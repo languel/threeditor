@@ -16,6 +16,9 @@ Don't use a server that adds COEP/COOP headers: the editor loads CDN scripts. Ha
 - **Code panel** (menu **Code**): docked CodeMirror panel, resizable (width persisted), themed to match the editor in light/dark.
   - Scene → code regenerates ~250 ms after any scene change.
   - Code → scene: edit, then Apply / Ctrl/Cmd+Enter (or *auto*). Applies the `// @key Scene contents` … `// @/key` section.
+  - Follows selection: nothing selected → scene code; object with an attached script → that script (saved as you type); other objects → scene code scrolled/highlighted at their lines.
+  - Object scripts and material Vertex/Fragment/Program editors open in this panel (the stock popup is gone).
+  - The scene code is mirrored as a generated, read-only-named `scene.js` script on the Scene (Properties → Script); it is skipped by Play/export runtime.
   - Copy, `.js`, `.html` (CDN), `.zip`.
 - **Exporter** produces meshes, geometry args, materials, texture maps, lights, shadows, camera, background, fog, hierarchy, `GLTFLoader`/`OBJLoader` for imported models and `AnimationMixer` for clips.
 - **File > Publish**

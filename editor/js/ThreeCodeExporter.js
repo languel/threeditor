@@ -238,7 +238,18 @@ function generateThreeCode( editor ) {
 
 	}
 
+	const ranges = {}; // object uuid -> [first, last] line index within the scene section
+
 	function emitObject( o, parent ) {
+
+		const from = lines.length;
+		const r = emitObjectInner( o, parent );
+		if ( lines.length > from ) ranges[ o.uuid ] = [ from, lines.length - 1 ];
+		return r;
+
+	}
+
+	function emitObjectInner( o, parent ) {
 
 		if ( o.isHelper ) return;
 		if ( MODEL_RE.test( o.userData?.sourceFile || o.name ) && o.children.length > 0 ) return emitModel( o, parent );
@@ -341,6 +352,7 @@ function generateThreeCode( editor ) {
 	else for ( const c of scene.children ) emitObject( c, 'scene' );
 
 	const sceneLines = lines.splice( 0, lines.length );
+	const shift = texLines.length > 0 ? texLines.length + 2 : 0;
 	if ( texLines.length > 0 ) sceneLines.unshift( '// Textures (image files live in assets/)', ...texLines, '' );
 
 	const tm = config.getKey( 'project/renderer/toneMapping' );
@@ -413,7 +425,10 @@ function generateThreeCode( editor ) {
 	tail.push( '});' );
 	tail.push( '// @/key' );
 
-	return { code: [ ...head, ...sceneLines, ...tail ].join( '\n' ) + '\n', assets };
+	const offset = head.length + shift;
+	for ( const k in ranges ) ranges[ k ] = [ ranges[ k ][ 0 ] + offset, ranges[ k ][ 1 ] + offset ];
+
+	return { code: [ ...head, ...sceneLines, ...tail ].join( '\n' ) + '\n', assets, ranges };
 
 }
 

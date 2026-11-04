@@ -8,6 +8,7 @@ Working: everything in README. Verified manually in a browser (Playwright) at ea
 
 ## Key design points
 
+- Scripts/shaders: `CodePanel.js` replaces the old `Script.js` popup (removed); it handles `signals.editScript`. The Scene carries a `generated: true` script (`scene.js`) mirroring the code; `libs/app.js` skips `generated` scripts. `generateThreeCode` also returns `ranges` (object uuid → line range) used for selection highlight.
 - Upstream coupling is small: changes are in `ThreeCodeExporter.js`, `CodePanel.js` (new), plus edits in `Menubar.js`, `Menubar.File.js`, `Viewport.js`, `Viewport.Controls.js`, `Player.js`, `libs/app.js`, `Loader.js`, `Animation.js`, `Resizer.js`, `Sidebar.Project.App.js`, `css/main.css`, `index.html`. Search these for what differs from stock r187 before upgrading three.
 - Code ↔ scene: the generated file has a `// @key Scene contents` … `// @/key` section. Apply runs only that section via `buildSceneFromCode` with stand-ins for `renderer`, `camera`, `controls`, `pmrem` (a Proxy over the real renderer with mutating calls disabled). Keep that contract when changing the generator.
 - Assets: textures are re-encoded from memory; imported models keep their original files in `editor.sourceFiles`; a persistent asset map keeps blob URLs stable across regenerations. Text/URL paths in code are `assets/<name>`; Single HTML replaces those quoted literals with data URIs.
@@ -26,7 +27,7 @@ Working: everything in README. Verified manually in a browser (Playwright) at ea
 1. Persist imported source files (IndexedDB) so models survive reloads; currently Apply/zip fail for them until re-imported.
 2. Export background/environment textures (HDR/equirect).
 3. Lighting parity when a background colour is set (editor vs. exported default environment).
-4. Scripts, custom shaders, exotic geometry (currently raw buffers).
+4. Custom shaders and exotic geometry (currently raw buffers). Object scripts live in `editor.scripts` and are not part of the generated code; Apply re-attaches them to objects by name.
 5. Teaching focus: beginner-friendly controls (Blender-style navigation/shortcuts, simplified UI/sidebar, lesson presets that load the repo's lesson scenes, code annotations/comments, hide advanced panels).
 6. Consider trimming `examples/jsm` and the 13 MB wasm to what is used, or loading them on demand.
 7. Add smoke tests (Playwright) for: add Box → code contains `BoxGeometry`; Apply round trip; each Publish option; Z cycle.

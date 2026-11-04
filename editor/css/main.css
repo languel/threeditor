@@ -1076,6 +1076,32 @@ body.presenting #player {
 		padding: 0 4px;
 	}
 
+	#code-panel .code-target {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+		padding: 0 8px 4px;
+		font-size: 12px;
+	}
+
+	#code-panel .code-target select {
+		font-size: 12px;
+	}
+
+	#code-panel .code-focus {
+		background: #08f2;
+	}
+
+	#code-panel .errorLine {
+		background: #f442;
+	}
+
+	#code-panel .esprima-error {
+		color: #f44;
+		font-size: 12px;
+		padding: 0 4px;
+	}
+
 	#code-panel .code-status {
 		padding: 3px 8px;
 		font-size: 12px;

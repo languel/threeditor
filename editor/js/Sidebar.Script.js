@@ -61,6 +61,7 @@ function SidebarScript( editor ) {
 				( function ( object, script ) {
 
 					const name = new UIInput( script.name ).setWidth( '130px' ).setFontSize( '12px' );
+					if ( script.generated ) name.dom.disabled = true;
 					name.onChange( function () {
 
 						editor.execute( new SetScriptValueCommand( editor, editor.selected, script, 'name', this.getValue() ) );
@@ -88,7 +89,7 @@ function SidebarScript( editor ) {
 						}
 
 					} );
-					scriptsContainer.add( remove );
+					if ( ! script.generated ) scriptsContainer.add( remove );
 
 					scriptsContainer.add( new UIBreak() );
 

@@ -99,6 +99,8 @@ const APP = {
 
 					const script = scripts[ i ];
 
+					if ( script.generated ) continue; // the mirrored scene code is documentation, not runtime behaviour
+
 					const functions = ( new Function( scriptWrapParams, script.source + '\nreturn ' + scriptWrapResult + ';' ).bind( object ) )( this, renderer, scene, camera );
 
 					for ( const name in functions ) {
