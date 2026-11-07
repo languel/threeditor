@@ -349,16 +349,43 @@ function Viewport( editor ) {
 	function updateTheme() {
 
 		const dark = document.documentElement.dataset.theme === 'dark';
-		renderer.setClearColor( dark ? 0x333333 : 0xaaaaaa );
+		const background = getComputedStyle( document.documentElement ).getPropertyValue( '--theme-background' ).trim();
+		const translucent = /^#[\da-f]{8}$/i.test( background ) && parseInt( background.slice( 7 ), 16 ) < 255;
+		const changed = document.body.classList.contains( 'translucent-panels' ) !== translucent;
+		document.body.classList.toggle( 'translucent-panels', translucent );
+		const value = getComputedStyle( document.documentElement ).getPropertyValue( '--theme-viewport' ).trim();
+		const fallback = dark ? 0x333333 : 0xaaaaaa;
+		// Renderer clear colors are opaque; blend a translucent theme color over the default viewport.
+		if ( /^#[\da-f]{8}$/i.test( value ) ) {
+
+			const color = new THREE.Color( value.slice( 0, 7 ) );
+			const base = new THREE.Color( fallback );
+			base.lerp( color, parseInt( value.slice( 7 ), 16 ) / 255 );
+			renderer.setClearColor( base );
+
+		} else {
+
+			renderer.setClearColor( value || fallback );
+
+		}
 		renderer.getClearColor( editor.viewportColor );
 		updateGridColors( grid1, grid2, dark ? GRID_COLORS_DARK : GRID_COLORS_LIGHT );
+		return changed;
 
 	}
+
+	signals.themePreviewChanged.add( function () {
+
+		if ( renderer === null ) return;
+		if ( updateTheme() ) signals.windowResize.dispatch();
+		render();
+
+	} );
 
 	signals.themeChanged.add( function () {
 
 		if ( renderer === null ) return;
-		updateTheme();
+		if ( updateTheme() ) signals.windowResize.dispatch();
 		render();
 
 	} );
@@ -771,6 +798,12 @@ function Viewport( editor ) {
 
 	signals.windowResize.add( function () {
 
+		const overlay = document.body.classList.contains( 'translucent-panels' );
+		const sidebar = document.getElementById( 'sidebar' );
+		const right = overlay && sidebar?.dataset.dock === 'open' && window.innerWidth > 600 ? sidebar.offsetWidth : 0;
+		const top = overlay ? parseFloat( getComputedStyle( document.body ).getPropertyValue( '--menubar-height' ) ) || 0 : 0;
+		viewHelper.location.right = right;
+		viewHelper.location.top = top + 30;
 		updateAspectRatio();
 
 		if ( renderer === null ) return;

@@ -21,7 +21,7 @@ async function snapshotEditor( editor ) {
 
 	}
 
-	const keys = [ 'project/title', 'project/renderer/antialias', 'project/presentationEditVisible', 'settings/theme', 'settings/history', 'language' ];
+	const keys = [ 'project/title', 'project/renderer/antialias', 'project/presentationEditVisible', 'settings/theme', 'settings/userThemes', 'settings/history', 'settings/autoHideMenubar', 'language' ];
 	const config = Object.fromEntries( keys.map( ( key ) => [ key, editor.config.getKey( key ) ] ) );
 	return { scene, files, assets: await embedResources( { resources } ), config };
 

@@ -5,6 +5,7 @@ function ViewportControls( editor ) {
 	const signals = editor.signals;
 
 	const container = new UIPanel();
+	container.dom.classList.add( 'viewport-controls' );
 	container.setPosition( 'absolute' );
 	container.setRight( '10px' );
 	container.setTop( '10px' );

@@ -762,7 +762,8 @@ function CodePanel( editor ) {
 		handle.classList.add( 'active' );
 		const move = ( ev ) => {
 
-			const right = parseFloat( getComputedStyle( document.getElementById( 'viewport' ) ).right ) || 0;
+			const sidebar = document.getElementById( 'sidebar' );
+			const right = sidebar?.dataset.dock === 'open' && window.innerWidth > 600 ? sidebar.offsetWidth : 0;
 			const max = Math.max( MIN_WIDTH, window.innerWidth - right - 100 );
 			WIDTH = Math.round( Math.min( max, Math.max( MIN_WIDTH, ev.clientX ) ) );
 			document.body.style.setProperty( '--code-width', WIDTH + 'px' );

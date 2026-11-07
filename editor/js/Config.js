@@ -27,7 +27,9 @@ function Config( persist = true ) {
 		'project/renderer/toneMappingExposure': 1,
 
 		'settings/history': false,
+		'settings/autoHideMenubar': false,
 		'settings/theme': 'system',
+		'settings/userThemes': {},
 
 		'settings/shortcuts/translate': 'w',
 		'settings/shortcuts/rotate': 'e',

@@ -15,7 +15,7 @@ Open `http://127.0.0.1:5300/editor/` with the trailing slash. The hosted editor 
 ## Workspace
 
 - The four icons beside the gear toggle the **Code panel**, **sidebar**, **timeline**, and **transform toolbar**. Double-click a resize bar to collapse its panel. Hover at the corresponding edge for a temporary reveal.
-- The **gear** opens **Settings**, with collapsible General, Theme, Shortcuts, and History sections. General holds language and autosave. Theme offers **System**, **Light**, and **Dark**. Hosted editor preferences and autosaved projects are stored in the browser.
+- The **gear** opens **Settings**, with collapsible General, Theme, Shortcuts, and History sections. General holds language, autosave, and an option to auto-hide the top menu; move to the top edge to reveal it. Theme offers System, Light, Dark, Mono Light, Mono Dark, and Warm Dark presets. Adjust the palette colors, enter a name, and choose **Save theme** to keep a custom theme; select a saved theme to edit or delete it. Themes also color the code editor. Hosted editor preferences and autosaved projects are stored in the browser; editable HTML exports include the saved themes.
 - The viewport camera dropdown chooses the view used for preview and publishing. The top **Camera** in the outliner is the editor's orbit camera. Added cameras keep their own transforms and can be parented to objects.
 - Choose **Preview** in the shading dropdown to view the scene without editor helpers. Under **Scene**, an unset background with **Environment → Default** uses procedural studio lighting. A solid background color supplies its own ambient environment. **Equirect** loads an environment image separately.
 

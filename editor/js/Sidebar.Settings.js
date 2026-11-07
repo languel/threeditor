@@ -1,4 +1,5 @@
 import { UIDiv, UIPanel, UIRow, UISelect, UIText } from './libs/ui.js';
+import { presets, resolveTheme } from './Theme.js';
 import { UIBoolean } from './libs/ui.three.js';
 
 import { SidebarSettingsShortcuts } from './Sidebar.Settings.Shortcuts.js';
@@ -51,6 +52,19 @@ function SidebarSettings( editor ) {
 
 	}
 	general.dom.appendChild( autosaveLabel );
+
+	const autoHideMenubar = new UIBoolean( config.getKey( 'settings/autoHideMenubar' ), 'Auto-hide top menu' );
+	const autoHideLabel = document.createElement( 'label' );
+	autoHideLabel.className = 'settings-checkbox';
+	autoHideLabel.style.display = 'block';
+	autoHideLabel.appendChild( autoHideMenubar.dom );
+	general.dom.appendChild( autoHideLabel );
+	autoHideMenubar.onChange( function () {
+
+		config.setKey( 'settings/autoHideMenubar', this.getValue() );
+		signals.menuAutoHideChanged.dispatch();
+
+	} );
 	autosave.onChange( function () {
 
 		const value = this.getValue();
@@ -63,21 +77,153 @@ function SidebarSettings( editor ) {
 	addSection( strings.getKey( 'sidebar/settings/general' ), general, true );
 
 	const themeLabel = strings.getKey( 'sidebar/settings/theme' );
-	const theme = new UISelect().setWidth( '150px' );
+	const themePanel = new UIPanel();
+	const theme = new UISelect().setWidth( '100%' );
 	theme.dom.setAttribute( 'aria-label', themeLabel );
-	theme.setOptions( {
-		system: strings.getKey( 'sidebar/settings/theme/system' ),
-		light: strings.getKey( 'sidebar/settings/theme/light' ),
-		dark: strings.getKey( 'sidebar/settings/theme/dark' )
-	} );
-	theme.setValue( config.getKey( 'settings/theme' ) );
+
+	function refreshThemes() {
+
+		const saved = config.getKey( 'settings/userThemes' ) || {};
+		theme.setOptions( {
+			system: strings.getKey( 'sidebar/settings/theme/system' ),
+			...Object.fromEntries( Object.entries( presets ).map( ( [ id, value ] ) => [ id, value.name ] ) ),
+			...Object.fromEntries( Object.keys( saved ).map( name => [ 'user:' + name, name ] ) )
+		} );
+		theme.setValue( config.getKey( 'settings/theme' ) );
+
+	}
+
+	const fields = [
+		[ 'background', 'Panel' ], [ 'surface', 'Surface' ], [ 'text', 'Text' ],
+		[ 'accent', 'Accent' ], [ 'viewport', 'Viewport' ], [ 'keyword', 'Keyword' ], [ 'string', 'String' ]
+	];
+	const inputs = new Map();
+	const alphas = new Map();
+	const colors = document.createElement( 'div' );
+	colors.className = 'theme-colors';
+	for ( const [ key, label ] of fields ) {
+
+		const row = document.createElement( 'label' );
+		const text = document.createElement( 'span' );
+		text.textContent = label;
+		const input = document.createElement( 'input' );
+		input.type = 'color';
+		input.className = 'Color Input';
+		input.setAttribute( 'aria-label', label );
+		const alpha = document.createElement( 'input' );
+		alpha.type = 'number';
+		alpha.className = 'theme-alpha';
+		alpha.min = '0';
+		alpha.max = '100';
+		alpha.step = '1';
+		alpha.setAttribute( 'aria-label', label + ' opacity percent' );
+		alpha.title = 'Opacity (%)';
+		const controls = document.createElement( 'span' );
+		controls.className = 'theme-color-controls';
+		const percent = document.createElement( 'span' );
+		percent.textContent = '%';
+		percent.setAttribute( 'aria-hidden', 'true' );
+		controls.append( input, alpha, percent );
+		row.append( text, controls );
+		colors.appendChild( row );
+		inputs.set( key, input );
+		alphas.set( key, alpha );
+		const preview = () => {
+
+			const opacity = Math.max( 0, Math.min( 100, Number( alpha.value ) || 0 ) );
+			const suffix = opacity === 100 ? '' : Math.round( opacity * 255 / 100 ).toString( 16 ).padStart( 2, '0' );
+			document.documentElement.style.setProperty( '--theme-' + key, input.value + suffix );
+			if ( key === 'viewport' || key === 'background' ) signals.themePreviewChanged.dispatch();
+
+		};
+		input.addEventListener( 'input', preview );
+		alpha.addEventListener( 'input', preview );
+		alpha.addEventListener( 'change', () => { alpha.value = Math.max( 0, Math.min( 100, Number( alpha.value ) || 0 ) ); } );
+
+	}
+
+	function refreshColors() {
+
+		const selected = resolveTheme( config, window.matchMedia( '(prefers-color-scheme: dark)' ).matches );
+		for ( const [ key, input ] of inputs ) {
+
+			const value = selected.colors[ key ];
+			input.value = value.slice( 0, 7 );
+			alphas.get( key ).value = value.length === 9 ? Math.round( parseInt( value.slice( 7 ), 16 ) / 255 * 100 ) : 100;
+
+		}
+
+	}
+
 	theme.onChange( function () {
 
 		config.setKey( 'settings/theme', this.getValue() );
 		signals.themeChanged.dispatch();
+		refreshColors();
 
 	} );
-	addSection( themeLabel, new UIPanel().add( theme ), true );
+	themePanel.add( theme );
+	themePanel.dom.appendChild( colors );
+
+	const name = document.createElement( 'input' );
+	name.className = 'Input theme-name';
+	name.placeholder = 'Theme name';
+	name.setAttribute( 'aria-label', 'Theme name' );
+	const save = document.createElement( 'button' );
+	save.className = 'Button';
+	save.textContent = 'Save theme';
+	const remove = document.createElement( 'button' );
+	remove.className = 'Button';
+	remove.textContent = 'Delete';
+	remove.title = 'Delete selected saved theme';
+	const actions = document.createElement( 'div' );
+	actions.className = 'theme-actions';
+	actions.append( name, save, remove );
+	themePanel.dom.appendChild( actions );
+
+	save.addEventListener( 'click', () => {
+
+		const value = name.value.trim();
+		if ( ! value ) {
+
+			name.focus();
+			return;
+
+		}
+
+		const current = resolveTheme( config, window.matchMedia( '(prefers-color-scheme: dark)' ).matches );
+		const saved = { ...( config.getKey( 'settings/userThemes' ) || {} ) };
+		Object.defineProperty( saved, value, { value: { name: value, mode: current.mode, colors: Object.fromEntries( [ ...inputs ].map( ( [ key ] ) => [ key, document.documentElement.style.getPropertyValue( '--theme-' + key ).trim() ] ) ) }, enumerable: true, configurable: true, writable: true } );
+		config.setKey( 'settings/userThemes', saved, 'settings/theme', 'user:' + value );
+		refreshThemes();
+		signals.themeChanged.dispatch();
+		name.value = '';
+
+	} );
+
+	remove.addEventListener( 'click', () => {
+
+		const id = config.getKey( 'settings/theme' );
+		if ( ! id?.startsWith( 'user:' ) ) return;
+		const saved = { ...( config.getKey( 'settings/userThemes' ) || {} ) };
+		delete saved[ id.slice( 5 ) ];
+		config.setKey( 'settings/userThemes', saved, 'settings/theme', 'system' );
+		refreshThemes();
+		signals.themeChanged.dispatch();
+		refreshColors();
+
+	} );
+
+	signals.themeChanged.add( () => {
+
+		remove.disabled = ! config.getKey( 'settings/theme' )?.startsWith( 'user:' );
+		if ( config.getKey( 'settings/theme' ) === 'system' ) refreshColors();
+
+	} );
+	refreshThemes();
+	refreshColors();
+	remove.disabled = ! config.getKey( 'settings/theme' )?.startsWith( 'user:' );
+	addSection( themeLabel, themePanel, true );
 
 	addSection( strings.getKey( 'sidebar/settings/shortcuts' ), new SidebarSettingsShortcuts( editor ) );
 	addSection( strings.getKey( 'sidebar/history' ), new SidebarSettingsHistory( editor ) );

@@ -331,6 +331,13 @@ body:has(#code-panel[data-dock="open"]) { --left-dock: var(--code-size); }
 body:has(#sidebar[data-dock="open"]) { --right-dock: var(--sidebar-size); }
 body:has(#animation[data-dock="open"]) { --timeline-h: var(--animation-height); }
 
+body.menubar-auto-hide { --menubar-height: 0px; }
+body.menubar-auto-hide #menubar { height: 36px; transform: translateY(-100%); }
+body.menubar-auto-hide #menubar:is(.revealed, :focus-within) { transform: none; }
+.menubar-edge { display: none; }
+body.menubar-auto-hide:not(.presenting) .menubar-edge { display: block; position: fixed; inset: 0 0 auto; height: 8px; z-index: 11; }
+body.menubar-auto-hide:has(#menubar.revealed) .menubar-edge { pointer-events: none; }
+
 [data-dock="closed"], #toolbar[hidden] { display: none !important; }
 
 .panel-edge {
@@ -382,6 +389,12 @@ body:has(#animation[data-dock="open"]) { --timeline-h: var(--animation-height); 
 	right: var(--right-dock);
 	bottom: calc(var(--timeline-h) + var(--sidebar-bottom));
 }
+
+/* Translucent panels overlay the scene rather than an empty page backdrop. */
+body.translucent-panels #viewport { inset: 0; }
+body.translucent-panels #viewport .viewport-controls { right: calc(var(--right-dock) + 10px) !important; top: calc(var(--menubar-height) + 10px) !important; }
+body.translucent-panels #viewport #viewHelper { right: var(--right-dock) !important; top: calc(var(--menubar-height) + 30px) !important; }
+body.translucent-panels #viewport #info { left: calc(var(--left-dock) + 10px) !important; bottom: calc(var(--timeline-h) + var(--sidebar-bottom) + 50px) !important; }
 
 	#viewport .Text {
 		text-shadow: 1px 1px 0 rgba(0,0,0,0.25);
@@ -805,6 +818,8 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 		--code-size: min(var(--code-width, 520px), 90vw);
 		--sidebar-size: 100%;
 	}
+	body.menubar-auto-hide { --menubar-height: 0px; }
+	body.menubar-auto-hide #menubar { height: 68px; }
 
 	body:has(#code-panel[data-dock="open"]) { --left-dock: 0px; }
 	body:has(#sidebar[data-dock="open"]) {
@@ -1298,5 +1313,83 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	.cm-s-editor .cm-comment { color: #666; }
 	.cm-s-editor .cm-string, .cm-s-editor .cm-string-2 { color: #98c379; }
 	.cm-s-editor .cm-meta { color: #777; }
+
+}
+
+/* Theme palette */
+:root {
+	--theme-background: #eeeeee;
+	--theme-surface: #ffffff;
+	--theme-text: #555555;
+	--theme-accent: #0088ff;
+	--theme-viewport: #aaaaaa;
+	--theme-keyword: #a626a4;
+	--theme-string: #50a14f;
+}
+
+:root[data-theme="light"] { background: #aaaaaa; }
+:root[data-theme="dark"] { background: #333333; }
+
+:root[data-theme] {
+/* Docked panels sit outside the viewport, so their translucent colors need a
+   theme-colored backdrop rather than the browser's default page color. */
+body { min-height: 100dvh; background: var(--theme-viewport); }
+#menubar, #sidebar, #animation, #toolbar, #code-panel,
+#menubar .menu .options { background-color: var(--theme-background); }
+
+#sidebar .Panel, #sidebar .Row .Label, #menubar .menu .title,
+#menubar .menu .options .option, #animation .Panel, #code-panel,
+.settings-section > summary, .panel-toggles { color: var(--theme-text); }
+
+.TabbedPanel .Tabs, #tabs { background-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 9%); }
+.TabbedPanel .Tab.selected, #tabs span.selected { background-color: var(--theme-background); color: var(--theme-text); }
+.TabbedPanel .Tab, #tabs span { color: color-mix(in srgb, var(--theme-text), var(--theme-background) 40%); }
+.Outliner, .Listbox, .cm-s-editor.CodeMirror { background-color: var(--theme-surface); color: var(--theme-text); }
+.Input, .TextArea, .Select, .Button { background-color: var(--theme-surface); color: var(--theme-text); }
+.Select { border-color: var(--theme-surface); }
+.Select:hover, .Button:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
+@supports (appearance: base-select) {
+	.Select, .Select::picker(select) { appearance: base-select; }
+	.Select::picker(select) { background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); }
+	.Select option { padding: 4px 8px; }
+	.Select option:hover, .Select option:focus { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%); color: var(--theme-text); }
+	.Select option:checked { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 60%); color: var(--theme-text); }
+	.Select option::checkmark { color: var(--theme-accent); }
+}
+#toolbar { border-color: var(--theme-background); }
+#animation, #animation .Panel, #sidebar .Panel, #tabs, #tabs span,
+.TabbedPanel .Tabs, .TabbedPanel .Tab, #code-panel .code-status,
+#menubar .menu .options hr, #menubar .menu .key { border-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 18%); }
+.Dialog-content { background: var(--theme-background); color: var(--theme-text); }
+.Dialog-title, .Dialog-body .Row .Label { color: var(--theme-text); }
+.Input.Number { color: var(--theme-accent) !important; }
+.settings-section { border-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); }
+.Outliner .option, .Listbox .ListboxItem { color: var(--theme-text); }
+.Outliner .option.active, .Listbox .ListboxItem.active { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 70%); }
+.Outliner .option:hover, .Listbox .ListboxItem:hover { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 87%); }
+.Button.selected, #menubar .menu .options .option:hover { background-color: var(--theme-accent); color: var(--theme-surface); }
+.panel-toggles button[aria-pressed="true"] { color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent), transparent 85%); }
+.panel-toggles button:hover, .settings-section > summary:hover { background: color-mix(in srgb, var(--theme-accent), transparent 90%); }
+#resizer:hover, #animation-resizer:hover, #code-resizer:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 45%); }
+#resizer:active, #animation-resizer:active, #code-resizer.active { background-color: var(--theme-accent); }
+#animation input[type="range"], input[type="checkbox"] { accent-color: var(--theme-accent); }
+.cm-s-editor .CodeMirror-gutters { background: color-mix(in srgb, var(--theme-surface), var(--theme-text) 5%); border-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 20%); }
+.cm-s-editor .CodeMirror-cursor { border-color: var(--theme-accent); }
+.cm-s-editor .CodeMirror-selected, #code-panel .code-focus { background: color-mix(in srgb, var(--theme-accent), transparent 80%); }
+.cm-s-editor .CodeMirror-matchingbracket { color: var(--theme-accent) !important; outline-color: var(--theme-accent); }
+.cm-s-editor .cm-keyword, .cm-s-editor .cm-atom, .cm-s-editor .cm-number, .cm-s-editor .cm-meta { color: var(--theme-keyword); }
+.cm-s-editor .cm-string, .cm-s-editor .cm-string-2 { color: var(--theme-string); }
+.cm-s-editor .cm-def, .cm-s-editor .cm-variable-2, .cm-s-editor .cm-variable-3, .cm-s-editor .cm-type, .cm-s-editor .cm-property, .cm-s-editor .cm-operator { color: var(--theme-text); }
+.cm-s-editor .cm-comment { color: color-mix(in srgb, var(--theme-text), var(--theme-surface) 35%); }
+.theme-colors { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 10px; }
+.theme-colors label { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 12px; }
+.theme-color-controls { display: inline-flex; align-items: center; gap: 4px; }
+.theme-colors input[type="color"] { width: 32px; height: 16px; padding: 2px; border: 0; background: transparent; cursor: pointer; }
+.theme-colors .theme-alpha { width: 38px; padding: 2px; border: 0; background: var(--theme-surface); color: var(--theme-text); font-size: 11px; }
+.theme-actions { display: flex; gap: 5px; align-items: center; margin-top: 10px; }
+.theme-actions .theme-name { min-width: 0; flex: 1; }
+.color-alpha { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }
+.color-alpha input { width: 70px; accent-color: var(--theme-accent); }
+.color-alpha output { min-width: 32px; color: var(--theme-text); font-size: 11px; }
 
 }

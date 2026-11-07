@@ -82,7 +82,9 @@ function Editor( portable = false ) {
 		scriptRemoved: new Signal(),
 
 		windowResize: new Signal(),
+		menuAutoHideChanged: new Signal(),
 		themeChanged: new Signal(),
+		themePreviewChanged: new Signal(),
 
 		showHelpersChanged: new Signal(),
 		refreshSidebarObject3D: new Signal(),

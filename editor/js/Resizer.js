@@ -16,7 +16,8 @@ function Resizer( editor ) {
 
 		if ( ! dom.hasPointerCapture( event.pointerId ) ) return;
 
-		const left = parseFloat( getComputedStyle( document.getElementById( 'viewport' ) ).left ) || 0;
+		const code = document.getElementById( 'code-panel' );
+		const left = code?.dataset.dock === 'open' && window.innerWidth > 600 ? code.offsetWidth : 0;
 		const max = Math.max( 335, window.innerWidth - left - 100 );
 		const width = Math.min( max, Math.max( 335, window.innerWidth - event.clientX ) );
 		document.body.style.setProperty( '--sidebar-width', width + 'px' );

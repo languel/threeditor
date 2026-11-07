@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js';
+import { applyTheme } from './Theme.js';
 import { Viewport } from './Viewport.js';
 import { Toolbar } from './Toolbar.js';
 import { Player } from './Player.js';
 import { Sidebar } from './Sidebar.js';
 import { Menubar } from './Menubar.js';
+import { MenuAutoHide } from './MenuAutoHide.js';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';
@@ -40,21 +42,14 @@ async function startEditor( portable = null ) {
 	}
 	const systemTheme = window.matchMedia( '(prefers-color-scheme: dark)' );
 
-	function applyTheme() {
-
-		const theme = editor.config.getKey( 'settings/theme' );
-		const dark = theme === 'dark' || ( theme === 'system' && systemTheme.matches );
-		document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-
-	}
-
-	editor.signals.themeChanged.add( applyTheme );
+	const updateTheme = () => applyTheme( editor.config, systemTheme.matches );
+	editor.signals.themeChanged.add( updateTheme );
 	systemTheme.addEventListener( 'change', function () {
 
 		if ( editor.config.getKey( 'settings/theme' ) === 'system' ) editor.signals.themeChanged.dispatch();
 
 	} );
-	applyTheme();
+	updateTheme();
 
 	window.editor = editor; // Expose editor to Console
 	window.THREE = THREE; // Expose THREE to APP Scripts and Console
@@ -92,6 +87,7 @@ async function startEditor( portable = null ) {
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
+	MenuAutoHide( editor, menubar.dom );
 
 	//
 
