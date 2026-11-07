@@ -13,7 +13,7 @@ _DEFAULT_CAMERA.position.set( 0, 5, 10 );
 _DEFAULT_CAMERA.lookAt( new THREE.Vector3() );
 const _ORTHOGRAPHIC_FRUSTUM_SIZE = 100;
 
-function Editor() {
+function Editor( portable = false ) {
 
 	const Signal = signals.Signal; // eslint-disable-line no-undef
 
@@ -82,6 +82,7 @@ function Editor() {
 		scriptRemoved: new Signal(),
 
 		windowResize: new Signal(),
+		themeChanged: new Signal(),
 
 		showHelpersChanged: new Signal(),
 		refreshSidebarObject3D: new Signal(),
@@ -101,7 +102,7 @@ function Editor() {
 
 	};
 
-	this.config = new Config();
+	this.config = new Config( ! portable );
 	this.history = new _History( this );
 	this.selector = new Selector( this );
 	this.storage = new _Storage();
@@ -150,6 +151,7 @@ Editor.prototype = {
 		this.scene.uuid = scene.uuid;
 		this.scene.name = scene.name;
 
+		this.scene.animations = scene.animations;
 		this.scene.background = scene.background;
 		this.scene.environment = scene.environment;
 		this.scene.fog = scene.fog;
@@ -697,6 +699,7 @@ Editor.prototype = {
 
 		this.history.clear();
 		this.storage.clear();
+		this.sourceFiles = new Map();
 
 		this.setCameraType( 'perspective' );
 		this.camera.copy( _DEFAULT_CAMERA );
@@ -704,6 +707,7 @@ Editor.prototype = {
 
 		this.scene.name = 'Scene';
 		this.scene.userData = {};
+		this.scene.animations = [];
 		this.scene.background = null;
 		this.scene.environment = null;
 		this.scene.fog = null;
@@ -743,8 +747,12 @@ Editor.prototype = {
 
 	fromJSON: async function ( json ) {
 
-		var loader = new THREE.ObjectLoader();
-		var camera = await loader.parseAsync( json.camera );
+		const loader = new THREE.ObjectLoader();
+		const scene = await loader.parseAsync( json.scene );
+		const savedCamera = await loader.parseAsync( json.camera );
+		const sceneCamera = scene.getObjectByProperty( 'uuid', savedCamera.uuid );
+		// Older saves wrote the active scene camera into the main camera slot.
+		const camera = sceneCamera?.isCamera ? _DEFAULT_CAMERA.clone() : savedCamera;
 
 		this.setCameraType( camera.isOrthographicCamera ? 'orthographic' : 'perspective' );
 
@@ -769,12 +777,11 @@ Editor.prototype = {
 		this.history.fromJSON( json.history );
 		this.scripts = json.scripts;
 
-		const scene = await loader.parseAsync( json.scene );
-
 		this.backgroundType = json.backgroundType || 'Default';
 		this.environmentType = json.environmentType || 'Default';
 
 		this.setScene( scene );
+		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
 
 	},
 
@@ -807,7 +814,8 @@ Editor.prototype = {
 				toneMapping: this.config.getKey( 'project/renderer/toneMapping' ),
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
-			camera: this.viewportCamera.toJSON(),
+			camera: this.camera.toJSON(),
+			viewportCamera: this.viewportCamera.uuid,
 			controls: this.controls.toJSON(),
 			scene: this.scene.toJSON(),
 			scripts: this.scripts,

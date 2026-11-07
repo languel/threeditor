@@ -35,8 +35,19 @@ function Loader( editor ) {
 
 			// Keep the original files so the three.js code exporter can bundle them into an archive.
 			editor.sourceFiles = editor.sourceFiles || new Map();
-			const batch = Object.keys( filesMap );
-			for ( const key of batch ) editor.sourceFiles.set( key, { file: filesMap[ key ], batch } );
+			const keys = Object.keys( filesMap );
+			let prefix = '', suffix = 2;
+			while ( keys.some( ( key ) => editor.sourceFiles.has( prefix + key ) ) ) prefix = 'import-' + suffix ++ + '/';
+			const batch = keys.map( ( key ) => prefix + key );
+			const sourcePaths = new Map();
+			for ( const key of keys ) {
+
+				const path = prefix + key;
+				const file = filesMap[ key ];
+				editor.sourceFiles.set( path, { file, batch } );
+				sourcePaths.set( file, path );
+
+			}
 
 			const normalizeLookupPath = function ( path ) {
 
@@ -147,7 +158,7 @@ function Loader( editor ) {
 
 				}
 
-				return url;
+				return THREE.DefaultLoadingManager.resolveURL( url );
 
 			} );
 
@@ -155,7 +166,7 @@ function Loader( editor ) {
 
 			for ( let i = 0; i < files.length; i ++ ) {
 
-				scope.loadFile( files[ i ], manager );
+				scope.loadFile( files[ i ], manager, sourcePaths.get( files[ i ] ) );
 
 			}
 
@@ -163,7 +174,7 @@ function Loader( editor ) {
 
 	};
 
-	this.loadFile = function ( file, manager ) {
+	this.loadFile = function ( file, manager, sourcePath ) {
 
 		const filename = file.name;
 		const extension = filename.split( '.' ).pop().toLowerCase();
@@ -382,6 +393,7 @@ function Loader( editor ) {
 							const scene = result.scene;
 							scene.name = filename;
 							scene.userData.sourceFile = filename;
+							scene.userData.sourceAssetPath = sourcePath;
 
 							scene.animations.push( ...result.animations );
 
@@ -433,6 +445,7 @@ function Loader( editor ) {
 							const scene = result.scene;
 							scene.name = filename;
 							scene.userData.sourceFile = filename;
+							scene.userData.sourceAssetPath = sourcePath;
 
 							scene.animations.push( ...result.animations );
 
@@ -587,6 +600,7 @@ function Loader( editor ) {
 					const object = new OBJLoader().parse( contents );
 					object.name = filename;
 					object.userData.sourceFile = filename;
+					object.userData.sourceAssetPath = sourcePath;
 
 					editor.execute( new AddObjectCommand( editor, object ) );
 
@@ -888,6 +902,7 @@ function Loader( editor ) {
 
 			}
 
+			case 'bin':
 			case 'bmp':
 			case 'gif':
 			case 'jpg':
@@ -895,7 +910,7 @@ function Loader( editor ) {
 			case 'png':
 			case 'tga':
 
-				break; // Image files are handled as textures by other loaders
+				break; // These can be companion files used by other loaders.
 
 			default:
 

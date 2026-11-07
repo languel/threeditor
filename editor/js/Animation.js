@@ -18,7 +18,7 @@ function Animation( editor ) {
 	signals.animationPanelResized.add( function ( height ) {
 
 		panelHeight = height;
-		container.dom.style.height = height + 'px';
+		document.body.style.setProperty( '--animation-height', height + 'px' );
 		signals.animationPanelChanged.dispatch( height );
 
 	} );
@@ -300,10 +300,6 @@ function Animation( editor ) {
 	function update() {
 
 		trackListContainer.innerHTML = '';
-
-		container.setDisplay( 'flex' );
-		container.dom.style.height = panelHeight + 'px';
-		signals.animationPanelChanged.dispatch( panelHeight );
 
 		const clips = getAnimationClips();
 
@@ -587,7 +583,6 @@ function Animation( editor ) {
 
 	// Show panel on initial load
 	container.setDisplay( 'flex' );
-	container.dom.style.height = panelHeight + 'px';
 	signals.animationPanelChanged.dispatch( panelHeight );
 
 	return container;

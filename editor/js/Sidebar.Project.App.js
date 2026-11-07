@@ -1,7 +1,3 @@
-import * as THREE from 'three';
-
-import { zipSync, strToU8 } from 'three/addons/libs/fflate.module.js';
-
 import { UIButton, UICheckbox, UIPanel, UIInput, UIRow, UIText } from './libs/ui.js';
 
 function SidebarProjectApp( editor ) {
@@ -9,8 +5,6 @@ function SidebarProjectApp( editor ) {
 	const config = editor.config;
 	const signals = editor.signals;
 	const strings = editor.strings;
-
-	const save = editor.utils.save;
 
 	const container = new UIPanel();
 	container.setId( 'app' );
@@ -46,6 +40,18 @@ function SidebarProjectApp( editor ) {
 	editableRow.add( editable );
 
 	container.add( editableRow );
+
+	const editIconRow = new UIRow();
+	const editIconLabel = document.createElement( 'label' );
+	const editIcon = new UICheckbox( config.getKey( 'project/presentationEditVisible' ) ).onChange( function () {
+
+		config.setKey( 'project/presentationEditVisible', this.getValue() );
+
+	} );
+	editIconLabel.title = strings.getKey( 'sidebar/project/app/edit-icon-help' );
+	editIconLabel.append( editIcon.dom, ' ' + strings.getKey( 'sidebar/project/app/edit-icon' ) );
+	editIconRow.dom.appendChild( editIconLabel );
+	container.add( editIconRow );
 
 	// Play/Stop
 
@@ -89,123 +95,6 @@ function SidebarProjectApp( editor ) {
 
 	container.add( playButton );
 
-	// Publish
-
-	const publishButton = new UIButton( strings.getKey( 'sidebar/project/app/publish' ) );
-	publishButton.setWidth( '170px' );
-	publishButton.setMarginLeft( '120px' );
-	publishButton.setMarginBottom( '10px' );
-	publishButton.onClick( publishApp );
-	editor.publishApp = publishApp;
-
-	function publishApp() {
-
-		const toZip = {};
-
-		const rendererType = config.getKey( 'project/renderer/type' );
-
-		//
-
-		let output = editor.toJSON();
-		output.metadata.type = 'App';
-		delete output.history;
-
-		output = JSON.stringify( output, null, '\t' );
-		output = output.replace( /[\n\t]+([\d\.e\-\[\]]+)/g, '$1' );
-
-		toZip[ 'app.json' ] = strToU8( output );
-
-		//
-
-		const title = config.getKey( 'project/title' );
-
-		const manager = new THREE.LoadingManager( function () {
-
-			const zipped = zipSync( toZip, { level: 9 } );
-
-			const blob = new Blob( [ zipped.buffer ], { type: 'application/zip' } );
-
-			save( blob, ( title !== '' ? title : 'untitled' ) + '.zip' );
-
-		} );
-
-		const loader = new THREE.FileLoader( manager );
-		loader.load( 'js/libs/app/index.html', function ( content ) {
-
-			content = content.replace( '<!-- title -->', title );
-
-			//
-
-			const IMPORTMAP = {
-				WebGLRenderer: {
-					imports: {
-						'three': './js/three.module.js'
-					}
-				},
-				WebGPURenderer: {
-					imports: {
-						'three': './js/three.webgpu.js',
-						'three/webgpu': './js/three.webgpu.js'
-					}
-				}
-			};
-			const importmap = JSON.stringify( IMPORTMAP[ rendererType ], null, '\t' );
-			content = content.replace( '<!-- importmap -->', indent( '\n' + indent( importmap, 1 ) + '\n', 2 ) );
-
-			//
-
-			let editButton = '';
-
-			if ( config.getKey( 'project/editable' ) ) {
-
-				editButton = [
-					'			let button = document.createElement( \'a\' );',
-					'			button.href = \'https://threejs.org/editor/#file=\' + location.href.split( \'/\' ).slice( 0, - 1 ).join( \'/\' ) + \'/app.json\';',
-					'			button.style.cssText = \'position: absolute; bottom: 20px; right: 20px; padding: 10px 16px; color: #fff; border: 1px solid #fff; border-radius: 20px; text-decoration: none;\';',
-					'			button.target = \'_blank\';',
-					'			button.textContent = \'EDIT\';',
-					'			document.body.appendChild( button );',
-				].join( '\n' );
-
-			}
-
-			content = content.replace( '\t\t\t/* edit button */', editButton );
-
-			toZip[ 'index.html' ] = strToU8( content );
-
-		} );
-		loader.load( 'js/libs/app.js', function ( content ) {
-
-			toZip[ 'js/app.js' ] = strToU8( content );
-
-		} );
-		loader.load( '../build/three.core.js', function ( content ) {
-
-			toZip[ 'js/three.core.js' ] = strToU8( content );
-
-		} );
-
-		if ( rendererType === 'WebGPURenderer' ) {
-
-			loader.load( '../build/three.webgpu.js', function ( content ) {
-
-				toZip[ 'js/three.webgpu.js' ] = strToU8( content );
-
-			} );
-
-		} else {
-
-			loader.load( '../build/three.module.js', function ( content ) {
-
-				toZip[ 'js/three.module.js' ] = strToU8( content );
-
-			} );
-
-		}
-
-	}
-	container.add( publishButton );
-
 	// Signals
 
 	signals.editorCleared.add( function () {
@@ -218,18 +107,5 @@ function SidebarProjectApp( editor ) {
 	return container;
 
 }
-
-//
-
-function indent( text, count, space = '\t' ) {
-
-	return text
-		.split( '\n' )
-		.map( line => space.repeat( count ) + line )
-		.join( '\n' );
-
-}
-
-//
 
 export { SidebarProjectApp };

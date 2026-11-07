@@ -1,6 +1,7 @@
-function Config() {
+function Config( persist = true ) {
 
 	const name = 'threejs-editor';
+	const localStorage = persist ? window.localStorage : null;
 
 	const userLanguage = navigator.language.split( '-' )[ 0 ];
 
@@ -13,6 +14,7 @@ function Config() {
 
 		'project/title': '',
 		'project/editable': false,
+		'project/presentationEditVisible': false,
 		'project/vr': false,
 
 		'project/camera': 'perspective',
@@ -25,6 +27,7 @@ function Config() {
 		'project/renderer/toneMappingExposure': 1,
 
 		'settings/history': false,
+		'settings/theme': 'system',
 
 		'settings/shortcuts/translate': 'w',
 		'settings/shortcuts/rotate': 'e',
@@ -36,13 +39,13 @@ function Config() {
 		'settings/shortcuts/selectAll': 'a'
 	};
 
-	if ( window.localStorage[ name ] === undefined ) {
+	if ( localStorage && localStorage[ name ] === undefined ) {
 
-		window.localStorage[ name ] = JSON.stringify( storage );
+		localStorage[ name ] = JSON.stringify( storage );
 
-	} else {
+	} else if ( localStorage ) {
 
-		const data = JSON.parse( window.localStorage[ name ] );
+		const data = JSON.parse( localStorage[ name ] );
 
 		for ( const key in data ) {
 
@@ -68,7 +71,7 @@ function Config() {
 
 			}
 
-			window.localStorage[ name ] = JSON.stringify( storage );
+			if ( localStorage ) localStorage[ name ] = JSON.stringify( storage );
 
 			console.log( '[' + /\d\d\:\d\d\:\d\d/.exec( new Date() )[ 0 ] + ']', 'Saved config to LocalStorage.' );
 
@@ -76,7 +79,7 @@ function Config() {
 
 		clear: function () {
 
-			delete window.localStorage[ name ];
+			if ( localStorage ) delete localStorage[ name ];
 
 		}
 

@@ -21,28 +21,11 @@
 		<script type="importmap"><!-- importmap --></script>
 		<script type="module">
 
-			import * as THREE from 'three';
-			import { APP } from './js/app.js';
+			import { playApp } from './js/app-bootstrap.js';
 
-			window.THREE = THREE; // Used by APP Scripts.
-
-			var loader = new THREE.FileLoader();
-			loader.load( 'app.json', async function ( text ) {
-
-				var player = new APP.Player();
-				await player.load( JSON.parse( text ) );
-				player.setSize( window.innerWidth, window.innerHeight );
-				player.play();
-
-				document.body.appendChild( player.dom );
-
-				window.addEventListener( 'resize', function () {
-
-					player.setSize( window.innerWidth, window.innerHeight );
-
-				} );
-
-			} );
+			const response = await fetch( 'app.json' );
+			if ( ! response.ok ) throw new Error( 'Could not load app.json (HTTP ' + response.status + ').' );
+			await playApp( await response.json() );
 
 			/* edit button */
 

@@ -202,7 +202,7 @@ function Viewport( editor ) {
 
 		if ( onDownPosition.distanceTo( onUpPosition ) === 0 ) {
 
-			const intersects = selector.getPointerIntersects( onUpPosition, camera );
+			const intersects = selector.getPointerIntersects( onUpPosition, editor.viewportCamera );
 			signals.intersectionsDetected.dispatch( intersects, event.shiftKey );
 
 			render();
@@ -264,7 +264,7 @@ function Viewport( editor ) {
 		const array = getMousePosition( container.dom, event.clientX, event.clientY );
 		onDoubleClickPosition.fromArray( array );
 
-		const intersects = selector.getPointerIntersects( onDoubleClickPosition, camera );
+		const intersects = selector.getPointerIntersects( onDoubleClickPosition, editor.viewportCamera );
 
 		if ( intersects.length > 0 ) {
 
@@ -345,6 +345,23 @@ function Viewport( editor ) {
 
 	} );
 
+	function updateTheme() {
+
+		const dark = document.documentElement.dataset.theme === 'dark';
+		renderer.setClearColor( dark ? 0x333333 : 0xaaaaaa );
+		renderer.getClearColor( editor.viewportColor );
+		updateGridColors( grid1, grid2, dark ? GRID_COLORS_DARK : GRID_COLORS_LIGHT );
+
+	}
+
+	signals.themeChanged.add( function () {
+
+		if ( renderer === null ) return;
+		updateTheme();
+		render();
+
+	} );
+
 	signals.rendererCreated.add( function ( newRenderer ) {
 
 		if ( renderer !== null ) {
@@ -373,26 +390,7 @@ function Viewport( editor ) {
 		renderer = newRenderer;
 
 		renderer.setAnimationLoop( animate );
-		renderer.setClearColor( 0xaaaaaa );
-
-		if ( window.matchMedia ) {
-
-			const mediaQuery = window.matchMedia( '(prefers-color-scheme: dark)' );
-			mediaQuery.addEventListener( 'change', function ( event ) {
-
-				renderer.setClearColor( event.matches ? 0x333333 : 0xaaaaaa );
-				updateGridColors( grid1, grid2, event.matches ? GRID_COLORS_DARK : GRID_COLORS_LIGHT );
-
-				render();
-
-			} );
-
-			renderer.setClearColor( mediaQuery.matches ? 0x333333 : 0xaaaaaa );
-			updateGridColors( grid1, grid2, mediaQuery.matches ? GRID_COLORS_DARK : GRID_COLORS_LIGHT );
-
-		}
-
-		renderer.getClearColor( editor.viewportColor );
+		updateTheme();
 
 		renderer.setPixelRatio( window.devicePixelRatio );
 		renderer.setSize( container.dom.offsetWidth, container.dom.offsetHeight );

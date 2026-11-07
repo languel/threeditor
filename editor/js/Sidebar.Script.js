@@ -1,4 +1,4 @@
-import { UIPanel, UIBreak, UIButton, UIRow, UIInput } from './libs/ui.js';
+import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
@@ -23,7 +23,7 @@ function SidebarScript( editor ) {
 	const newScript = new UIButton( strings.getKey( 'sidebar/script/new' ) );
 	newScript.onClick( function () {
 
-		const script = { name: '', source: 'function update( event ) {}' };
+		const script = { name: '', source: 'function update( event ) {}', enabled: true };
 		editor.execute( new AddScriptCommand( editor, editor.selected, script ) );
 
 	} );
@@ -68,6 +68,22 @@ function SidebarScript( editor ) {
 
 					} );
 					scriptsContainer.add( name );
+
+					if ( ! script.generated ) {
+
+						const enabled = new UICheckbox( script.enabled !== false ).setMarginLeft( '6px' );
+						enabled.dom.title = 'Enable script in Play';
+						enabled.dom.setAttribute( 'aria-label', 'Enable ' + ( script.name || 'script ' + ( i + 1 ) ) );
+						enabled.onChange( function () {
+
+							const command = new SetScriptValueCommand( editor, object, script, 'enabled', this.getValue() );
+							command.updatable = false;
+							editor.execute( command );
+
+						} );
+						scriptsContainer.add( enabled );
+
+					}
 
 					const edit = new UIButton( strings.getKey( 'sidebar/script/edit' ) );
 					edit.setMarginLeft( '4px' );

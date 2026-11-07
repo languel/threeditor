@@ -1,5 +1,5 @@
 :root {
-	color-scheme: light dark;
+	color-scheme: light;
 }
 
 [hidden] {
@@ -316,15 +316,52 @@ hr {
 
 /* UI */
 
+body {
+	--menubar-height: 36px;
+	--sidebar-size: clamp(335px, var(--sidebar-width, 350px), 50vw);
+	--code-size: min(var(--code-width, 520px), calc(100vw - var(--right-dock) - 100px));
+	--animation-height: 36px;
+	--left-dock: 0px;
+	--right-dock: 0px;
+	--timeline-h: 0px;
+	--sidebar-bottom: 0px;
+}
+
+body:has(#code-panel[data-dock="open"]) { --left-dock: var(--code-size); }
+body:has(#sidebar[data-dock="open"]) { --right-dock: var(--sidebar-size); }
+body:has(#animation[data-dock="open"]) { --timeline-h: var(--animation-height); }
+
+[data-dock="closed"], #toolbar[hidden] { display: none !important; }
+
+.panel-edge {
+	position: absolute;
+	z-index: 7;
+}
+
+.panel-edge.left, .panel-edge.right {
+	top: calc(var(--menubar-height) + 12px);
+	bottom: calc(var(--timeline-h) + 12px);
+	width: 8px;
+}
+
+.panel-edge.left { left: 0; }
+.panel-edge.right { right: 0; }
+.panel-edge.bottom { left: 12px; right: 12px; bottom: 0; height: 8px; }
+
+@media (hover: none) {
+	.panel-edge { display: none; }
+}
+
 #resizer {
 	position: absolute;
-	z-index: 2; /* Above #sidebar */
-	top: 36px;
-	right: 350px;
+	z-index: 4; /* Above #sidebar */
+	top: var(--menubar-height);
+	right: var(--sidebar-size);
 	width: 5px;
 	bottom: var(--timeline-h, 0px);
 	transform: translatex(2.5px);
 	cursor: col-resize;
+	touch-action: none;
 }
 
 	#resizer:hover {
@@ -340,10 +377,10 @@ hr {
 
 #viewport {
 	position: absolute;
-	top: 36px;
-	left: 0;
-	right: 350px;
-	bottom: 36px;
+	top: var(--menubar-height);
+	left: var(--left-dock);
+	right: var(--right-dock);
+	bottom: calc(var(--timeline-h) + var(--sidebar-bottom));
 }
 
 	#viewport .Text {
@@ -357,7 +394,7 @@ hr {
 	right: 0;
 	z-index: 5;
 	bottom: 0;
-	height: 36px;
+	height: var(--animation-height);
 	background: #eee;
 	border-top: 1px solid #ccc;
 	display: none;
@@ -376,10 +413,11 @@ hr {
 	position: absolute;
 	left: 0;
 	right: 0;
-	bottom: var(--timeline-h, 36px);
+	bottom: var(--animation-height);
 	height: 5px;
 	transform: translateY(2.5px);
 	cursor: row-resize;
+	touch-action: none;
 	z-index: 6;
 }
 
@@ -396,41 +434,70 @@ hr {
 
 #script {
 	position: absolute;
-	top: 36px;
-	left: 0;
-	right: 350px;
+	top: var(--menubar-height);
+	left: var(--left-dock);
+	right: var(--right-dock);
 	bottom: 0;
 	opacity: 0.9;
 }
 
 #player {
 	position: absolute;
-	top: 36px;
-	left: 0;
-	right: 350px;
-	bottom: var(--timeline-h, 0px);
+	top: var(--menubar-height);
+	left: var(--left-dock);
+	right: var(--right-dock);
+	bottom: calc(var(--timeline-h) + var(--sidebar-bottom));
 	background: #aaa; /* opaque, so the editor viewport doesn't show through the play view */
 	z-index: 2;
 }
 
-@media ( prefers-color-scheme: dark ) {
+:root[data-theme="dark"] {
 
 	#player { background: #222; }
 
 }
 
 body.presenting #player {
-	top: 0;
-	left: 0 !important;
-	right: 0;
-	bottom: 0;
+	inset: 0;
 	z-index: 100;
+}
+
+.presentation-exit {
+	display: none;
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 1;
+	width: 44px;
+	height: 44px;
+	box-sizing: border-box;
+	border: 1px solid #ffffff55;
+	border-radius: 5px;
+	padding: 10px;
+	background: #161616dd;
+	color: #fff;
+	cursor: pointer;
+	opacity: 0;
+}
+
+.presentation-exit svg { display: block; }
+
+body.presenting .presentation-exit { display: block; }
+
+.presentation-exit:is(:focus-visible, .always-visible, .touch-revealed) { opacity: 1; }
+
+@media (hover: hover) {
+	.presentation-exit:hover { opacity: 1; }
+}
+
+body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-panel, #animation, #animation-resizer, .panel-edge) {
+	visibility: hidden;
 }
 
 #menubar {
 	position: absolute;
 	width: 100%;
-	height: 36px;
+	height: var(--menubar-height);
 	background: #eee;
 	padding: 0;
 	margin: 0;
@@ -439,17 +506,38 @@ body.presenting #player {
 	z-index: 10; /* dropdowns above the code panel, timeline and resizers */
 }
 
+.panel-toggles {
+	float: right;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 36px;
+	padding: 0 6px;
+	color: #777;
+}
+
+.panel-toggles button {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.panel-toggles svg { width: 19px; height: 19px; }
+.panel-toggles button:hover { background: #08f2; }
+.panel-toggles button[aria-pressed="true"] { background: #08f2; color: #167ac4; }
+
+
 	#menubar .menu {
 		float: left;
 		cursor: pointer;
 		padding-right: 8px;
-	}
-
-	#menubar .menu.right {
-		float: right;
-		cursor: auto;
-		padding-right: 0;
-		text-align: right;
 	}
 
 		#menubar .menu .title {
@@ -545,9 +633,10 @@ body.presenting #player {
 #sidebar {
 	position: absolute;
 	right: 0;
-	top: 36px;
-	bottom: var(--timeline-h, 0px);
-	width: 350px;
+	top: var(--menubar-height);
+	bottom: var(--timeline-h);
+	width: var(--sidebar-size);
+	z-index: 3;
 	background: #eee;
 	overflow: auto;
 	overflow-x: hidden;
@@ -576,6 +665,41 @@ body.presenting #player {
 
 	}
 
+.settings {
+	padding: 8px;
+}
+
+.settings-section {
+	margin-bottom: 6px;
+	border: 1px solid #ccc;
+	border-radius: 5px;
+}
+
+.settings-section > summary {
+	padding: 9px 10px;
+	color: #555;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.settings-section > summary:hover {
+	background: #08f1;
+}
+
+#sidebar .settings-section > .Panel {
+	padding: 4px 10px 10px;
+	border-top: 0;
+}
+
+.settings-section .Row:last-child {
+	margin-bottom: 0;
+}
+
+.settings-checkbox {
+	display: inline-block;
+	cursor: pointer;
+}
+
 #tabs {
 	background-color: #ddd;
 	border-top: 1px solid #ccc;
@@ -594,9 +718,9 @@ body.presenting #player {
 
 #toolbar {
 	position: absolute;
-	left: calc(50% - 175px);
+	left: calc((100% + var(--left-dock) - var(--right-dock)) / 2);
 	transform: translateX(-50%);
-	bottom: 56px;
+	bottom: calc(var(--timeline-h) + var(--sidebar-bottom) + 20px);
 	height: 32px;
 	background: #eee;
 	text-align: center;
@@ -675,67 +799,49 @@ body.presenting #player {
 
 /* */
 
-@media all and ( max-width: 600px ) {
-
-	#resizer {
-		display: none;
+@media (max-width: 600px) {
+	body {
+		--menubar-height: 68px;
+		--code-size: min(var(--code-width, 520px), 90vw);
+		--sidebar-size: 100%;
 	}
 
-	#animation-resizer {
-		display: none;
+	body:has(#code-panel[data-dock="open"]) { --left-dock: 0px; }
+	body:has(#sidebar[data-dock="open"]) {
+		--right-dock: 0px;
+		--sidebar-bottom: min(320px, 40dvh);
 	}
 
-	#menubar .menu .options {
-		max-height: calc(100% - 80px);
+	#resizer, #code-resizer { display: none; }
+
+	.panel-edge.right {
+		top: auto;
+		height: calc(min(320px, 40dvh) - 24px);
 	}
 
-	#menubar .menu.right {
-		display: none;
-	}
+	#menubar .menu { padding-right: 0; }
+	#menubar .menu .title { padding-inline: 8px; }
 
-	#viewport {
-		left: 0;
+	.panel-toggles {
+		position: absolute;
 		right: 0;
 		top: 36px;
-		height: calc(100% - 356px);
-	}
-
-	#script {
-		left: 0;
-		right: 0;
-		top: 36px;
-		height: calc(100% - 356px);
-	}
-
-	#player {
-		left: 0;
-		right: 0;
-		top: 36px;
-		height: calc(100% - 356px);
+		height: 32px;
 	}
 
 	#sidebar {
-		left: 0;
-		width: 100%;
-		top: calc(100% - 320px);
-		bottom: 0;
+		top: auto;
+		height: min(320px, 40dvh);
 	}
-
-	#toolbar {
-		left: 50%;
-		transform: translateX(-50%);
-		bottom: 330px;
-	}
-
-	#animation {
-		display: none !important;
-	}
-
 }
 
 /* DARK MODE */
 
-@media ( prefers-color-scheme: dark ) {
+:root[data-theme="dark"] {
+	color-scheme: dark;
+
+	.settings-section { border-color: #333; }
+	.settings-section > summary { color: #bbb; }
 
 	.Button {
 		color: #aaa;
@@ -1012,7 +1118,7 @@ body.presenting #player {
 	margin-top: 0;
 }
 
-@media ( prefers-color-scheme: dark ) {
+:root[data-theme="dark"] {
 
 	.TextureParametersDialog-groupHeading {
 		border-bottom-color: #444;
@@ -1026,7 +1132,7 @@ body.presenting #player {
 	line-height: 16px;
 }
 
-@media ( prefers-color-scheme: dark ) {
+:root[data-theme="dark"] {
 
 	.Dialog-content {
 		background: #111;
@@ -1052,8 +1158,9 @@ body.presenting #player {
 #code-panel {
 	position: absolute;
 	left: 0;
-	top: 36px;
-	bottom: var(--timeline-h, 0px);
+	top: var(--menubar-height);
+	bottom: var(--timeline-h);
+	width: var(--code-size);
 	display: flex;
 	flex-direction: column;
 	background: #eee;
@@ -1168,9 +1275,11 @@ body.presenting #player {
 .cm-s-editor .cm-meta { color: #888; }
 .cm-s-editor .CodeMirror-matchingbracket { color: #08f !important; outline: 1px solid #08f6; }
 
-@media ( prefers-color-scheme: dark ) {
+:root[data-theme="dark"] {
 
 	#code-panel { background: #111; color: #aaa; }
+	.panel-toggles { color: #aaa; }
+	.panel-toggles button[aria-pressed="true"] { color: #75bfff; }
 	#code-panel .code-status { color: #888; border-bottom-color: #222; }
 	#code-panel .code-status.error { color: #f66; }
 

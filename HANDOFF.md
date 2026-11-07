@@ -1,38 +1,37 @@
 # Handoff
 
-Origin: an experiment in `languel/threejslessons` (folder `editor-experiment/`, branch history there has the full commit trail). Goal: a lightweight Blender-like staging tool for students that exports readable three.js code in the style of the lessons (`const cube = new THREE.Mesh(...)`, hierarchy via `add()`, comments).
+threeditor started as the `editor-experiment/` folder in `languel/threejslessons`. It now runs as a static three.js r187 workspace with a docked Code panel, clip preview, presentation mode, and offline publishing.
 
-## State
+## Run and deploy
 
-Working: everything in README. Verified manually in a browser (Playwright) at each step; there is no automated test suite.
+- Run `python3 -m http.server 5300` from the repository root and open `/editor/`. Keep the trailing slash for the relative module and asset paths.
+- GitHub Pages uses the Actions workflow in `.github/workflows/pages.yml`. A push to `main` assembles the static site and deploys it. The workflow can also be dispatched manually.
+- Smoke-test the deployed editor, including the `/threeditor/` base path, at [GitHub Pages](https://languel.github.io/threeditor/editor/).
+- The editor still registers the upstream cleanup service worker. It unregisters itself and clears old caches. Hard-reload if an older session is serving stale modules.
 
-## Key design points
+## Implementation map
 
-- Scripts/shaders: `CodePanel.js` replaces the old `Script.js` popup (removed); it handles `signals.editScript`. The Scene carries a `generated: true` script (`scene.js`) mirroring the code; `libs/app.js` skips `generated` scripts. `generateThreeCode` also returns `ranges` (object uuid → line range) used for selection highlight.
-- Upstream coupling is small: changes are in `ThreeCodeExporter.js`, `CodePanel.js` (new), plus edits in `Menubar.js`, `Menubar.File.js`, `Viewport.js`, `Viewport.Controls.js`, `Player.js`, `libs/app.js`, `Loader.js`, `Animation.js`, `Resizer.js`, `Sidebar.Project.App.js`, `css/main.css`, `index.html`. Search these for what differs from stock r187 before upgrading three.
-- Code ↔ scene: the generated file has a `// @key Scene contents` … `// @/key` section. Apply runs only that section via `buildSceneFromCode` with stand-ins for `renderer`, `camera`, `controls`, `pmrem` (a Proxy over the real renderer with mutating calls disabled). Keep that contract when changing the generator.
-- Assets: textures are re-encoded from memory; imported models keep their original files in `editor.sourceFiles`; a persistent asset map keeps blob URLs stable across regenerations. Text/URL paths in code are `assets/<name>`; Single HTML replaces those quoted literals with data URIs.
-- Layout uses `--timeline-h` on `body`; z-index order: menubar 10, timeline resizer 6, timeline 5, code resizer 4, code panel 3, player 2, left sidebar resizer 2.
-- Keyboard: Z/Shift+Z use `event.key`; Alt shortcuts use `event.code` (macOS Alt+P types a symbol). The CodePanel stops key propagation so editor shortcuts don't fire in the code box; a capture pointerdown blurs CodeMirror when clicking elsewhere.
+| Area | Entry points and behavior |
+| --- | --- |
+| Startup | `editor/index.html` loads `EditorApp.js`. The same startup initializes hosted and packaged sessions. The hosted session restores IndexedDB state and retains imported source files in `editor.sourceFiles`. |
+| Code and scripts | `CodePanel.js` mirrors generated `scene.js`, follows selection, and edits object scripts and shaders. `ThreeCodeExporter.js` emits readable source and object line ranges. Apply executes the marked Scene contents section with runtime stand-ins. `libs/app.js` skips generated and disabled scripts. |
+| Camera and lighting | `Editor.toJSON()` stores the editor camera in `camera` and the viewport camera UUID in `viewportCamera`. Legacy saves with a duplicate camera UUID recover the default editor camera. The player resolves the selected scene camera in the loaded graph so parent transforms and camera scripts affect playback. The source exporter captures the selected camera's framing and rebuilds procedural environment lighting. |
+| Workspace | `PanelDock.js` manages docked, collapsed, and overlay states. CSS variables reserve space for docked panels. `Animation.js` previews one active clip. `Sidebar.Settings.js` contains the settings sections. The resolved theme updates the editor CSS and viewport grid and clear color. |
+| ZIP and playback | `Publish.js` validates supported module and asset dependencies. Source project generates JavaScript, while Playable scene serializes the scene and shares `libs/app-bootstrap.js` with Playable HTML. `SingleHtml.js` uses the vendored esbuild WASM for a single-file player. |
+| Portable editor | `EditorHtml.js` bundles the editor and embeds the project, scripts, source files, and runtime assets. `PortableSession.js` restores them and saves a new HTML copy without rebuilding the editor bundle. Its presentation stack icon is hidden until hover or focus by default. The `project/presentationEditVisible` preference travels in the embedded config. |
 
-## Gotchas
+## Verification and limits
 
-- Serve `/editor/` with the trailing slash; a server that redirects `index.html` breaks relative paths.
-- Service worker + module caching: hard-reload (or disable cache in devtools) when testing.
-- `realistic` shading (path tracer) logs a `cube_uv_reflection_fragment` shader error; excluded from the Z cycle. Not checked against stock upstream.
-- Playwright tip: menu hover is CSS-driven; click options through `document.querySelectorAll('#menubar .option')`.
+Chrome smoke tests have covered editable and playable files opening offline, an animated GLB, glTF companion files, an object script with a packaged asset and module, disabled scripts, camera recovery, environment lighting, panel controls, theme switching, and re-saving an edited HTML copy. WebGPU packaging has been checked at build time. Runtime playback checks used WebGL. Browser smoke tests currently run outside the repository.
 
-## Known gaps / next steps
+- Older autosaves and standalone project JSON files may require re-importing the original model and companion files for source publishing.
+- Dependency discovery covers static imports and supported literal asset paths. Custom runtime code can require additional packaging support. A portable editor re-save retains the libraries bundled in the original HTML. Build with the hosted editor when adding new module dependencies or producing ZIP or Playable exports.
+- Source publishing reconstructs the scene from its supported material, geometry, and lighting features. Use the serialized player for attached object behavior.
+- The path tracer is opt-in under **Realistic**. A shader error has been observed in that view. The regular preview and published WebGL paths were used for visual checks.
+- When upgrading three.js, compare the editor and vendored build/addons against upstream and rerun the publish and import smoke tests.
 
-1. Persist imported source files (IndexedDB) so models survive reloads; currently Apply/zip fail for them until re-imported.
-2. Export background/environment textures (HDR/equirect).
-3. Lighting parity when a background colour is set (editor vs. exported default environment).
-4. Custom shaders and exotic geometry (currently raw buffers). Object scripts live in `editor.scripts` and are not part of the generated code; Apply re-attaches them to objects by name.
-5. Teaching focus: beginner-friendly controls (Blender-style navigation/shortcuts, simplified UI/sidebar, lesson presets that load the repo's lesson scenes, code annotations/comments, hide advanced panels).
-6. Consider trimming `examples/jsm` and the 13 MB wasm to what is used, or loading them on demand.
-7. Add smoke tests (Playwright) for: add Box → code contains `BoxGeometry`; Apply round trip; each Publish option; Z cycle.
-8. Upgrading three: replace `build/`, `examples/jsm/`, and diff `editor/` against the new upstream editor, re-applying the files listed above.
+## Licenses
 
-## License
-
-three.js editor and library: MIT (`LICENSE`). esbuild-wasm: MIT (`editor/js/libs/esbuild-wasm/LICENSE.md`).
+- three.js editor and library are MIT. See `LICENSE`.
+- esbuild-wasm is MIT. See `editor/js/libs/esbuild-wasm/LICENSE.md`.
+- Acorn 8.15.0 is MIT. See `editor/js/libs/acorn/LICENSE`.

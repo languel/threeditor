@@ -14,8 +14,33 @@ function Player( editor ) {
 
 	//
 
-	const player = new APP.Player();
+	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript );
 	container.dom.appendChild( player.dom );
+	const exit = editor.portable ? document.createElement( 'button' ) : null;
+	if ( exit ) {
+
+		exit.type = 'button';
+		exit.className = 'presentation-exit';
+		const label = editor.strings.getKey( 'sidebar/project/app/edit-scene' );
+		exit.title = label + ' (Esc)';
+		exit.setAttribute( 'aria-label', label );
+		exit.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></svg>';
+		exit.addEventListener( 'click', ( event ) => {
+
+			// Touch has no hover. A tap on the corner reveals the button first.
+			if ( event.pointerType === 'touch' && ! exit.classList.contains( 'always-visible' ) && ! exit.classList.contains( 'touch-revealed' ) ) {
+
+				exit.classList.add( 'touch-revealed' );
+				return;
+
+			}
+
+			signals.stopPlayer.dispatch();
+
+		} );
+		container.dom.appendChild( exit );
+
+	}
 
 	window.addEventListener( 'resize', function () {
 
@@ -35,6 +60,7 @@ function Player( editor ) {
 
 		const json = editor.toJSON();
 		await player.load( json );
+		if ( container.dom.style.display === 'none' ) return;
 
 		// Match the editor's look: neutral clear colour and the "Default" room environment (the player has its own GL context)
 		const renderer = player.getRenderer();
@@ -80,7 +106,7 @@ function Player( editor ) {
 	// Alt+Cmd+P: presentation mode (fullscreen, no editor UI)
 	let presenting = false;
 
-	function present() {
+	function present( fullscreen = true ) {
 
 		if ( presenting ) {
 
@@ -91,19 +117,34 @@ function Player( editor ) {
 
 		presenting = true;
 		if ( document.activeElement ) document.activeElement.blur();
+		if ( exit ) {
+
+			exit.classList.remove( 'touch-revealed' );
+			exit.classList.toggle( 'always-visible', editor.config.getKey( 'project/presentationEditVisible' ) === true );
+
+		}
 		document.body.classList.add( 'presenting' );
-		if ( document.fullscreenElement === null && document.documentElement.requestFullscreen ) document.documentElement.requestFullscreen().catch( function () {} );
-		signals.startPlayer.dispatch();
+		if ( fullscreen && document.fullscreenElement === null && document.documentElement.requestFullscreen ) document.documentElement.requestFullscreen().catch( function () {} );
+		if ( container.dom.style.display === 'none' ) signals.startPlayer.dispatch();
+		else signals.windowResize.dispatch();
 
 	}
 
 	document.addEventListener( 'keydown', function ( event ) {
 
+		if ( presenting && event.key === 'Escape' && ! document.fullscreenElement ) {
+
+			event.preventDefault();
+			signals.stopPlayer.dispatch();
+			return;
+
+		}
+
 		if ( event.code !== 'KeyP' || ! event.altKey || ! event.metaKey || event.ctrlKey ) return;
 		event.preventDefault();
-		present();
+		if ( ! event.repeat ) present();
 
-	} );
+	}, true );
 
 	document.addEventListener( 'fullscreenchange', function () {
 
@@ -130,7 +171,7 @@ function Player( editor ) {
 
 	} );
 
-	return container;
+	return { dom: container.dom, present };
 
 }
 

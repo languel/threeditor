@@ -1,5 +1,5 @@
 
-import { UIButton, UIPanel, UIBreak, UIText } from './libs/ui.js';
+import { UIButton, UIPanel, UIBreak } from './libs/ui.js';
 import { UIBoolean, UIOutliner } from './libs/ui.three.js';
 
 function SidebarSettingsHistory( editor ) {
@@ -11,12 +11,7 @@ function SidebarSettingsHistory( editor ) {
 
 	const container = new UIPanel();
 
-	container.add( new UIText( strings.getKey( 'sidebar/history' ).toUpperCase() ) );
-
-	//
-
 	const persistent = new UIBoolean( config.getKey( 'settings/history' ), strings.getKey( 'sidebar/history/persistent' ) );
-	persistent.setPosition( 'absolute' ).setRight( '8px' );
 	persistent.onChange( function () {
 
 		const value = this.getValue();

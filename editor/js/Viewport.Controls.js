@@ -22,6 +22,7 @@ function ViewportControls( editor ) {
 
 	signals.cameraAdded.add( update );
 	signals.cameraRemoved.add( update );
+	signals.viewportCameraChanged.add( () => cameraSelect.setValue( editor.viewportCamera.uuid ) );
 	signals.objectChanged.add( function ( object ) {
 
 		if ( object.isCamera ) {

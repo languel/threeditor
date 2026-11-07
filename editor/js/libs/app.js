@@ -1,8 +1,8 @@
-/* global THREE */ /* assigned at ./app/index.html */
+/* global THREE, __THREEEDITOR_RENDERER__ */
 
 const APP = {
 
-	Player: function () {
+	Player: function ( importScriptModule, prepareScript ) {
 
 		let renderer;
 
@@ -33,7 +33,10 @@ const APP = {
 
 			}
 
-			if ( project.renderer === 'WebGPURenderer' ) {
+			// A single-file player knows its renderer at build time.
+			if ( typeof __THREEEDITOR_RENDERER__ === 'undefined'
+				? project.renderer === 'WebGPURenderer'
+				: __THREEEDITOR_RENDERER__ === 'WebGPURenderer' ) {
 
 				const { WebGPURenderer } = await import( 'three/webgpu' );
 				renderer = new WebGPURenderer( { antialias: true, reversedDepthBuffer: true } );
@@ -56,7 +59,8 @@ const APP = {
 			this.canvas = renderer.domElement;
 
 			this.setScene( loader.parse( json.scene ) );
-			this.setCamera( loader.parse( json.camera ) );
+			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
+			this.setCamera( sceneCamera?.isCamera ? sceneCamera : loader.parse( json.camera ) );
 
 			events = {
 				init: [],
@@ -71,6 +75,14 @@ const APP = {
 			};
 
 			let scriptWrapParams = 'player,renderer,scene,camera';
+			const scriptArgs = [ this, renderer, scene, camera ];
+			if ( importScriptModule ) {
+
+				scriptWrapParams += ',__publishImport';
+				scriptArgs.push( importScriptModule );
+
+			}
+
 			const scriptWrapResultObj = {};
 
 			for ( var eventKey in events ) {
@@ -99,9 +111,10 @@ const APP = {
 
 					const script = scripts[ i ];
 
-					if ( script.generated ) continue; // the mirrored scene code is documentation, not runtime behaviour
+					if ( script.generated || script.enabled === false ) continue;
 
-					const functions = ( new Function( scriptWrapParams, script.source + '\nreturn ' + scriptWrapResult + ';' ).bind( object ) )( this, renderer, scene, camera );
+					const source = prepareScript ? prepareScript( script.source ) : script.source;
+					const functions = ( new Function( scriptWrapParams, source + '\nreturn ' + scriptWrapResult + ';' ).bind( object ) )( ...scriptArgs );
 
 					for ( const name in functions ) {
 

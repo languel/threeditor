@@ -7,7 +7,8 @@
 // The view follows the selection: nothing -> scene code; object with a script -> that script; otherwise the
 // scene code scrolled to the object's lines.
 
-import { generateThreeCode, assetsToBlobs, exportThreeArchive, exportThreeHtml, buildSceneFromCode } from './ThreeCodeExporter.js';
+import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCodeExporter.js';
+import { PanelDock } from './PanelDock.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 import buildThreeDefs from './libs/tern-threejs/build-defs.js';
@@ -19,7 +20,6 @@ function CodePanel( editor ) {
 
 	const dom = document.createElement( 'div' );
 	dom.id = 'code-panel';
-	dom.style.display = 'none';
 
 	const bar = document.createElement( 'div' );
 	bar.className = 'code-bar';
@@ -67,7 +67,6 @@ function CodePanel( editor ) {
 	let dirty = false; // code edited but not applied yet
 	let applying = false;
 	let setting = false;
-	let assets = [];
 	let assetsReady = Promise.resolve( new Map() );
 	let urls = new Map();
 	const store = new Map(); // path -> Blob, survives regeneration so reloaded textures keep their bytes
@@ -128,7 +127,7 @@ function CodePanel( editor ) {
 	} );
 	const sceneOnly = [ applyBtn, autoLabel, regenBtn ];
 	const sceneCode = () => target.kind === 'scene' ? getCode() : sceneText;
-	const isOpen = () => dom.style.display !== 'none';
+	const isOpen = () => dock.isVisible();
 
 	// --- scene script (generated code mirrored onto the Scene) ---
 
@@ -453,8 +452,14 @@ function CodePanel( editor ) {
 		try {
 
 			server = new window.CodeMirror.TernServer( { caseInsensitive: true } );
-			const source = await ( await fetch( new URL( '../build/three.core.js', document.baseURI ).href ) ).text();
-			server.server.defs.push( buildThreeDefs( source ) );
+			let defs = editor.portable?.threeDefs;
+			if ( ! defs ) {
+
+				const url = new URL( '../build/three.core.js', document.baseURI );
+				defs = buildThreeDefs( await ( await fetch( url ) ).text() );
+
+			}
+			server.server.defs.push( defs );
 			server.server.reset();
 
 			cm.addKeyMap( {
@@ -491,25 +496,7 @@ function CodePanel( editor ) {
 		}
 
 	} );
-	button( '.js', 'code-dl-js', 'Download main.js', () => editor.utils.save( new Blob( [ sceneCode() ], { type: 'text/javascript' } ), 'scene.js' ) );
-	button( '.html', 'code-dl-html', 'Single HTML page that loads three from a CDN (no textures/models)', () => editor.utils.save( new Blob( [ exportThreeHtml( sceneCode(), 'cdn' ) ], { type: 'text/html' } ), 'scene.html' ) );
-	button( '.zip', 'code-dl-zip', 'Standalone archive: page, code, textures, models and a local copy of three.js', async () => {
-
-		try {
-
-			setStatus( 'Building archive…' );
-			const blobs = await assetsReady;
-			const zip = await exportThreeArchive( sceneCode(), blobs );
-			editor.utils.save( zip, 'three-scene.zip' );
-			setStatus( 'Archive saved (' + Math.round( zip.size / 1024 ) + ' KB, ' + blobs.size + ' asset files).' );
-
-		} catch ( e ) {
-
-			setStatus( 'Archive failed: ' + e.message, true );
-
-		}
-
-	} );
+	button( '.js', 'code-dl-js', 'Download scene source only', () => editor.utils.save( new Blob( [ sceneCode() ], { type: 'text/javascript' } ), 'scene.js' ) );
 
 	dom.addEventListener( 'keydown', ( e ) => {
 
@@ -564,8 +551,7 @@ function CodePanel( editor ) {
 		sceneText = result.code;
 		ranges = result.ranges;
 		ensureSceneScript( result.code );
-		assets = result.assets;
-		assetsReady = assetsToBlobs( assets, store ).then( ( map ) => {
+		assetsReady = assetsToBlobs( result.assets, store ).then( ( map ) => {
 
 			for ( const [ p, b ] of map ) {
 
@@ -578,7 +564,7 @@ function CodePanel( editor ) {
 
 			}
 
-			return new Map( [ ...map ].filter( ( [ p ] ) => assets.some( ( a ) => a.path === p ) ) );
+			return map;
 
 		} ).catch( ( e ) => {
 
@@ -687,6 +673,7 @@ function CodePanel( editor ) {
 
 			const result = generateThreeCode( editor );
 			sceneText = result.code;
+			if ( target.kind === 'scene' ) setCode( result.code );
 			ranges = result.ranges;
 			ensureSceneScript( result.code );
 
@@ -702,11 +689,17 @@ function CodePanel( editor ) {
 
 		if ( applying ) return;
 		clearTimeout( timer );
-		timer = setTimeout( () => isOpen() ? regenerate( false ) : syncClosed(), isOpen() ? 250 : 600 );
+		timer = setTimeout( () => {
+
+			timer = 0;
+			if ( isOpen() ) regenerate( false );
+			else syncClosed();
+
+		}, isOpen() ? 250 : 600 );
 
 	}
 
-	for ( const s of [ 'objectAdded', 'objectChanged', 'objectRemoved', 'geometryChanged', 'materialChanged', 'sceneGraphChanged', 'sceneFogChanged', 'sceneFogSettingsChanged', 'sceneBackgroundChanged', 'refreshSidebarObject3D', 'editorCleared' ] ) {
+	for ( const s of [ 'objectAdded', 'objectChanged', 'objectRemoved', 'geometryChanged', 'materialChanged', 'sceneGraphChanged', 'sceneFogChanged', 'sceneFogSettingsChanged', 'sceneBackgroundChanged', 'sceneEnvironmentChanged', 'cameraChanged', 'cameraResetted', 'viewportCameraChanged', 'refreshSidebarObject3D', 'editorCleared' ] ) {
 
 		signals[ s ].add( schedule );
 
@@ -721,7 +714,7 @@ function CodePanel( editor ) {
 
 	signals.editScript.add( ( object, script ) => {
 
-		if ( ! isOpen() ) open();
+		dock.toggle( true );
 
 		if ( typeof script === 'object' ) {
 
@@ -754,33 +747,8 @@ function CodePanel( editor ) {
 
 	// Layout: the panel docks to the left of the viewport.
 	const MIN_WIDTH = 280;
-	let WIDTH = Math.max( MIN_WIDTH, parseInt( localStorage.getItem( 'threejs-editor/code-panel-width' ) ) || 520 );
-	const shifted = [ 'viewport', 'player' ];
-
-	function layout( open ) {
-
-		dom.style.display = open ? '' : 'none';
-		dom.style.width = WIDTH + 'px';
-		for ( const id of shifted ) {
-
-			const el = document.getElementById( id );
-			if ( el ) el.style.left = open ? WIDTH + 'px' : '';
-
-		}
-
-		const toolbar = document.getElementById( 'toolbar' );
-		const sidebar = document.getElementById( 'sidebar' );
-		if ( toolbar && sidebar ) {
-
-			const left = open ? WIDTH : 0;
-			toolbar.style.left = ( left + ( document.body.offsetWidth - left - sidebar.offsetWidth ) / 2 ) + 'px';
-
-		}
-
-		signals.windowResize.dispatch();
-		if ( cm ) cm.refresh();
-
-	}
+	let WIDTH = Math.max( MIN_WIDTH, ( ! editor.portable && parseInt( localStorage.getItem( 'threejs-editor/code-panel-width' ) ) ) || 520 );
+	document.body.style.setProperty( '--code-width', WIDTH + 'px' );
 
 	const handle = document.createElement( 'div' );
 	handle.id = 'code-resizer';
@@ -788,15 +756,17 @@ function CodePanel( editor ) {
 
 	handle.addEventListener( 'pointerdown', ( e ) => {
 
-		if ( e.isPrimary === false ) return;
+		if ( e.isPrimary === false || e.button !== 0 ) return;
 		e.preventDefault();
 		handle.setPointerCapture( e.pointerId );
 		handle.classList.add( 'active' );
 		const move = ( ev ) => {
 
-			const max = Math.max( MIN_WIDTH, document.body.offsetWidth - 335 - 100 );
+			const right = parseFloat( getComputedStyle( document.getElementById( 'viewport' ) ).right ) || 0;
+			const max = Math.max( MIN_WIDTH, window.innerWidth - right - 100 );
 			WIDTH = Math.round( Math.min( max, Math.max( MIN_WIDTH, ev.clientX ) ) );
-			layout( true );
+			document.body.style.setProperty( '--code-width', WIDTH + 'px' );
+			signals.windowResize.dispatch();
 
 		};
 
@@ -804,47 +774,46 @@ function CodePanel( editor ) {
 
 			handle.classList.remove( 'active' );
 			handle.removeEventListener( 'pointermove', move );
-			handle.removeEventListener( 'pointerup', up );
-			localStorage.setItem( 'threejs-editor/code-panel-width', String( WIDTH ) );
+			handle.removeEventListener( 'lostpointercapture', up );
+			if ( ! editor.portable ) localStorage.setItem( 'threejs-editor/code-panel-width', String( WIDTH ) );
 
 		};
 
 		handle.addEventListener( 'pointermove', move );
-		handle.addEventListener( 'pointerup', up );
+		handle.addEventListener( 'lostpointercapture', up );
 
 	} );
 
-	function open() {
+	const dock = new PanelDock( editor, dom, handle, 'left', false, () => {
 
-		layout( true );
 		regenerate( false );
+		follow( editor.selected, true );
 
-	}
+	} );
 
-	function toggle( force ) {
-
-		const next = force === undefined ? dom.style.display === 'none' : force;
-		if ( next ) {
-
-			open();
-			follow( editor.selected, true );
-
-		} else {
-
-			layout( false );
-
-		}
-
-	}
 
 	const getPublishInputs = async () => {
 
-		if ( sceneCode().trim() === '' ) regenerate( true );
-		return { code: sceneCode(), blobs: await assetsReady };
+		const generated = generateThreeCode( editor );
+		const current = sceneCode();
+		const code = ! current.trim() || ( ! dirty && timer ) ? generated.code : current;
+		if ( code === generated.code && generated.assetIssues.length ) throw new Error( generated.assetIssues.join( '\n' ) );
+
+		const files = [ ...( editor.sourceFiles || [] ) ];
+		const cached = new Map( store );
+		const blobs = await assetsToBlobs( generated.assets, cached );
+		if ( dirty ) for ( const [ path, blob ] of cached ) if ( ! blobs.has( path ) ) blobs.set( path, blob );
+		for ( const [ path, { file } ] of files ) {
+
+			if ( ! blobs.has( 'assets/' + path ) ) blobs.set( 'assets/' + path, file );
+
+		}
+
+		return { code, blobs };
 
 	};
 
-	return { dom, getPublishInputs, toggle, apply, regenerate, isOpen: () => dom.style.display !== 'none' };
+	return { dom, dock, getPublishInputs, toggle: dock.toggle, apply, regenerate, isOpen };
 
 }
 

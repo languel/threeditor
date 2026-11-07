@@ -20,10 +20,6 @@ function SidebarSettingsShortcuts( editor ) {
 
 	const container = new UIPanel();
 
-	const headerRow = new UIRow();
-	headerRow.add( new UIText( strings.getKey( 'sidebar/settings/shortcuts' ).toUpperCase() ) );
-	container.add( headerRow );
-
 	const shortcuts = [ 'translate', 'rotate', 'scale', 'undo', 'focus', 'perspective', 'orthographic', 'selectAll' ];
 
 	function createShortcutInput( name ) {

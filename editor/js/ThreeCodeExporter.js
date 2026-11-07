@@ -32,13 +32,15 @@ function drawable( image ) {
 function generateThreeCode( editor ) {
 
 	const assets = [];
+	const assetIssues = [];
 	const texVars = new Map();
 	const texLines = [];
 	const usedPaths = new Set();
 	let usesTextures = false;
 
 	const scene = editor.scene;
-	const camera = editor.camera;
+	const camera = editor.viewportCamera || editor.camera;
+	const useOrbit = camera === editor.camera;
 	const config = editor.config;
 	const lines = [];
 	const used = new Set( RESERVED );
@@ -94,26 +96,46 @@ function generateThreeCode( editor ) {
 
 		if ( texVars.has( tex.uuid ) ) return texVars.get( tex.uuid );
 		const reuse = tex.userData?.assetPath;
-		if ( ! reuse && ! drawable( tex.image ) ) {
+		const pixels = tex.isDataTexture && ArrayBuffer.isView( tex.image?.data ) ? tex.image.data : null;
+		if ( ! reuse && ! pixels && ! drawable( tex.image ) ) {
 
-			texLines.push( `// texture "${ tex.name || key }" is not an image the exporter can save; skipped` );
+			assetIssues.push( `Cannot package texture "${ tex.name || key }". Replace it with an imported image.` );
+			texLines.push( `// Unsupported texture "${ tex.name || key }" skipped` );
 			texVars.set( tex.uuid, null );
 			return null;
 
 		}
 
 		let file = base( tex.sourceFile || tex.name || key || 'texture' );
-		if ( ! /\.(png|jpe?g|webp)$/i.test( file ) ) file = file.replace( /\.[^.]*$/, '' ) + '.png';
+		if ( pixels ) file = file.replace( /\.[^.]*$/, '' ) + '.bin';
+		else if ( ! /\.(png|jpe?g|webp)$/i.test( file ) ) file = file.replace( /\.[^.]*$/, '' ) + '.png';
 		let path = reuse || 'assets/' + file, i = 2;
 		while ( ! reuse && usedPaths.has( path ) ) path = 'assets/' + file.replace( /(\.[^.]+)$/, `_${ i ++ }$1` );
 		usedPaths.add( path );
-		assets.push( { path, texture: tex, reuse: !! reuse } );
+		assets.push( { path, texture: tex, reuse: !! reuse, file: pixels ? new Blob( [ pixels ] ) : undefined } );
 
-		usesTextures = true;
 		const v = ident( { name: base( path ).replace( /\.[^.]+$/, '' ) }, 'texture' );
 		texVars.set( tex.uuid, v );
-		texLines.push( `const ${ v } = textureLoader.load(${ q( path ) });` );
-		if ( COLOR_MAPS.has( key ) ) texLines.push( `${ v }.colorSpace = THREE.SRGBColorSpace;   // colour data, not raw numbers` );
+		if ( pixels ) {
+
+			texLines.push( `const ${ v } = new THREE.DataTexture(new ${ pixels.constructor.name }(await (await fetch(${ q( path ) })).arrayBuffer()), ${ tex.image.width }, ${ tex.image.height }, ${ tex.format }, ${ tex.type });` );
+			texLines.push( `${ v }.needsUpdate = true;` );
+
+		} else {
+
+			usesTextures = true;
+			texLines.push( `const ${ v } = textureLoader.load(${ q( path ) });` );
+
+		}
+
+		if ( tex.colorSpace || COLOR_MAPS.has( key ) ) texLines.push( `${ v }.colorSpace = ${ q( tex.colorSpace || 'srgb' ) };` );
+		if ( tex.mapping !== 300 ) texLines.push( `${ v }.mapping = ${ tex.mapping };` );
+		if ( pixels ) {
+
+			texLines.push( `${ v }.minFilter = ${ tex.minFilter };` );
+			texLines.push( `${ v }.magFilter = ${ tex.magFilter };` );
+
+		}
 		if ( tex.wrapS === 1000 || tex.wrapT === 1000 ) texLines.push( `${ v }.wrapS = ${ v }.wrapT = THREE.RepeatWrapping;` );
 		if ( tex.repeat.x !== 1 || tex.repeat.y !== 1 ) texLines.push( `${ v }.repeat.set(${ n( tex.repeat.x ) }, ${ n( tex.repeat.y ) });` );
 		if ( tex.flipY === false ) texLines.push( `${ v }.flipY = false;` );
@@ -185,17 +207,22 @@ function generateThreeCode( editor ) {
 		const name = ident( o, 'model' );
 		const sourceName = o.userData?.sourceFile || o.name;
 		const isObj = /\.obj$/i.test( sourceName );
-		const key = [ ...( editor.sourceFiles?.keys() || [] ) ].find( ( k ) => k === sourceName || k.endsWith( '/' + sourceName ) );
-		const file = 'assets/' + ( key || sourceName );
-		if ( key ) {
+		const preferred = o.userData?.sourceAssetPath;
+		const key = editor.sourceFiles?.has( preferred ) ? preferred :
+			[ ...( editor.sourceFiles?.keys() || [] ) ].find( ( k ) => k === sourceName || k.endsWith( '/' + sourceName ) );
+		const modelPath = key || preferred || sourceName;
+		const file = 'assets/' + modelPath;
+		const entry = editor.sourceFiles?.get( key );
+		if ( entry ) {
 
-			for ( const k of editor.sourceFiles.get( key ).batch ) {
+			for ( const k of entry.batch ) {
 
 				const p = 'assets/' + k;
-				if ( ! usedPaths.has( p ) ) {
+				const file = editor.sourceFiles.get( k )?.file;
+				if ( file && ! usedPaths.has( p ) ) {
 
 					usedPaths.add( p );
-					assets.push( { path: p, file: editor.sourceFiles.get( k ).file } );
+					assets.push( { path: p, file } );
 
 				}
 
@@ -291,7 +318,8 @@ function generateThreeCode( editor ) {
 		} else if ( o.isSprite ) {
 
 			name = ident( o, 'sprite' );
-			out( `const ${ name } = new THREE.Sprite(new THREE.SpriteMaterial({ color: ${ hex( o.material.color ) } }));` );
+			const map = o.material.map && textureRef( o.material.map, 'map' );
+			out( `const ${ name } = new THREE.Sprite(new THREE.SpriteMaterial({ color: ${ hex( o.material.color ) }${ map ? ', map: ' + map : '' } }));` );
 
 		} else if ( o.isGroup || o.isObject3D ) {
 
@@ -333,7 +361,19 @@ function generateThreeCode( editor ) {
 	if ( scene.background ) {
 
 		if ( scene.background.isColor ) out( `scene.background = new THREE.Color(${ hex( scene.background ) });` );
-		else out( '// scene.background is a texture in the editor: load it with THREE.TextureLoader / RGBELoader' );
+		else {
+
+			const texture = textureRef( scene.background, 'background' );
+			if ( texture ) {
+
+				out( `scene.background = ${ texture };` );
+				out( `scene.backgroundIntensity = ${ n( scene.backgroundIntensity ) };` );
+				out( `scene.backgroundBlurriness = ${ n( scene.backgroundBlurriness ) };` );
+				out( `scene.backgroundRotation.set(${ vec( scene.backgroundRotation.x, scene.backgroundRotation.y, scene.backgroundRotation.z ) });` );
+
+			}
+
+		}
 
 	}
 
@@ -344,9 +384,31 @@ function generateThreeCode( editor ) {
 
 	}
 
+	if ( scene.environment && ! scene.environment.isRenderTargetTexture ) {
+
+		const texture = textureRef( scene.environment, 'environment' );
+		if ( texture ) {
+
+			out( `scene.environment = ${ texture };` );
+			out( `scene.environmentIntensity = ${ n( scene.environmentIntensity ) };` );
+			out( `scene.environmentRotation.set(${ vec( scene.environmentRotation.x, scene.environmentRotation.y, scene.environmentRotation.z ) });` );
+
+		}
+
+	} else if ( scene.environment && editor.environmentType !== 'Default' ) {
+
+		assetIssues.push( 'Cannot package the environment render target. Replace it with an imported environment texture.' );
+
+	}
+
 	if ( lines.length > 0 ) out();
 
-	const needsRoomEnv = editor.environmentType === 'Default' && scene.environment && ! scene.background;
+	// Recreate procedural lighting on the exported renderer. The editor's PMREM texture
+	// belongs to its own renderer, while imported environment textures are saved above.
+	const environmentClass = editor.environmentType === 'Default' &&
+		( ! scene.environment || scene.environment.isRenderTargetTexture ) &&
+		( ! scene.background || scene.background.isColor ) ?
+		( scene.background ? 'ColorEnvironment' : 'RoomEnvironment' ) : null;
 
 	if ( MODEL_RE.test( scene.userData?.sourceFile || scene.name ) && scene.children.length > 0 ) emitModel( scene, 'scene' );
 	else for ( const c of scene.children ) emitObject( c, 'scene' );
@@ -357,22 +419,50 @@ function generateThreeCode( editor ) {
 
 	const tm = config.getKey( 'project/renderer/toneMapping' );
 	const target = editor.controls ? editor.controls.center : { x: 0, y: 0, z: 0 };
+	const position = camera.getWorldPosition( camera.position.clone() );
+	const rotation = camera.getWorldQuaternion( camera.quaternion.clone() );
+	const orthoCenter = camera.isOrthographicCamera ? ( camera.left + camera.right ) / 2 : 0;
+	const orthoHalfHeight = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / 2 : 0;
 
 	const head = [];
 	head.push( '// Generated by the three.js editor fork ("three.js code" exporter). Edit freely: every line is plain three.js.' );
 	head.push( `import * as THREE from 'three';` );
-	head.push( `import { OrbitControls } from 'three/addons/controls/OrbitControls.js';` );
+	if ( useOrbit ) head.push( `import { OrbitControls } from 'three/addons/controls/OrbitControls.js';` );
 	for ( const i of imports ) head.push( `import { ${ i } } from 'three/addons/loaders/${ i }.js';` );
-	if ( needsRoomEnv ) head.push( `import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';` );
+	if ( imports.has( 'GLTFLoader' ) ) {
+
+		head.push( "import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';" );
+		head.push( "import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';" );
+		head.push( "import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';" );
+
+	}
+
+	if ( environmentClass ) head.push( `import { ${ environmentClass } } from 'three/addons/environments/${ environmentClass }.js';` );
 	head.push( '' );
 	head.push( '// @key Scene and camera | The scene holds what exists; the camera says where we look from.' );
 	head.push( 'const scene = new THREE.Scene();' );
-	head.push( `const camera = new THREE.PerspectiveCamera(${ n( camera.fov ) }, innerWidth / innerHeight, 0.1, 1000);` );
-	head.push( `camera.position.set(${ vec( camera.position.x, camera.position.y, camera.position.z ) });` );
+	if ( camera.isOrthographicCamera ) {
+
+		const halfWidth = `${ orthoHalfHeight } * innerWidth / innerHeight`;
+		head.push( `const camera = new THREE.OrthographicCamera(${ orthoCenter } - ${ halfWidth }, ${ orthoCenter } + ${ halfWidth }, ${ camera.top }, ${ camera.bottom }, ${ camera.near }, ${ camera.far });` );
+
+	} else {
+
+		head.push( `const camera = new THREE.PerspectiveCamera(${ camera.fov }, innerWidth / innerHeight, ${ camera.near }, ${ camera.far });` );
+
+	}
+	head.push( `camera.position.set(${ vec( position.x, position.y, position.z ) });` );
+	if ( ! useOrbit ) head.push( `camera.quaternion.set(${ [ rotation.x, rotation.y, rotation.z, rotation.w ].map( n ).join( ', ' ) }).normalize();` );
+	if ( camera.zoom !== 1 ) {
+
+		head.push( `camera.zoom = ${ camera.zoom };` );
+		head.push( 'camera.updateProjectionMatrix();' );
+
+	}
 	head.push( '// @/key' );
 	head.push( '' );
 	head.push( '// @key Renderer | Draws the scene, seen through the camera, onto a canvas element.' );
-	head.push( `const renderer = new THREE.WebGLRenderer({ antialias: ${ config.getKey( 'project/renderer/antialias' ) } });` );
+	head.push( `const renderer = new THREE.WebGLRenderer({ antialias: ${ config.getKey( 'project/renderer/antialias' ) }, reversedDepthBuffer: true });` );
 	head.push( 'renderer.setSize(innerWidth, innerHeight);' );
 	head.push( 'renderer.setPixelRatio(devicePixelRatio);' );
 	if ( TONE[ tm ] ) head.push( `renderer.toneMapping = THREE.${ TONE[ tm ] };` );
@@ -380,20 +470,22 @@ function generateThreeCode( editor ) {
 	head.push( 'document.body.append(renderer.domElement);   // domElement is the <canvas>' );
 	head.push( '// @/key' );
 	head.push( '' );
-	head.push( 'const controls = new OrbitControls(camera, renderer.domElement);   // drag to orbit, wheel to zoom' );
-	head.push( `controls.target.set(${ vec( target.x, target.y, target.z ) });` );
-	head.push( 'controls.update();' );
-	head.push( '' );
-	if ( needsRoomEnv ) {
+	if ( useOrbit ) {
 
-		head.push( `// Soft studio reflections for the materials (the editor's "Default" environment)` );
-		head.push( 'const pmrem = new THREE.PMREMGenerator(renderer);' );
-		head.push( 'scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;' );
+		head.push( 'const controls = new OrbitControls(camera, renderer.domElement);   // drag to orbit, wheel to zoom' );
+		head.push( `controls.target.set(${ vec( target.x, target.y, target.z ) });` );
+		head.push( 'controls.update();' );
 		head.push( '' );
 
 	}
+	if ( imports.has( 'GLTFLoader' ) ) {
 
-	if ( imports.has( 'GLTFLoader' ) ) head.push( 'const gltfLoader = new GLTFLoader();' );
+		head.push( 'const gltfLoader = new GLTFLoader();' );
+		head.push( "gltfLoader.setDRACOLoader(new DRACOLoader().setDecoderPath('./lib/codecs/draco/gltf/'));" );
+		head.push( "gltfLoader.setKTX2Loader(new KTX2Loader().setTranscoderPath('./lib/codecs/basis/').detectSupport(renderer));" );
+		head.push( 'gltfLoader.setMeshoptDecoder(MeshoptDecoder);' );
+
+	}
 	if ( imports.has( 'OBJLoader' ) ) head.push( 'const objLoader = new OBJLoader();' );
 	if ( usesTextures ) head.push( 'const textureLoader = new THREE.TextureLoader();' );
 	if ( needsMixers ) head.push( 'const mixers = [];   // one AnimationMixer per animated model' );
@@ -403,8 +495,35 @@ function generateThreeCode( editor ) {
 	const tail = [];
 	tail.push( '// @/key' );
 	tail.push( '' );
+	if ( environmentClass ) {
+
+		tail.push( '// Recreate the editor’s Default environment after setting the background.' );
+		tail.push( '{' );
+		tail.push( `  const environment = new ${ environmentClass }(${ scene.background ? 'scene.background' : '' });` );
+		tail.push( '  const pmrem = new THREE.PMREMGenerator(renderer);' );
+		tail.push( '  scene.environment = pmrem.fromScene(environment, 0.04).texture;' );
+		tail.push( '  environment.dispose();' );
+		tail.push( '  pmrem.dispose();' );
+		tail.push( '}' );
+		if ( scene.environmentIntensity !== 1 ) tail.push( `scene.environmentIntensity = ${ n( scene.environmentIntensity ) };` );
+		const rotation = scene.environmentRotation;
+		if ( rotation.x || rotation.y || rotation.z ) tail.push( `scene.environmentRotation.set(${ vec( rotation.x, rotation.y, rotation.z ) });` );
+		tail.push( '' );
+
+	}
+
 	tail.push( `addEventListener('resize', () => {` );
-	tail.push( '  camera.aspect = innerWidth / innerHeight;' );
+	if ( camera.isOrthographicCamera ) {
+
+		tail.push( `  const halfWidth = ${ orthoHalfHeight } * innerWidth / innerHeight;` );
+		tail.push( `  camera.left = ${ orthoCenter } - halfWidth;` );
+		tail.push( `  camera.right = ${ orthoCenter } + halfWidth;` );
+
+	} else {
+
+		tail.push( '  camera.aspect = innerWidth / innerHeight;' );
+
+	}
 	tail.push( '  camera.updateProjectionMatrix();' );
 	tail.push( '  renderer.setSize(innerWidth, innerHeight);' );
 	tail.push( '});' );
@@ -420,7 +539,7 @@ function generateThreeCode( editor ) {
 	}
 
 	tail.push( '  last = t;' );
-	tail.push( '  controls.update();' );
+	if ( useOrbit ) tail.push( '  controls.update();' );
 	tail.push( '  renderer.render(scene, camera);' );
 	tail.push( '});' );
 	tail.push( '// @/key' );
@@ -428,7 +547,7 @@ function generateThreeCode( editor ) {
 	const offset = head.length + shift;
 	for ( const k in ranges ) ranges[ k ] = [ ranges[ k ][ 0 ] + offset, ranges[ k ][ 1 ] + offset ];
 
-	return { code: [ ...head, ...sceneLines, ...tail ].join( '\n' ) + '\n', assets, ranges };
+	return { code: [ ...head, ...sceneLines, ...tail ].join( '\n' ) + '\n', assets, ranges, assetIssues };
 
 }
 
@@ -459,134 +578,19 @@ async function assetsToBlobs( assets, store = new Map() ) {
 		}
 
 		const img = a.texture.image;
+		if ( ! drawable( img ) ) throw new Error( 'Missing texture image for ' + a.path );
 		const canvas = document.createElement( 'canvas' );
 		canvas.width = img.naturalWidth || img.width;
 		canvas.height = img.naturalHeight || img.height;
 		canvas.getContext( '2d' ).drawImage( img, 0, 0 );
 		const jpeg = /\.jpe?g$/i.test( a.path );
 		const blob = await new Promise( ( r ) => canvas.toBlob( r, jpeg ? 'image/jpeg' : /\.webp$/i.test( a.path ) ? 'image/webp' : 'image/png', 0.92 ) );
+		if ( ! blob ) throw new Error( 'Could not encode ' + a.path );
 		map.set( a.path, blob );
-		if ( a.texture.userData ) a.texture.userData.assetPath = a.path;
 
 	}
 
 	return map;
-
-}
-
-const THREE_MAP = { three: './lib/three.module.js', addons: './lib/addons/' };
-
-// Self-contained archive: index.html, main.js, assets/, and a local copy of three + only the addons the code imports.
-async function exportThreeArchive( code, blobs, title = 'three.js scene' ) {
-
-	const { zipSync, strToU8 } = await import( 'three/addons/libs/fflate.module.js' );
-	const buildBase = new URL( '../../build/', import.meta.url ).href;
-	const addonBase = new URL( '../../examples/jsm/', import.meta.url ).href;
-	const files = {};
-	const getText = async ( url ) => ( await fetch( url ) ).text();
-
-	files[ 'lib/three.module.js' ] = strToU8( await getText( buildBase + 'three.module.js' ) );
-	files[ 'lib/three.core.js' ] = strToU8( await getText( buildBase + 'three.core.js' ) );
-
-	const queue = [ ...code.matchAll( /from\s+'three\/addons\/([^']+)'/g ) ].map( ( m ) => m[ 1 ] );
-	const seen = new Set();
-	while ( queue.length ) {
-
-		const p = queue.pop();
-		if ( seen.has( p ) ) continue;
-		seen.add( p );
-		const text = await getText( addonBase + p );
-		files[ 'lib/addons/' + p ] = strToU8( text );
-		for ( const m of text.matchAll( /from\s+'(\.{1,2}\/[^']+)'/g ) ) {
-
-			queue.push( new URL( m[ 1 ], 'http://x/' + p ).pathname.slice( 1 ) );
-
-		}
-
-	}
-
-	for ( const [ path, blob ] of blobs ) files[ path ] = new Uint8Array( await blob.arrayBuffer() );
-
-	files[ 'main.js' ] = strToU8( code );
-	files[ 'index.html' ] = strToU8( `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${ title }</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#111}canvas{display:block}</style>
-<script type="importmap">{"imports":{"three":${ q( THREE_MAP.three ) },"three/addons/":${ q( THREE_MAP.addons ) }}}</script>
-</head><body>
-<script type="module" src="./main.js"></script>
-</body></html>
-` );
-	files[ 'README.txt' ] = strToU8( 'Standalone three.js scene.\n\nModules and file loading need http, so do not double-click index.html. In this folder run:\n\n  python3 -m http.server 8000\n\nand open http://localhost:8000\n\nmain.js is the scene (plain three.js). assets/ holds textures and models. lib/ holds the three.js build (MIT license, see https://threejs.org).\n' );
-
-	return new Blob( [ zipSync( files ) ], { type: 'application/zip' } );
-
-}
-
-// Bundles the code with esbuild-wasm (local copy, runs in the browser) into ONE html file:
-// three.js + addons + the scene are inlined, and every asset is embedded as a data: URI.
-let esbuildReady;
-
-async function exportSingleHtml( code, blobs, title = 'three.js scene' ) {
-
-	const dir = new URL( './libs/esbuild-wasm/', import.meta.url ).href;
-	const esbuild = await import( dir + 'browser.js' );
-	esbuildReady = esbuildReady || esbuild.initialize( { wasmURL: dir + 'esbuild.wasm', worker: true } );
-	await esbuildReady;
-
-	const buildBase = new URL( '../../build/', import.meta.url ).href;
-	const addonBase = new URL( '../../examples/jsm/', import.meta.url ).href;
-
-	const result = await esbuild.build( {
-		stdin: { contents: code, resolveDir: '/', sourcefile: 'main.js', loader: 'js' },
-		bundle: true, minify: true, format: 'iife', write: false, legalComments: 'none',
-		plugins: [ {
-			name: 'three-http',
-			setup( build ) {
-
-				build.onResolve( { filter: /^three$/ }, () => ( { path: buildBase + 'three.module.js', namespace: 'http' } ) );
-				build.onResolve( { filter: /^three\/addons\// }, ( a ) => ( { path: addonBase + a.path.slice( 'three/addons/'.length ), namespace: 'http' } ) );
-				build.onResolve( { filter: /.*/, namespace: 'http' }, ( a ) => ( { path: new URL( a.path, a.importer ).href, namespace: 'http' } ) );
-				build.onLoad( { filter: /.*/, namespace: 'http' }, async ( a ) => {
-
-					const res = await fetch( a.path );
-					if ( ! res.ok ) throw new Error( 'Could not load ' + a.path );
-					return { contents: await res.text(), loader: 'js' };
-
-				} );
-
-			}
-		} ]
-	} );
-
-	let js = result.outputFiles[ 0 ].text;
-
-	const toDataUri = ( blob ) => new Promise( ( resolve, reject ) => {
-
-		const r = new FileReader();
-		r.onload = () => resolve( r.result );
-		r.onerror = reject;
-		r.readAsDataURL( blob );
-
-	} );
-
-	for ( const [ path, blob ] of blobs ) {
-
-		const uri = await toDataUri( blob );
-		const escaped = path.replace( /[.*+?^${}()|[\]\\]/g, '\\$&' );
-		js = js.replace( new RegExp( '([\'"`])(\\./)?' + escaped + '\\1', 'g' ), ( m, quote ) => quote + uri + quote );
-
-	}
-
-	const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${ title }</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#111}canvas{display:block}</style>
-</head><body>
-<script>${ js.replace( /<\/script/gi, '<\\/script' ) }</script>
-</body></html>
-`;
-	return new Blob( [ html ], { type: 'text/html' } );
 
 }
 
@@ -644,6 +648,7 @@ async function buildSceneFromCode( code, resolve, env = {} ) {
 			const g = await super.loadAsync( url, onProgress );
 			g.scene.name = base( url );
 			g.scene.userData.sourceFile = base( url );
+			g.scene.userData.sourceAssetPath = String( url ).replace( /^(?:\.\/)?assets\//, '' );
 			g.scene.animations = g.animations;
 			return g;
 
@@ -658,6 +663,7 @@ async function buildSceneFromCode( code, resolve, env = {} ) {
 			const o = await super.loadAsync( url, onProgress );
 			o.name = base( url );
 			o.userData.sourceFile = base( url );
+			o.userData.sourceAssetPath = String( url ).replace( /^(?:\.\/)?assets\//, '' );
 			return o;
 
 		}
@@ -691,35 +697,12 @@ async function buildSceneFromCode( code, resolve, env = {} ) {
 	const controls = { target: new THREE.Vector3(), update() {}, enabled: true };
 	const pmrem = real ? new THREE.PMREMGenerator( real ) : { fromScene: () => ( { texture: null } ), dispose() {} };
 
-	const run = new AsyncFunction( 'THREE', 'scene', 'gltfLoader', 'objLoader', 'textureLoader', 'mixers', 'camera', 'renderer', 'controls', 'pmrem', m[ 1 ] );
-	await run( THREE, scene, new TagGLTFLoader( manager ), new TagOBJLoader( manager ), new TagTextureLoader( manager ), mixers, camera, renderer, controls, pmrem );
+	const run = new AsyncFunction( 'THREE', 'scene', 'gltfLoader', 'objLoader', 'textureLoader', 'mixers', 'camera', 'renderer', 'controls', 'pmrem', 'fetch', m[ 1 ] );
+	await run( THREE, scene, new TagGLTFLoader( manager ), new TagOBJLoader( manager ), new TagTextureLoader( manager ), mixers, camera, renderer, controls, pmrem, ( url, options ) => fetch( resolve( url ) || url, options ) );
 	if ( real ) pmrem.dispose();
 	await Promise.all( pending ); // let textures finish loading so they don't pop in after the swap
 	return scene;
 
 }
 
-// Standalone page that runs the generated code. 'local' = import map pointing at ../build and ../examples/jsm,
-// so save the page in a folder that sits next to build/ (the test-models/ folder does).
-function exportThreeHtml( code, importBase = 'cdn', title = 'three.js scene' ) {
-
-	const maps = {
-		cdn: { three: 'https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js', addons: 'https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/' },
-		local: { three: '../build/three.module.js', addons: '../examples/jsm/' }
-	};
-	const m = maps[ importBase ];
-	return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${ title }</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#111}canvas{display:block}</style>
-<script type="importmap">{"imports":{"three":${ q( m.three ) },"three/addons/":${ q( m.addons ) }}}</script>
-</head><body>
-<!-- Serve over http (e.g. python3 -m http.server); imported models must sit next to this file. -->
-<script type="module">
-${ code }</script>
-</body></html>
-`;
-
-}
-
-export { exportThreeCode, generateThreeCode, assetsToBlobs, exportThreeArchive, exportSingleHtml, buildSceneFromCode, exportThreeHtml };
+export { exportThreeCode, generateThreeCode, assetsToBlobs, buildSceneFromCode };

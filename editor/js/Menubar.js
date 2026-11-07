@@ -6,9 +6,8 @@ import { MenubarFile } from './Menubar.File.js';
 import { MenubarView } from './Menubar.View.js';
 import { MenubarRender } from './Menubar.Render.js';
 import { MenubarHelp } from './Menubar.Help.js';
-import { MenubarStatus } from './Menubar.Status.js';
 
-function Menubar( editor ) {
+function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 
 	const container = new UIPanel();
 	container.setId( 'menubar' );
@@ -31,7 +30,48 @@ function Menubar( editor ) {
 	container.add( code );
 	container.add( new MenubarHelp( editor ) );
 
-	container.add( new MenubarStatus( editor ) );
+	const toggles = document.createElement( 'div' );
+	toggles.className = 'panel-toggles';
+	toggles.setAttribute( 'role', 'group' );
+	toggles.setAttribute( 'aria-label', 'Workspace controls' );
+	container.dom.appendChild( toggles );
+
+	function iconButton( label, path ) {
+
+		const button = document.createElement( 'button' );
+		button.type = 'button';
+		button.title = label;
+		button.setAttribute( 'aria-label', label );
+		button.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${ path }</svg>`;
+		toggles.appendChild( button );
+		return button;
+
+	}
+
+	const frame = '<rect x="2.5" y="3.5" width="15" height="13" rx="2"/>';
+	editor.codePanel.dock.bindToggle( iconButton( 'Toggle Code panel', frame + '<path d="M7.5 4v12"/>' ) );
+	sidebarDock.bindToggle( iconButton( 'Toggle right sidebar', frame + '<path d="M12.5 4v12"/>' ) );
+	timelineDock.bindToggle( iconButton( 'Toggle animation timeline', frame + '<path d="M3 12h14"/>' ) );
+
+	const toolbarButton = iconButton( 'Toggle transform toolbar', '<rect x="2.5" y="6" width="15" height="8" rx="2"/><path d="M7.5 8v4m5-4v4"/>' );
+	toolbarButton.setAttribute( 'aria-controls', toolbar.id );
+	toolbarButton.setAttribute( 'aria-pressed', 'true' );
+	toolbarButton.addEventListener( 'click', () => {
+
+		toolbar.hidden = ! toolbar.hidden;
+		toolbarButton.setAttribute( 'aria-pressed', String( ! toolbar.hidden ) );
+
+	} );
+
+	const gearPath = '<path d="m8 2.5-.4 2-1.7 1-1.9-.7-2 3.4 1.5 1.4v2l-1.5 1.4 2 3.4 1.9-.7 1.7 1 .4 2h4l.4-2 1.7-1 1.9.7 2-3.4-1.5-1.4v-2l1.5-1.4-2-3.4-1.9.7-1.7-1-.4-2z"/><circle cx="10" cy="10" r="2.5"/>';
+	const settingsButton = iconButton( editor.strings.getKey( 'sidebar/settings' ), gearPath );
+	settingsButton.setAttribute( 'aria-controls', sidebar.dom.id );
+	settingsButton.addEventListener( 'click', () => {
+
+		sidebar.select( 'settings' );
+		sidebarDock.toggle( true );
+
+	} );
 
 	return container;
 

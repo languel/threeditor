@@ -93,7 +93,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': 'پرسپکتیو',
 			'menubar/add/camera/orthographic': 'اورتوگرافیک',
 
-			'menubar/status/autosave': 'ذخیره اتوماتیک',
 
 			'menubar/view': 'نمایش',
 			'menubar/view/fullscreen': 'تمام صفحه',
@@ -381,6 +380,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': 'توقف',
 			'sidebar/project/app/title': 'تیتر',
 			'sidebar/project/app/editable': 'قابل ویرایش',
+			'sidebar/project/app/edit-icon': 'نمایش همیشگی نماد ویرایش',
+			'sidebar/project/app/edit-icon-help': 'نماد ویرایش را در ارائهٔ HTML قابل ویرایش همیشه نشان بده.',
+			'sidebar/project/app/edit-scene': 'ویرایش صحنه',
 			'sidebar/project/app/publish': 'انتشار',
 
 			'sidebar/project/image': 'عکس',
@@ -393,6 +395,12 @@ function Strings( config ) {
 			'sidebar/project/render': 'رندر',
 
 			'sidebar/settings': 'تنظیمات',
+			'sidebar/settings/general': 'عمومی',
+			'sidebar/settings/theme': 'پوسته',
+			'sidebar/settings/theme/system': 'سیستم',
+			'sidebar/settings/theme/light': 'روشن',
+			'sidebar/settings/theme/dark': 'تیره',
+			'sidebar/settings/autosave': 'ذخیره اتوماتیک',
 			'sidebar/settings/language': 'زبان ها',
 
 			'sidebar/settings/shortcuts': 'شورت کات ها',
@@ -546,7 +554,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': 'Perspective',
 			'menubar/add/camera/orthographic': 'Orthographic',
 
-			'menubar/status/autosave': 'autosave',
 
 			'menubar/view': 'View',
 			'menubar/view/fullscreen': 'Fullscreen',
@@ -834,6 +841,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': 'Stop',
 			'sidebar/project/app/title': 'Title',
 			'sidebar/project/app/editable': 'Editable',
+			'sidebar/project/app/edit-icon': 'Always show edit icon',
+			'sidebar/project/app/edit-icon-help': 'Show the edit icon in Editable HTML presentations without hovering.',
+			'sidebar/project/app/edit-scene': 'Edit scene',
 			'sidebar/project/app/publish': 'Publish',
 
 			'sidebar/project/image': 'Image',
@@ -846,6 +856,12 @@ function Strings( config ) {
 			'sidebar/project/render': 'Render',
 
 			'sidebar/settings': 'Settings',
+			'sidebar/settings/general': 'General',
+			'sidebar/settings/theme': 'Theme',
+			'sidebar/settings/theme/system': 'System',
+			'sidebar/settings/theme/light': 'Light',
+			'sidebar/settings/theme/dark': 'Dark',
+			'sidebar/settings/autosave': 'Autosave',
 			'sidebar/settings/language': 'Language',
 
 			'sidebar/settings/shortcuts': 'Shortcuts',
@@ -1000,7 +1016,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': 'Perspective',
 			'menubar/add/camera/orthographic': 'Orthographique',
 
-			'menubar/status/autosave': 'enregistrement automatique',
 
 			'menubar/view': 'View',
 			'menubar/view/fullscreen': 'Fullscreen',
@@ -1288,6 +1303,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': 'Arrêter',
 			'sidebar/project/app/title': 'Titre',
 			'sidebar/project/app/editable': 'Modifiable',
+			'sidebar/project/app/edit-icon': 'Toujours afficher l’icône de modification',
+			'sidebar/project/app/edit-icon-help': 'Afficher l’icône de modification dans les présentations HTML modifiables sans survol.',
+			'sidebar/project/app/edit-scene': 'Modifier la scène',
 			'sidebar/project/app/publish': 'Publier',
 
 			'sidebar/project/image': 'Image',
@@ -1300,6 +1318,12 @@ function Strings( config ) {
 			'sidebar/project/render': 'Render',
 
 			'sidebar/settings': 'Paramètres',
+			'sidebar/settings/general': 'Général',
+			'sidebar/settings/theme': 'Thème',
+			'sidebar/settings/theme/system': 'Système',
+			'sidebar/settings/theme/light': 'Clair',
+			'sidebar/settings/theme/dark': 'Sombre',
+			'sidebar/settings/autosave': 'enregistrement automatique',
 			'sidebar/settings/language': 'Langue',
 
 			'sidebar/settings/shortcuts': 'Shortcuts',
@@ -1454,7 +1478,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': '透视相机',
 			'menubar/add/camera/orthographic': '正交相机',
 
-			'menubar/status/autosave': '自动保存',
 
 			'menubar/view': '视图',
 			'menubar/view/fullscreen': '全屏',
@@ -1742,6 +1765,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': '暂停',
 			'sidebar/project/app/title': '标题',
 			'sidebar/project/app/editable': '编辑性',
+			'sidebar/project/app/edit-icon': '始终显示编辑图标',
+			'sidebar/project/app/edit-icon-help': '在可编辑 HTML 的演示模式下始终显示编辑图标。',
+			'sidebar/project/app/edit-scene': '编辑场景',
 			'sidebar/project/app/publish': '发布',
 
 			'sidebar/project/image': '图片',
@@ -1754,6 +1780,12 @@ function Strings( config ) {
 			'sidebar/project/render': '渲染',
 
 			'sidebar/settings': '设置',
+			'sidebar/settings/general': '常规',
+			'sidebar/settings/theme': '主题',
+			'sidebar/settings/theme/system': '跟随系统',
+			'sidebar/settings/theme/light': '浅色',
+			'sidebar/settings/theme/dark': '深色',
+			'sidebar/settings/autosave': '自动保存',
 			'sidebar/settings/language': '语言',
 
 			'sidebar/settings/shortcuts': '快捷键',
@@ -1908,7 +1940,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': '透視投影',
 			'menubar/add/camera/orthographic': '平行投影',
 
-			'menubar/status/autosave': '自動保存',
 
 			'menubar/view': '表示',
 			'menubar/view/fullscreen': 'フルスクリーン',
@@ -2196,6 +2227,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': '停止',
 			'sidebar/project/app/title': 'タイトル',
 			'sidebar/project/app/editable': '編集可能',
+			'sidebar/project/app/edit-icon': '編集アイコンを常に表示',
+			'sidebar/project/app/edit-icon-help': '編集可能な HTML のプレゼンテーションで編集アイコンを常に表示します。',
+			'sidebar/project/app/edit-scene': 'シーンを編集',
 			'sidebar/project/app/publish': 'アプリファイルとして保存',
 
 			'sidebar/project/image': '画像',
@@ -2208,6 +2242,12 @@ function Strings( config ) {
 			'sidebar/project/render': 'レンダー',
 
 			'sidebar/settings': '設定',
+			'sidebar/settings/general': '一般',
+			'sidebar/settings/theme': 'テーマ',
+			'sidebar/settings/theme/system': 'システム',
+			'sidebar/settings/theme/light': 'ライト',
+			'sidebar/settings/theme/dark': 'ダーク',
+			'sidebar/settings/autosave': '自動保存',
 			'sidebar/settings/language': '言語',
 
 			'sidebar/settings/shortcuts': 'ショートカット',
@@ -2361,7 +2401,6 @@ function Strings( config ) {
 			'menubar/add/camera/perspective': '투시 투영',
 			'menubar/add/camera/orthographic': '정사영',
 
-			'menubar/status/autosave': '자동 저장',
 
 			'menubar/view': '보기',
 			'menubar/view/fullscreen': '전체 화면',
@@ -2649,6 +2688,9 @@ function Strings( config ) {
 			'sidebar/project/app/stop': '정지',
 			'sidebar/project/app/title': '제목',
 			'sidebar/project/app/editable': '편집 가능',
+			'sidebar/project/app/edit-icon': '편집 아이콘 항상 표시',
+			'sidebar/project/app/edit-icon-help': '편집 가능한 HTML 프레젠테이션에서 편집 아이콘을 항상 표시합니다.',
+			'sidebar/project/app/edit-scene': '장면 편집',
 			'sidebar/project/app/publish': '앱 파일로 저장',
 
 			'sidebar/project/image': '이미지',
@@ -2661,6 +2703,12 @@ function Strings( config ) {
 			'sidebar/project/render': '렌더',
 
 			'sidebar/settings': '설정',
+			'sidebar/settings/general': '일반',
+			'sidebar/settings/theme': '테마',
+			'sidebar/settings/theme/system': '시스템',
+			'sidebar/settings/theme/light': '밝게',
+			'sidebar/settings/theme/dark': '어둡게',
+			'sidebar/settings/autosave': '자동 저장',
 			'sidebar/settings/language': '언어',
 
 			'sidebar/settings/shortcuts': '단축키',

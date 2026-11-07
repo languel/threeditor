@@ -504,25 +504,38 @@ function MenubarFile( editor ) {
 
 	}
 
-	publishOption( 'three.js project (.zip)', async function () {
+	if ( ! editor.portable ) {
 
-		const { code, blobs } = await editor.codePanel.getPublishInputs();
-		const { exportThreeArchive } = await import( './ThreeCodeExporter.js' );
-		editor.utils.save( await exportThreeArchive( code, blobs ), 'three-scene.zip' );
+		publishOption( 'Source project (.zip)', async function () {
 
-	} );
+			const { code, blobs } = await editor.codePanel.getPublishInputs();
+			const { exportThreeArchive } = await import( './Publish.js' );
+			editor.utils.save( await exportThreeArchive( code, blobs ), 'three-scene.zip' );
 
-	publishOption( 'Single HTML (esbuild)', async function () {
+		} );
 
-		const { code, blobs } = await editor.codePanel.getPublishInputs();
-		const { exportSingleHtml } = await import( './ThreeCodeExporter.js' );
-		editor.utils.save( await exportSingleHtml( code, blobs ), 'three-scene.html' );
+		publishOption( 'Playable scene (.zip)', async function () {
 
-	} );
+			const { exportPlayableScene } = await import( './Publish.js' );
+			const { zip, filename } = await exportPlayableScene( editor );
+			editor.utils.save( zip, filename );
 
-	publishOption( 'Editor app build (.zip)', function () {
+		} );
 
-		editor.publishApp();
+		publishOption( 'Playable HTML (esbuild)', async function () {
+
+			const { exportPlayableHtml } = await import( './Publish.js' );
+			editor.utils.save( await exportPlayableHtml( editor ), 'three-scene-playable.html' );
+
+		} );
+
+	}
+
+	publishOption( 'Editable HTML (esbuild)', async function () {
+
+		const html = editor.portable ? await editor.portable.save( editor ) :
+			await ( await import( './EditorHtml.js' ) ).exportEditorHtml( editor );
+		editor.utils.save( html, 'three-scene-editable.html' );
 
 	} );
 

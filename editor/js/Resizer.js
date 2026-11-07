@@ -2,59 +2,27 @@ import { UIElement } from './libs/ui.js';
 
 function Resizer( editor ) {
 
-	const signals = editor.signals;
-
 	const dom = document.createElement( 'div' );
 	dom.id = 'resizer';
 
-	function onPointerDown( event ) {
+	dom.addEventListener( 'pointerdown', ( event ) => {
 
-		if ( event.isPrimary === false ) return;
+		if ( event.isPrimary === false || event.button !== 0 ) return;
+		dom.setPointerCapture( event.pointerId );
 
-		dom.ownerDocument.addEventListener( 'pointermove', onPointerMove );
-		dom.ownerDocument.addEventListener( 'pointerup', onPointerUp );
+	} );
 
-	}
+	dom.addEventListener( 'pointermove', ( event ) => {
 
-	function onPointerUp( event ) {
+		if ( ! dom.hasPointerCapture( event.pointerId ) ) return;
 
-		if ( event.isPrimary === false ) return;
+		const left = parseFloat( getComputedStyle( document.getElementById( 'viewport' ) ).left ) || 0;
+		const max = Math.max( 335, window.innerWidth - left - 100 );
+		const width = Math.min( max, Math.max( 335, window.innerWidth - event.clientX ) );
+		document.body.style.setProperty( '--sidebar-width', width + 'px' );
+		editor.signals.windowResize.dispatch();
 
-		dom.ownerDocument.removeEventListener( 'pointermove', onPointerMove );
-		dom.ownerDocument.removeEventListener( 'pointerup', onPointerUp );
-
-	}
-
-	function onPointerMove( event ) {
-
-		// PointerEvent's movementX/movementY are 0 in WebKit
-
-		if ( event.isPrimary === false ) return;
-
-		const offsetWidth = document.body.offsetWidth;
-		const clientX = event.clientX;
-
-		const cX = clientX < 0 ? 0 : clientX > offsetWidth ? offsetWidth : clientX;
-
-		const x = Math.max( 335, offsetWidth - cX ); // .TabbedPanel min-width: 335px
-
-		dom.style.right = x + 'px';
-
-		document.getElementById( 'sidebar' ).style.width = x + 'px';
-		document.getElementById( 'player' ).style.right = x + 'px';
-		document.getElementById( 'script' ).style.right = x + 'px';
-		document.getElementById( 'viewport' ).style.right = x + 'px';
-
-		// Center toolbar in viewport area
-		const toolbar = document.getElementById( 'toolbar' );
-		const viewportWidth = offsetWidth - x;
-		toolbar.style.left = ( viewportWidth / 2 ) + 'px';
-
-		signals.windowResize.dispatch();
-
-	}
-
-	dom.addEventListener( 'pointerdown', onPointerDown );
+	} );
 
 	return new UIElement( dom );
 
