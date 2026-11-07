@@ -604,6 +604,8 @@ async function buildSceneFromCode( code, resolve, env = {} ) {
 	const THREE = await import( 'three' );
 	const { GLTFLoader } = await import( 'three/addons/loaders/GLTFLoader.js' );
 	const { OBJLoader } = await import( 'three/addons/loaders/OBJLoader.js' );
+	const { RoomEnvironment } = await import( 'three/addons/environments/RoomEnvironment.js' );
+	const { ColorEnvironment } = await import( 'three/addons/environments/ColorEnvironment.js' );
 
 	const manager = new THREE.LoadingManager();
 	manager.setURLModifier( ( url ) => resolve( url ) || url );
@@ -697,8 +699,8 @@ async function buildSceneFromCode( code, resolve, env = {} ) {
 	const controls = { target: new THREE.Vector3(), update() {}, enabled: true };
 	const pmrem = real ? new THREE.PMREMGenerator( real ) : { fromScene: () => ( { texture: null } ), dispose() {} };
 
-	const run = new AsyncFunction( 'THREE', 'scene', 'gltfLoader', 'objLoader', 'textureLoader', 'mixers', 'camera', 'renderer', 'controls', 'pmrem', 'fetch', m[ 1 ] );
-	await run( THREE, scene, new TagGLTFLoader( manager ), new TagOBJLoader( manager ), new TagTextureLoader( manager ), mixers, camera, renderer, controls, pmrem, ( url, options ) => fetch( resolve( url ) || url, options ) );
+	const run = new AsyncFunction( 'THREE', 'scene', 'gltfLoader', 'objLoader', 'textureLoader', 'mixers', 'camera', 'renderer', 'controls', 'pmrem', 'RoomEnvironment', 'ColorEnvironment', 'fetch', m[ 1 ] );
+	await run( THREE, scene, new TagGLTFLoader( manager ), new TagOBJLoader( manager ), new TagTextureLoader( manager ), mixers, camera, renderer, controls, pmrem, RoomEnvironment, ColorEnvironment, ( url, options ) => fetch( resolve( url ) || url, options ) );
 	if ( real ) pmrem.dispose();
 	await Promise.all( pending ); // let textures finish loading so they don't pop in after the swap
 	return scene;

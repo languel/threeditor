@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UITextArea, UIText, UINumber } from './libs/ui.js';
 import { UIBoolean } from './libs/ui.three.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 
 import { SetUuidCommand } from './commands/SetUuidCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
@@ -434,21 +435,21 @@ function SidebarObject( editor ) {
 		if ( object !== null ) {
 
 			const newPosition = new THREE.Vector3( objectPositionX.getValue(), objectPositionY.getValue(), objectPositionZ.getValue() );
-			if ( object.position.distanceTo( newPosition ) >= 0.01 ) {
+			if ( ! hasRestriction( object, 'locked' ) && object.position.distanceTo( newPosition ) >= 0.01 ) {
 
 				editor.execute( new SetPositionCommand( editor, object, newPosition ) );
 
 			}
 
 			const newRotation = new THREE.Euler( objectRotationX.getValue() * THREE.MathUtils.DEG2RAD, objectRotationY.getValue() * THREE.MathUtils.DEG2RAD, objectRotationZ.getValue() * THREE.MathUtils.DEG2RAD );
-			if ( new THREE.Vector3().setFromEuler( object.rotation ).distanceTo( new THREE.Vector3().setFromEuler( newRotation ) ) >= 0.01 ) {
+			if ( ! hasRestriction( object, 'locked' ) && new THREE.Vector3().setFromEuler( object.rotation ).distanceTo( new THREE.Vector3().setFromEuler( newRotation ) ) >= 0.01 ) {
 
 				editor.execute( new SetRotationCommand( editor, object, newRotation ) );
 
 			}
 
 			const newScale = new THREE.Vector3( objectScaleX.getValue(), objectScaleY.getValue(), objectScaleZ.getValue() );
-			if ( object.scale.distanceTo( newScale ) >= 0.01 ) {
+			if ( ! hasRestriction( object, 'locked' ) && object.scale.distanceTo( newScale ) >= 0.01 ) {
 
 				editor.execute( new SetScaleCommand( editor, object, newScale ) );
 
@@ -726,9 +727,11 @@ function SidebarObject( editor ) {
 
 	signals.objectChanged.add( function ( object ) {
 
-		if ( object !== editor.selected ) return;
+		let selected = editor.selected;
+		while ( selected && selected !== object ) selected = selected.parent;
+		if ( ! selected ) return;
 
-		updateUI( object );
+		updateUI( editor.selected );
 
 	} );
 
@@ -741,6 +744,14 @@ function SidebarObject( editor ) {
 	} );
 
 	function updateUI( object ) {
+
+		const locked = hasRestriction( object, 'locked' );
+		for ( const row of [ objectPositionRow, objectRotationRow, objectScaleRow ] ) {
+
+			row.dom.querySelectorAll( 'input' ).forEach( input => { input.disabled = locked; } );
+			row.dom.style.opacity = locked ? '0.5' : '';
+
+		}
 
 		objectType.setValue( object.type );
 

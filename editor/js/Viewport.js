@@ -8,6 +8,8 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js';
 
 import { ViewportControls } from './Viewport.Controls.js';
+import { FlyControls } from './FlyControls.js';
+import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
 
 import { ViewHelper } from './Viewport.ViewHelper.js';
@@ -40,6 +42,21 @@ function Viewport( editor ) {
 	let pmremGenerator = null;
 	let environmentTarget = null;
 	let pathtracer = null;
+	let helperAppearance = { cameraHelpers: true, lightHelpers: true, skeletonHelpers: true };
+
+	function updateHelperVisibility() {
+
+		for ( const id in editor.helpers ) {
+
+			const helper = editor.helpers[ id ];
+			const object = editor.scene.getObjectById( Number( id ) );
+			if ( ! object ) continue;
+			const enabled = helper.type === 'CameraHelper' ? helperAppearance.cameraHelpers : helper.isSkeletonHelper ? helperAppearance.skeletonHelpers : helperAppearance.lightHelpers;
+			helper.visible = enabled && isVisible( object );
+
+		}
+
+	}
 
 	let camera = editor.camera;
 	const scene = editor.scene;
@@ -216,7 +233,7 @@ function Viewport( editor ) {
 
 		// event.preventDefault();
 
-		if ( event.target !== renderer.domElement ) return;
+		if ( event.button !== 0 || event.target !== renderer.domElement || ( editor.keymap.preset === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
 
 		const array = getMousePosition( container.dom, event.clientX, event.clientY );
 		onDownPosition.fromArray( array );
@@ -285,6 +302,8 @@ function Viewport( editor ) {
 	// otherwise controls.enabled doesn't work.
 
 	const controls = new EditorControls( camera );
+	controls.navigationMode = () => editor.keymap.preset;
+	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
 
 		signals.cameraChanged.dispatch( camera );
@@ -294,6 +313,7 @@ function Viewport( editor ) {
 	viewHelper.center = controls.center;
 
 	editor.controls = controls;
+	editor.flyControls = new FlyControls( editor, container.dom );
 
 	// signals
 
@@ -416,9 +436,19 @@ function Viewport( editor ) {
 		}
 
 		controls.connect( newRenderer.domElement );
+		newRenderer.domElement.addEventListener( 'pointerdown', function ( event ) {
+
+			if ( editor.keymap.preset !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
+			transformControls.enabled = false;
+			const restore = () => { transformControls.enabled = true; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
+			window.addEventListener( 'pointerup', restore, { once: true } );
+			window.addEventListener( 'pointercancel', restore, { once: true } );
+
+		}, true );
 		transformControls.connect( newRenderer.domElement );
 
 		renderer = newRenderer;
+		editor.renderer = newRenderer;
 
 		renderer.setAnimationLoop( animate );
 		updateTheme();
@@ -479,20 +509,20 @@ function Viewport( editor ) {
 
 			selector.getSelectionBox( box );
 
-			selectionBox.visible = true;
-			transformControls.attach( selector.group );
+			selectionBox.visible = selector.selection.some( isVisible );
+			if ( selector.selection.every( item => isVisible( item ) && ! hasRestriction( item, 'locked' ) ) ) transformControls.attach( selector.group );
 
 		} else if ( object !== null && object !== scene && object !== camera ) {
 
 			box.setFromObject( object, true );
 
-			if ( box.isEmpty() === false ) {
+			if ( box.isEmpty() === false && isVisible( object ) ) {
 
 				selectionBox.visible = true;
 
 			}
 
-			transformControls.attach( object );
+			if ( isVisible( object ) && ! hasRestriction( object, 'locked' ) ) transformControls.attach( object );
 
 		}
 
@@ -520,6 +550,14 @@ function Viewport( editor ) {
 	} );
 
 	signals.objectChanged.add( function ( object ) {
+
+		const selected = selector.selection;
+		const candidate = selected.length > 1 ? selector.group : selected[ 0 ];
+		const canTransform = selected.length > 0 && selected.every( item => item !== scene && item !== camera && isVisible( item ) && ! hasRestriction( item, 'locked' ) );
+		if ( canTransform && transformControls.object !== candidate ) transformControls.attach( candidate );
+		else if ( ! canTransform && transformControls.object ) transformControls.detach();
+		selectionBox.visible = selected.some( item => item !== scene && item !== camera && isVisible( item ) ) && ! selectionBox.box.isEmpty();
+		updateHelperVisibility();
 
 		if ( editor.selected === object ) {
 
@@ -817,6 +855,7 @@ function Viewport( editor ) {
 
 	signals.showHelpersChanged.add( function ( appearanceStates ) {
 
+		helperAppearance = appearanceStates;
 		grid.visible = appearanceStates.gridHelper;
 
 		sceneHelpers.traverse( function ( object ) {
@@ -866,6 +905,7 @@ function Viewport( editor ) {
 		} );
 
 
+		updateHelperVisibility();
 		render();
 
 	} );

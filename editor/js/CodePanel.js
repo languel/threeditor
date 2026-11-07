@@ -36,7 +36,7 @@ function CodePanel( editor ) {
 	const label = document.createElement( 'span' );
 	const select = document.createElement( 'select' );
 	head.append( backBtn, label, select );
-	dom.append( bar, head, status, host );
+	dom.append( bar, head, host, status );
 
 	const button = ( label, id, title, fn ) => {
 
@@ -51,7 +51,7 @@ function CodePanel( editor ) {
 
 	};
 
-	let viewportRenderer = null;
+	let viewportRenderer = editor.renderer || null;
 	signals.rendererCreated.add( ( r ) => { viewportRenderer = r; } );
 
 	// Clicking outside the panel (e.g. in the viewport) hands the keyboard back to the editor shortcuts
@@ -481,23 +481,6 @@ function CodePanel( editor ) {
 		}
 
 	}
-	button( 'Copy', 'code-copy', 'Copy to clipboard', async () => {
-
-		try {
-
-			await navigator.clipboard.writeText( getCode() );
-
-		} catch ( e ) {
-
-			textarea.value = getCode();
-			textarea.select();
-			document.execCommand( 'copy' );
-
-		}
-
-	} );
-	button( '.js', 'code-dl-js', 'Download scene source only', () => editor.utils.save( new Blob( [ sceneCode() ], { type: 'text/javascript' } ), 'scene.js' ) );
-
 	dom.addEventListener( 'keydown', ( e ) => {
 
 		if ( ( e.metaKey || e.ctrlKey ) && e.key === 'Enter' ) {
@@ -611,6 +594,7 @@ function CodePanel( editor ) {
 			signals.sceneGraphChanged.active = false;
 			for ( const child of [ ...editor.scene.children ] ) editor.removeObject( child );
 			editor.scene.background = next.background;
+			editor.scene.environment = next.environment;
 			editor.scene.fog = next.fog;
 			editor.deselect();
 			while ( next.children.length > 0 ) editor.addObject( next.children[ 0 ] );
@@ -650,12 +634,14 @@ function CodePanel( editor ) {
 
 			dirty = false;
 			setStatus( 'Applied ✓ ' + new Date().toLocaleTimeString() );
+			return { ok: true };
 
 		} catch ( e ) {
 
 			signals.sceneGraphChanged.active = true;
 			setStatus( 'Error: ' + e.message, true );
 			console.warn( e );
+			return { ok: false, error: e.message };
 
 		} finally {
 
@@ -814,7 +800,17 @@ function CodePanel( editor ) {
 
 	};
 
-	return { dom, dock, getPublishInputs, toggle: dock.toggle, apply, regenerate, isOpen };
+	async function applySceneSource( source ) {
+
+		showScene( editor.selected );
+		setCode( source );
+		sceneText = source;
+		dirty = true;
+		return apply();
+
+	}
+
+	return { dom, dock, getPublishInputs, toggle: dock.toggle, apply, applySceneSource, regenerate, isOpen, getSceneSource: sceneCode };
 
 }
 

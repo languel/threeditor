@@ -4,6 +4,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 import { UISpan, UIDiv, UIRow, UIButton, UICheckbox, UIText, UINumber } from './ui.js';
 import { MoveObjectCommand } from '../commands/MoveObjectCommand.js';
+import { hasRestriction } from '../ObjectRestrictions.js';
 
 const cache = new Map();
 
@@ -370,6 +371,14 @@ class UIOutliner extends UIDiv {
 		}
 
 		function onDragStart( event ) {
+
+			const object = scope.scene.getObjectById( this.value );
+			if ( ! object || hasRestriction( object, 'locked' ) ) {
+
+				event.preventDefault();
+				return;
+
+			}
 
 			event.dataTransfer.setData( 'text', 'foo' );
 

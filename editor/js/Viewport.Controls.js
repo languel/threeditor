@@ -45,25 +45,7 @@ function ViewportControls( editor ) {
 
 	} );
 	container.add( shadingSelect );
-
-	// Z / Shift+Z cycle the view modes, like Blender's shading pie
-	// 'realistic' (path tracer) is left to the dropdown: it is heavy and restarts a renderer
-	const modes = [ 'solid', 'wireframe', 'normals', 'preview' ];
-
-	document.addEventListener( 'keydown', function ( event ) {
-
-		if ( event.key.toLowerCase() !== 'z' || event.ctrlKey || event.metaKey || event.altKey ) return;
-
-		const t = event.target;
-		if ( t && ( t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test( t.tagName ) || t.closest && t.closest( '.CodeMirror' ) ) ) return;
-
-		event.preventDefault();
-		const i = Math.max( 0, modes.indexOf( shadingSelect.getValue() ) );
-		const next = modes[ ( i + ( event.shiftKey ? modes.length - 1 : 1 ) ) % modes.length ];
-		shadingSelect.setValue( next );
-		editor.setViewportShading( next );
-
-	} );
+	signals.viewportShadingChanged.add( () => shadingSelect.setValue( editor.viewportShading ) );
 
 	signals.editorCleared.add( function () {
 

@@ -107,6 +107,11 @@ function Animation( editor ) {
 
 	} );
 	controlsPanel.add( stopButton );
+	editor.animationCommands = {
+		animationPlay: () => { if ( currentAction?.isRunning() && ! currentAction.paused ) pauseButton.dom.click(); else playButton.dom.click(); },
+		animationPause: () => pauseButton.dom.click(),
+		animationStop: () => stopButton.dom.click()
+	};
 
 	// Time display
 	const timeDisplay = document.createElement( 'div' );

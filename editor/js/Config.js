@@ -27,6 +27,9 @@ function Config( persist = true ) {
 		'project/renderer/toneMappingExposure': 1,
 
 		'settings/history': false,
+		'settings/keymapPreset': 'blender',
+		'settings/keymapOverrides': {},
+		'settings/emulateThreeButtonMouse': false,
 		'settings/autoHideMenubar': false,
 		'settings/theme': 'system',
 		'settings/userThemes': {},

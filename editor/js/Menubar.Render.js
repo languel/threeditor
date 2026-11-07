@@ -4,6 +4,7 @@ import { UIPanel, UIRow, UIButton, UIInteger, UISelect, UIText } from './libs/ui
 
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { APP } from './libs/app.js';
+import { setupRenderEnvironment, setupPathTracingEnvironment } from './RenderEnvironment.js';
 
 function MenubarRender( editor ) {
 
@@ -109,9 +110,13 @@ class RenderImageDialog {
 		shadingRow.add( new UIText( strings.getKey( 'sidebar/project/shading' ) ).setClass( 'Label' ) );
 
 		const shadingTypeSelect = new UISelect().setOptions( {
+			'preview': 'PREVIEW',
 			'solid': 'SOLID',
+			'normals': 'NORMALS',
+			'wireframe': 'WIREFRAME',
 			'realistic': 'REALISTIC'
-		} ).setWidth( '170px' ).onChange( refreshShadingRow ).setValue( 'solid' );
+		} ).setWidth( '170px' ).onChange( refreshShadingRow ).setValue( 'preview' );
+		shadingTypeSelect.dom.title = 'Render without editor helpers; Solid and Preview use scene materials.';
 		shadingRow.add( shadingTypeSelect );
 
 		const pathTracerMinSamples = 3;
@@ -158,7 +163,7 @@ class RenderImageDialog {
 
 			if ( shadingTypeSelect.getValue() === 'realistic' ) {
 
-				let isMaterialsValid = true;
+				const unsupported = [];
 
 				editor.scene.traverseVisible( ( object ) => {
 
@@ -170,10 +175,9 @@ class RenderImageDialog {
 
 							const material = materials[ i ];
 
-							if ( ! material.isMeshStandardMaterial ) {
+							if ( ! material?.isMeshStandardMaterial ) {
 
-								isMaterialsValid = false;
-								return;
+								unsupported.push( `${ object.name || object.type }: ${ material?.type || 'missing material' }` );
 
 							}
 
@@ -183,9 +187,9 @@ class RenderImageDialog {
 
 				} );
 
-				if ( isMaterialsValid === false ) {
+				if ( unsupported.length > 0 ) {
 
-					alert( strings.getKey( 'prompt/rendering/realistic/unsupportedMaterial' ) );
+					alert( strings.getKey( 'prompt/rendering/realistic/unsupportedMaterial' ) + '\n\n' + [ ...new Set( unsupported ) ].join( '\n' ) );
 					return;
 
 				}
@@ -223,7 +227,33 @@ class RenderImageDialog {
 			camera.updateProjectionMatrix();
 			camera.updateMatrixWorld();
 
-			const renderer = new THREE.WebGLRenderer( { antialias: true, reversedDepthBuffer: true } );
+			let renderer;
+			if ( shadingTypeSelect.getValue() === 'realistic' ) {
+
+				try {
+
+					if ( ! navigator.gpu || ! await navigator.gpu.requestAdapter() ) throw new Error( 'WebGPU is unavailable' );
+					const { WebGPURenderer } = await import( 'three/webgpu' );
+					renderer = new WebGPURenderer( { antialias: true } );
+					await renderer.init();
+					camera.coordinateSystem = THREE.WebGPUCoordinateSystem;
+					// Path tracing constructs primary rays from the inverse projection in
+					// float32; an extreme clip ratio makes the far point infinite.
+					if ( camera.isPerspectiveCamera ) camera.far = Math.min( camera.far, camera.near * 100000 );
+					camera.updateProjectionMatrix();
+
+				} catch ( error ) {
+
+					alert( 'Realistic rendering needs WebGPU: ' + error.message );
+					return;
+
+				}
+
+			} else {
+
+				renderer = new THREE.WebGLRenderer( { antialias: true, reversedDepthBuffer: true } );
+
+			}
 			renderer.setSize( imageWidth.getValue(), imageHeight.getValue() );
 			renderer.setClearColor( editor.viewportColor );
 
@@ -231,6 +261,18 @@ class RenderImageDialog {
 			if ( project.shadowType !== undefined ) renderer.shadowMap.type = project.shadowType;
 			if ( project.toneMapping !== undefined ) renderer.toneMapping = project.toneMapping;
 			if ( project.toneMappingExposure !== undefined ) renderer.toneMappingExposure = project.toneMappingExposure;
+			let environmentTarget;
+			try {
+
+				environmentTarget = shadingTypeSelect.getValue() === 'realistic' ? await setupPathTracingEnvironment( scene, json.environmentType ) : await setupRenderEnvironment( scene, renderer, json.environmentType );
+
+			} catch ( error ) {
+
+				renderer.dispose();
+				alert( 'Could not prepare the render environment: ' + error.message );
+				return;
+
+			}
 
 			// popup
 
@@ -241,6 +283,14 @@ class RenderImageDialog {
 			const top = ( screen.height - height ) / 2;
 
 			const output = window.open( '', '_blank', `location=no,left=${left},top=${top},width=${width},height=${height}` );
+			if ( ! output ) {
+
+				environmentTarget?.dispose();
+				renderer.dispose();
+				alert( 'Allow pop-up windows to display the render.' );
+				return;
+
+			}
 
 			const meta = document.createElement( 'meta' );
 			meta.name = 'viewport';
@@ -261,13 +311,21 @@ class RenderImageDialog {
 			switch ( shadingTypeSelect.getValue() ) {
 
 				case 'solid':
+				case 'preview':
+				case 'normals':
+				case 'wireframe':
 
+					scene.overrideMaterial = shadingTypeSelect.getValue() === 'normals' ? new THREE.MeshNormalMaterial() : shadingTypeSelect.getValue() === 'wireframe' ? new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } ) : null;
 					renderer.render( scene, camera );
+					scene.overrideMaterial?.dispose();
+					environmentTarget?.dispose();
 					renderer.dispose();
 
 					break;
 
 				case 'realistic':
+
+					if ( scene.background === null ) scene.background = editor.viewportColor.clone();
 
 					const status = document.createElement( 'div' );
 					status.style.position = 'absolute';
@@ -278,39 +336,53 @@ class RenderImageDialog {
 					status.style.fontSize = '12px';
 					output.document.body.appendChild( status );
 
-					const pathTracer = new ViewportPathtracer( renderer );
-					pathTracer.init( scene, camera );
-					pathTracer.setSize( imageWidth.getValue(), imageHeight.getValue() );
+					let pathTracer;
+					try {
+
+						const { WebGPUPathTracer } = await import( 'three-gpu-pathtracer/webgpu' );
+						pathTracer = new WebGPUPathTracer( renderer );
+						// The wavefront backend currently fails WGSL validation with r187.
+						pathTracer.useMegakernel( true );
+						pathTracer.renderDelay = 0;
+						pathTracer.dynamicLowRes = false;
+						pathTracer.setScene( scene, camera );
+
+					} catch ( error ) {
+
+						status.textContent = 'Render failed: ' + error.message;
+						pathTracer?.dispose();
+						environmentTarget?.dispose();
+						renderer.dispose();
+						break;
+
+					}
 
 					const maxSamples = Math.max( pathTracerMinSamples, Math.min( pathTracerMaxSamples, samplesNumber.getValue() ) );
+					pathTracer.maxSamples = maxSamples;
+					let samples = 0;
+					let reading = false;
 
 					function animate() {
 
 						if ( output.closed === true ) return;
 
-						const samples = Math.floor( pathTracer.getSamples() ) + 1;
+						pathTracer.renderSample();
+						if ( ! reading ) {
 
-						if ( samples < maxSamples ) {
+							reading = true;
+							pathTracer.getSampleCountsAsync().then( counts => {
 
-							requestAnimationFrame( animate );
-
-						}
-
-						pathTracer.update();
-
-						const progress = Math.floor( samples / maxSamples * 100 );
-
-						status.textContent = `${ samples } / ${ maxSamples } ( ${ progress }% )`;
-
-						if ( progress === 100 ) {
-
-							status.textContent += ' \u2713';
+								samples = Math.floor( counts.min );
+								status.textContent = `${ Math.min( samples, maxSamples ) } / ${ maxSamples }` + ( samples >= maxSamples ? ' ✓' : '' );
+							} ).catch( error => { status.textContent = 'Render failed: ' + error.message; } ).finally( () => { reading = false; } );
 
 						}
+						if ( samples < maxSamples ) requestAnimationFrame( animate );
 
 					}
 
 					animate();
+					output.addEventListener( 'beforeunload', () => { pathTracer.dispose(); environmentTarget?.dispose(); renderer.dispose(); }, { once: true } );
 
 					break;
 
@@ -427,7 +499,9 @@ class RenderVideoDialog {
 		renderButton.onClick( async () => {
 
 			const player = new APP.Player();
-			await player.load( editor.toJSON() );
+			const project = editor.toJSON();
+			await player.load( project );
+			const environmentTarget = await setupRenderEnvironment( player.getScene(), player.getRenderer(), project.environmentType );
 			player.setPixelRatio( 1 );
 			player.setSize( videoWidth.getValue(), videoHeight.getValue() );
 			player.setClearColor( editor.viewportColor );
@@ -572,6 +646,7 @@ class RenderVideoDialog {
 
 			}
 
+			environmentTarget?.dispose();
 			player.dispose();
 
 			this.close();

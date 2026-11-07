@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
+import { SetValueCommand } from './commands/SetValueCommand.js';
 
 function SidebarScene( editor ) {
 
@@ -21,7 +22,19 @@ function SidebarScene( editor ) {
 		const option = document.createElement( 'div' );
 		option.draggable = draggable;
 		option.innerHTML = buildHTML( object );
+		addRestrictions( option, object );
 		option.value = object.id;
+		option.addEventListener( 'click', event => {
+
+			if ( ! event.target.closest( '.Script' ) ) return;
+			event.stopPropagation();
+			const scripts = editor.scripts[ object.uuid ] || [];
+			const script = scripts.find( item => ! item.generated ) || scripts[ 0 ];
+			if ( ! script ) return;
+			editor.select( object );
+			signals.editScript.dispatch( object, script );
+
+		} );
 
 		// opener
 
@@ -50,6 +63,51 @@ function SidebarScene( editor ) {
 		}
 
 		return option;
+
+	}
+
+
+	function addRestrictions( option, object ) {
+
+		const controls = document.createElement( 'span' );
+		controls.className = 'outliner-restrictions';
+		const name = object.name || getObjectType( object );
+		const flags = object.userData?.threeditor || {};
+		const items = [
+			{ key: 'visible', on: object.visible, label: object.visible ? 'Hide' : 'Show', svg: '<path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2"/>' },
+			{ key: 'unselectable', on: ! flags.unselectable, label: flags.unselectable ? 'Enable viewport selection for' : 'Disable viewport selection for', svg: '<path d="M3 2l9 7-4 1-2 4z"/>' },
+			{ key: 'locked', on: ! flags.locked, label: flags.locked ? 'Unlock transforms for' : 'Lock transforms for', svg: flags.locked ? '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/>' : '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 015-2"/>' }
+		];
+		for ( const item of items ) {
+
+			const button = document.createElement( 'button' );
+			button.type = 'button';
+			button.className = 'outliner-restriction';
+			button.title = item.label + ' ' + name;
+			button.setAttribute( 'aria-label', button.title );
+			button.setAttribute( 'aria-pressed', String( item.on ) );
+			button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">${ item.svg }</svg>`;
+			button.addEventListener( 'pointerdown', event => event.stopPropagation() );
+			button.addEventListener( 'dblclick', event => event.stopPropagation() );
+			button.addEventListener( 'click', event => {
+
+				event.stopPropagation();
+				let command;
+				if ( item.key === 'visible' ) command = new SetValueCommand( editor, object, 'visible', ! object.visible );
+				else {
+
+					const data = { ...object.userData, threeditor: { ...object.userData?.threeditor, [ item.key ]: ! object.userData?.threeditor?.[ item.key ] } };
+					command = new SetValueCommand( editor, object, 'userData', data );
+
+				}
+				command.updatable = false;
+				editor.execute( command );
+
+			} );
+			controls.appendChild( button );
+
+		}
+		option.appendChild( controls );
 
 	}
 
@@ -123,7 +181,7 @@ function SidebarScene( editor ) {
 
 		if ( editor.scripts[ uuid ].length === 0 ) return '';
 
-		return ' <span class="type Script"></span>';
+		return ' <button type="button" class="type Script" aria-label="Open script" title="Open script"></button>';
 
 	}
 
@@ -547,6 +605,7 @@ function SidebarScene( editor ) {
 				const openerElement = option.querySelector( ':scope > .opener' );
 
 				option.innerHTML = buildHTML( object );
+				addRestrictions( option, object );
 
 				if ( openerElement !== null ) option.insertBefore( openerElement, option.firstChild );
 

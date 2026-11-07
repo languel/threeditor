@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js';
+import { Keymap } from './Keymap.js';
+import { ModalTransform } from './ModalTransform.js';
 import { applyTheme } from './Theme.js';
 import { Viewport } from './Viewport.js';
 import { Toolbar } from './Toolbar.js';
@@ -8,6 +10,8 @@ import { Player } from './Player.js';
 import { Sidebar } from './Sidebar.js';
 import { Menubar } from './Menubar.js';
 import { MenuAutoHide } from './MenuAutoHide.js';
+import { ContextMenu } from './ContextMenu.js';
+import { AgentAPI } from './AgentAPI.js';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';
@@ -25,6 +29,8 @@ async function startEditor( portable = null ) {
 
 	let isLoadingFromHash = false;
 	const editor = new Editor( portable !== null );
+	let finishStartup;
+	editor.startupReady = new Promise( resolve => { finishStartup = resolve; } );
 	editor.portable = portable;
 	if ( portable ) {
 
@@ -56,6 +62,8 @@ async function startEditor( portable = null ) {
 
 	THREE.ObjectLoader.registerGeometry( 'TextGeometry', TextGeometry );
 
+	editor.keymap = new Keymap( editor );
+	editor.modalTransform = new ModalTransform( editor );
 	const viewport = new Viewport( editor );
 	document.body.appendChild( viewport.dom );
 
@@ -63,6 +71,7 @@ async function startEditor( portable = null ) {
 	document.body.appendChild( toolbar.dom );
 
 	const player = new Player( editor );
+	editor.player = player;
 	document.body.appendChild( player.dom );
 
 	const sidebar = new Sidebar( editor );
@@ -88,6 +97,9 @@ async function startEditor( portable = null ) {
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
 	MenuAutoHide( editor, menubar.dom );
+	editor.keymap.registerMenu( menubar.dom );
+	editor.contextMenu = new ContextMenu( editor, viewport.dom );
+	window.threeditor = AgentAPI( editor );
 
 	//
 
@@ -117,6 +129,8 @@ async function startEditor( portable = null ) {
 					editor.selectByUuid( selected );
 
 				}
+
+				finishStartup();
 
 			} );
 
@@ -219,6 +233,7 @@ async function startEditor( portable = null ) {
 
 		editor.sourceFiles = portable.sourceFiles;
 		await editor.fromJSON( portable.scene );
+		finishStartup();
 		player.present( false );
 		return editor;
 
@@ -234,12 +249,12 @@ async function startEditor( portable = null ) {
 
 			const loader = new THREE.FileLoader();
 			loader.crossOrigin = '';
-			loader.load( file, function ( text ) {
+			loader.load( file, async function ( text ) {
 
 				editor.clear();
-				editor.fromJSON( JSON.parse( text ) );
+				try { await editor.fromJSON( JSON.parse( text ) ); } finally { finishStartup(); }
 
-			} );
+			}, undefined, () => finishStartup() );
 
 			isLoadingFromHash = true;
 

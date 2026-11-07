@@ -7,6 +7,8 @@ import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
+import { formatCombo } from './Keymap.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 
 function MenubarEdit( editor ) {
 
@@ -87,7 +89,7 @@ function MenubarEdit( editor ) {
 
 		const object = editor.selected;
 
-		if ( object === null || object.parent === null ) return; // avoid centering the camera or scene
+		if ( object === null || object.parent === null || hasRestriction( object, 'locked' ) ) return; // avoid centering the camera, scene, or locked objects
 
 		const aabb = new Box3().setFromObject( object );
 		const center = aabb.getCenter( new Vector3() );
@@ -121,6 +123,8 @@ function MenubarEdit( editor ) {
 	options.add( option );
 
 	// Delete
+	const cloneOption = option;
+	editor.shortcutDuplicate = () => cloneOption.dom.click();
 
 	option = new UIRow();
 	option.setClass( 'option' );
@@ -147,6 +151,16 @@ function MenubarEdit( editor ) {
 
 	} );
 	options.add( option );
+	const deleteOption = option;
+	const updateKeys = () => {
+
+		undo.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'undo' ) );
+		redo.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'redo' ) );
+		deleteOption.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'delete' ) );
+
+	};
+	editor.keymap.listeners.add( updateKeys );
+	updateKeys();
 
 	return container;
 

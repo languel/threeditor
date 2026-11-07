@@ -84,15 +84,6 @@ function SidebarProjectApp( editor ) {
 
 	} );
 
-	// Alt+P toggles play mode (event.code because Alt+P types a symbol on macOS)
-	document.addEventListener( 'keydown', function ( event ) {
-
-		if ( event.code !== 'KeyP' || ! event.altKey || event.ctrlKey || event.metaKey ) return;
-		event.preventDefault();
-		togglePlay();
-
-	} );
-
 	container.add( playButton );
 
 	// Signals

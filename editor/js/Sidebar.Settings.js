@@ -65,6 +65,19 @@ function SidebarSettings( editor ) {
 		signals.menuAutoHideChanged.dispatch();
 
 	} );
+
+	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)' );
+	const emulateMouseLabel = document.createElement( 'label' );
+	emulateMouseLabel.className = 'settings-checkbox';
+	emulateMouseLabel.style.display = 'block';
+	emulateMouseLabel.title = 'Option/Alt + left drag orbits; add Shift to pan or Ctrl/Command to zoom';
+	emulateMouseLabel.appendChild( emulateMouse.dom );
+	general.dom.appendChild( emulateMouseLabel );
+	emulateMouse.onChange( function () {
+
+		config.setKey( 'settings/emulateThreeButtonMouse', this.getValue() );
+
+	} );
 	autosave.onChange( function () {
 
 		const value = this.getValue();

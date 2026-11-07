@@ -85,6 +85,8 @@ function MenubarView( editor ) {
 	options.add( option );
 
 	// new helpers are visible by default, the global visibility state
+	const helperOptions = [ ...options.dom.querySelectorAll( '.option' ) ];
+	editor.shortcutToggleHelper = id => helperOptions[ { grid: 0, cameraHelpers: 1, lightHelpers: 2, skeletonHelpers: 3 }[ id ] ]?.click();
 	// of helpers is managed in this component. every time a helper is added,
 	// we request a viewport updated by firing the showHelpersChanged signal.
 

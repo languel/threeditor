@@ -504,6 +504,13 @@ function MenubarFile( editor ) {
 
 	}
 
+	publishOption( 'Scene JavaScript (.js)', async function () {
+
+		const { code } = await editor.codePanel.getPublishInputs();
+		editor.utils.save( new Blob( [ code ], { type: 'text/javascript' } ), 'scene.js' );
+
+	} );
+
 	if ( ! editor.portable ) {
 
 		publishOption( 'Source project (.zip)', async function () {

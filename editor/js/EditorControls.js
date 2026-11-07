@@ -13,6 +13,8 @@ class EditorControls extends THREE.EventDispatcher {
 		this.panSpeed = 0.002;
 		this.zoomSpeed = 0.1;
 		this.rotationSpeed = 0.005;
+		this.navigationMode = () => 'basic';
+		this.emulateThreeButton = () => false;
 
 		// internals
 
@@ -150,6 +152,9 @@ class EditorControls extends THREE.EventDispatcher {
 		function onPointerDown( event ) {
 
 			if ( scope.enabled === false ) return;
+			const emulatedMiddle = scope.navigationMode() === 'blender' && scope.emulateThreeButton() && event.button === 0 && event.altKey;
+			if ( event.pointerType !== 'touch' && scope.navigationMode() === 'blender' && event.button !== 1 && ! emulatedMiddle ) return;
+			if ( event.pointerType !== 'touch' && event.button === 1 ) event.preventDefault();
 
 			if ( pointers.length === 0 ) {
 
@@ -229,7 +234,11 @@ class EditorControls extends THREE.EventDispatcher {
 
 		function onMouseDown( event ) {
 
-			if ( event.button === 0 ) {
+			if ( scope.navigationMode() === 'blender' && ( event.button === 1 || ( scope.emulateThreeButton() && event.button === 0 && event.altKey ) ) ) {
+
+				state = event.shiftKey ? STATE.PAN : ( event.ctrlKey || event.metaKey ) ? STATE.ZOOM : STATE.ROTATE;
+
+			} else if ( event.button === 0 ) {
 
 				state = STATE.ROTATE;
 

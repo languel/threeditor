@@ -266,6 +266,8 @@ hr {
 	content: '◎'
 }
 
+#outliner button.Script { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+
 /*  */
 
 .Button {
@@ -679,17 +681,16 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	}
 
 .settings {
-	padding: 8px;
+	padding: 0;
 }
 
 .settings-section {
-	margin-bottom: 6px;
-	border: 1px solid #ccc;
-	border-radius: 5px;
+	margin: 0;
+	border: 0;
 }
 
 .settings-section > summary {
-	padding: 9px 10px;
+	padding: 10px;
 	color: #555;
 	font-weight: 600;
 	cursor: pointer;
@@ -1196,6 +1197,9 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	#code-panel .code-bar label {
 		cursor: pointer;
 		padding: 0 4px;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
 	}
 
 	#code-panel .code-target {
@@ -1229,7 +1233,7 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 		font-size: 12px;
 		color: #888;
 		min-height: 16px;
-		border-bottom: 1px solid #ddd;
+		border-top: 1px solid #ddd;
 	}
 
 	#code-panel .code-status.error {
@@ -1295,7 +1299,7 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	#code-panel { background: #111; color: #aaa; }
 	.panel-toggles { color: #aaa; }
 	.panel-toggles button[aria-pressed="true"] { color: #75bfff; }
-	#code-panel .code-status { color: #888; border-bottom-color: #222; }
+	#code-panel .code-status { color: #888; border-top-color: #222; }
 	#code-panel .code-status.error { color: #f66; }
 
 	.cm-s-editor.CodeMirror { background: #1b1b1b; color: #bbb; }
@@ -1363,7 +1367,7 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .Dialog-content { background: var(--theme-background); color: var(--theme-text); }
 .Dialog-title, .Dialog-body .Row .Label { color: var(--theme-text); }
 .Input.Number { color: var(--theme-accent) !important; }
-.settings-section { border-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); }
+#sidebar .settings-section > .Panel { border: 0; }
 .Outliner .option, .Listbox .ListboxItem { color: var(--theme-text); }
 .Outliner .option.active, .Listbox .ListboxItem.active { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 70%); }
 .Outliner .option:hover, .Listbox .ListboxItem:hover { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 87%); }
@@ -1393,3 +1397,29 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .color-alpha output { min-width: 32px; color: var(--theme-text); font-size: 11px; }
 
 }
+
+.shortcut-toolbar { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.shortcut-toolbar .Input { flex: 1; min-width: 100px; }
+.shortcut-note { margin: 8px 0; font-size: 11px; opacity: .8; }
+.shortcut-list { max-height: 420px; overflow: auto; }
+.shortcut-category { margin-top: 10px; font-size: 11px; font-weight: bold; opacity: .75; text-transform: uppercase; }
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.shortcut-row span { min-width: 0; }
+.shortcut-row button { flex: none; max-width: 48%; font-size: 11px; }
+.navigation-notice { position: fixed; z-index: 50; bottom: 45px; left: 50%; transform: translateX(-50%); padding: 7px 12px; background: var(--theme-background); color: var(--theme-text); border: 1px solid var(--theme-accent); border-radius: 4px; font-size: 12px; pointer-events: none; }
+.shortcut-binding { display: flex; gap: 3px; align-items: center; flex: none; }
+.shortcut-row .shortcut-binding button { max-width: none; }
+.shortcut-clear { padding-inline: 6px; }
+.outliner-restrictions { float: right; position: sticky; right: 0; display: inline-flex; gap: 1px; margin-left: 8px; z-index: 1; }
+.outliner-restriction { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 2px; border: 0; background: var(--theme-surface); color: var(--theme-text); cursor: pointer; }
+.outliner-restriction[aria-pressed="false"] { opacity: .45; }
+.outliner-restriction:hover, .outliner-restriction:focus-visible { color: var(--theme-accent); opacity: 1; }
+.outliner-restriction svg { width: 15px; height: 15px; }
+.context-menu { position: fixed; z-index: 100; width: 230px; max-width: calc(100vw - 8px); padding: 6px; border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); border-radius: 5px; background: var(--theme-background); color: var(--theme-text); box-shadow: 0 8px 25px #0005; }
+.context-menu-title { font-weight: bold; padding: 4px 6px 6px; }
+.context-menu-search { box-sizing: border-box; width: 100%; margin-bottom: 4px; }
+.context-menu-list { max-height: min(60vh, 500px); overflow: auto; }
+.context-menu-section { padding: 7px 6px 3px; font-size: 10px; font-weight: bold; text-transform: uppercase; opacity: .7; }
+.context-menu-item { display: block; width: 100%; padding: 6px; border: 0; text-align: left; background: transparent; color: var(--theme-text); cursor: pointer; }
+.context-menu-item:hover, .context-menu-item:focus-visible { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%); outline: none; }
+.context-menu-key { float: right; opacity: .65; font-size: 11px; margin-left: 8px; }

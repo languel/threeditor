@@ -1,4 +1,9 @@
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
+import { ShaderChunk } from 'three';
+import cubeUVReflection from './libs/cube_uv_reflection_fragment.js';
+
+// WebGL path tracer still references the pre-r187 cube-UV shader chunk.
+if ( ! ShaderChunk.cube_uv_reflection_fragment ) ShaderChunk.cube_uv_reflection_fragment = cubeUVReflection;
 
 function ViewportPathtracer( renderer ) {
 

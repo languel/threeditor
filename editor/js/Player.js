@@ -140,10 +140,6 @@ function Player( editor ) {
 
 		}
 
-		if ( event.code !== 'KeyP' || ! event.altKey || ! event.metaKey || event.ctrlKey ) return;
-		event.preventDefault();
-		if ( ! event.repeat ) present();
-
 	}, true );
 
 	document.addEventListener( 'fullscreenchange', function () {

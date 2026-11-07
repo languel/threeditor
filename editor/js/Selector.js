@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
@@ -125,7 +126,12 @@ class Selector {
 
 		} );
 
-		return raycaster.intersectObjects( objects, false );
+		return raycaster.intersectObjects( objects, false ).filter( hit => {
+
+			const object = hit.object.userData.object || hit.object;
+			return isVisible( object ) && ! hasRestriction( object, 'unselectable' );
+
+		} );
 
 	}
 
