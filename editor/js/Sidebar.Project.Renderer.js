@@ -11,6 +11,9 @@ function SidebarProjectRenderer( editor ) {
 	const strings = editor.strings;
 
 	let currentRenderer = null;
+	let rendererRequest = 0;
+	let appliedRendererType = config.getKey( 'project/renderer/type' );
+	let appliedAntialias = config.getKey( 'project/renderer/antialias' );
 
 	const container = new UIPanel();
 	container.setBorderTop( '0px' );
@@ -83,6 +86,7 @@ function SidebarProjectRenderer( editor ) {
 
 	function updateShadows() {
 
+		if ( currentRenderer === null ) return;
 		currentRenderer.shadowMap.enabled = shadowsBoolean.getValue();
 		currentRenderer.shadowMap.type = parseFloat( shadowTypeSelect.getValue() );
 
@@ -120,6 +124,7 @@ function SidebarProjectRenderer( editor ) {
 
 		toneMappingExposure.setDisplay( toneMappingSelect.getValue() === '0' ? 'none' : '' );
 
+		if ( currentRenderer === null ) return;
 		currentRenderer.toneMapping = parseFloat( toneMappingSelect.getValue() );
 		currentRenderer.toneMappingExposure = toneMappingExposure.getValue();
 		signals.rendererUpdated.dispatch();
@@ -130,27 +135,50 @@ function SidebarProjectRenderer( editor ) {
 
 	async function createRenderer() {
 
+		const request = ++ rendererRequest;
 		const rendererType = rendererTypeSelect.getValue();
 		const antialias = antialiasBoolean.getValue();
+		const options = { antialias, reversedDepthBuffer: true };
+		let nextRenderer;
 
-		if ( rendererType === 'WebGPURenderer' ) {
+		try {
 
-			currentRenderer = new WebGPURenderer( { antialias: antialias, reversedDepthBuffer: true } );
-			await currentRenderer.init();
+			nextRenderer = rendererType === 'WebGPURenderer' ? new WebGPURenderer( options ) : new THREE.WebGLRenderer( options );
+			if ( nextRenderer.isWebGPURenderer ) await nextRenderer.init();
 
-		} else {
+		} catch ( error ) {
 
-			currentRenderer = new THREE.WebGLRenderer( { antialias: antialias, reversedDepthBuffer: true } );
+			if ( request !== rendererRequest ) return;
+			rendererTypeSelect.setValue( appliedRendererType );
+			antialiasBoolean.setValue( appliedAntialias );
+			console.error( 'Could not switch renderer.', error );
+			return;
 
 		}
 
-		currentRenderer.shadowMap.enabled = shadowsBoolean.getValue();
-		currentRenderer.shadowMap.type = parseFloat( shadowTypeSelect.getValue() );
-		currentRenderer.toneMapping = parseFloat( toneMappingSelect.getValue() );
-		currentRenderer.toneMappingExposure = toneMappingExposure.getValue();
+		if ( request !== rendererRequest ) {
+
+			nextRenderer.dispose();
+			return;
+
+		}
+
+		currentRenderer = nextRenderer;
+		appliedRendererType = rendererType;
+		appliedAntialias = antialias;
+		applySettings( currentRenderer );
 
 		signals.rendererCreated.dispatch( currentRenderer );
 		signals.rendererUpdated.dispatch();
+
+	}
+
+	function applySettings( renderer ) {
+
+		renderer.shadowMap.enabled = shadowsBoolean.getValue();
+		renderer.shadowMap.type = parseFloat( shadowTypeSelect.getValue() );
+		renderer.toneMapping = parseFloat( toneMappingSelect.getValue() );
+		renderer.toneMappingExposure = toneMappingExposure.getValue();
 
 	}
 
@@ -170,17 +198,14 @@ function SidebarProjectRenderer( editor ) {
 
 	signals.editorCleared.add( function () {
 
-		currentRenderer.shadowMap.enabled = true;
-		currentRenderer.shadowMap.type = THREE.PCFShadowMap;
-		currentRenderer.toneMapping = THREE.NeutralToneMapping;
-		currentRenderer.toneMappingExposure = 1;
+		shadowsBoolean.setValue( true );
+		shadowTypeSelect.setValue( THREE.PCFShadowMap );
+		toneMappingSelect.setValue( THREE.NeutralToneMapping );
+		toneMappingExposure.setValue( 1 );
+		toneMappingExposure.setDisplay( '' );
 
-		shadowsBoolean.setValue( currentRenderer.shadowMap.enabled );
-		shadowTypeSelect.setValue( currentRenderer.shadowMap.type );
-		toneMappingSelect.setValue( currentRenderer.toneMapping );
-		toneMappingExposure.setValue( currentRenderer.toneMappingExposure );
-		toneMappingExposure.setDisplay( currentRenderer.toneMapping === 0 ? 'none' : '' );
-
+		if ( currentRenderer === null ) return;
+		applySettings( currentRenderer );
 		signals.rendererUpdated.dispatch();
 
 	} );
@@ -188,8 +213,8 @@ function SidebarProjectRenderer( editor ) {
 	signals.rendererUpdated.add( function () {
 
 		config.setKey(
-			'project/renderer/type', rendererTypeSelect.getValue(),
-			'project/renderer/antialias', antialiasBoolean.getValue(),
+			'project/renderer/type', appliedRendererType,
+			'project/renderer/antialias', appliedAntialias,
 			'project/renderer/shadows', shadowsBoolean.getValue(),
 			'project/renderer/shadowType', parseFloat( shadowTypeSelect.getValue() ),
 			'project/renderer/toneMapping', parseFloat( toneMappingSelect.getValue() ),

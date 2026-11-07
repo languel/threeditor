@@ -38,6 +38,7 @@ function Viewport( editor ) {
 
 	let renderer = null;
 	let pmremGenerator = null;
+	let environmentTarget = null;
 	let pathtracer = null;
 
 	let camera = editor.camera;
@@ -364,9 +365,12 @@ function Viewport( editor ) {
 
 	signals.rendererCreated.add( function ( newRenderer ) {
 
+		const environment = scene.environment;
 		if ( renderer !== null ) {
 
 			renderer.setAnimationLoop( null );
+			environmentTarget?.dispose();
+			environmentTarget = null;
 
 			try {
 
@@ -412,7 +416,7 @@ function Viewport( editor ) {
 
 		container.dom.appendChild( renderer.domElement );
 
-		signals.sceneEnvironmentChanged.dispatch( editor.environmentType );
+		signals.sceneEnvironmentChanged.dispatch( editor.environmentType, environment );
 
 		render();
 
@@ -619,6 +623,8 @@ function Viewport( editor ) {
 
 		editor.environmentType = environmentType;
 
+		environmentTarget?.dispose();
+		environmentTarget = null;
 		scene.environment = null;
 
 		useBackgroundAsEnvironment = false;
@@ -640,23 +646,25 @@ function Viewport( editor ) {
 
 				useBackgroundAsEnvironment = true;
 
-				if ( scene.background !== null ) {
+				if ( scene.background?.isTexture ) {
 
-					if ( scene.background.isColor ) {
+					scene.environment = scene.background;
+					scene.environment.mapping = THREE.EquirectangularReflectionMapping;
+					scene.environmentRotation.y = scene.backgroundRotation.y;
 
-						scene.environment = pmremGenerator.fromScene( new ColorEnvironment( scene.background ), 0.04 ).texture;
+				} else if ( pmremGenerator && ( scene.background === null || scene.background.isColor ) ) {
 
-					} else if ( scene.background.isTexture ) {
+					const environmentScene = scene.background ? new ColorEnvironment( scene.background ) : new RoomEnvironment();
+					try {
 
-						scene.environment = scene.background;
-						scene.environment.mapping = THREE.EquirectangularReflectionMapping;
-						scene.environmentRotation.y = scene.backgroundRotation.y;
+						environmentTarget = pmremGenerator.fromScene( environmentScene, 0.04 );
+						scene.environment = environmentTarget.texture;
+
+					} finally {
+
+						environmentScene.dispose();
 
 					}
-
-				} else {
-
-					scene.environment = pmremGenerator.fromScene( new RoomEnvironment(), 0.04 ).texture;
 
 				}
 
