@@ -91,6 +91,8 @@ async function startEditor( portable = null ) {
 	document.body.appendChild( animationResizer.dom );
 
 	const sidebarDock = new PanelDock( editor, sidebar.dom, resizer.dom, 'right' );
+	editor.assetBrowser.reveal = () => { sidebar.select( 'assets' ); sidebarDock.toggle( true ); };
+	editor.assetBrowser.bindViewport( viewport.dom );
 	const timelineDock = new PanelDock( editor, animation.dom, animationResizer.dom, 'bottom' );
 	editor.signals.animationPanelChanged.add( () => editor.signals.windowResize.dispatch() );
 
@@ -202,6 +204,8 @@ async function startEditor( portable = null ) {
 	document.addEventListener( 'drop', function ( event ) {
 
 		event.preventDefault();
+
+		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) return;
 
 		if ( event.dataTransfer.types[ 0 ] === 'text/plain' ) return; // Outliner drop
 

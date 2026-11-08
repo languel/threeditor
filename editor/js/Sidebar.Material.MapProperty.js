@@ -139,6 +139,8 @@ function SidebarMaterialMapProperty( editor, property, name ) {
 
 		if ( texture !== null ) {
 
+			if ( ! colorMaps.includes( property ) ) texture.colorSpace = THREE.NoColorSpace;
+
 			if ( colorMaps.includes( property ) && texture.isDataTexture !== true && texture.colorSpace !== THREE.SRGBColorSpace ) {
 
 				texture.colorSpace = THREE.SRGBColorSpace;

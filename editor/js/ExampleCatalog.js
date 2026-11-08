@@ -17,4 +17,8 @@ const exampleCatalog = [
 	] }
 ];
 
-export { exampleCatalog };
+function exampleResources( entries = exampleCatalog ) {
+	return entries.flatMap( entry => entry.children ? exampleResources( entry.children ) : [ entry.file, ...( entry.assets || [] ).map( asset => asset.file ) ] );
+}
+
+export { exampleCatalog, exampleResources };

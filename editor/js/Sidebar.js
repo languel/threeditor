@@ -4,6 +4,7 @@ import { SidebarScene } from './Sidebar.Scene.js';
 import { SidebarProperties } from './Sidebar.Properties.js';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js';
+import { SidebarAssets } from './Sidebar.Assets.js';
 
 function Sidebar( editor ) {
 
@@ -22,9 +23,17 @@ function Sidebar( editor ) {
 	const settings = new SidebarSettings( editor );
 
 	container.addTab( 'scene', strings.getKey( 'sidebar/scene' ), scene );
+	container.addTab( 'assets', 'Assets', new SidebarAssets( editor ) );
 	container.addTab( 'project', strings.getKey( 'sidebar/project' ), project );
 	container.addTab( 'settings', strings.getKey( 'sidebar/settings' ), settings );
 	container.select( 'scene' );
+
+	// Reveal inspector tabs while an asset is being dragged, so texture slots
+	// remain reachable from the Assets tab without opening a separate window.
+	for ( const tab of container.tabs ) tab.dom.addEventListener( 'dragenter', event => {
+		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) container.select( tab.dom.id );
+	} );
+
 
 	const sidebarPropertiesResizeObserver = new ResizeObserver( function () {
 

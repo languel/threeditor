@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { projectPath, projectRecord, projectTree } from '../editor/js/ProjectLibrary.js';
-import { exampleCatalog } from '../editor/js/ExampleCatalog.js';
+import { exampleCatalog, exampleResources } from '../editor/js/ExampleCatalog.js';
 
 test( 'Project names support nested folders without empty or traversal segments', () => {
 
@@ -81,4 +81,13 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 	}
 
+} );
+
+test( 'Editable HTML resources follow nested examples and include lesson source assets', async () => {
+	const resources = exampleResources();
+	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 11 );
+	assert.ok( resources.includes( '../demos/fox-follow/assets/fox.glb' ) );
+	assert.ok( resources.includes( 'examples/threejs/arkanoid.app.json' ) );
+	for ( const path of resources ) assert.ok( ( await readFile( new URL( '../editor/' + path, import.meta.url ) ) ).length > 0 );
+	assert.deepEqual( exampleResources( [ { children: [ { children: [ { file: 'deep/scene.json', assets: [ { file: 'deep/model.glb' } ] } ] } ] } ] ), [ 'deep/scene.json', 'deep/model.glb' ] );
 } );

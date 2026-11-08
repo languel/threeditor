@@ -14,10 +14,10 @@ async function snapshotEditor( editor ) {
 	const scene = JSON.parse( JSON.stringify( editor.toJSON() ) );
 	const resources = new Map();
 	const files = [];
-	for ( const [ path, { file, batch } ] of editor.sourceFiles || [] ) {
+	for ( const [ path, { file, batch, asset } ] of editor.sourceFiles || [] ) {
 
 		resources.set( 'editor/assets/' + path, file );
-		files.push( { path, name: file.name, type: file.type, lastModified: file.lastModified, batch } );
+		files.push( { path, name: file.name, type: file.type, lastModified: file.lastModified, batch, asset } );
 
 	}
 
@@ -32,10 +32,10 @@ async function openPortableSession( modules ) {
 	const template = document.documentElement.outerHTML;
 	const state = JSON.parse( document.getElementById( stateId ).textContent );
 	const { scene, config, files, assets, compiled, threeDefs } = state;
-	const sourceFiles = new Map( await Promise.all( files.map( async ( { path, name, type, lastModified, batch } ) => {
+	const sourceFiles = new Map( await Promise.all( files.map( async ( { path, name, type, lastModified, batch, asset } ) => {
 
 		const blob = await ( await fetch( assets[ 'editor/assets/' + path ] ) ).blob();
-		return [ path, { file: new File( [ blob ], name, { type, lastModified } ), batch } ];
+		return [ path, { file: new File( [ blob ], name, { type, lastModified } ), batch, asset } ];
 
 	} ) ) );
 	const compiledScripts = new Map( compiled );

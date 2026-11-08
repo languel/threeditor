@@ -28,7 +28,7 @@ function Loader( editor ) {
 
 	};
 
-	this.loadAsset = function ( path ) {
+	this.loadAsset = function ( path, options = {} ) {
 
 		const entry = editor.sourceFiles?.get( path );
 		if ( ! entry ) return;
@@ -36,11 +36,46 @@ function Loader( editor ) {
 			.filter( key => editor.sourceFiles.has( key ) )
 			.map( key => [ key, editor.sourceFiles.get( key ).file ] ) );
 		filesMap[ path ] = entry.file;
-		scope.loadFiles( [ entry.file ], filesMap, new Map( [ [ entry.file, path ] ] ) );
+		scope.loadFiles( [ entry.file ], filesMap, new Map( [ [ entry.file, path ] ] ), options );
 
 	};
 
-	this.loadFiles = function ( files, filesMap, sourcePaths ) {
+	// Asset-browser placement is explicit: import a model without a scene-replacement dialog.
+	this.importGLTFAsset = async function ( path, { position, metadata, canCommit } = {} ) {
+		const entry = editor.sourceFiles.get( path );
+		const urls = [], failed = [];
+		const manager = new THREE.LoadingManager();
+		manager.onError = url => failed.push( url );
+		const base = new URL( './', new URL( path, 'https://assets.invalid/' ) );
+		manager.setURLModifier( url => {
+			if ( /^(data:|blob:)/.test( url ) ) return url;
+			if ( /^(?:\.\.\/)?examples\/jsm\/libs\/(basis|draco)\//.test( url ) ) return THREE.DefaultLoadingManager.resolveURL( url );
+			const key = decodeURIComponent( new URL( url, base ).pathname.slice( 1 ) );
+			const resource = editor.sourceFiles.get( key );
+			if ( ! resource ) throw new Error( 'Missing model dependency: ' + key );
+			const objectURL = URL.createObjectURL( resource.file ); urls.push( objectURL ); return objectURL;
+		} );
+		const loader = await createGLTFLoader( manager );
+		try {
+			const result = await loader.parseAsync( await entry.file.arrayBuffer(), base.href );
+			if ( canCommit && ! canCommit() ) throw new Error( 'The project changed while importing this model. Try again.' );
+			if ( failed.length ) throw new Error( 'Model dependency could not be decoded: ' + failed.join( ', ' ) );
+			const object = result.scene;
+			object.name = metadata?.title || entry.file.name;
+			object.userData.sourceFile = entry.file.name;
+			object.userData.sourceAssetPath = path;
+			if ( metadata ) object.userData.asset = metadata;
+			object.animations.push( ...result.animations );
+			if ( position ) object.position.add( position );
+			editor.execute( new AddObjectCommand( editor, object ) );
+			return object;
+		} finally {
+			loader.dracoLoader.dispose(); loader.ktx2Loader.dispose();
+			for ( const url of urls ) URL.revokeObjectURL( url );
+		}
+	};
+
+	this.loadFiles = function ( files, filesMap, sourcePaths, options = {} ) {
 
 		if ( files.length > 0 ) {
 
@@ -165,7 +200,7 @@ function Loader( editor ) {
 
 			for ( let i = 0; i < files.length; i ++ ) {
 
-				scope.loadFile( files[ i ], manager, sourcePaths.get( files[ i ] ) );
+				scope.loadFile( files[ i ], manager, sourcePaths.get( files[ i ] ), options );
 
 			}
 
@@ -173,7 +208,16 @@ function Loader( editor ) {
 
 	};
 
-	this.loadFile = function ( file, manager, sourcePath ) {
+	this.loadFile = function ( file, manager, sourcePath, options = {} ) {
+
+		function addObject( object ) {
+			object.userData.sourceFile = file.name;
+			object.userData.sourceAssetPath = sourcePath;
+			if ( options.canCommit && ! options.canCommit() ) return;
+			if ( options.position ) object.position.add( options.position );
+			if ( options.metadata ) object.userData.asset = options.metadata;
+			editor.execute( new AddObjectCommand( editor, object ) );
+		}
 
 		const filename = file.name;
 		const extension = filename.split( '.' ).pop().toLowerCase();
@@ -206,7 +250,7 @@ function Loader( editor ) {
 
 						object.name = filename;
 
-						editor.execute( new AddObjectCommand( editor, object ) );
+						addObject( object );
 
 					}, function ( error ) {
 
@@ -232,7 +276,7 @@ function Loader( editor ) {
 					const loader = new TDSLoader();
 					const object = loader.parse( event.target.result );
 
-					editor.execute( new AddObjectCommand( editor, object ) );
+					addObject( object );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -252,7 +296,7 @@ function Loader( editor ) {
 					const loader = new ThreeMFLoader();
 					const object = loader.parse( event.target.result );
 
-					editor.execute( new AddObjectCommand( editor, object ) );
+					addObject( object );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -272,7 +316,7 @@ function Loader( editor ) {
 					const loader = new AMFLoader();
 					const amfobject = loader.parse( event.target.result );
 
-					editor.execute( new AddObjectCommand( editor, amfobject ) );
+					addObject( amfobject );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -296,7 +340,7 @@ function Loader( editor ) {
 
 					collada.scene.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, collada.scene ) );
+					addObject( collada.scene );
 
 				}, false );
 				reader.readAsText( file );
@@ -339,7 +383,7 @@ function Loader( editor ) {
 						}
 
 						loader.dispose();
-						editor.execute( new AddObjectCommand( editor, object ) );
+						addObject( object );
 
 					} );
 
@@ -363,7 +407,7 @@ function Loader( editor ) {
 					const loader = new FBXLoader( manager );
 					const object = loader.parse( contents );
 
-					editor.execute( new AddObjectCommand( editor, object ) );
+					addObject( object );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -402,7 +446,7 @@ function Loader( editor ) {
 
 							} else {
 
-								editor.execute( new AddObjectCommand( editor, scene ) );
+								addObject( scene );
 
 							}
 
@@ -454,7 +498,7 @@ function Loader( editor ) {
 
 							} else {
 
-								editor.execute( new AddObjectCommand( editor, scene ) );
+								addObject( scene );
 
 							}
 
@@ -522,7 +566,7 @@ function Loader( editor ) {
 
 					collada.scene.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, collada.scene ) );
+					addObject( collada.scene );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -548,7 +592,7 @@ function Loader( editor ) {
 						// Convert from LDraw coordinates: rotate 180 degrees around OX
 						group.rotation.x = Math.PI;
 
-						editor.execute( new AddObjectCommand( editor, group ) );
+						addObject( group );
 
 					} );
 
@@ -577,7 +621,7 @@ function Loader( editor ) {
 					mesh.name = filename;
 
 					mesh.animations.push( ...geometry.animations );
-					editor.execute( new AddObjectCommand( editor, mesh ) );
+					addObject( mesh );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -601,7 +645,7 @@ function Loader( editor ) {
 					object.userData.sourceFile = filename;
 					object.userData.sourceAssetPath = sourcePath;
 
-					editor.execute( new AddObjectCommand( editor, object ) );
+					addObject( object );
 
 				}, false );
 				reader.readAsText( file );
@@ -623,7 +667,7 @@ function Loader( editor ) {
 					const points = new PCDLoader().parse( contents );
 					points.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, points ) );
+					addObject( points );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -662,7 +706,7 @@ function Loader( editor ) {
 
 					}
 
-					editor.execute( new AddObjectCommand( editor, object ) );
+					addObject( object );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -687,7 +731,7 @@ function Loader( editor ) {
 					const mesh = new THREE.Mesh( geometry, material );
 					mesh.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, mesh ) );
+					addObject( mesh );
 
 				}, false );
 
@@ -778,7 +822,7 @@ function Loader( editor ) {
 
 					}
 
-					editor.execute( new AddObjectCommand( editor, group ) );
+					addObject( group );
 
 				}, false );
 				reader.readAsText( file );
@@ -804,7 +848,7 @@ function Loader( editor ) {
 					loader.parse( contents, '', function ( group ) {
 
 						group.name = filename;
-						editor.execute( new AddObjectCommand( editor, group ) );
+						addObject( group );
 
 					} );
 
@@ -829,7 +873,7 @@ function Loader( editor ) {
 
 					scene.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, scene ) );
+					addObject( scene );
 
 				}, false );
 				reader.readAsArrayBuffer( file );
@@ -850,7 +894,7 @@ function Loader( editor ) {
 
 					const result = new VRMLLoader().parse( contents );
 
-					editor.execute( new AddObjectCommand( editor, result ) );
+					addObject( result );
 
 				}, false );
 				reader.readAsText( file );
@@ -877,7 +921,7 @@ function Loader( editor ) {
 					const points = new THREE.Points( geometry, material );
 					points.name = filename;
 
-					editor.execute( new AddObjectCommand( editor, points ) );
+					addObject( points );
 
 				}, false );
 				reader.readAsText( file );

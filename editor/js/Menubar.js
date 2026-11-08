@@ -48,6 +48,8 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 
 	}
 
+	iconButton( 'Open asset browser', '<path d="M2 6h6l2-3h8v14H2z"/><path d="M2 7h16"/>' ).addEventListener( 'click', () => editor.assetBrowser.reveal() );
+
 	const frame = '<rect x="2.5" y="3.5" width="15" height="13" rx="2"/>';
 	editor.codePanel.dock.bindToggle( iconButton( 'Toggle Code panel', frame + '<path d="M7.5 4v12"/>' ) );
 	sidebarDock.bindToggle( iconButton( 'Toggle right sidebar', frame + '<path d="M12.5 4v12"/>' ) );

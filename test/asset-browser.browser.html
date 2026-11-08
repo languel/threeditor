@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Asset browser integration checks</title>
+<button id="run">Run asset integration checks</button><pre role="status" id="result">Ready</pre>
+<script src="../editor/js/libs/signals.min.js"></script>
+<script type="importmap">{"imports":{"three":"../build/three.module.js","three/addons/":"../examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { UITexture } from '../editor/js/libs/ui.three.js';
+import { Editor } from '../editor/js/Editor.js';
+import { AssetLibrary, ASSET_MIME } from '../editor/js/assets/AssetLibrary.js';
+import { AssetController } from '../editor/js/assets/AssetController.js';
+import { projectRecord, ProjectLibrary } from '../editor/js/ProjectLibrary.js';
+import { snapshotEditor } from '../editor/js/PortableSession.js';
+const assert = (value,message) => { if(!value) throw new Error(message); };
+const result = document.querySelector('#result');
+document.querySelector('#run').onclick = async () => {
+ const library = new AssetLibrary(), created = [], projectPath = '__asset_test__/'+crypto.randomUUID();
+ const report = text => { result.textContent += '\n'+text; };
+ result.textContent = 'Running';
+ try {
+  const editor = new Editor(); editor.controls = { center:new THREE.Vector3(), toJSON:()=>({}) };
+  const controller = new AssetController(editor, library); controller.cancelPicker=()=>{controller.picker=null;};
+  const records = await library.importFiles([new File(['abc'],'geometry.bin'), new File(['model'],'sample.obj')], '__asset_test__'); created.push(...records.map(r=>r.id));
+  const saved = await new AssetLibrary().get(records[0].id);
+  assert(await saved.file.text()==='abc','IndexedDB must retain File bytes');
+  assert(saved.batch===records[1].batch,'companions must share an import batch');
+  report('PASS IndexedDB Files and companion batches');
+  const fox={id:'test-fox',title:'Fox',kind:'model',url:'https://languel.github.io/mediatheque/items/gltf-fox/media.glb',credit:'Fox attribution'};
+  controller.records.set(fox.id,fox);
+  const object=await controller.use(fox.id,{position:new THREE.Vector3(3,0,2)});
+  assert(object.animations.length===3,'Fox must retain Survey, Walk, Run clips');
+  assert(object.position.x===3 && object.position.z===2,'drop position must be applied');
+  assert(object.userData.asset.credit==='Fox attribution','attribution must be retained');
+  editor.undo(); assert(!object.parent,'model undo'); editor.redo(); assert(object.parent===editor.scene,'model redo');
+  report('PASS CORS Fox import, animation clips, position and undo/redo');
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()); editor.addObject(mesh); editor.select(mesh);
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);const png=await new Promise(resolve=>canvas.toBlob(resolve));
+  const textureRecord={id:'test-texture',title:'White',kind:'texture',file:new File([png],'white.png',{type:'image/png'})};controller.records.set(textureRecord.id,textureRecord);
+  await controller.use(textureRecord.id,{object:mesh,map:'map'});
+  assert(mesh.material.map?.colorSpace===THREE.SRGBColorSpace,'color textures must be sRGB');
+  const color=mesh.material.map;editor.undo();assert(mesh.material.map===null,'texture undo');editor.redo();assert(mesh.material.map===color,'texture redo');
+  await controller.use(textureRecord.id,{object:mesh,map:'roughnessMap'});
+  assert(mesh.material.roughnessMap.colorSpace===THREE.NoColorSpace,'data textures must remain linear');
+  assert(mesh.material.roughnessMap!==color,'texture slots must have independent texture settings');
+  report('PASS texture decoding, map/data color spaces and undo/redo');
+  const gltf={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},material:0}]}],buffers:[{uri:'../shared/positions.bin',byteLength:36}],bufferViews:[{buffer:0,byteLength:36}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[0,0,0],max:[1,1,0]}],images:[{uri:'../textures/white.png'}],textures:[{source:0}],materials:[{pbrMetallicRoughness:{baseColorTexture:{index:0}}}]};
+  const modelFile=new File([JSON.stringify(gltf)],'simple.gltf',{type:'model/gltf+json'});modelFile.relPath='models/simple.gltf';
+  const binFile=new File([new Float32Array([0,0,0,1,0,0,0,1,0])],'positions.bin');binFile.relPath='shared/positions.bin';
+  const imageFile=new File([png],'white.png',{type:'image/png'});imageFile.relPath='textures/white.png';
+  const companions=await library.importFiles([modelFile,binFile,imageFile],'__asset_test__');created.push(...companions.map(r=>r.id));
+  controller.records.set(companions[0].id,companions[0]);
+  const triangle=await controller.use(companions[0].id);
+  assert(triangle.children[0].geometry.attributes.position.count===3&&triangle.children[0].material.map,'glTF must resolve ../ buffer and texture companions');
+  report('PASS local glTF folder import with binary and texture companions');
+  const remote={id:'test-remote-gltf',title:'Remote triangle',kind:'model',url:'https://assets.example/models/simple.gltf'};
+  const originalFetch=controller.fetchFile.bind(controller);
+  controller.fetchFile=async url=>{const name=new URL(url).pathname.split('/').pop();return {'simple.gltf':modelFile,'positions.bin':binFile,'white.png':imageFile}[name]||originalFetch(url);};
+  controller.records.set(remote.id,remote);await controller.use(remote.id);controller.fetchFile=originalFetch;
+  assert([...editor.sourceFiles].some(([path])=>path.endsWith('shared/positions.bin')),'remote glTF downloads retain binary companions');
+  report('PASS remote glTF dependency resolution and collision-safe project paths');
+  let picked;controller.picker={kind:'texture',onPick:entry=>{picked=entry;}};await controller.use(textureRecord.id);assert(picked.file.name==='white.png'&&!controller.picker,'slot picking resolves a retained file');
+  const viewport=document.createElement('div');viewport.style='position:fixed;left:0;top:100px;width:500px;height:500px';document.body.append(viewport);controller.bindViewport(viewport);
+  let placed;controller.use=async(id,options)=>{placed={id,options};};
+  const transfer=new DataTransfer();transfer.setData(ASSET_MIME,fox.id);
+  viewport.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,clientX:250,clientY:350,bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setTimeout(resolve,0));assert(placed?.id===fox.id&&placed.options.position.isVector3,'viewport drop must resolve ray placement');viewport.remove();
+  editor.assetBrowser=controller;
+  const widget=new UITexture(editor);document.body.append(widget.dom);controller.open=options=>{controller.picker=options;};
+  widget.dom.querySelector('canvas').click();
+  controller.use=AssetController.prototype.use.bind(controller);await controller.use(textureRecord.id);
+  assert(widget.getValue()?.userData.sourceAssetPath,'native texture slot picker retains source paths');
+  const textureTransfer=new DataTransfer();textureTransfer.setData(ASSET_MIME,textureRecord.id);
+  widget.dom.querySelector('canvas').dispatchEvent(new DragEvent('drop',{dataTransfer:textureTransfer,bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setTimeout(resolve,20));assert(widget.getValue()?.isTexture,'native slot drop must resolve browser asset IDs');widget.dom.remove();
+  report('PASS texture picker, native texture-slot drop and viewport drag/drop routing');
+  const projects=new ProjectLibrary();await projects.save(projectRecord(editor,projectPath));const restored=await projects.get(projectPath);
+  assert(restored.sourceFiles.some(([path,entry])=>entry.asset?.id===fox.id&&entry.file.size===162852),'User saves must retain original GLB and credit metadata');
+  const portable=await snapshotEditor(editor);assert(portable.files.some(f=>f.asset?.id===fox.id),'editable HTML must retain source metadata');
+  assert(JSON.stringify(portable.scene).includes('Survey'),'serialized project must retain animation clips');
+  report('PASS User project and portable snapshot originals, metadata and animation');
+  const database=await projects.open();await new Promise((resolve,reject)=>{const tx=database.transaction(['projects','entries'],'readwrite');tx.objectStore('projects').delete(projectPath);tx.objectStore('entries').delete(projectPath);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+  result.textContent+='\nALL PASSED';
+ }catch(error){result.textContent+='\nFAIL '+error.stack;console.error(error);}
+ finally{for(const id of created) await library.remove(id);const db=await new ProjectLibrary().open();await new Promise(resolve=>{const tx=db.transaction(['projects','entries'],'readwrite');tx.objectStore('projects').delete(projectPath);tx.objectStore('entries').delete(projectPath);tx.oncomplete=resolve;});}
+};
+</script></html>

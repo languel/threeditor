@@ -7,9 +7,8 @@ import { MoveObjectCommand } from '../commands/MoveObjectCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 import { openAssetBrowser } from '../AssetBrowser.js';
-import { isImageAsset, isTextureAsset, storeSourceFiles } from '../ProjectAssets.js';
-
-const cache = new WeakMap();
+import { loadAssetTexture } from '../assets/AssetTexture.js';
+import { ASSET_MIME } from '../assets/AssetLibrary.js';
 
 class UITexture extends UISpan {
 
@@ -42,6 +41,15 @@ class UITexture extends UISpan {
 
 			event.preventDefault();
 			event.stopPropagation();
+			const asset = event.dataTransfer.getData( ASSET_MIME );
+			if ( asset ) {
+				editor.assetBrowser.run( async () => {
+					const entry = await editor.assetBrowser.materialize( asset );
+					if ( entry.texture ) deliver( entry.texture, entry.path );
+					else await loadFile( entry.file, entry.path );
+				} );
+				return;
+			}
 			const file = event.dataTransfer.files[ 0 ];
 			if ( file ) loadFile( file ).catch( error => alert( error.message ) );
 
@@ -69,64 +77,8 @@ class UITexture extends UISpan {
 		}
 
 		async function loadFile( file, path ) {
-
-			if ( ! isTextureAsset( file ) ) throw new Error( 'Choose a supported image or texture file.' );
-			let texture = cache.get( file );
-			if ( ! texture ) {
-
-				const extension = file.name.split( '.' ).pop().toLowerCase();
-				const url = URL.createObjectURL( file );
-				let loader;
-				try {
-
-					if ( extension === 'hdr' || extension === 'pic' ) {
-
-						const { HDRLoader } = await import( 'three/addons/loaders/HDRLoader.js' );
-						loader = new HDRLoader();
-
-					} else if ( extension === 'tga' ) {
-
-						const { TGALoader } = await import( 'three/addons/loaders/TGALoader.js' );
-						loader = new TGALoader();
-
-					} else if ( extension === 'ktx2' ) {
-
-						const { KTX2Loader } = await import( 'three/addons/loaders/KTX2Loader.js' );
-						loader = new KTX2Loader().setTranscoderPath( '../../examples/jsm/libs/basis/' );
-						editor.signals.rendererDetectKTX2Support.dispatch( loader );
-
-					} else if ( extension === 'exr' ) {
-
-						const { EXRLoader } = await import( 'three/addons/loaders/EXRLoader.js' );
-						loader = new EXRLoader();
-
-					} else if ( isImageAsset( file ) ) {
-
-						loader = new THREE.TextureLoader();
-
-					}
-
-					texture = await loader.loadAsync( url );
-					if ( extension === 'tga' || extension === 'ktx2' ) texture.colorSpace = THREE.SRGBColorSpace;
-					texture.sourceFile = file.name;
-					cache.set( file, texture );
-
-				} catch ( error ) {
-
-					throw new Error( 'Could not open texture: ' + file.name, { cause: error } );
-
-				} finally {
-
-					loader?.dispose?.();
-					URL.revokeObjectURL( url );
-
-				}
-
-			}
-
-			path ||= storeSourceFiles( editor, { [ file.name ]: file } ).get( file );
-			deliver( texture, path );
-
+			const texture = await loadAssetTexture( editor, file, path );
+			deliver( texture, texture.userData.sourceAssetPath );
 		}
 
 		this.texture = null;

@@ -1,6 +1,7 @@
 import { collectPlayableProject, inlineScriptDependencies } from './Publish.js';
 import { embedResources, loadEsbuild } from './SingleHtml.js';
 import { stateId, serializeState, snapshotEditor } from './PortableSession.js';
+import { exampleResources } from './ExampleCatalog.js';
 import buildThreeDefs from './libs/tern-threejs/build-defs.js';
 
 const base = new URL( '../', import.meta.url );
@@ -56,7 +57,7 @@ async function exportEditorHtml( editor ) {
 	const resourcePaths = [
 		'js/libs/language-worker.js', 'js/libs/language-types.json',
 		...decoderFiles.map( file => '../examples/jsm/libs/' + file ),
-		...Array.from( [ 'arkanoid', 'camera', 'particles', 'pong', 'shaders' ], name => 'examples/' + name + '.app.json' ),
+		...exampleResources(),
 		...Array.from( [ 'translate', 'rotate', 'scale' ], name => 'images/' + name + '.svg' )
 	];
 	const builtIn = new Map( await Promise.all( resourcePaths.map( async ( path ) => {

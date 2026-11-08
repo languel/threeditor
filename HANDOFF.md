@@ -48,3 +48,16 @@ The suite now contains ten checks, adding nested project paths/tree construction
 - three.js editor and library are MIT. See `LICENSE`.
 - esbuild-wasm is MIT. See `editor/js/libs/esbuild-wasm/LICENSE.md`.
 - Acorn 8.15.0 is MIT. See `editor/js/libs/acorn/LICENSE`.
+
+
+## Asset browser integration
+
+The Assets sidebar replaces the old modal chooser. `Sidebar.Assets.js` owns Project/My assets/Mediatheque browsing; `assets/AssetController.js` resolves links into project source files, applies textures through `SetMaterialMapCommand`, and routes viewport drops. `assets/AssetLibrary.js` owns the independent `threeditor-assets` IndexedDB library. `assets/Mediatheque.js` adapts the AMS catalog/search/facet implementation from `languel/artistmodelstudio`; AMS was read from `/tmp/threeditor-ams-reference` because `~/dev/artistmodelstudio` was absent. The full catalog includes models, model animations, originals and BVH links. Default host is `https://languel.github.io/mediatheque/`, verified with `Access-Control-Allow-Origin: *`; the Catalog connection UI overrides it via `threeditor_mediatheque_base`.
+
+`Loader.importGLTFAsset` shares the editor's Draco/KTX2/Meshopt configuration and adds the model as an undoable object without the scene-replacement dialog. Both GLB and glTF external resources are discovered before placement; uploads retain all companions in their batch, including `.bin` files. `assets/AssetTexture.js` is shared by native texture slots and browser material assignment. Viewport drops raycast against scene meshes, then the ground plane; images target the hit mesh material. Dragging over Scene/Material tabs exposes native texture slots. No original bytes are discarded: using a remote asset retains a project copy; named User saves and portable snapshots preserve source metadata. A local library copy retains companion paths as a batch. All catalog kinds are browsable, but SDF/splats/video/audio have link/download support only.
+
+Validation: `node --test test/*.test.mjs` now has fifteen passing checks. Open `test/asset-browser.browser.html` and run its button for real IndexedDB File retention, live CORS Fox import (three animation clips), position and undo/redo, color/data texture handling, local and remote glTF sibling-directory dependencies, native texture-slot picking/drop, viewport drag routing, and named/portable project snapshots. It creates uniquely named test records and removes those records afterward. GUI checks also cover catalog search and the scrolling grid with its persistent asset inspector. Hard-refresh the editor after module/CSS changes.
+
+The final export smoke test caught and fixed a stale flat-demo list in `EditorHtml.js`; it now uses recursive `exampleResources()` from `ExampleCatalog.js`, including lesson assets. Source ZIP and a 34.5 MB Editable HTML exported successfully; the standalone HTML reopened on a separate origin with original GLBs and reimported Fox with its animation clips.
+
+The app remains available at `http://localhost:5300/editor/`. The separate exported-HTML QA server on port 5301 was stopped after the reopen check; no unrelated development servers were stopped. Deployment uses the GitHub Pages workflow on pushes to main.

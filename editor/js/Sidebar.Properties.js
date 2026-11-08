@@ -18,6 +18,10 @@ function SidebarProperties( editor ) {
 	container.addTab( 'scriptTab', strings.getKey( 'sidebar/properties/script' ), new SidebarScript( editor ) );
 	container.select( 'objectTab' );
 
+	for ( const tab of container.tabs ) tab.dom.addEventListener( 'dragenter', event => {
+		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) container.select( tab.dom.id );
+	} );
+
 	function getTabByTabId( tabs, tabId ) {
 
 		return tabs.find( function ( tab ) {
