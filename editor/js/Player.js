@@ -1,6 +1,7 @@
 import { UIPanel } from './libs/ui.js';
 import * as THREE from 'three';
 import { APP } from './libs/app.js';
+import { mediaPlaybackJSON } from './assets/AssetRuntime.js';
 import { setupRenderEnvironment } from './RenderEnvironment.js';
 
 function Player( editor ) {
@@ -16,6 +17,8 @@ function Player( editor ) {
 
 	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript );
 	let environmentTarget = null;
+	let disposeMediaURLs = () => {};
+	signals.stopPlayer.add( () => { disposeMediaURLs(); disposeMediaURLs = () => {}; } );
 	container.dom.appendChild( player.dom );
 	const exit = editor.portable ? document.createElement( 'button' ) : null;
 	if ( exit ) {
@@ -62,6 +65,7 @@ function Player( editor ) {
 		try {
 
 			const json = editor.toJSON();
+			disposeMediaURLs(); disposeMediaURLs = mediaPlaybackJSON( json, editor.sourceFiles );
 			await player.load( json );
 			if ( container.dom.style.display === 'none' ) return;
 

@@ -41,7 +41,7 @@ function Loader( editor ) {
 	};
 
 	// Asset-browser placement is explicit: import a model without a scene-replacement dialog.
-	this.importGLTFAsset = async function ( path, { position, metadata, canCommit } = {} ) {
+	this.importGLTFAsset = async function ( path, { position, metadata, canCommit, commit = true, stripPresentation = false } = {} ) {
 		const entry = editor.sourceFiles.get( path );
 		const urls = [], failed = [];
 		const manager = new THREE.LoadingManager();
@@ -61,13 +61,19 @@ function Loader( editor ) {
 			if ( canCommit && ! canCommit() ) throw new Error( 'The project changed while importing this model. Try again.' );
 			if ( failed.length ) throw new Error( 'Model dependency could not be decoded: ' + failed.join( ', ' ) );
 			const object = result.scene;
+			if ( stripPresentation ) {
+				const remove = []; object.traverse( child => { if ( child.isCamera || child.isLight || child.isHelper ) remove.push( child ); } );
+				for ( const child of remove ) child.removeFromParent();
+				object.background = null; object.environment = null; object.fog = null;
+				object.userData.assetObject = { type: 'model', stripPresentation: true };
+			}
 			object.name = metadata?.title || entry.file.name;
 			object.userData.sourceFile = entry.file.name;
 			object.userData.sourceAssetPath = path;
 			if ( metadata ) object.userData.asset = metadata;
 			object.animations.push( ...result.animations );
 			if ( position ) object.position.add( position );
-			editor.execute( new AddObjectCommand( editor, object ) );
+			if ( commit ) editor.execute( new AddObjectCommand( editor, object ) );
 			return object;
 		} finally {
 			loader.dracoLoader.dispose(); loader.ktx2Loader.dispose();

@@ -973,7 +973,7 @@ function Viewport( editor ) {
 		const mixer = editor.mixer;
 		const delta = timer.getDelta();
 
-		let needsUpdate = false;
+		let needsUpdate = editor.assetBrowser?.runtime?.update( delta ) || false;
 
 		// Animations
 

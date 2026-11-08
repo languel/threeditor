@@ -1,5 +1,6 @@
 // AMS-inspired asset browsing: folders, facets, metadata, references and local copies.
 // Catalog search/URL resolution is shared with the adapted AMS Mediatheque module.
+import { AssetPreview } from './assets/AssetPreview.js';
 import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
 import { AssetLibrary, ASSET_MIME, fileKind, folderPath } from './assets/AssetLibrary.js';
@@ -25,6 +26,22 @@ export function SidebarAssets( editor ) {
 	const panel = new UISpan(); panel.dom.className = 'assets-panel';
 	const library = new AssetLibrary();
 	const controller = new AssetController( editor, library ); editor.assetBrowser = controller;
+	const preview = new AssetPreview( editor, library );
+	const previewCache = new Map();
+	const thumbnailWorker = new AssetPreview( editor, library ), queuedThumbnails = new Set();
+	let thumbnailJobs = Promise.resolve();
+	function queueThumbnail( record ) {
+		if ( queuedThumbnails.has( record.id ) || previewCache.has( record.id ) ) return;
+		queuedThumbnails.add( record.id );
+		const epoch = controller.epoch;
+		thumbnailJobs = thumbnailJobs.then( async () => {
+			try { if ( record.projectPath && epoch !== controller.epoch ) return; const url = await thumbnailWorker.thumbnail( record ); if ( ! url || record.projectPath && epoch !== controller.epoch ) return; previewCache.set( record.id, url );
+				const card = [ ...grid.children ].find( node => node.dataset.assetId === record.id ); if ( card ) { const thumb = card.querySelector( '.asset-thumb' ); thumb.replaceChildren(); const image = el( 'img' ); image.src = url; image.alt = ''; thumb.append( image ); }
+			} catch { /* unsupported/invalid files retain an explicit type icon */ }
+		} );
+	}
+	editor.signals.startPlayer.add( () => preview.clear() );
+	for ( const signal of [ editor.signals.editorCleared, editor.signals.projectLoaded ] ) signal.add( () => { for ( const key of previewCache.keys() ) if ( key.startsWith( 'project:' ) ) previewCache.delete( key ); for ( const key of queuedThumbnails ) if ( key.startsWith( 'project:' ) ) queuedThumbnails.delete( key ); } );
 	let source = 'project', folder = '', tag = '', collection = '', records = [], catalog = [], local = [], selection = new Set(), generation = 0;
 	const urls = [];
 	const tabs = el( 'div', undefined, 'asset-sources' ); panel.dom.append( tabs );
@@ -77,7 +94,7 @@ export function SidebarAssets( editor ) {
 	const folders = el( 'div', undefined, 'asset-folders' ); panel.dom.append( folders );
 	const grid = el( 'div', undefined, 'asset-grid' ); grid.setAttribute( 'role', 'list' ); grid.setAttribute( 'aria-label', 'Assets' ); panel.dom.append( grid );
 	const detail = el( 'div', undefined, 'asset-detail' ); panel.dom.append( detail );
-	const status = el( 'p', 'Drag models into the viewport; drag textures onto meshes or texture slots.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
+	const status = el( 'p', 'Drag assets into the viewport. Images and videos become planes; use Apply as texture or a texture slot to assign a map.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
 	controller.status = ( message, error = false ) => { status.textContent = message; status.classList.toggle( 'error', error ); };
 	panel.dom.addEventListener( 'keydown', event => { event.stopPropagation(); if ( event.key === 'Escape' ) controller.cancelPicker(); } );
 	panel.dom.addEventListener( 'drop', event => {
@@ -89,14 +106,14 @@ export function SidebarAssets( editor ) {
 	editor.signals.projectLoaded.add( refresh ); editor.signals.editorCleared.add( refresh );
 	editor.signals.objectSelected.add( () => { if ( controller.picker ) controller.cancelPicker(); } );
 	function projectRecords() {
-		return [ ...editor.sourceFiles || [] ].map( ( [ path, entry ] ) => ( { ...entry.asset, id: 'project:' + path, projectPath: path, title: entry.file.name, kind: fileKind( entry.file ), folder: path.split( '/' ).slice( 0, -1 ).join( '/' ), file: entry.file, tags: [] } ) ).concat( textureEntries( editor ).map( ( entry, i ) => ( { ...entry, id: 'scene-texture:' + i, title: entry.name, kind: 'texture', folder: '', tags: [] } ) ) );
+		return [ ...editor.sourceFiles || [] ].map( ( [ path, entry ] ) => ( { ...entry.asset, id: 'project:' + path, projectPath: path, title: entry.file.name, kind: entry.asset?.kind || fileKind( entry.file ), folder: path.split( '/' ).slice( 0, -1 ).join( '/' ), file: entry.file, tags: [] } ) ).concat( textureEntries( editor ).map( ( entry, i ) => ( { ...entry, id: 'scene-texture:' + i, title: entry.name, kind: 'texture', folder: '', tags: [] } ) ) );
 	}
 	async function refresh() {
 		const current = ++ generation;
 		try {
 			try { local = await library.all(); } catch ( error ) { local = []; controller.status( 'Local asset storage unavailable: ' + error.message, true ); }
 			if ( current !== generation ) return;
-			records = source === 'project' ? projectRecords() : source === 'mine' ? local : catalog.map( r => ( { ...r, ...local.find( item => item.id === 'mediatheque:' + r.id ), id: 'mediatheque:' + r.id, catalogId: r.id, url: r.abs.url, preview: r.abs.thumb, page: r.abs.page, credit: creditLine( r ), kind: r.kind === 'image' ? 'texture' : r.kind } ) );
+			records = source === 'project' ? projectRecords() : source === 'mine' ? local : catalog.map( r => ( { ...r, ...local.find( item => item.id === 'mediatheque:' + r.id ), id: 'mediatheque:' + r.id, catalogId: r.id, url: r.kind === 'animation' && r.abs.video ? r.abs.video : r.abs.url, preview: r.abs.thumb, page: r.abs.page, credit: creditLine( r ), kind: r.kind === 'image' ? 'texture' : r.kind } ) );
 			for ( const record of records ) controller.records.set( record.id, record );
 			draw();
 		} catch ( error ) { controller.status( 'Local asset storage unavailable: ' + error.message, true ); }
@@ -106,7 +123,7 @@ export function SidebarAssets( editor ) {
 		for ( const url of urls.splice( 0 ) ) URL.revokeObjectURL( url );
 		for ( const [ id, node ] of sourceButtons ) node.setAttribute( 'aria-pressed', String( id === source ) );
 		archiveTools.hidden = facets.hidden = source !== 'catalog';
-		crumbs.replaceChildren(); folders.replaceChildren(); grid.replaceChildren(); detail.replaceChildren();
+		preview.clear(); crumbs.replaceChildren(); folders.replaceChildren(); grid.replaceChildren(); detail.replaceChildren();
 		if ( source !== 'catalog' ) {
 			button( source === 'mine' ? 'My assets' : 'Project', () => { folder = ''; draw(); }, crumbs );
 			const segments = folder.split( '/' ).filter( Boolean );
@@ -138,9 +155,9 @@ export function SidebarAssets( editor ) {
 		if ( ! visible.length ) grid.append( el( 'p', source === 'catalog' && state.status === 'loading' ? 'Loading catalog…' : 'No matching assets. Upload files, add a URL, or browse Mediatheque.' ) );
 		for ( const record of visible ) {
 			const card = el( 'div', undefined, 'asset-card' ); card.dataset.assetId = record.id; card.tabIndex = 0; card.draggable = true; card.setAttribute( 'role', 'listitem' ); card.setAttribute( 'aria-label', record.title ); card.classList.toggle( 'selected', selection.has( record.id ) );
-			const thumb = el( 'div', undefined, 'asset-thumb' ); let preview = record.preview;
+			const thumb = el( 'div', undefined, 'asset-thumb' ); let preview = record.preview || record.abs?.poster || previewCache.get( record.id ) || record.texture?.image?.src;
 			if ( ! preview && record.file && isImageAsset( record.file ) ) { preview = URL.createObjectURL( record.file ); urls.push( preview ); }
-			if ( preview ) { const img = el( 'img' ); img.src = preview; img.alt = ''; img.loading = 'lazy'; img.addEventListener( 'error', () => img.remove() ); thumb.append( img ); } else thumb.textContent = record.kind === 'model' ? '◇' : record.kind === 'texture' ? '▧' : '▷';
+			if ( preview ) { const img = el( 'img' ); img.src = preview; img.alt = ''; img.loading = 'lazy'; img.addEventListener( 'error', () => { if ( record.abs?.poster && img.src !== record.abs.poster ) img.src = record.abs.poster; else { img.remove(); thumb.textContent = record.kind === 'sdf' ? 'ƒ' : record.kind === 'model' ? '◇' : record.kind === 'audio' ? '♫' : '▧'; } } ); thumb.append( img ); } else thumb.textContent = record.kind === 'model' ? '◇' : record.kind === 'sdf' ? 'ƒ' : record.kind === 'texture' ? '▧' : record.kind === 'audio' ? '♫' : '▷';
 			const title = el( 'span', record.title, 'asset-title' ); card.title = [ record.title, record.summary, record.credit ].filter( Boolean ).join( '\n' );
 			card.append( thumb, title, el( 'small', record.kind + ( record.file ? ' · local' : record.texture ? ' · scene' : ' · link' ) ) );
 			const choose = event => { if ( ! event.ctrlKey && ! event.metaKey && ! event.shiftKey ) selection.clear(); if ( selection.has( record.id ) ) selection.delete( record.id ); else selection.add( record.id ); for ( const node of grid.children ) node.classList.toggle( 'selected', selection.has( node.dataset.assetId ) ); showDetail( record ); };
@@ -148,26 +165,37 @@ export function SidebarAssets( editor ) {
 			card.addEventListener( 'dblclick', () => use( record ) );
 			card.addEventListener( 'dragstart', event => { event.dataTransfer.setData( ASSET_MIME, record.id ); event.dataTransfer.effectAllowed = 'copy'; } );
 			grid.append( card );
+			if ( ! preview && ( [ 'model', 'sdf', 'video', 'splat' ].includes( record.kind ) || record.file?.type.startsWith( 'video/' ) ) ) queueThumbnail( record );
 		}
 		const selected = records.find( r => selection.has( r.id ) ); if ( selected ) showDetail( selected );
 	}
-	function use( record ) {
-		controller.run( () => controller.use( record.id, { map: map.value, materialSlot: Number( slot.value ) } ) );
+	function use( record, mode = 'plane' ) {
+		controller.run( async () => { const object = await controller.use( record.id, { mode, map: map.value, materialSlot: Number( slot.value ) } ); if ( object?.isObject3D ) showDetail( record ); return object; } );
 	}
 
 	const mapTools = el( 'div', undefined, 'asset-map-tools' );
 	const map = select( 'Texture target slot', [ 'map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'envMap', 'clearcoatMap', 'transmissionMap', 'sheenColorMap', 'specularColorMap' ].map( name => [ name, name ] ), mapTools, () => {} );
 	const slot = el( 'input' ); slot.type = 'number'; slot.min = 0; slot.value = 0; slot.setAttribute( 'aria-label', 'Material index' ); slot.title = 'Material index (for multi-material meshes)'; mapTools.append( slot );
 	function showDetail( record ) {
+		preview.clear();
 		detail.replaceChildren( el( 'strong', selection.size > 1 ? `${ selection.size } selected` : record.title ) );
 		if ( record.summary ) detail.append( el( 'p', record.summary ) );
-		if ( record.preview ) { const preview = el( 'img' ); preview.src = record.preview; preview.alt = record.title; preview.className = 'asset-detail-preview'; detail.append( preview ); }
+
 		if ( record.credit ) detail.append( el( 'p', record.credit, 'asset-credit' ) );
 		if ( record.rights?.license ) detail.append( el( 'p', record.rights.license ) );
-		if ( [ 'texture', 'animation' ].includes( record.kind ) && ! controller.picker ) detail.append( mapTools );
+		if ( [ 'texture', 'image' ].includes( record.kind ) && ! controller.picker && editor.selected?.material ) detail.append( mapTools );
 		const row = el( 'div', undefined, 'asset-actions' ); detail.insertBefore( row, detail.children[ 1 ] || null );
-		if ( [ 'model', 'texture', 'animation' ].includes( record.kind ) ) button( controller.picker ? 'Choose' : record.kind === 'texture' || record.kind === 'animation' ? 'Apply to selected mesh' : 'Add to scene', () => use( record ), row );
-		else detail.append( el( 'p', 'Available as a link or download. This format has no scene importer.' ) );
+		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add point cloud' };
+		if ( labels[ record.kind ] || controller.picker ) button( controller.picker ? 'Choose' : labels[ record.kind ], () => use( record ), row );
+		if ( [ 'texture', 'image' ].includes( record.kind ) && ! controller.picker && editor.selected?.material ) button( 'Apply as texture', () => use( record, 'texture' ), row );
+		const previewHost = el( 'div', undefined, 'asset-preview-stage' ); previewHost.setAttribute( 'aria-label', record.title + ' preview' ); detail.insertBefore( previewHost, detail.children[ 2 ] || null );
+		const sourcePath = controller.paths.get( record.id ) || record.projectPath;
+		preview.show( { ...record, file: editor.sourceFiles.get( sourcePath )?.file || record.file, projectPath: sourcePath }, previewHost );
+		let owner = editor.selected;
+		while ( owner && ! editor.scripts[ owner.uuid ]?.some( script => script.assetBehavior ) ) owner = owner.parent;
+		const behavior = owner && editor.scripts[ owner.uuid ]?.find( script => script.assetBehavior );
+		if ( behavior ) button( 'Edit attached behavior', () => editor.signals.editScript.dispatch( owner, behavior ), row );
+
 		if ( record.url ) {
 			button( 'Copy URL', () => controller.run( () => navigator.clipboard.writeText( record.url ) ), row );
 			const link = el( 'a', 'Open asset ↗' ); link.href = record.url; link.target = '_blank'; link.rel = 'noopener'; row.append( link );

@@ -1,5 +1,6 @@
 // three.js code exporter (experiment addition, not part of upstream three.js editor).
 // Turns the editor scene into readable, commented JavaScript in the style of the lessons.
+import { serializeScript } from './ScriptParams.js';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
@@ -152,6 +153,7 @@ function generateThreeCode( editor ) {
 
 	function material( m ) {
 
+		if ( m.isShaderMaterial ) return `new THREE.ShaderMaterial(${ q( { vertexShader: m.vertexShader, fragmentShader: m.fragmentShader, uniforms: m.uniforms, side: m.side, transparent: m.transparent } ) })`;
 		const props = [];
 		const add = ( k, v ) => props.push( `${ k }: ${ v }` );
 		if ( m.color ) add( 'color', hex( m.color ) );
@@ -200,7 +202,9 @@ function generateThreeCode( editor ) {
 
 	function transform( name, o ) {
 
-		if ( o.isCamera || followTargets.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
+		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
+		if ( o.userData.asset ) out( `${ name }.userData.asset = ${ q( o.userData.asset ) };` );
+		if ( o.userData.assetObject ) out( `${ name }.userData.assetObject = ${ q( o.userData.assetObject ) };` );
 		if ( o.isCamera && o.userData.threeditor?.cameraController ) {
 
 			out( `${ name }.userData.threeditor = ${ q( o.userData.threeditor ) };` );
@@ -214,6 +218,18 @@ function generateThreeCode( editor ) {
 		if ( o.receiveShadow ) out( `${ name }.receiveShadow = true;` );
 		if ( o.visible === false ) out( `${ name }.visible = false;` );
 
+	}
+
+	const assetBehaviors = [];
+	function emitAssetBehavior( object, name ) {
+		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
+		if ( ! script ) return false;
+		assetBehaviors.push( { object: name, script: serializeScript( script ) } );
+		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
+			if ( ! script.source.includes( JSON.stringify( 'assets/' + path ) ) || usedPaths.has( 'assets/' + path ) ) continue;
+			usedPaths.add( 'assets/' + path ); assets.push( { path: 'assets/' + path, file: entry.file } );
+		}
+		return true;
 	}
 
 	function emitModel( o, parent ) {
@@ -255,10 +271,13 @@ function generateThreeCode( editor ) {
 			imports.add( 'GLTFLoader' );
 			out( `const ${ name }Gltf = await gltfLoader.loadAsync(${ q( file ) });` );
 			out( `const ${ name } = ${ name }Gltf.scene;` );
+			out( `${ name }.animations = ${ name }Gltf.animations;` );
 
 		}
 
+		if ( o.name ) out( `${ name }.name = ${ q( o.name ) };` );
 		transform( name, o );
+		if ( o.userData.assetObject?.stripPresentation ) out( `{const discard=[]; ${ name }.traverse(node=>{if(node.isCamera||node.isLight||node.isHelper)discard.push(node);}); for(const node of discard)node.removeFromParent();}` );
 		function emitFollowTargets( node, reference ) {
 
 			node.children.forEach( ( child, index ) => {
@@ -274,7 +293,8 @@ function generateThreeCode( editor ) {
 		if ( followTargets.size ) emitFollowTargets( o, name );
 		out( `${ parent }.add(${ name });` );
 		const clips = o.animations || [];
-		if ( clips.length > 0 && ! isObj ) {
+		const hasAssetBehavior = emitAssetBehavior( o, name );
+		if ( clips.length > 0 && ! isObj && ! hasAssetBehavior ) {
 
 			needsMixers = true;
 			out( `// Animations in this file: ${ clips.map( ( c ) => q( c.name ) ).join( ', ' ) }` );
@@ -378,6 +398,7 @@ function generateThreeCode( editor ) {
 
 		}
 
+		emitAssetBehavior( o, name );
 		out();
 		for ( const c of o.children ) emitObject( c, name );
 
@@ -512,7 +533,16 @@ function generateThreeCode( editor ) {
 	head.push( '// @key Scene contents | Objects, lights and their hierarchy (add() puts a child inside a parent).' );
 
 	const tail = [];
+	if ( assetBehaviors.length ) head.push( 'const assetUpdates = [];' );
+
 	tail.push( '// @/key' );
+	for ( const { object, script } of assetBehaviors ) {
+		tail.push( `{ // Attached editable asset behavior: ${ script.name }` );
+		tail.push( `const behavior = (function(THREE,params,player){\n${ script.source }\nreturn {init:typeof init==='function'?init:null,update:typeof update==='function'?update:null,stop:typeof stop==='function'?stop:null};}).call(${ object },THREE,${ q( script.parameters || {} ) },{dom:document.body});` );
+		tail.push( `behavior.init?.call(${ object }); assetUpdates.push(event=>behavior.update?.call(${ object },event));` );
+		tail.push( '}' );
+	}
+
 	tail.push( '' );
 	if ( useController ) {
 
@@ -558,13 +588,14 @@ function generateThreeCode( editor ) {
 	tail.push( '// @key The loop | Called every frame with the time in milliseconds.' );
 	tail.push( 'let last = performance.now();' );
 	tail.push( 'renderer.setAnimationLoop((t) => {' );
-	if ( needsMixers || useController ) {
+	if ( needsMixers || useController || assetBehaviors.length ) {
 
 		tail.push( '  const dt = (t - last) / 1000;   // seconds since the previous frame' );
 		if ( needsMixers ) tail.push( '  for (const m of mixers) m.update(dt);' );
 
 	}
 
+	if ( assetBehaviors.length ) tail.push( '  for (const update of assetUpdates) update({time:t,delta:dt*1000});' );
 	tail.push( '  last = t;' );
 	if ( useController ) tail.push( '  controls.update(dt);' );
 	tail.push( '  renderer.render(scene, camera);' );

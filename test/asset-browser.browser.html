@@ -4,6 +4,7 @@
 <script type="importmap">{"imports":{"three":"../build/three.module.js","three/addons/":"../examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
+import { evaluateAssetScript } from '../editor/js/assets/AssetRuntime.js';
 import { UITexture } from '../editor/js/libs/ui.three.js';
 import { Editor } from '../editor/js/Editor.js';
 import { AssetLibrary, ASSET_MIME } from '../editor/js/assets/AssetLibrary.js';
@@ -31,7 +32,8 @@ document.querySelector('#run').onclick = async () => {
   assert(object.position.x===3 && object.position.z===2,'drop position must be applied');
   assert(object.userData.asset.credit==='Fox attribution','attribution must be retained');
   editor.undo(); assert(!object.parent,'model undo'); editor.redo(); assert(object.parent===editor.scene,'model redo');
-  report('PASS CORS Fox import, animation clips, position and undo/redo');
+  assert(editor.scripts[object.uuid]?.[0].assetBehavior==='model','models must receive editable behavior');
+  report('PASS CORS Fox import, attached model behavior, animation clips, position and atomic undo/redo');
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()); editor.addObject(mesh); editor.select(mesh);
   const canvas=document.createElement('canvas');canvas.width=canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);const png=await new Promise(resolve=>canvas.toBlob(resolve));
   const textureRecord={id:'test-texture',title:'White',kind:'texture',file:new File([png],'white.png',{type:'image/png'})};controller.records.set(textureRecord.id,textureRecord);
@@ -42,13 +44,37 @@ document.querySelector('#run').onclick = async () => {
   assert(mesh.material.roughnessMap.colorSpace===THREE.NoColorSpace,'data textures must remain linear');
   assert(mesh.material.roughnessMap!==color,'texture slots must have independent texture settings');
   report('PASS texture decoding, map/data color spaces and undo/redo');
-  const gltf={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},material:0}]}],buffers:[{uri:'../shared/positions.bin',byteLength:36}],bufferViews:[{buffer:0,byteLength:36}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[0,0,0],max:[1,1,0]}],images:[{uri:'../textures/white.png'}],textures:[{source:0}],materials:[{pbrMetallicRoughness:{baseColorTexture:{index:0}}}]};
+  const plane=await controller.use(textureRecord.id,{mode:'plane',position:new THREE.Vector3(1,2,3)});
+  assert(plane.geometry.type==='PlaneGeometry'&&plane.position.y===2,'images import as placed planes');
+  assert(plane.material.map.image.width===2,'plane retains image texture');
+  const mathRecord={id:'test-sdf',title:'Math sphere',kind:'sdf',file:new File([JSON.stringify({asset:{glsl:'float map(vec3 p){return length(p)-0.8;}',camera:{position:[0,0,9]}}})],'sphere.json',{type:'application/json'})};
+  controller.records.set(mathRecord.id,mathRecord);const sdf=await controller.use(mathRecord.id);
+  assert(sdf.material.isShaderMaterial&&editor.scripts[sdf.uuid][0].assetBehavior==='math','SDF imports as an editable code object');
+  let wrappers=0;sdf.traverse(node=>{if(node.isCamera||node.isLight)wrappers++;});assert(!wrappers,'viewer wrapper must not be imported');
+  const gpu=new THREE.WebGLRenderer();gpu.setSize(64,64);const checkScene=new THREE.Scene();checkScene.add(sdf.clone());const view=new THREE.PerspectiveCamera(45,1,.01,100);view.position.set(0,0,4);view.lookAt(0,0,0);gpu.render(checkScene,view);assert(gpu.info.programs.every(p=>p.diagnostics?.runnable!==false),'SDF shader must compile');gpu.dispose();
+  const mathRuntime=evaluateAssetScript(sdf,editor.scripts[sdf.uuid][0],{},editor.scene,view);assert(mathRuntime.stop===null,'missing lifecycle handlers must not bind window.stop');
+  report('PASS image planes, wrapper-free SDF code objects, shader compilation and lifecycle isolation');
+  {
+   const response=await fetch('https://languel.github.io/mediatheque/items/rectangles/proxy.webm');if(!response.ok)throw new Error('Video fixture unavailable');
+   const videoRecord={id:'test-video',title:'Video plane',kind:'video',file:new File([await response.blob()],'clip.webm',{type:'video/webm'})};controller.records.set(videoRecord.id,videoRecord);
+   const video=await controller.use(videoRecord.id,{mode:'plane'});assert(video.geometry.type==='PlaneGeometry'&&editor.scripts[video.uuid][0].assetBehavior==='media','video imports with editable playback');
+   assert(video.toJSON().object.userData.assetObject.type==='video','video plane must serialize');
+   const videoGPU=new THREE.WebGLRenderer();videoGPU.setSize(32,32);const videoScene=new THREE.Scene(),videoCamera=new THREE.PerspectiveCamera(45,1,.01,10);videoCamera.position.z=4;videoCamera.lookAt(0,0,0);
+   const parent=video.parent;videoScene.add(video);videoGPU.render(videoScene,videoCamera);
+   if(video.assetMedia.readyState<2)await new Promise((resolve,reject)=>{video.assetMedia.addEventListener('loadeddata',resolve,{once:true});video.assetMedia.addEventListener('error',reject,{once:true});});
+   const renderTarget=new THREE.WebGLRenderTarget(32,32);videoGPU.setRenderTarget(renderTarget);videoGPU.render(videoScene,videoCamera);const pixels=new Uint8Array(32*32*4);videoGPU.readRenderTargetPixels(renderTarget,0,0,32,32,pixels);
+   assert(pixels.some((v,i)=>i%4!==3&&v>5),'decoded video must produce visible GPU pixels after the first upload');parent.add(video);renderTarget.dispose();videoGPU.dispose();
+   report('PASS video planes, playback scripts, stable GPU texture uploads and poster serialization');
+  }
+
+  const gltf={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0,1]}],nodes:[{mesh:0},{camera:0}],cameras:[{type:'perspective',perspective:{yfov:0.7,znear:0.1,zfar:100}}],meshes:[{primitives:[{attributes:{POSITION:0},material:0}]}],buffers:[{uri:'../shared/positions.bin',byteLength:36}],bufferViews:[{buffer:0,byteLength:36}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[0,0,0],max:[1,1,0]}],images:[{uri:'../textures/white.png'}],textures:[{source:0}],materials:[{pbrMetallicRoughness:{baseColorTexture:{index:0}}}]};
   const modelFile=new File([JSON.stringify(gltf)],'simple.gltf',{type:'model/gltf+json'});modelFile.relPath='models/simple.gltf';
   const binFile=new File([new Float32Array([0,0,0,1,0,0,0,1,0])],'positions.bin');binFile.relPath='shared/positions.bin';
   const imageFile=new File([png],'white.png',{type:'image/png'});imageFile.relPath='textures/white.png';
   const companions=await library.importFiles([modelFile,binFile,imageFile],'__asset_test__');created.push(...companions.map(r=>r.id));
   controller.records.set(companions[0].id,companions[0]);
   const triangle=await controller.use(companions[0].id);
+  assert(!triangle.children.some(node=>node.isCamera),'model viewer cameras must be stripped');
   assert(triangle.children[0].geometry.attributes.position.count===3&&triangle.children[0].material.map,'glTF must resolve ../ buffer and texture companions');
   report('PASS local glTF folder import with binary and texture companions');
   const remote={id:'test-remote-gltf',title:'Remote triangle',kind:'model',url:'https://assets.example/models/simple.gltf'};

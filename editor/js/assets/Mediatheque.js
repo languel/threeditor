@@ -57,7 +57,7 @@ export function resolve(base, x) {
   // `url` is the stable primary (media.<ext>, original.gif or clips/<nn>.webm); a base override swaps its origin.
   // A GIF is also published as video (media.mp4): that plays on a timeline and knows its length.
   const rel = x.media || x.url || '';
-  return { url: abs(base, rel.split('#')[0]), thumb: abs(base, x.thumb), poster: abs(base, x.poster), proxy: abs(base, x.proxy), original: abs(base, x.original), bvh: abs(base, x.bvh), page: `${base}site/index.html#/${x.id}` };
+  return { url: abs(base, rel.split('#')[0]), video: abs(base, x.video_media), thumb: abs(base, x.thumb), poster: abs(base, x.poster), proxy: abs(base, x.proxy), original: abs(base, x.original), bvh: abs(base, x.bvh), page: `${base}site/index.html#/${x.id}` };
 }
 
 /** Distinct values of a facet, most common first: ['tags' | 'collections' | 'demos'] → [[value, count]]. */

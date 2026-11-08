@@ -3,6 +3,7 @@ import { isTextureAsset, isImportAsset } from '../ProjectAssets.js';
 
 export const ASSET_MIME = 'application/x-threeditor-asset';
 export function fileKind( file ) {
+	if ( /\.spz$/i.test( file.name ) ) return 'splat';
 	if ( isTextureAsset( file ) ) return 'texture';
 	if ( isImportAsset( file ) ) return 'model';
 	if ( file.type.startsWith( 'video/' ) || /\.(mp4|webm|mov)$/i.test( file.name ) ) return 'video';
@@ -69,7 +70,11 @@ export class AssetLibrary {
 		// Keep every companion, including .bin and .mtl, in its original directory.
 		for ( const { file, path } of entries ) {
 			const folder = folderPath( [ into, path.split( '/' ).slice( 0, -1 ).join( '/' ) ].filter( Boolean ).join( '/' ) );
-			records.push( await this.put( { id: crypto.randomUUID(), title: file.name, kind: fileKind( file ), file, path, batch, folder, tags: [], rating: 0, created: Date.now() } ) );
+			let kind = fileKind( file );
+			if ( /\.json$/i.test( file.name ) ) {
+				try { const { mathDefinition } = await import( './MathObjects.js' ); mathDefinition( JSON.parse( await file.text() ) ); kind = 'sdf'; } catch { /* ordinary JSON keeps its existing importer */ }
+			}
+			records.push( await this.put( { id: crypto.randomUUID(), title: file.name, kind, file, path, batch, folder, tags: [], rating: 0, created: Date.now() } ) );
 		}
 		return records;
 	}

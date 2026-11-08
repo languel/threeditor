@@ -1,4 +1,4 @@
-import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText, UINumber } from './libs/ui.js';
+import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText, UINumber, UISelect } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
@@ -114,7 +114,8 @@ function SidebarScript( editor ) {
 
 						const value = scriptParamValue( script, field );
 						let control;
-						if ( typeof value === 'boolean' ) control = new UICheckbox( value );
+						if ( field.options?.length ) control = new UISelect().setOptions( Object.fromEntries( field.options.map( value => [ value, value ] ) ) ).setValue( value );
+						else if ( typeof value === 'boolean' ) control = new UICheckbox( value );
 						else if ( typeof value === 'number' ) {
 
 							control = new UINumber( value ).setWidth( '80px' );

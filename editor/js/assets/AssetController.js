@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import { storeSourceFiles, isImportAsset, isTextureAsset } from '../ProjectAssets.js';
+import { AddObjectCommand } from '../commands/AddObjectCommand.js';
+import { AddScriptCommand } from '../commands/AddScriptCommand.js';
+import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
+import { mathDefinition, mathScript } from './MathObjects.js';
+import { modelScript } from './ModelBehavior.js';
+import { mediaPlane, mediaScript } from './MediaObjects.js';
+import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js';
 import { ASSET_MIME } from './AssetLibrary.js';
 import { loadAssetTexture } from './AssetTexture.js';
 import { SetMaterialMapCommand } from '../commands/SetMaterialMapCommand.js';
@@ -8,7 +15,7 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 
 export class AssetController {
 	constructor( editor, library ) {
-		this.epoch = 0; this.editor = editor; this.library = library; this.records = new Map(); this.paths = new Map(); this.pending = new Map();
+		this.epoch = 0; this.editor = editor; this.library = library; this.records = new Map(); this.paths = new Map(); this.pending = new Map(); this.runtime = new AssetRuntime( editor );
 		editor.signals.editorCleared.add( () => { this.epoch ++; this.paths.clear(); } );
 		editor.signals.projectLoaded.add( () => { this.epoch ++; this.paths.clear(); } );
 	}
@@ -38,7 +45,7 @@ export class AssetController {
 		const record = await this.record( id );
 		if ( record.projectPath && editor.sourceFiles.has( record.projectPath ) ) return { ...editor.sourceFiles.get( record.projectPath ), path: record.projectPath, record };
 		if ( record.texture ) return { texture: record.texture, path: record.texture.userData.sourceAssetPath, record };
-		const oldPath = this.paths.get( id );
+		const oldPath = this.paths.get( id ) || [ ...( editor.sourceFiles || [] ) ].find( ( [ , entry ] ) => entry.asset?.id === id )?.[ 0 ];
 		if ( oldPath && editor.sourceFiles.get( oldPath )?.asset?.id === id ) return { ...editor.sourceFiles.get( oldPath ), path: oldPath, record };
 		const file = record.file || await this.fetchFile( record.url );
 		const fileMap = Object.create( null );
@@ -64,17 +71,17 @@ export class AssetController {
 		if ( epoch !== this.epoch ) throw new Error( 'The project changed while loading this asset. Try again.' );
 		const paths = storeSourceFiles( editor, fileMap );
 		const path = paths.get( file );
-		const metadata = { id, title: record.title, url: record.url, page: record.page, credit: record.credit, rights: record.rights };
+		const metadata = { id, title: record.title, url: record.url, page: record.page, credit: record.credit, rights: record.rights, kind: record.kind };
 		editor.sourceFiles.get( path ).asset = metadata;
 		this.paths.set( id, path );
 		editor.signals.assetsChanged.dispatch();
 		return { file, path, record };
 	}
-	async use( id, { position, object, materialSlot = 0, map = 'map' } = {} ) {
+	async use( id, { position, object, materialSlot = 0, map = 'map', mode = 'auto' } = {} ) {
 		const epoch = this.epoch, picker = this.picker;
 		object ||= this.editor.selected;
 		const record = await this.record( id );
-		if ( [ 'sdf', 'splat', 'video', 'audio', 'file' ].includes( record.kind ) ) throw new Error( 'This format is available as a link or download; it has no scene importer.' );
+		if ( record.kind === 'file' ) throw new Error( 'This format is available as a link or download; it has no scene importer.' );
 		const entry = await this.materialize( id );
 		const canCommit = () => epoch === this.epoch;
 		if ( ! canCommit() ) throw new Error( 'The project changed while loading this asset. Try again.' );
@@ -86,7 +93,25 @@ export class AssetController {
 			this.cancelPicker();
 			return;
 		}
-		if ( entry.texture || isTextureAsset( entry.file ) ) {
+		if ( record.kind === 'sdf' ) {
+			const definition = mathDefinition( JSON.parse( await entry.file.text() ) );
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshNormalMaterial() );
+			mesh.userData.assetObject = { type: 'math', definition };
+			return this.commit( mesh, entry, mathScript( definition ), position, canCommit );
+		} else if ( record.kind === 'audio' ) {
+			const sound = new THREE.Group(); sound.userData.assetObject = { type: 'audio', path: entry.path };
+			return this.commit( sound, entry, mediaScript( entry.path, 'audio' ), position, canCommit );
+		} else if ( record.kind === 'splat' ) {
+			const { SPZLoader } = await import( 'three/addons/loaders/SPZLoader.js' );
+			const geometry = await new SPZLoader().parse( await entry.file.arrayBuffer() );
+			const cloud = new THREE.Points( geometry, new THREE.PointsMaterial( { size: 0.025, vertexColors: true, transparent: true } ) );
+			cloud.userData.assetObject = { type: 'splat-points' };
+			const script = { name: 'Point cloud display', assetBehavior: 'points', enabled: true, source: '// @param pointSize = 0.025 (0.001..1)\n// @param opacity = 1 (0..1)\nfunction init(){this.material.size=params.pointSize;this.material.opacity=params.opacity;this.material.transparent=true;this.material.needsUpdate=true;}\n' };
+			return this.commit( cloud, entry, script, position, canCommit );
+		} else if ( record.kind === 'video' || /^video\//.test( entry.file?.type || '' ) || /\.(webm|mp4|mov)$/i.test( entry.file?.name || '' ) || ( ( entry.texture || isTextureAsset( entry.file ) ) && mode !== 'texture' && ! this.picker && ( mode === 'plane' || ! object?.material ) ) ) {
+			const plane = await mediaPlane( this.editor, entry );
+			return this.commit( plane.object, entry, plane.script, position, canCommit );
+		} else if ( entry.texture || isTextureAsset( entry.file ) ) {
 			object ||= this.editor.selected;
 			if ( ! object?.material ) throw new Error( 'Select a mesh, or drag this texture onto a mesh or texture slot.' );
 			if ( hasRestriction( object, 'locked' ) ) throw new Error( 'This object is locked.' );
@@ -99,13 +124,27 @@ export class AssetController {
 			if ( ! canCommit() ) throw new Error( 'The project changed while loading this texture. Try again.' );
 			this.editor.execute( new SetMaterialMapCommand( this.editor, object, map, texture, materialSlot ) );
 		} else if ( /\.gl(tf|b)$/i.test( entry.file.name ) ) {
-			return this.editor.loader.importGLTFAsset( entry.path, { position, metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit } );
+			const model = await this.editor.loader.importGLTFAsset( entry.path, { metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit, commit: false, stripPresentation: true } );
+			return this.commit( model, entry, modelScript( model ), position, canCommit );
 		} else if ( isImportAsset( entry.file ) ) {
 			this.editor.loader.loadAsset( entry.path, { position, metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit } );
 		} else {
 			throw new Error( 'This asset can be linked or downloaded, but its format cannot be placed in a Three.js scene.' );
 		}
 	}
+	commit( object, entry, script, position, canCommit = () => true ) {
+		if ( ! canCommit() ) throw new Error( 'The project changed while importing this asset.' );
+		object.name = entry.record.title || entry.file.name;
+		object.userData.asset = this.editor.sourceFiles.get( entry.path )?.asset;
+		if ( position ) object.position.add( position );
+		if ( script?.assetBehavior === 'math' ) evaluateAssetScript( object, script, {}, this.editor.scene, this.editor.viewportCamera ).init.call( object );
+		const commands = [ new AddObjectCommand( this.editor, object ) ];
+		if ( script ) commands.push( new AddScriptCommand( this.editor, object, script ) );
+		const command = new MultiCmdsCommand( this.editor, commands ); command.name = 'Import ' + object.name;
+		this.editor.execute( command );
+		return object;
+	}
+
 	bindViewport( viewport ) {
 		viewport.addEventListener( 'dragover', event => {
 			if ( event.dataTransfer.types.includes( ASSET_MIME ) ) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
@@ -123,7 +162,7 @@ export class AssetController {
 			const position = hit?.point || ray.ray.intersectPlane( new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 ), new THREE.Vector3() ) || ray.ray.at( 10, new THREE.Vector3() );
 			// A drop always places/applies; it never invokes a stale slot-picker callback.
 			this.cancelPicker();
-			this.run( () => this.use( id, { position, object: hit?.object, materialSlot: hit?.face?.materialIndex || 0 } ) );
+			this.run( () => this.use( id, { position, object: hit?.object, materialSlot: hit?.face?.materialIndex || 0, mode: 'plane' } ) );
 		} );
 	}
 }

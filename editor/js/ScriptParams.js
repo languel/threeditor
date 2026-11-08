@@ -45,6 +45,11 @@ function scriptParams( source ) {
 		}
 
 	}
+	for ( const comment of comments ) for ( const line of comment.value.split( '\n' ) ) {
+		const match = line.match( /^\s*\*?\s*@options\s+([\w$]+)\s*=\s*(.+)$/ );
+		if ( ! match || ! fields.has( match[ 1 ] ) ) continue;
+		try { const choices = JSON.parse( match[ 2 ] ); if ( Array.isArray( choices ) && choices.every( value => typeof value === 'string' ) ) fields.get( match[ 1 ] ).options = choices; } catch { /* invalid choices leave a normal text field */ }
+	}
 	return [ ...fields.values() ];
 
 }
