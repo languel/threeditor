@@ -9,6 +9,7 @@ const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl
 
 // A single registry drives both shortcut execution and the settings list.
 const definitions = [
+ ['save','Save project','File','mod+s','mod+s'],
  ['translate','Move / grab','Transform','w','g'], ['rotate','Rotate','Transform','e','r'], ['scale','Scale','Transform','r','s'],
  ['addMenu','Open Add menu','Workspace','','shift+a'], ['contextMenu','Open object context menu','Workspace','',''],
  ['palette','Open command palette','Workspace','f3','f3'], ['paletteAlternate','Open command palette (alternate)','Workspace','mod+k','mod+k'],
@@ -54,7 +55,7 @@ class Keymap {
    this.overrides={...this.overrides,basic}; editor.config.setKey('settings/keymapOverrides',this.overrides,'settings/keymapMigrated',true);
   }
   for(const [id,label,category,basic,blender] of definitions) this.register({id,label,category,defaults:{basic,blender},run:()=>this.run(id)});
-  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
+  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
   document.addEventListener('keydown',e=>this.onKey(e));
  }
  register(action){if(!this.actions.some(a=>a.id===action.id))this.actions.push(action);}
@@ -85,6 +86,7 @@ class Keymap {
  }
  run(id){const e=this.editor,s=e.signals;
   switch(id){
+   case 'save':e.saveProject?.();break;
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
    case 'translate':case 'rotate':case 'scale': s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;

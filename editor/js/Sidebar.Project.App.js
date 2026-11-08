@@ -88,6 +88,8 @@ function SidebarProjectApp( editor ) {
 
 	// Signals
 
+	signals.projectLoaded.add( () => title.setValue( config.getKey( 'project/title' ) || '' ) );
+
 	signals.editorCleared.add( function () {
 
 		title.setValue( '' );

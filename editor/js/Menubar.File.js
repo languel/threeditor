@@ -1,5 +1,6 @@
 import { UIPanel, UIRow, UIHorizontalRule } from './libs/ui.js';
-import { FileLoader, PropertyBinding } from 'three';
+import { PropertyBinding } from 'three';
+import { createExampleLibrary } from './ExampleLibrary.js';
 import { openAssetBrowser } from './AssetBrowser.js';
 
 function MenubarFile( editor ) {
@@ -57,50 +58,26 @@ function MenubarFile( editor ) {
 	} );
 	newProjectSubmenu.add( option );
 
-	//
+	// Examples are folders, including the browser's named User projects.
 
-	newProjectSubmenu.add( new UIHorizontalRule() );
+	const exampleLibrary = createExampleLibrary( editor );
+	editor.saveProject = exampleLibrary.save;
+	const examplesTitle = new UIRow().setTextContent( 'Examples' ).addClass( 'option' ).addClass( 'submenu-title' );
+	const examplesPanel = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).addClass( 'examples-panel' ).setDisplay( 'none' );
+	examplesPanel.dom.appendChild( exampleLibrary.dom );
+	examplesTitle.add( examplesPanel );
+	examplesTitle.onMouseOver( function () {
 
-	// New Project / ...
+		const { top, right } = this.dom.getBoundingClientRect();
+		examplesPanel.setDisplay( 'block' );
+		const width = examplesPanel.dom.offsetWidth;
+		examplesPanel.setLeft( Math.min( right, window.innerWidth - width - 8 ) + 'px' );
+		examplesPanel.setTop( Math.max( 8, Math.min( top, window.innerHeight - examplesPanel.dom.offsetHeight - 8 ) ) + 'px' );
 
-	const examples = [
-		{ title: 'menubar/file/new/Arkanoid', file: 'arkanoid.app.json' },
-		{ title: 'menubar/file/new/Camera', file: 'camera.app.json' },
-		{ title: 'menubar/file/new/Particles', file: 'particles.app.json' },
-		{ title: 'menubar/file/new/Pong', file: 'pong.app.json' },
-		{ title: 'menubar/file/new/Shaders', file: 'shaders.app.json' }
-	];
-
-	const loader = new FileLoader();
-
-	for ( let i = 0; i < examples.length; i ++ ) {
-
-		( function ( i ) {
-
-			const example = examples[ i ];
-
-			const option = new UIRow();
-			option.setClass( 'option' );
-			option.setTextContent( strings.getKey( example.title ) );
-			option.onClick( function () {
-
-				if ( confirm( strings.getKey( 'prompt/file/open' ) ) ) {
-
-					loader.load( 'examples/' + example.file, function ( text ) {
-
-						editor.clear();
-						editor.fromJSON( JSON.parse( text ) );
-
-					} );
-
-				}
-
-			} );
-			newProjectSubmenu.add( option );
-
-		} )( i );
-
-	}
+	} );
+	examplesTitle.dom.addEventListener( 'mouseenter', () => exampleLibrary.refresh() );
+	examplesTitle.onMouseOut( () => examplesPanel.setDisplay( 'none' ) );
+	options.add( examplesTitle );
 
 	// Open
 
@@ -141,7 +118,7 @@ function MenubarFile( editor ) {
 
 		} finally {
 
-			form.reset();
+			openProjectForm.reset();
 
 		}
 
@@ -169,13 +146,7 @@ function MenubarFile( editor ) {
 	option = new UIRow()
 		.addClass( 'option' )
 		.setTextContent( strings.getKey( 'menubar/file/save' ) )
-		.onClick( function () {
-
-			const json = editor.toJSON();
-			const blob = new Blob( [ JSON.stringify( json ) ], { type: 'application/json' } );
-			editor.utils.save( blob, 'project.json' );
-
-		} );
+		.onClick( exampleLibrary.save );
 
 	options.add( option );
 

@@ -187,6 +187,25 @@ function SidebarProjectRenderer( editor ) {
 
 	// Signals
 
+	signals.projectLoaded.add( function ( json ) {
+
+		const project = json?.project;
+		if ( ! project ) return;
+		if ( project.renderer ) rendererTypeSelect.setValue( project.renderer );
+		if ( project.shadows !== undefined ) shadowsBoolean.setValue( project.shadows );
+		if ( project.shadowType !== undefined ) shadowTypeSelect.setValue( project.shadowType );
+		if ( project.toneMapping !== undefined ) toneMappingSelect.setValue( project.toneMapping );
+		if ( project.toneMappingExposure !== undefined ) toneMappingExposure.setValue( project.toneMappingExposure );
+		if ( rendererTypeSelect.getValue() !== appliedRendererType ) createRenderer();
+		else if ( currentRenderer ) {
+
+			applySettings( currentRenderer );
+			signals.rendererUpdated.dispatch();
+
+		}
+
+	} );
+
 	signals.cameraResetted.add( function () {
 
 		const type = editor.camera.isOrthographicCamera ? 'orthographic' : 'perspective';

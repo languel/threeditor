@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Project library browser checks</title>
+<button id="run">Run IndexedDB checks</button><pre id="result" role="status">Ready</pre>
+<script type="module">
+import { ProjectLibrary, projectRecord } from '../editor/js/ProjectLibrary.js';
+document.querySelector('#run').onclick = async () => {
+ const result = document.querySelector('#result');
+ const library = new ProjectLibrary();
+ const path = '__test__/' + crypto.randomUUID();
+ const assert = (value, message) => { if (!value) throw new Error(message); };
+ try {
+  const record = projectRecord({toJSON:()=>({project:{},scene:{},camera:{}}),sourceFiles:new Map([['fox.glb',{file:new File(['fox-bytes'],'fox.glb'),batch:['fox.glb']}]]),viewportShading:'preview'}, path);
+  await library.save(record);
+  const restored = await new ProjectLibrary().get(path);
+  assert(await restored.sourceFiles[0][1].file.text()==='fox-bytes','File contents did not survive IndexedDB');
+  assert((await library.list()).some(entry=>entry.path===path),'Saved project missing from listing');
+  record.project.scene.updated=true;
+  await library.save(record);
+  assert((await library.list()).filter(entry=>entry.path===path).length===1,'Repeated save duplicated the project');
+  assert((await library.get(path)).project.scene.updated,'Repeated save did not update snapshot');
+  const db=await library.open();
+  await new Promise((resolve,reject)=>{const t=db.transaction(['projects','entries'],'readwrite');t.objectStore('projects').delete(path);t.objectStore('entries').delete(path);t.oncomplete=resolve;t.onabort=()=>reject(t.error);});
+  assert(!await library.get(path),'Test cleanup failed');
+  result.textContent='PASS: IndexedDB save, File retention, independent connection, listing, same-name update, and cleanup.';
+ } catch(error) { result.textContent='FAIL: '+error.message; console.error(error); }
+};
+</script></html>

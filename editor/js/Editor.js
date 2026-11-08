@@ -20,6 +20,7 @@ function Editor( portable = false ) {
 	const Signal = signals.Signal; // eslint-disable-line no-undef
 
 	this.signals = {
+		projectLoaded: new Signal(),
 
 		// script
 
@@ -715,6 +716,7 @@ Editor.prototype = {
 
 	clear: function () {
 
+		this.userProjectPath = '';
 		this.activeSceneCameraUuid = null;
 		this.history.clear();
 		this.storage.clear();
@@ -803,6 +805,9 @@ Editor.prototype = {
 		this.activeSceneCameraUuid = json.activeSceneCamera || null;
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
 		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
+		this.config.setKey( 'project/title', json.project?.title || '' );
+		this.userProjectPath = json.project?.libraryPath || '';
+		this.signals.projectLoaded.dispatch( json );
 
 	},
 
@@ -829,6 +834,8 @@ Editor.prototype = {
 
 			metadata: {},
 			project: {
+				title: this.config.getKey( 'project/title' ),
+				libraryPath: this.userProjectPath || '',
 				renderer: this.config.getKey( 'project/renderer/type' ),
 				shadows: this.config.getKey( 'project/renderer/shadows' ),
 				shadowType: this.config.getKey( 'project/renderer/shadowType' ),

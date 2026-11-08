@@ -1440,6 +1440,20 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .shortcut-binding { display: flex; gap: 3px; align-items: center; flex: none; }
 .shortcut-row .shortcut-binding button { max-width: none; }
 .shortcut-clear { padding-inline: 6px; }
+.example-library { width: 290px; max-width: calc(100vw - 24px); padding: 8px; cursor: default; }
+.example-library > input { box-sizing: border-box; width: 100%; margin-bottom: 8px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--theme-text), transparent 65%); background: var(--theme-surface); color: var(--theme-text); }
+.example-folder > summary { cursor: pointer; padding: 6px 4px; font-weight: 600; }
+.example-folder > div { padding-left: 12px; }
+.example-library button { display: block; width: 100%; border: 0; padding: 6px 8px; background: transparent; color: var(--theme-text); text-align: left; cursor: pointer; }
+.example-library button:hover, .example-library button:focus-visible { background: var(--theme-accent); color: #fff; }
+.example-library-status { margin: 6px 4px; font-size: 11px; color: var(--theme-text); opacity: .75; white-space: normal; }
+.project-save-dialog { width: 380px; max-width: calc(100vw - 48px); padding: 20px; border: 1px solid color-mix(in srgb, var(--theme-text), transparent 65%); background: var(--theme-background); color: var(--theme-text); }
+.project-save-dialog::backdrop { background: #0007; }
+.project-save-dialog h2 { margin-top: 0; font-size: 18px; }
+.project-save-dialog label { display: grid; gap: 7px; }
+.project-save-dialog input { padding: 7px; border: 1px solid color-mix(in srgb, var(--theme-text), transparent 65%); background: var(--theme-surface); color: var(--theme-text); }
+.project-save-dialog p { font-size: 12px; line-height: 1.5; }
+.project-save-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .outliner-restrictions { float: right; position: sticky; right: 0; display: inline-flex; gap: 1px; margin-left: 8px; z-index: 1; }
 .outliner-restriction { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 2px; border: 0; background: var(--theme-surface); color: var(--theme-text); cursor: pointer; }
 .outliner-restriction[aria-pressed="false"] { opacity: .45; }

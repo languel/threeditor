@@ -184,6 +184,7 @@ async function startEditor( portable = null ) {
 			signals.scriptChanged.add( saveState );
 			signals.historyChanged.add( saveState );
 			signals.assetsChanged.add( saveState );
+			signals.projectLoaded.add( saveState );
 
 		} );
 
