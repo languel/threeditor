@@ -1,5 +1,6 @@
 // three.js code exporter (experiment addition, not part of upstream three.js editor).
 // Turns the editor scene into readable, commented JavaScript in the style of the lessons.
+import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
 const RESERVED = new Set( [ 'scene', 'camera', 'renderer', 'controls', 'THREE', 'mixers', 'gltfLoader', 'objLoader', 'last', 'pmrem', 'dt', 't' ] );
@@ -40,10 +41,11 @@ function generateThreeCode( editor ) {
 
 	const scene = editor.scene;
 	const camera = editor.viewportCamera || editor.camera;
-	const controllerMode = camera === editor.camera ? 'orbit' : camera.userData.threeditor?.cameraController;
+	const controllerSettings = cameraControllerSettings( editor, camera );
+	const controllerMode = controllerSettings.mode;
 	const useController = controllerMode && controllerMode !== 'none';
-	const followUuid = camera.userData.threeditor?.cameraFollow;
-	const followTargets = new Set( Object.values( editor.cameras || {} ).map( camera => camera.userData.threeditor?.cameraFollow ).filter( Boolean ) );
+	const followUuid = controllerSettings.follow;
+	const followTargets = new Set( Object.values( editor.cameras || {} ).map( camera => cameraControllerSettings( editor, camera ).follow ).filter( Boolean ) );
 	const config = editor.config;
 	const lines = [];
 	const used = new Set( RESERVED );
@@ -515,7 +517,9 @@ function generateThreeCode( editor ) {
 	if ( useController ) {
 
 		const follow = controllerMode === 'thirdPerson' && followUuid ? `, follow: scene.getObjectByProperty('uuid', ${ q( followUuid ) })` : '';
-		tail.push( `const controls = createCameraController(camera, renderer.domElement, { mode: ${ q( controllerMode ) }, target: [${ vec( target.x, target.y, target.z ) }]${ follow } });` );
+		const options = { ...controllerSettings };
+		delete options.follow;
+		tail.push( `const controls = createCameraController(camera, renderer.domElement, { ...${ q( options ) }, target: [${ vec( target.x, target.y, target.z ) }]${ follow } });` );
 
 	}
 	if ( environmentClass ) {

@@ -3,7 +3,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { FlyControls } from './FlyControls.js';
 import { FirstPersonControls } from './FirstPersonControls.js';
 
-function createCameraController( camera, element, { mode, target, follow } ) {
+function createCameraController( camera, element, { mode, target, follow, movementSpeed = 4, lookSpeed = 0.08, rotateSpeed = 1, zoomSpeed = 1, panSpeed = 1, enablePan = true, enableZoom = true } ) {
 
 	// The stock controls operate in world coordinates. Use an unparented
 	// camera for input when the actual camera belongs to a scene or rig.
@@ -38,19 +38,24 @@ function createCameraController( camera, element, { mode, target, follow } ) {
 
 		controls = new FlyControls( view, element );
 		controls.dragToLook = true;
-		controls.movementSpeed = 4;
+		controls.movementSpeed = movementSpeed;
 
 	} else if ( mode === 'firstPerson' ) {
 
 		controls = new FirstPersonControls( view, element );
-		controls.movementSpeed = 4;
-		controls.lookSpeed = 0.08;
+		controls.movementSpeed = movementSpeed;
+		controls.lookSpeed = lookSpeed;
 		controls.lookAt( position.clone().add( direction ) );
 
 	} else {
 
 		view.up.set( 0, 1, 0 ).applyQuaternion( rotation );
 		controls = new OrbitControls( view, element );
+		controls.rotateSpeed = rotateSpeed;
+		controls.zoomSpeed = zoomSpeed;
+		controls.panSpeed = panSpeed;
+		controls.enablePan = enablePan;
+		controls.enableZoom = enableZoom;
 		view.position.copy( position );
 		if ( mode === 'thirdPerson' && follow ) followPosition = follow.getWorldPosition( new Vector3() );
 		const distance = target ? Math.max( 0.01, position.distanceTo( new Vector3().fromArray( target ) ) ) : 4;

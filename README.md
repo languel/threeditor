@@ -12,11 +12,15 @@ python3 -m http.server 5300
 
 Open `http://127.0.0.1:5300/editor/` with the trailing slash. The hosted editor runs as static ES modules and loads a few libraries from a CDN. Serve it without COEP or COOP headers.
 
+Try the [Fox woodland demo](demos/fox-follow/) for an animated character with a Third Person follow camera. Its **Edit scene** link opens the saved project in the editor.
+
 ## Workspace
 
 - The four icons beside the gear toggle the **Code panel**, **sidebar**, **timeline**, and **transform toolbar**. Double-click a resize bar to collapse its panel. Hover at the corresponding edge for a temporary reveal.
 - The **gear** opens **Settings**, with collapsible General, Theme, Shortcuts, and History sections. General holds language, autosave, and an option to auto-hide the top menu; move to the top edge to reveal it. Theme offers System, Light, Dark, Mono Light, Mono Dark, and Warm Dark presets. Adjust the palette colors, enter a name, and choose **Save theme** to keep a custom theme; select a saved theme to edit or delete it. Themes also color the code editor. Hosted editor preferences and autosaved projects are stored in the browser; editable HTML exports include the saved themes.
 - The viewport camera dropdown chooses the view used for preview and publishing. The top **Camera** in the outliner is the editor's orbit camera. Added cameras keep their own transforms and can be parented to objects.
+- Mouse navigation defaults to **Standard**: left-drag to orbit, Shift-left-drag or right-drag to pan, and scroll to zoom. **Settings → General → Mouse navigation** can switch to Blender middle-mouse navigation independently of the keyboard shortcut preset. Backtick activates WASD fly navigation with either mouse mode.
+- The top **Camera** is the director view: standard mouse navigation and backtick/WASD fly navigation are always available. For scene cameras, **Object → Controller** attaches an editable Orbit, Fly, First Person, or Third Person script for Play and playable exports. Third Person offers a **Follow target**. Choose **Edit controller script** to change its behavior; the Script tab exposes speed, sensitivity, zoom, pan and follow parameters. Scene cameras start with no controller. Source exports retain the controller preset and parameters; use playable exports for custom script behavior.
 - Choose **Preview** in the shading dropdown to view the scene without editor helpers. Under **Scene**, an unset background with **Environment → Default** uses procedural studio lighting. A solid background color supplies its own ambient environment. **Equirect** loads an environment image separately.
 
 In **Settings → Shortcuts**, choose **Blender** (the default) or **Basic (Maya)**, search actions and menu commands, and click a binding to record a combination. The × clears a binding; assigning an existing combination clears its previous action. Each preset keeps its own changes. Reset restores that preset's defaults. Keyboard shortcuts are suspended while typing in fields or the code editor.

@@ -272,7 +272,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 			} else if ( event.button === 0 ) {
 
-				state = STATE.ROTATE;
+				state = event.shiftKey ? STATE.PAN : STATE.ROTATE;
 
 			} else if ( event.button === 1 ) {
 

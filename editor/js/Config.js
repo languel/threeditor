@@ -29,6 +29,7 @@ function Config( persist = true ) {
 		'settings/history': false,
 		'settings/keymapPreset': 'blender',
 		'settings/keymapOverrides': {},
+		'settings/mouseNavigation': 'basic',
 		'settings/emulateThreeButtonMouse': false,
 		'settings/autoHideMenubar': false,
 		'settings/theme': 'system',

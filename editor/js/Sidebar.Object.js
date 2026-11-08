@@ -11,6 +11,11 @@ import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import { SetScaleCommand } from './commands/SetScaleCommand.js';
 import { SetColorCommand } from './commands/SetColorCommand.js';
 import { SetShadowValueCommand } from './commands/SetShadowValueCommand.js';
+import { AddScriptCommand } from './commands/AddScriptCommand.js';
+import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
+import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
+import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
+import { cameraControllerScript, cameraControllerSettings, createCameraControllerScript } from './CameraControllerScript.js';
 
 function SidebarObject( editor ) {
 
@@ -154,6 +159,12 @@ function SidebarObject( editor ) {
 
 	container.add( objectFovRow );
 
+	const directorNavigationRow = new UIRow().add(
+		new UIText( 'Navigation' ).setClass( 'Label' ),
+		new UIText( 'Orbit / Pan / Zoom + Fly (`)' )
+	);
+	container.add( directorNavigationRow );
+
 	const cameraControllerRow = new UIRow();
 	const cameraController = new UISelect().setOptions( {
 		none: 'None', orbit: 'Orbit', fly: 'Fly', firstPerson: 'First Person', thirdPerson: 'Third Person'
@@ -168,28 +179,66 @@ function SidebarObject( editor ) {
 	cameraFollow.dom.setAttribute( 'aria-label', 'Follow target' );
 	cameraFollowRow.add( new UIText( 'Follow target' ).setClass( 'Label' ), cameraFollow );
 	container.add( cameraFollowRow );
+	const cameraControllerEditRow = new UIRow();
+	const cameraControllerEdit = new UIButton( 'Edit controller script' ).onClick( () => {
+
+		const script = cameraControllerScript( editor, editor.selected );
+		if ( script ) signals.editScript.dispatch( editor.selected, script );
+
+	} );
+	cameraControllerEditRow.add( cameraControllerEdit );
+	container.add( cameraControllerEditRow );
 
 	function setCameraController( changes ) {
 
 		const camera = editor.selected;
-		const settings = camera.userData.threeditor || {};
-		const command = new SetValueCommand( editor, camera, 'userData', {
-			...camera.userData, threeditor: { ...settings, ...changes }
-		} );
-		command.updatable = false;
-		editor.execute( command );
+		if ( camera === editor.camera ) return;
+		const script = cameraControllerScript( editor, camera );
+		const settings = { ...cameraControllerSettings( editor, camera ), ...changes };
+		const commands = [];
+		if ( settings.mode === 'none' ) {
+
+			if ( script ) commands.push( new RemoveScriptCommand( editor, camera, script ) );
+
+		} else if ( script ) {
+
+			const command = new SetScriptValueCommand( editor, camera, script, 'paramValues', { ...script.paramValues, ...settings } );
+			command.updatable = false;
+			commands.push( command );
+			if ( script.enabled === false ) commands.push( new SetScriptValueCommand( editor, camera, script, 'enabled', true ) );
+
+		} else {
+
+			commands.push( new AddScriptCommand( editor, camera, createCameraControllerScript( settings ) ) );
+
+		}
+		// Migrate older preset metadata when a controller is attached or detached.
+		if ( camera.userData.threeditor?.cameraController || camera.userData.threeditor?.cameraFollow ) {
+
+			const metadata = { ...camera.userData.threeditor };
+			delete metadata.cameraController;
+			delete metadata.cameraFollow;
+			const command = new SetValueCommand( editor, camera, 'userData', { ...camera.userData, threeditor: metadata } );
+			command.updatable = false;
+			commands.push( command );
+
+		}
+		if ( commands.length ) editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( editor, commands ) );
+		updateCameraController( camera );
 
 	}
-	cameraController.onChange( () => setCameraController( { cameraController: cameraController.getValue() } ) );
-	cameraFollow.onChange( () => setCameraController( { cameraFollow: cameraFollow.getValue() } ) );
+	cameraController.onChange( () => setCameraController( { mode: cameraController.getValue() } ) );
+	cameraFollow.onChange( () => setCameraController( { follow: cameraFollow.getValue() } ) );
 
 	function updateCameraController( object ) {
 
-		const sceneCamera = ( object.isPerspectiveCamera || object.isOrthographicCamera ) && object !== editor.camera;
-		const settings = object.userData.threeditor;
-		cameraControllerRow.setDisplay( sceneCamera ? '' : 'none' );
-		cameraController.setValue( settings?.cameraController || 'none' );
-		const showFollow = sceneCamera && settings?.cameraController === 'thirdPerson';
+		const isCamera = object.isCamera && object !== editor.camera;
+		const settings = cameraControllerSettings( editor, object );
+		directorNavigationRow.setDisplay( object === editor.camera ? '' : 'none' );
+		cameraControllerRow.setDisplay( isCamera ? '' : 'none' );
+		cameraController.setValue( settings.mode || 'none' );
+		cameraControllerEditRow.setDisplay( isCamera && cameraControllerScript( editor, object ) ? '' : 'none' );
+		const showFollow = isCamera && settings.mode === 'thirdPerson';
 		cameraFollowRow.setDisplay( showFollow ? '' : 'none' );
 		if ( showFollow ) {
 
@@ -199,7 +248,7 @@ function SidebarObject( editor ) {
 				if ( target !== editor.scene && ! target.isCamera && ! target.isHelper ) options[ target.uuid ] = target.name || target.type;
 
 			} );
-			cameraFollow.setOptions( options ).setValue( settings.cameraFollow || '' );
+			cameraFollow.setOptions( options ).setValue( settings.follow || '' );
 
 		}
 
@@ -793,6 +842,11 @@ function SidebarObject( editor ) {
 		updateUI( object );
 
 	} );
+	for ( const signal of [ signals.scriptAdded, signals.scriptRemoved, signals.scriptChanged ] ) {
+
+		signal.add( () => { if ( editor.selected ) updateCameraController( editor.selected ); } );
+
+	}
 
 	function updateUI( object ) {
 

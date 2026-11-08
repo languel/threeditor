@@ -857,6 +857,12 @@ function CodePanel( editor ) {
 
 	}
 
+	for ( const signal of [ signals.scriptAdded, signals.scriptChanged, signals.scriptRemoved ] ) {
+
+		signal.add( script => { if ( script.cameraController ) schedule(); } );
+
+	}
+
 	signals.objectSelected.add( ( object ) => {
 
 		follow( object );

@@ -6,7 +6,7 @@ const APP = {
 	Player: function ( importScriptModule, prepareScript ) {
 
 		let renderer;
-		let controller, controllerOptions;
+		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
 		let camera, scene;
@@ -66,10 +66,12 @@ const APP = {
 			this.setScene( loader.parse( json.scene ) );
 			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
 			this.setCamera( sceneCamera?.isCamera ? sceneCamera : loader.parse( json.camera ) );
-			const mode = project.cameraController || camera.userData.threeditor?.cameraController;
+			const hasControllerScript = json.scripts?.[ camera.uuid ]?.some( script => script.cameraController === true );
+			const mode = hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
+			cameraTarget = json.viewportTarget || json.controls?.center;
 			controllerOptions = mode && mode !== 'none' ? {
 				mode,
-				target: json.viewportTarget || json.controls?.center,
+				target: cameraTarget,
 				follow: scene.getObjectByProperty( 'uuid', camera.userData.threeditor?.cameraFollow )
 			} : null;
 
@@ -151,6 +153,22 @@ const APP = {
 			}
 
 			dispatch( events.init, arguments );
+
+		};
+
+		// Controller scripts share the player's update, resize and disposal lifecycle.
+		this.setCameraController = function ( object, options ) {
+
+			if ( object !== camera ) return;
+			controller?.dispose();
+			controller = undefined;
+			if ( options.mode && options.mode !== 'none' ) {
+
+				controller = createCameraController( camera, renderer.domElement, {
+					target: cameraTarget, ...options
+				} );
+
+			}
 
 		};
 

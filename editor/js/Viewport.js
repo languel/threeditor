@@ -262,7 +262,7 @@ function Viewport( editor ) {
 
 		// event.preventDefault();
 
-		if ( event.button !== 0 || event.target !== renderer.domElement || ( editor.keymap.preset === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
+		if ( event.button !== 0 || event.target !== renderer.domElement || ( controls.navigationMode() === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
 
 		const array = getMousePosition( container.dom, event.clientX, event.clientY );
 		onDownPosition.fromArray( array );
@@ -331,7 +331,7 @@ function Viewport( editor ) {
 	// otherwise controls.enabled doesn't work.
 
 	const controls = new EditorControls( camera );
-	controls.navigationMode = () => editor.keymap.preset;
+	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'basic';
 	controls.canNavigate = () => ! hasRestriction( editor.viewportCamera, 'locked' );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
@@ -471,7 +471,7 @@ function Viewport( editor ) {
 		controls.connect( newRenderer.domElement );
 		newRenderer.domElement.addEventListener( 'pointerdown', function ( event ) {
 
-			if ( editor.keymap.preset !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
+			if ( controls.navigationMode() !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
 			transformControls.enabled = false;
 			const restore = () => { transformControls.enabled = true; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
 			window.addEventListener( 'pointerup', restore, { once: true } );

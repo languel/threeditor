@@ -8,7 +8,7 @@ import { hasRestriction } from './ObjectRestrictions.js';
 function FlyControls( editor, viewport ) {
  let camera=null,canvas=null,startPosition,startRotation,worldPosition,yaw=0,pitch=0,roll=0,locked=false,stopping=false,last=0,speed=4;
  const keys=new Set(), euler=new THREE.Euler(0,0,0,'YXZ'), q=new THREE.Quaternion(), parentQ=new THREE.Quaternion(), direction=new THREE.Vector3(), right=new THREE.Vector3();
- const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;document.body.appendChild(notice);
+ const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;viewport.appendChild(notice);
  function refresh(){camera.updateMatrixWorld(true);editor.signals.cameraChanged.dispatch(camera);editor.signals.refreshSidebarObject3D.dispatch(camera);}
  function start(){
   if(camera||editor.modalTransform?.active||document.body.classList.contains('presenting'))return;

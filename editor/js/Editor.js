@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cameraControllerSettings } from './CameraControllerScript.js';
 
 import { Config } from './Config.js';
 import { Loader } from './Loader.js';
@@ -612,6 +613,7 @@ Editor.prototype = {
 
 		newCamera.name = oldCamera.name;
 		newCamera.uuid = oldCamera.uuid;
+		newCamera.userData = structuredClone( oldCamera.userData );
 		newCamera.updateProjectionMatrix();
 
 		this.camera = newCamera;
@@ -831,7 +833,7 @@ Editor.prototype = {
 				shadows: this.config.getKey( 'project/renderer/shadows' ),
 				shadowType: this.config.getKey( 'project/renderer/shadowType' ),
 				toneMapping: this.config.getKey( 'project/renderer/toneMapping' ),
-				cameraController: this.viewportCamera === this.camera ? 'orbit' : this.viewportCamera.userData.threeditor?.cameraController || 'none',
+				cameraController: cameraControllerSettings( this, this.viewportCamera ).mode || 'none',
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
 			camera: this.camera.toJSON(),

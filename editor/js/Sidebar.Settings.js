@@ -67,6 +67,19 @@ function SidebarSettings( editor ) {
 
 	} );
 
+	const mouseNavigationRow = new UIRow();
+	const mouseNavigation = new UISelect().setOptions( { basic: 'Standard', blender: 'Blender' } );
+	mouseNavigation.dom.setAttribute( 'aria-label', 'Mouse navigation' );
+	mouseNavigation.dom.title = 'Independent of keyboard shortcuts. Standard: drag to orbit, Shift-drag or right-drag to pan, scroll to zoom.';
+	mouseNavigation.setValue( config.getKey( 'settings/mouseNavigation' ) || 'basic' );
+	mouseNavigation.onChange( function () {
+
+		config.setKey( 'settings/mouseNavigation', this.getValue() );
+
+	} );
+	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ), mouseNavigation );
+	general.add( mouseNavigationRow );
+
 	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)' );
 	const emulateMouseLabel = document.createElement( 'label' );
 	emulateMouseLabel.className = 'settings-checkbox';

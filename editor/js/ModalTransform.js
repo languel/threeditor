@@ -7,14 +7,14 @@ import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 
 function ModalTransform( editor ) {
  let mode=null,states=[],axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0;
- const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;document.body.appendChild(notice);
+ const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
  function label(){notice.textContent=`${mode==='translate'?'Grab':mode==='rotate'?'Rotate':'Scale'}${axis?' · '+(plane?'plane excluding ':'')+axis.toUpperCase()+(local?' local':' global'):''}${numeric?' · '+numeric:''} · X/Y/Z axis · Shift+axis plane · type value · Enter accept · Esc cancel`;}
  function start(next){
   if(mode||editor.flyControls?.active)return;
   const selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
   const objects=selection.filter(o=>!selection.some(parent=>parent!==o&&isAncestor(parent,o)));
   if(!objects.length)return;
-  states=objects.map(o=>({o,position:o.position.clone(),rotation:o.rotation.clone(),scale:o.scale.clone()}));mode=next;axis=null;plane=false;local=false;numeric='';precision=false;startX=lastX;startY=lastY;x=0;y=0;editor.controls.enabled=false;notice.hidden=false;label();
+  states=objects.map(o=>({o,position:o.position.clone(),rotation:o.rotation.clone(),scale:o.scale.clone()}));mode=next;axis=null;plane=false;local=false;numeric='';precision=false;startX=lastX;startY=lastY;x=0;y=0;editor.controls.enabled=false;document.getElementById('viewport').appendChild(notice);notice.hidden=false;label();
  }
  function isAncestor(a,o){for(let p=o.parent;p;p=p.parent)if(p===a)return true;return false;}
  function update(){
