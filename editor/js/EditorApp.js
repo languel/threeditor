@@ -103,7 +103,7 @@ async function startEditor( portable = null ) {
 
 	//
 
-	if ( ! portable ) {
+	if ( ! portable && ! new URLSearchParams( location.search ).has( 'threecoder' ) ) {
 
 		editor.storage.init( function () {
 

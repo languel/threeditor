@@ -68,7 +68,11 @@
 
 			import { startEditor } from './js/EditorApp.js?v=preview-color';
 
-			await startEditor();
+			const editor = await startEditor();
+			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {
+				const { installBridge } = await import( '/studio/editor-bridge.js' );
+				installBridge( editor );
+			}
 
 		</script>
 	</body>
