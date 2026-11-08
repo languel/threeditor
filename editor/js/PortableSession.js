@@ -21,7 +21,7 @@ async function snapshotEditor( editor ) {
 
 	}
 
-	const keys = [ 'project/title', 'project/renderer/antialias', 'project/presentationEditVisible', 'settings/theme', 'settings/userThemes', 'settings/history', 'settings/autoHideMenubar', 'settings/keymapPreset', 'settings/keymapOverrides', 'settings/keymapMigrated', 'settings/emulateThreeButtonMouse', 'language' ];
+	const keys = [ 'project/title', 'project/renderer/antialias', 'project/presentationEditVisible', 'settings/theme', 'settings/userThemes', 'settings/history', 'settings/autoHideMenubar', 'settings/keymapPreset', 'settings/keymapOverrides', 'settings/keymapMigrated', 'settings/emulateThreeButtonMouse', 'settings/codeEditor', 'language' ];
 	const config = Object.fromEntries( keys.map( ( key ) => [ key, editor.config.getKey( key ) ] ) );
 	return { scene, files, assets: await embedResources( { resources } ), config };
 

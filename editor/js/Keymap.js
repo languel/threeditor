@@ -1,7 +1,11 @@
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
+import { SetPositionCommand } from './commands/SetPositionCommand.js';
+import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+
+const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl+alt+numpad0' : 'mod+alt+numpad0';
 
 // A single registry drives both shortcut execution and the settings list.
 const definitions = [
@@ -12,7 +16,8 @@ const definitions = [
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
  ['selectAll','Select all / deselect','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
  ['focus','Frame selection','View','f','numpaddecimal'], ['frameAll','Frame all','View','','home'], ['perspective','Perspective camera','View','p',''], ['orthographic','Orthographic camera','View','o',''], ['projection','Toggle perspective / orthographic','View','','numpad5'],
- ['viewFront','Front view','View','','numpad1'], ['viewBack','Back view','View','','mod+numpad1'], ['viewRight','Right view','View','','numpad3'], ['viewLeft','Left view','View','','mod+numpad3'], ['viewTop','Top view','View','','numpad7'], ['viewBottom','Bottom view','View','','mod+numpad7'], ['viewCamera','Look through selected / scene camera','View','','numpad0'],
+ ['viewFront','Front view','View','','numpad1'], ['viewBack','Back view','View','','mod+numpad1'], ['viewRight','Right view','View','','numpad3'], ['viewLeft','Left view','View','','mod+numpad3'], ['viewTop','Top view','View','','numpad7'], ['viewBottom','Bottom view','View','','mod+numpad7'], ['viewCamera','Toggle active camera view','View','numpad0','numpad0'],
+ ['alignActiveCamera','Align active camera to view','View',alignCameraShortcut,alignCameraShortcut],
  ['orbitLeft','Orbit left','Navigation','','numpad4'], ['orbitRight','Orbit right','Navigation','','numpad6'], ['orbitUp','Orbit up','Navigation','','numpad8'], ['orbitDown','Orbit down','Navigation','','numpad2'], ['flipView','Opposite view','Navigation','','numpad9'],
  ['panLeft','Pan left','Navigation','','mod+numpad4'], ['panRight','Pan right','Navigation','','mod+numpad6'], ['panUp','Pan up','Navigation','','mod+numpad8'], ['panDown','Pan down','Navigation','','mod+numpad2'], ['zoomIn','Zoom in','Navigation','','numpadadd'], ['zoomOut','Zoom out','Navigation','','numpadsubtract'],
  ['fly','Fly active camera','View','backquote','backquote'], ['shading','Cycle viewport shading','View','z','z'], ['shadingBack','Cycle viewport shading backward','View','shift+z','shift+z'],
@@ -94,15 +99,40 @@ class Keymap {
     const dirs={viewFront:[0,0,1],viewBack:[0,0,-1],viewRight:[1,0,0],viewLeft:[-1,0,0],viewTop:[0,1,0],viewBottom:[0,-1,0]};
     cam.up.set(0,Math.abs(dirs[id][1])?0:1,Math.abs(dirs[id][1])?-1:0);cam.position.copy(center).add(new THREE.Vector3(...dirs[id]).multiplyScalar(distance));cam.lookAt(center);cam.updateMatrixWorld(true);s.cameraChanged.dispatch(cam);break;
    }
-   case 'viewCamera':{if(e.viewportCamera!==e.camera){e.setViewportCamera(e.camera.uuid);break;}const selected=e.selected?.isCamera&&e.selected!==e.camera?e.selected:Object.values(e.cameras).find(c=>c!==e.camera);if(selected)e.setViewportCamera(selected.uuid);break;}
-   case 'orbitLeft':case 'orbitRight':case 'orbitUp':case 'orbitDown':{
-    e.setViewportCamera(e.camera.uuid);const cam=e.camera,center=e.controls.center;const polar=new THREE.Spherical().setFromVector3(cam.position.clone().sub(center));
-    if(id==='orbitLeft')polar.theta-=Math.PI/12;if(id==='orbitRight')polar.theta+=Math.PI/12;if(id==='orbitUp')polar.phi-=Math.PI/12;if(id==='orbitDown')polar.phi+=Math.PI/12;
-    polar.makeSafe();cam.up.set(0,1,0);cam.position.copy(center).add(new THREE.Vector3().setFromSpherical(polar));cam.lookAt(center);cam.updateMatrixWorld(true);s.cameraChanged.dispatch(cam);break;
+   case 'viewCamera':{
+    const camera = e.viewportCamera === e.camera ? e.activeSceneCamera : e.camera;
+    if ( camera ) e.setViewportCamera( camera.uuid );
+    break;
    }
-   case 'flipView':{e.setViewportCamera(e.camera.uuid);const cam=e.camera,center=e.controls.center;cam.position.sub(center).negate().add(center);cam.lookAt(center);cam.updateMatrixWorld(true);s.cameraChanged.dispatch(cam);break;}
-   case 'panLeft':case 'panRight':case 'panUp':case 'panDown':e.setViewportCamera(e.camera.uuid);e.controls.pan(new THREE.Vector3(id==='panLeft'?-35:id==='panRight'?35:0,id==='panUp'?35:id==='panDown'?-35:0,0));break;
-   case 'zoomIn':case 'zoomOut':e.setViewportCamera(e.camera.uuid);e.controls.zoom(new THREE.Vector3(0,0,id==='zoomIn'?-1:1));break;
+   case 'alignActiveCamera':{
+    const camera = e.activeSceneCamera, view = e.viewportCamera;
+    if ( ! camera || camera === view || hasRestriction( camera, 'locked' ) ) break;
+    const position = view.getWorldPosition( new THREE.Vector3() );
+    const orientation = view.getWorldQuaternion( new THREE.Quaternion() );
+    if ( camera.parent ) {
+     camera.parent.worldToLocal( position );
+     orientation.premultiply( camera.parent.getWorldQuaternion( new THREE.Quaternion() ).invert() );
+    }
+    const rotation = new THREE.Euler().setFromQuaternion( orientation, camera.rotation.order );
+    e.execute( new MultiCmdsCommand( e, [ new SetPositionCommand( e, camera, position ), new SetRotationCommand( e, camera, rotation ) ] ) );
+    e.controls.getCenter( camera ).copy( e.controls.center );
+    e.setViewportCamera( camera.uuid );
+    break;
+   }
+   case 'orbitLeft':case 'orbitRight':case 'orbitUp':case 'orbitDown':{
+    const step = Math.PI / 12 / e.controls.rotationSpeed;
+    e.controls.rotate( new THREE.Vector3( id === 'orbitLeft' ? -step : id === 'orbitRight' ? step : 0, id === 'orbitUp' ? -step : id === 'orbitDown' ? step : 0, 0 ) );
+    break;
+   }
+   case 'flipView':{
+    const offset = e.viewportCamera.getWorldPosition( new THREE.Vector3() ).sub( e.controls.center );
+    const phi = new THREE.Spherical().setFromVector3( offset ).phi;
+    const speed = e.controls.rotationSpeed;
+    e.controls.rotate( new THREE.Vector3( Math.PI / speed, ( Math.PI - 2 * phi ) / speed, 0 ) );
+    break;
+   }
+   case 'panLeft':case 'panRight':case 'panUp':case 'panDown':e.controls.pan(new THREE.Vector3(id==='panLeft'?-35:id==='panRight'?35:0,id==='panUp'?35:id==='panDown'?-35:0,0));break;
+   case 'zoomIn':case 'zoomOut':e.controls.zoom(new THREE.Vector3(0,0,id==='zoomIn'?-1:1));break;
    case 'fly':e.flyControls?.start();break;
    case 'shading':case 'shadingBack':{const modes=['solid','wireframe','normals','preview'];const n=Math.max(0,modes.indexOf(e.viewportShading));e.setViewportShading(modes[(n+(id==='shading'?1:3))%4]);break;}
    case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;

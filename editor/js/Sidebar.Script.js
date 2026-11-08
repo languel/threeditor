@@ -1,8 +1,9 @@
-import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox } from './libs/ui.js';
+import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText, UINumber } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
+import { scriptParams, scriptParamValue } from './ScriptParams.js';
 
 function SidebarScript( editor ) {
 
@@ -108,6 +109,31 @@ function SidebarScript( editor ) {
 					if ( ! script.generated ) scriptsContainer.add( remove );
 
 					scriptsContainer.add( new UIBreak() );
+
+					if ( ! script.generated ) for ( const field of scriptParams( script.source ) ) {
+
+						const value = scriptParamValue( script, field );
+						let control;
+						if ( typeof value === 'boolean' ) control = new UICheckbox( value );
+						else if ( typeof value === 'number' ) {
+
+							control = new UINumber( value ).setWidth( '80px' );
+							if ( field.min !== undefined ) control.setRange( field.min, field.max );
+
+						} else control = new UIInput( value );
+						control.dom.setAttribute( 'aria-label', field.name );
+						control.onChange( () => {
+
+							const command = new SetScriptValueCommand( editor, object, script, 'paramValues', {
+								...script.paramValues, [ field.name ]: control.getValue()
+							} );
+							command.updatable = false;
+							editor.execute( command );
+
+						} );
+						scriptsContainer.add( new UIRow().add( new UIText( field.name ).setClass( 'Label' ), control ) );
+
+					}
 
 				} )( object, scripts[ i ] );
 

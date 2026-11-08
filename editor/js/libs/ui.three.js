@@ -6,7 +6,10 @@ import { UISpan, UIDiv, UIRow, UIButton, UICheckbox, UIText, UINumber } from './
 import { MoveObjectCommand } from '../commands/MoveObjectCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
-const cache = new Map();
+import { openAssetBrowser } from '../AssetBrowser.js';
+import { isImageAsset, isTextureAsset, storeSourceFiles } from '../ProjectAssets.js';
+
+const cache = new WeakMap();
 
 class UITexture extends UISpan {
 
@@ -16,177 +19,113 @@ class UITexture extends UISpan {
 
 		const scope = this;
 
-		const form = document.createElement( 'form' );
-
-		const input = document.createElement( 'input' );
-		input.type = 'file';
-		input.addEventListener( 'change', function ( event ) {
-
-			loadFile( event.target.files[ 0 ] );
-
-		} );
-		form.appendChild( input );
-
 		const canvas = document.createElement( 'canvas' );
 		canvas.width = 32;
 		canvas.height = 16;
 		canvas.style.cursor = 'pointer';
 		canvas.style.marginRight = '5px';
 		canvas.style.border = '1px solid #888';
-		canvas.addEventListener( 'click', function () {
+		canvas.tabIndex = 0;
+		canvas.setAttribute( 'role', 'button' );
+		canvas.setAttribute( 'aria-label', 'Choose texture from assets' );
+		canvas.addEventListener( 'click', browse );
+		canvas.addEventListener( 'keydown', event => {
 
-			input.click();
+			if ( event.key !== 'Enter' && event.key !== ' ' ) return;
+			event.preventDefault();
+			event.stopPropagation();
+			browse();
 
 		} );
-		canvas.addEventListener( 'drop', function ( event ) {
+		canvas.addEventListener( 'dragover', event => event.preventDefault() );
+		canvas.addEventListener( 'drop', event => {
 
 			event.preventDefault();
 			event.stopPropagation();
-			loadFile( event.dataTransfer.files[ 0 ] );
+			const file = event.dataTransfer.files[ 0 ];
+			if ( file ) loadFile( file ).catch( error => alert( error.message ) );
 
 		} );
 		this.dom.appendChild( canvas );
 
-		async function loadFile( file ) {
+		function browse() {
 
-			const extension = file.name.split( '.' ).pop().toLowerCase();
-			const reader = new FileReader();
+			openAssetBrowser( editor, {
+				kind: 'texture',
+				onPick: ( { texture, file, path } ) => texture ? deliver( texture, texture.userData.sourceAssetPath ) : loadFile( file, path ),
+				onUpload: ( [ file ] ) => loadFile( file )
+			} );
 
-			const hash = `${file.lastModified}_${file.size}_${file.name}`;
+		}
 
-			function deliver( texture ) {
+		function deliver( texture, path ) {
 
-				if ( ! cache.has( hash ) ) cache.set( hash, texture );
+			const clone = texture.clone();
+			clone.sourceFile = texture.sourceFile;
+			if ( path ) clone.userData.sourceAssetPath = path;
+			scope.setValue( clone );
+			scope.onChangeCallback?.( clone );
 
-				const cached = cache.get( hash );
-				const clone = cached.clone();
-				clone.sourceFile = cached.sourceFile;
+		}
 
-				scope.setValue( clone );
+		async function loadFile( file, path ) {
 
-				if ( scope.onChangeCallback ) scope.onChangeCallback( clone );
+			if ( ! isTextureAsset( file ) ) throw new Error( 'Choose a supported image or texture file.' );
+			let texture = cache.get( file );
+			if ( ! texture ) {
 
-			}
+				const extension = file.name.split( '.' ).pop().toLowerCase();
+				const url = URL.createObjectURL( file );
+				let loader;
+				try {
 
-			if ( cache.has( hash ) ) {
+					if ( extension === 'hdr' || extension === 'pic' ) {
 
-				deliver( cache.get( hash ) );
+						const { HDRLoader } = await import( 'three/addons/loaders/HDRLoader.js' );
+						loader = new HDRLoader();
 
-			} else if ( extension === 'hdr' || extension === 'pic' ) {
+					} else if ( extension === 'tga' ) {
 
-				reader.addEventListener( 'load', async function ( event ) {
+						const { TGALoader } = await import( 'three/addons/loaders/TGALoader.js' );
+						loader = new TGALoader();
 
-					// assuming RGBE/Radiance HDR image format
+					} else if ( extension === 'ktx2' ) {
 
-					const { HDRLoader } = await import( 'three/addons/loaders/HDRLoader.js' );
+						const { KTX2Loader } = await import( 'three/addons/loaders/KTX2Loader.js' );
+						loader = new KTX2Loader().setTranscoderPath( '../../examples/jsm/libs/basis/' );
+						editor.signals.rendererDetectKTX2Support.dispatch( loader );
 
-					const loader = new HDRLoader();
-					loader.load( event.target.result, function ( hdrTexture ) {
+					} else if ( extension === 'exr' ) {
 
-						hdrTexture.sourceFile = file.name;
+						const { EXRLoader } = await import( 'three/addons/loaders/EXRLoader.js' );
+						loader = new EXRLoader();
 
-						deliver( hdrTexture );
+					} else if ( isImageAsset( file ) ) {
 
-					} );
+						loader = new THREE.TextureLoader();
 
-				} );
+					}
 
-				reader.readAsDataURL( file );
+					texture = await loader.loadAsync( url );
+					if ( extension === 'tga' || extension === 'ktx2' ) texture.colorSpace = THREE.SRGBColorSpace;
+					texture.sourceFile = file.name;
+					cache.set( file, texture );
 
-			} else if ( extension === 'tga' ) {
+				} catch ( error ) {
 
-				reader.addEventListener( 'load', async function ( event ) {
+					throw new Error( 'Could not open texture: ' + file.name, { cause: error } );
 
-					const { TGALoader } = await import( 'three/addons/loaders/TGALoader.js' );
+				} finally {
 
-					const loader = new TGALoader();
-					loader.load( event.target.result, function ( texture ) {
+					loader?.dispose?.();
+					URL.revokeObjectURL( url );
 
-						texture.colorSpace = THREE.SRGBColorSpace;
-						texture.sourceFile = file.name;
-
-						deliver( texture );
-
-					} );
-
-				}, false );
-
-				reader.readAsDataURL( file );
-
-			} else if ( extension === 'ktx2' ) {
-
-				reader.addEventListener( 'load', async function ( event ) {
-
-					const { KTX2Loader } = await import( 'three/addons/loaders/KTX2Loader.js' );
-
-					const arrayBuffer = event.target.result;
-					const blobURL = URL.createObjectURL( new Blob( [ arrayBuffer ] ) );
-					const ktx2Loader = new KTX2Loader();
-					ktx2Loader.setTranscoderPath( '../../examples/jsm/libs/basis/' );
-					editor.signals.rendererDetectKTX2Support.dispatch( ktx2Loader );
-
-					ktx2Loader.load( blobURL, function ( texture ) {
-
-						texture.colorSpace = THREE.SRGBColorSpace;
-						texture.sourceFile = file.name;
-						texture.needsUpdate = true;
-
-						deliver( texture );
-						ktx2Loader.dispose();
-
-					} );
-
-				} );
-
-				reader.readAsArrayBuffer( file );
-
-			} else if ( extension === 'exr' ) {
-
-				reader.addEventListener( 'load', async function ( event ) {
-
-					const { EXRLoader } = await import( 'three/addons/loaders/EXRLoader.js' );
-
-					const arrayBuffer = event.target.result;
-					const blobURL = URL.createObjectURL( new Blob( [ arrayBuffer ] ) );
-					const exrLoader = new EXRLoader();
-
-					exrLoader.load( blobURL, function ( texture ) {
-
-						texture.sourceFile = file.name;
-						texture.needsUpdate = true;
-
-						deliver( texture );
-
-					} );
-
-				} );
-
-				reader.readAsArrayBuffer( file );
-
-			} else if ( file.type.match( 'image.*' ) ) {
-
-				reader.addEventListener( 'load', function ( event ) {
-
-					const image = document.createElement( 'img' );
-					image.addEventListener( 'load', function () {
-
-						const texture = new THREE.Texture( this );
-						texture.sourceFile = file.name;
-						texture.needsUpdate = true;
-
-						deliver( texture );
-
-					}, false );
-
-					image.src = event.target.result;
-
-				}, false );
-
-				reader.readAsDataURL( file );
+				}
 
 			}
 
-			form.reset();
+			path ||= storeSourceFiles( editor, { [ file.name ]: file } ).get( file );
+			deliver( texture, path );
 
 		}
 

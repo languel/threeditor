@@ -1,7 +1,7 @@
 import { UIPanel } from './libs/ui.js';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { APP } from './libs/app.js';
+import { setupRenderEnvironment } from './RenderEnvironment.js';
 
 function Player( editor ) {
 
@@ -15,6 +15,7 @@ function Player( editor ) {
 	//
 
 	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript );
+	let environmentTarget = null;
 	container.dom.appendChild( player.dom );
 	const exit = editor.portable ? document.createElement( 'button' ) : null;
 	if ( exit ) {
@@ -58,25 +59,36 @@ function Player( editor ) {
 
 		container.setDisplay( '' );
 
-		const json = editor.toJSON();
-		await player.load( json );
-		if ( container.dom.style.display === 'none' ) return;
+		try {
 
-		// Match the editor's look: neutral clear colour and the "Default" room environment (the player has its own GL context)
-		const renderer = player.getRenderer();
-		const scene = player.getScene();
-		renderer.setClearColor( 0xaaaaaa );
-		if ( json.environmentType === 'Default' && ! scene.environment && renderer.isWebGLRenderer ) {
+			const json = editor.toJSON();
+			await player.load( json );
+			if ( container.dom.style.display === 'none' ) return;
 
-			const pmrem = new THREE.PMREMGenerator( renderer );
-			scene.environment = pmrem.fromScene( new RoomEnvironment(), 0.04 ).texture;
-			pmrem.dispose();
+			// Match the editor's look in the player's separate renderer.
+			const renderer = player.getRenderer();
+			const scene = player.getScene();
+			renderer.setClearColor( editor.viewportColor );
+			const target = await setupRenderEnvironment( scene, renderer, json.environmentType );
+			if ( container.dom.style.display === 'none' || renderer !== player.getRenderer() ) {
+
+				target?.dispose();
+				return;
+
+			}
+			environmentTarget = target;
+
+			applyShading();
+			player.setSize( container.dom.clientWidth, container.dom.clientHeight );
+			player.play();
+
+		} catch ( error ) {
+
+			console.error( 'Could not start Play:', error );
+			signals.stopPlayer.dispatch();
+			alert( 'Could not start Play: ' + error.message );
 
 		}
-
-		applyShading();
-		player.setSize( container.dom.clientWidth, container.dom.clientHeight );
-		player.play();
 
 	} );
 
@@ -102,6 +114,15 @@ function Player( editor ) {
 	}
 
 	signals.viewportShadingChanged.add( applyShading );
+
+	function updateClearColor() {
+
+		if ( player.getScene() ) player.setClearColor( editor.viewportColor );
+
+	}
+
+	signals.themeChanged.add( updateClearColor );
+	signals.themePreviewChanged.add( updateClearColor );
 
 	// Alt+Cmd+P: presentation mode (fullscreen, no editor UI)
 	let presenting = false;
@@ -162,8 +183,21 @@ function Player( editor ) {
 
 		container.setDisplay( 'none' );
 
-		player.stop();
-		player.dispose();
+		try {
+
+			player.stop();
+
+		} catch ( error ) {
+
+			console.error( 'Could not stop Play cleanly:', error );
+
+		} finally {
+
+			environmentTarget?.dispose();
+			environmentTarget = null;
+			player.dispose();
+
+		}
 
 	} );
 

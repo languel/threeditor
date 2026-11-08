@@ -54,6 +54,7 @@ async function exportEditorHtml( editor ) {
 	const core = await ( await read( new URL( '../build/three.core.js', base ) ) ).text();
 	state.threeDefs = buildThreeDefs( core );
 	const resourcePaths = [
+		'js/libs/language-worker.js', 'js/libs/language-types.json',
 		...decoderFiles.map( file => '../examples/jsm/libs/' + file ),
 		...Array.from( [ 'arkanoid', 'camera', 'particles', 'pong', 'shaders' ], name => 'examples/' + name + '.app.json' ),
 		...Array.from( [ 'translate', 'rotate', 'scale' ], name => 'images/' + name + '.svg' )

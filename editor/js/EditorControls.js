@@ -15,6 +15,7 @@ class EditorControls extends THREE.EventDispatcher {
 		this.rotationSpeed = 0.005;
 		this.navigationMode = () => 'basic';
 		this.emulateThreeButton = () => false;
+		this.canNavigate = () => true;
 
 		// internals
 
@@ -27,7 +28,9 @@ class EditorControls extends THREE.EventDispatcher {
 		var state = STATE.NONE;
 
 		var center = this.center;
-		var normalMatrix = new THREE.Matrix3();
+		var position = new THREE.Vector3();
+		var orientation = new THREE.Quaternion();
+		var centers = new WeakMap( [ [ object, center ] ] );
 		var pointer = new THREE.Vector2();
 		var pointerOld = new THREE.Vector2();
 		var spherical = new THREE.Spherical();
@@ -44,12 +47,36 @@ class EditorControls extends THREE.EventDispatcher {
 
 		this.setCamera = function ( camera ) {
 
+			if ( object !== camera ) state = STATE.NONE;
 			object = camera;
+			center = this.center = this.getCenter( camera );
 
 		};
 
+		this.getCenter = function ( camera = object ) {
+
+			if ( ! centers.has( camera ) ) {
+
+				const pivot = camera.getWorldPosition( new THREE.Vector3() );
+				pivot.addScaledVector( camera.getWorldDirection( new THREE.Vector3() ), 4 );
+				centers.set( camera, pivot );
+
+			}
+			return centers.get( camera );
+
+		};
+
+		function setWorldPosition( point ) {
+
+			object.position.copy( point );
+			if ( object.parent ) object.parent.worldToLocal( object.position );
+			object.updateWorldMatrix( true, false );
+
+		}
+
 		this.focus = function ( target ) {
 
+			if ( ! scope.enabled || ! scope.canNavigate() || target === object ) return;
 			var distance;
 
 			box.setFromObject( target );
@@ -69,10 +96,10 @@ class EditorControls extends THREE.EventDispatcher {
 			}
 
 			delta.set( 0, 0, 1 );
-			delta.applyQuaternion( object.quaternion );
+			delta.applyQuaternion( object.getWorldQuaternion( orientation ) );
 			delta.multiplyScalar( distance * 4 );
 
-			object.position.copy( center ).add( delta );
+			setWorldPosition( vector.copy( center ).add( delta ) );
 
 			if ( object.isOrthographicCamera ) {
 
@@ -87,14 +114,16 @@ class EditorControls extends THREE.EventDispatcher {
 
 		this.pan = function ( delta ) {
 
+			if ( ! scope.enabled || ! scope.canNavigate() ) return;
+			object.getWorldPosition( position );
 			var distance = object.isOrthographicCamera
 				? ( object.top - object.bottom ) / object.zoom
-				: object.position.distanceTo( center );
+				: position.distanceTo( center );
 
 			delta.multiplyScalar( distance * scope.panSpeed );
-			delta.applyMatrix3( normalMatrix.getNormalMatrix( object.matrix ) );
+			delta.applyQuaternion( object.getWorldQuaternion( orientation ) );
 
-			object.position.add( delta );
+			setWorldPosition( position.add( delta ) );
 			center.add( delta );
 
 			scope.dispatchEvent( changeEvent );
@@ -103,6 +132,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 		this.zoom = function ( delta ) {
 
+			if ( ! scope.enabled || ! scope.canNavigate() ) return;
 			if ( object.isOrthographicCamera ) {
 
 				object.zoom = Math.max( 0.0001, object.zoom * Math.pow( 0.95, delta.z ) );
@@ -110,15 +140,16 @@ class EditorControls extends THREE.EventDispatcher {
 
 			} else {
 
-				var distance = object.position.distanceTo( center );
+				object.getWorldPosition( position );
+				var distance = position.distanceTo( center );
 
 				delta.multiplyScalar( distance * scope.zoomSpeed );
 
 				if ( delta.length() > distance ) return;
 
-				delta.applyMatrix3( normalMatrix.getNormalMatrix( object.matrix ) );
+				delta.applyQuaternion( object.getWorldQuaternion( orientation ) );
 
-				object.position.add( delta );
+				setWorldPosition( position.add( delta ) );
 
 			}
 
@@ -128,7 +159,8 @@ class EditorControls extends THREE.EventDispatcher {
 
 		this.rotate = function ( delta ) {
 
-			vector.copy( object.position ).sub( center );
+			if ( ! scope.enabled || ! scope.canNavigate() ) return;
+			object.getWorldPosition( vector ).sub( center );
 
 			spherical.setFromVector3( vector );
 
@@ -139,7 +171,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 			vector.setFromSpherical( spherical );
 
-			object.position.copy( center ).add( vector );
+			setWorldPosition( vector.add( center ) );
 
 			object.lookAt( center );
 
@@ -151,7 +183,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 		function onPointerDown( event ) {
 
-			if ( scope.enabled === false ) return;
+			if ( scope.enabled === false || ! scope.canNavigate() ) return;
 			const emulatedMiddle = scope.navigationMode() === 'blender' && scope.emulateThreeButton() && event.button === 0 && event.altKey;
 			if ( event.pointerType !== 'touch' && scope.navigationMode() === 'blender' && event.button !== 1 && ! emulatedMiddle ) return;
 			if ( event.pointerType !== 'touch' && event.button === 1 ) event.preventDefault();
@@ -479,16 +511,16 @@ class EditorControls extends THREE.EventDispatcher {
 
 	}
 
-	fromJSON( json ) {
+	fromJSON( json, camera ) {
 
-		if ( json.center !== undefined ) this.center.fromArray( json.center );
+		if ( json.center !== undefined ) this.getCenter( camera ).fromArray( json.center );
 
 	}
 
-	toJSON() {
+	toJSON( camera ) {
 
 		return {
-			center: this.center.toArray()
+			center: this.getCenter( camera ).toArray()
 		};
 
 	}

@@ -6,6 +6,7 @@ import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { SetSceneCommand } from './commands/SetSceneCommand.js';
 
 import { LoaderUtils } from './LoaderUtils.js';
+import { isTextureAsset, storeSourceFiles } from './ProjectAssets.js';
 
 import { GLTFImportDialog } from './GLTFImportDialog.js';
 
@@ -27,27 +28,25 @@ function Loader( editor ) {
 
 	};
 
-	this.loadFiles = function ( files, filesMap ) {
+	this.loadAsset = function ( path ) {
+
+		const entry = editor.sourceFiles?.get( path );
+		if ( ! entry ) return;
+		const filesMap = Object.fromEntries( ( entry.batch || [ path ] )
+			.filter( key => editor.sourceFiles.has( key ) )
+			.map( key => [ key, editor.sourceFiles.get( key ).file ] ) );
+		filesMap[ path ] = entry.file;
+		scope.loadFiles( [ entry.file ], filesMap, new Map( [ [ entry.file, path ] ] ) );
+
+	};
+
+	this.loadFiles = function ( files, filesMap, sourcePaths ) {
 
 		if ( files.length > 0 ) {
 
 			filesMap = filesMap || LoaderUtils.createFilesMap( files );
 
-			// Keep the original files so the three.js code exporter can bundle them into an archive.
-			editor.sourceFiles = editor.sourceFiles || new Map();
-			const keys = Object.keys( filesMap );
-			let prefix = '', suffix = 2;
-			while ( keys.some( ( key ) => editor.sourceFiles.has( prefix + key ) ) ) prefix = 'import-' + suffix ++ + '/';
-			const batch = keys.map( ( key ) => prefix + key );
-			const sourcePaths = new Map();
-			for ( const key of keys ) {
-
-				const path = prefix + key;
-				const file = filesMap[ key ];
-				editor.sourceFiles.set( path, { file, batch } );
-				sourcePaths.set( file, path );
-
-			}
+			sourcePaths ||= storeSourceFiles( editor, filesMap );
 
 			const normalizeLookupPath = function ( path ) {
 
@@ -914,7 +913,7 @@ function Loader( editor ) {
 
 			default:
 
-				console.error( 'Unsupported file format (' + extension + ').' );
+				if ( ! isTextureAsset( file ) ) console.error( 'Unsupported file format (' + extension + ').' );
 
 				break;
 

@@ -5,7 +5,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { UIPanel } from './libs/ui.js';
 
-import { EditorControls } from './EditorControls.js';
+import { EditorControls } from './EditorControls.js?v=camera-playback';
 
 import { ViewportControls } from './Viewport.Controls.js';
 import { FlyControls } from './FlyControls.js';
@@ -94,6 +94,34 @@ function Viewport( editor ) {
 	let objectStatesOnDown = [];
 
 	const transformControls = new TransformControls( camera );
+	let translationSnap = null;
+	function setControlSnap( held ) {
+
+		transformControls.setTranslationSnap( held ? translationSnap ?? 1 : translationSnap );
+		transformControls.setRotationSnap( held ? Math.PI / 12 : null );
+		transformControls.setScaleSnap( held ? 0.1 : null );
+
+	}
+
+	// Update before TransformControls handles the pointer, including modifier changes mid-drag.
+	container.dom.addEventListener( 'pointerdown', event => {
+
+		if ( event.button === 0 ) setControlSnap( event.ctrlKey );
+
+	}, true );
+	container.dom.addEventListener( 'pointermove', event => {
+
+		if ( transformControls.dragging ) setControlSnap( event.ctrlKey );
+
+	}, true );
+	container.dom.addEventListener( 'pointercancel', () => setControlSnap( false ), true );
+	container.dom.addEventListener( 'contextmenu', event => {
+
+		if ( ! transformControls.dragging ) return;
+		event.preventDefault();
+		event.stopPropagation();
+
+	}, true );
 	transformControls.addEventListener( 'axis-changed', function () {
 
 		if ( editor.viewportShading !== 'realistic' ) render();
@@ -122,6 +150,7 @@ function Viewport( editor ) {
 	} );
 	transformControls.addEventListener( 'mouseUp', function () {
 
+		setControlSnap( false );
 		if ( transformControls.object !== undefined ) {
 
 			const commands = [];
@@ -303,11 +332,14 @@ function Viewport( editor ) {
 
 	const controls = new EditorControls( camera );
 	controls.navigationMode = () => editor.keymap.preset;
+	controls.canNavigate = () => ! hasRestriction( editor.viewportCamera, 'locked' );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
 
-		signals.cameraChanged.dispatch( camera );
-		signals.refreshSidebarObject3D.dispatch( camera );
+		const active = editor.viewportCamera;
+		if ( active !== editor.camera ) signals.objectChanged.dispatch( active );
+		signals.cameraChanged.dispatch( active );
+		signals.refreshSidebarObject3D.dispatch( active );
 
 	} );
 	viewHelper.center = controls.center;
@@ -319,7 +351,7 @@ function Viewport( editor ) {
 
 	signals.editorCleared.add( function () {
 
-		controls.center.set( 0, 0, 0 );
+		controls.getCenter( editor.camera ).set( 0, 0, 0 );
 		if ( pathtracer ) pathtracer.reset();
 
 		initPT();
@@ -338,7 +370,8 @@ function Viewport( editor ) {
 
 	signals.snapChanged.add( function ( dist ) {
 
-		transformControls.setTranslationSnap( dist );
+		translationSnap = dist;
+		setControlSnap( false );
 
 	} );
 
@@ -794,9 +827,8 @@ function Viewport( editor ) {
 
 		}
 
-		// disable EditorControls when setting a user camera
-
-		controls.enabled = ( viewportCamera === editor.camera );
+		controls.setCamera( viewportCamera );
+		controls.enabled = ! editor.modalTransform?.active && ! editor.flyControls?.active;
 
 		initPT();
 		render();
@@ -916,9 +948,10 @@ function Viewport( editor ) {
 
 			camera = editor.camera;
 
-			controls.setCamera( camera );
+			controls.setCamera( editor.viewportCamera );
 			transformControls.camera = camera;
 			viewHelper.camera = camera;
+			viewHelper.center = controls.getCenter( camera );
 
 		}
 

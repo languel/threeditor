@@ -1,5 +1,6 @@
 import { UIPanel, UIRow, UIHorizontalRule } from './libs/ui.js';
 import { FileLoader, PropertyBinding } from 'three';
+import { openAssetBrowser } from './AssetBrowser.js';
 
 function MenubarFile( editor ) {
 
@@ -184,27 +185,16 @@ function MenubarFile( editor ) {
 
 	// Import
 
-	const form = document.createElement( 'form' );
-	form.style.display = 'none';
-	document.body.appendChild( form );
-
-	const fileInput = document.createElement( 'input' );
-	fileInput.multiple = true;
-	fileInput.type = 'file';
-	fileInput.addEventListener( 'change', function () {
-
-		editor.loader.loadFiles( fileInput.files );
-		form.reset();
-
-	} );
-	form.appendChild( fileInput );
-
 	option = new UIRow();
 	option.setClass( 'option' );
 	option.setTextContent( strings.getKey( 'menubar/file/import' ) );
 	option.onClick( function () {
 
-		fileInput.click();
+		openAssetBrowser( editor, {
+			kind: 'import',
+			onPick: ( { path } ) => editor.loader.loadAsset( path ),
+			onUpload: files => editor.loader.loadFiles( files )
+		} );
 
 	} );
 	options.add( option );

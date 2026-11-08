@@ -1018,6 +1018,27 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 
 /* Dialog */
 
+.asset-browser {
+	box-sizing: border-box;
+	width: min(480px, calc(100% - 24px));
+	max-height: 80vh;
+	padding: 16px;
+	background: var(--theme-background);
+	color: var(--theme-text);
+	border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%);
+	border-radius: 6px;
+}
+.asset-browser::backdrop { background: #0008; }
+.asset-browser h2 { margin: 0 0 12px; font-size: 15px; }
+.asset-browser-toolbar { display: flex; gap: 6px; }
+.asset-browser-toolbar input { flex: 1; min-width: 0; }
+.asset-browser-list { display: grid; gap: 4px; max-height: 52vh; overflow: auto; margin-top: 10px; }
+.asset-browser-item:not([hidden]) { display: flex; align-items: center; gap: 10px; text-align: left; }
+.asset-browser-item > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.asset-browser-item small { display: block; opacity: .72; }
+.asset-browser-thumb { width: 40px; height: 32px; flex: 0 0 40px; background: var(--theme-background); }
+.asset-browser-thumb img { width: 100%; height: 100%; object-fit: contain; }
+
 .Dialog {
 	position: fixed;
 	top: 0;
@@ -1379,6 +1400,14 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 #animation input[type="range"], input[type="checkbox"] { accent-color: var(--theme-accent); }
 .cm-s-editor .CodeMirror-gutters { background: color-mix(in srgb, var(--theme-surface), var(--theme-text) 5%); border-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 20%); }
 .cm-s-editor .CodeMirror-cursor { border-color: var(--theme-accent); }
+.CodeMirror-hints.editor {
+	background: var(--theme-surface);
+	border-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 25%);
+}
+.CodeMirror-hints.editor .CodeMirror-hint { color: var(--theme-text); }
+.CodeMirror-hints.editor .CodeMirror-hint-active {
+	background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%);
+}
 .cm-s-editor .CodeMirror-selected, #code-panel .code-focus { background: color-mix(in srgb, var(--theme-accent), transparent 80%); }
 .cm-s-editor .CodeMirror-matchingbracket { color: var(--theme-accent) !important; outline-color: var(--theme-accent); }
 .cm-s-editor .cm-keyword, .cm-s-editor .cm-atom, .cm-s-editor .cm-number, .cm-s-editor .cm-meta { color: var(--theme-keyword); }
@@ -1423,3 +1452,14 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .context-menu-item { display: block; width: 100%; padding: 6px; border: 0; text-align: left; background: transparent; color: var(--theme-text); cursor: pointer; }
 .context-menu-item:hover, .context-menu-item:focus-visible { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%); outline: none; }
 .context-menu-key { float: right; opacity: .65; font-size: 11px; margin-left: 8px; }
+
+/* Shared code editor preferences */
+#code-panel .CodeMirror, #code-panel textarea {
+	font-family: var(--code-font, monospace);
+	font-size: var(--code-font-size, 13px);
+	font-variant-ligatures: var(--code-ligatures, none);
+}
+.settings-code-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+.settings-code-row select { width: 150px; }
+.settings-code-row input[type="number"] { width: 64px; }
+.code-lint-error { text-decoration: underline wavy #e56b6b; text-underline-offset: 2px; }

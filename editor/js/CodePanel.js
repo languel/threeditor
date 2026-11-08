@@ -3,7 +3,7 @@
 // Code -> scene: Apply (or Auto-apply) re-runs the "Scene contents" section and swaps the editor scene.
 
 // It is also the editor for attached object scripts and material shaders (replaces the stock popup).
-// The scene code is mirrored into a generated "scene.js" script on the Scene (editor.scripts[scene.uuid]).
+// The applied scene code is mirrored into a generated "scene.js" script on the Scene (editor.scripts[scene.uuid]).
 // The view follows the selection: nothing -> scene code; object with a script -> that script; otherwise the
 // scene code scrolled to the object's lines.
 
@@ -11,7 +11,9 @@ import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCod
 import { PanelDock } from './PanelDock.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
-import buildThreeDefs from './libs/tern-threejs/build-defs.js';
+import { codeEditorSettings, setCodeEditorSettings } from './CodeEditorSettings.js';
+import { createCodeLanguageService } from './CodeLanguageService.js';
+import { parse } from './libs/acorn/acorn.mjs';
 
 function CodePanel( editor ) {
 
@@ -66,6 +68,8 @@ function CodePanel( editor ) {
 	let cm = null;
 	let dirty = false; // code edited but not applied yet
 	let applying = false;
+	let editRevision = 0;
+	let suppressSceneSync = false;
 	let setting = false;
 	let assetsReady = Promise.resolve( new Map() );
 	let urls = new Map();
@@ -84,6 +88,11 @@ function CodePanel( editor ) {
 	if ( window.CodeMirror ) {
 
 		cm = window.CodeMirror( host, { value: '', mode: 'javascript', lineNumbers: true, matchBrackets: true, indentWithTabs: false, tabSize: 2, indentUnit: 2, theme: 'editor' } );
+		const input = cm.getInputField();
+		input.spellcheck = false;
+		input.setAttribute( 'autocorrect', 'off' );
+		input.setAttribute( 'autocapitalize', 'off' );
+		input.setAttribute( 'autocomplete', 'off' );
 		cm.on( 'change', onEdit );
 
 	} else {
@@ -94,6 +103,66 @@ function CodePanel( editor ) {
 	}
 
 	const getCode = () => cm ? cm.getValue() : textarea.value;
+
+	function refreshCodeSettings() {
+
+		const settings = codeEditorSettings( editor );
+		host.style.setProperty( '--code-font', `"${ settings.font.replaceAll( '"', '' ) }", monospace` );
+		host.style.setProperty( '--code-font-size', `${ settings.fontSize }px` );
+		host.style.setProperty( '--code-ligatures', settings.ligatures ? 'normal' : 'none' );
+		if ( cm ) {
+
+			cm.setOption( 'lineNumbers', settings.lineNumbers );
+			cm.setOption( 'lineWrapping', settings.wrap );
+			cm.setOption( 'foldGutter', settings.folding );
+			cm.setOption( 'gutters', [ ...( settings.lineNumbers ? [ 'CodeMirror-linenumbers' ] : [] ), ...( settings.folding ? [ 'CodeMirror-foldgutter' ] : [] ) ] );
+			cm.refresh();
+
+		} else {
+
+			textarea.wrap = settings.wrap ? 'soft' : 'off';
+
+		}
+
+	}
+	document.addEventListener( 'threeditor-code-settings', refreshCodeSettings );
+	refreshCodeSettings();
+
+	async function transformCode( kind ) {
+
+		if ( target.kind === 'glsl' || target.kind === 'json' ) {
+
+			setStatus( 'Format and minimize currently support JavaScript only.', true );
+			return;
+
+		}
+		const before = getCode();
+		const selected = cm ? cm.somethingSelected() : textarea.selectionStart !== textarea.selectionEnd;
+		const from = cm ? cm.indexFromPos( cm.getCursor( 'from' ) ) : textarea.selectionStart;
+		const to = cm ? cm.indexFromPos( cm.getCursor( 'to' ) ) : textarea.selectionEnd;
+		try {
+
+			const tools = await import( './libs/code-tools.js' );
+			let result;
+			if ( kind === 'format' ) result = await tools.formatCode( before, selected ? { from, to } : null );
+			else {
+
+				const source = selected ? before.slice( from, to ) : before;
+				const minimized = await tools.minifyCode( source );
+				result = selected ? before.slice( 0, from ) + minimized + before.slice( to ) : minimized;
+
+			}
+			if ( getCode() !== before ) { setStatus( 'Code changed while the operation was running; try again.', true ); return; }
+			if ( cm ) cm.replaceRange( result, { line: 0, ch: 0 }, cm.posFromIndex( before.length ), '+input' );
+			else { textarea.value = result; onEdit(); }
+
+		} catch ( error ) {
+
+			setStatus( `${ kind === 'format' ? 'Format' : 'Minimize' } failed: ${ error.message.split( '\n' )[ 0 ] }`, true );
+
+		}
+
+	}
 
 	function setCode( value ) {
 
@@ -115,9 +184,15 @@ function CodePanel( editor ) {
 	const auto = document.createElement( 'input' );
 	auto.type = 'checkbox';
 	auto.id = 'code-auto';
-	auto.checked = true;
+	auto.checked = false;
+	auto.addEventListener( 'change', () => {
+
+		clearTimeout( applyTimer );
+		if ( auto.checked && dirty ) applyTimer = setTimeout( autoApply, 700 );
+
+	} );
 	autoLabel.append( auto, ' auto' );
-	autoLabel.title = 'Apply automatically while typing';
+	autoLabel.title = 'Apply valid scene code after a pause while typing';
 	bar.appendChild( autoLabel );
 	const regenBtn = button( 'Regenerate', 'code-regen', 'Throw away edits and rebuild the code from the scene', () => {
 
@@ -260,7 +335,7 @@ function CodePanel( editor ) {
 		if ( cm ) cm.clearHistory();
 		refreshHead();
 		setStatus( message );
-		if ( mode === 'javascript' ) loadThreeDefs();
+		scheduleLint();
 
 	}
 
@@ -334,11 +409,11 @@ function CodePanel( editor ) {
 
 				try {
 
-					errors = window.esprima.parse( string, { tolerant: true } ).errors;
+					parse( string, { ecmaVersion: 'latest', allowReturnOutsideFunction: true } );
 
 				} catch ( error ) {
 
-					errors.push( { lineNumber: error.lineNumber - 1, message: error.message } );
+					errors.push( { lineNumber: ( error.loc?.line || 1 ) - 1, message: error.message } );
 
 				}
 
@@ -441,47 +516,102 @@ function CodePanel( editor ) {
 
 	// --- autocomplete (three.js API defs are built lazily from the library) ---
 
-	let server = null;
-	let threeDefsRequested = false;
+	const askLanguage = createCodeLanguageService( editor );
+	let lintTimer = 0;
+	let lintMarks = [];
+	const shaderWords = 'attribute uniform varying in out const float int uint bool vec2 vec3 vec4 ivec2 ivec3 ivec4 mat2 mat3 mat4 sampler2D samplerCube void if else for return gl_Position gl_FragColor gl_FragCoord gl_PointCoord gl_PointSize position normal uv projectionMatrix modelMatrix modelViewMatrix viewMatrix normalMatrix cameraPosition texture texture2D textureCube mix clamp smoothstep step dot cross normalize length distance reflect refract pow sin cos tan abs min max mod fract floor ceil sqrt inversesqrt discard'.split( ' ' );
+	function shaderHint( c ) {
 
-	async function loadThreeDefs() {
+		const cursor = c.getCursor(), token = c.getTokenAt( cursor );
+		const start = token.start, word = token.string.slice( 0, cursor.ch - start );
+		return { list: shaderWords.filter( entry => entry.startsWith( word ) && entry !== word ), from: { line: cursor.line, ch: start }, to: cursor };
 
-		if ( threeDefsRequested || ! cm || ! window.CodeMirror.TernServer ) return;
-		threeDefsRequested = true;
+	}
+	if ( cm ) cm.addKeyMap( { 'Ctrl-Space': c => {
 
+		if ( ! codeEditorSettings( editor ).completion ) return;
+		if ( target.kind === 'glsl' ) c.showHint( { hint: shaderHint, completeSingle: false } ); else if ( target.kind !== 'json' ) c.showHint( { hint: semanticHint, completeSingle: false } );
+
+	} } );
+	if ( cm ) cm.on( 'inputRead', ( c, change ) => {
+
+		if ( target.kind !== 'glsl' || ! codeEditorSettings( editor ).completion || change.origin !== '+input' || ! /^[A-Za-z_]$/.test( change.text[ 0 ] ) ) return;
+		if ( ! c.state.completionActive ) c.showHint( { hint: shaderHint, completeSingle: false } );
+
+	} );
+
+	async function semanticHint( c ) {
+
+		const cursor = c.getCursor(), source = c.getValue(), position = c.indexFromPos( cursor );
+		const token = c.getTokenAt( cursor );
+		if ( /comment|string/.test( token.type || '' ) ) return null;
+		const match = /[\w$]*$/.exec( source.slice( 0, position ) );
+		const from = position - match[ 0 ].length;
 		try {
 
-			server = new window.CodeMirror.TernServer( { caseInsensitive: true } );
-			let defs = editor.portable?.threeDefs;
-			if ( ! defs ) {
-
-				const url = new URL( '../build/three.core.js', document.baseURI );
-				defs = buildThreeDefs( await ( await fetch( url ) ).text() );
-
-			}
-			server.server.defs.push( defs );
-			server.server.reset();
-
-			cm.addKeyMap( {
-				'Ctrl-Space': ( c ) => server.complete( c ),
-				'Ctrl-I': ( c ) => server.showType( c ),
-				'Ctrl-O': ( c ) => server.showDocs( c ),
-				'Alt-.': ( c ) => server.jumpToDef( c ),
-				'Alt-,': ( c ) => server.jumpBack( c ),
-				'Ctrl-Q': ( c ) => server.rename( c ),
-				'Ctrl-.': ( c ) => server.selectName( c )
-			} );
-			cm.on( 'cursorActivity', ( c ) => { if ( target.kind === 'script' ) server.updateArgHints( c ); } );
-			cm.on( 'keypress', ( c, kb ) => { if ( target.kind === 'script' && /[\w.]/.test( kb.key ) ) server.complete( c ); } );
+			const entries = await askLanguage( source, 'completion', position );
+			if ( c.getValue() !== source || c.indexFromPos( c.getCursor() ) !== position ) return null;
+			return { from: c.posFromIndex( from ), to: cursor, list: entries.filter( item => item.label.toLowerCase().startsWith( match[ 0 ].toLowerCase() ) ).map( item => ( { text: item.apply, displayText: item.label } ) ) };
 
 		} catch ( error ) {
 
-			console.warn( 'CodePanel: Failed to build three.js autocomplete defs.', error );
+			console.warn( 'Code completion unavailable:', error.message );
+			return null;
 
 		}
 
 	}
+	function scheduleLint() {
+
+		clearTimeout( lintTimer );
+		for ( const mark of lintMarks ) mark.clear();
+		lintMarks = [];
+		if ( ! cm || ! codeEditorSettings( editor ).lint || ! [ 'scene', 'script' ].includes( target.kind ) ) return;
+		const source = getCode(), currentTarget = target;
+		lintTimer = setTimeout( async () => {
+
+			try {
+
+				const diagnostics = await askLanguage( source, 'diagnostics' );
+				if ( getCode() !== source || target !== currentTarget || ! codeEditorSettings( editor ).lint ) return;
+				for ( const diagnostic of diagnostics ) {
+
+					const mark = cm.markText( cm.posFromIndex( diagnostic.from ), cm.posFromIndex( diagnostic.from + diagnostic.length ), { className: 'code-lint-error', attributes: { title: diagnostic.message } } );
+					lintMarks.push( mark );
+
+				}
+				if ( diagnostics.length ) setStatus( diagnostics[ 0 ].message, true );
+
+			} catch ( error ) { console.warn( 'Code diagnostics unavailable:', error.message ); }
+
+		}, 1200 );
+
+	}
+	if ( cm ) cm.on( 'inputRead', ( c, change ) => {
+
+		if ( codeEditorSettings( editor ).completion && [ 'scene', 'script' ].includes( target.kind ) && change.origin === '+input' && change.text[ 0 ] === '.' && ! c.state.completionActive ) c.showHint( { hint: semanticHint, completeSingle: false } );
+
+	} );
+	document.addEventListener( 'threeditor-code-settings', scheduleLint );
 	dom.addEventListener( 'keydown', ( e ) => {
+
+		if ( ( e.metaKey || e.ctrlKey ) && ! e.altKey && ( e.key === '+' || e.key === '=' || e.key === '-' ) ) {
+
+			e.preventDefault();
+			const delta = e.key === '-' ? - 1 : 1;
+			setCodeEditorSettings( editor, { fontSize: Math.max( 8, Math.min( 32, codeEditorSettings( editor ).fontSize + delta ) ) } );
+
+		} else if ( e.altKey && ! e.metaKey && ! e.ctrlKey && ! e.shiftKey && e.code === 'KeyZ' ) {
+
+			e.preventDefault();
+			setCodeEditorSettings( editor, { wrap: ! codeEditorSettings( editor ).wrap } );
+
+		} else if ( e.altKey && ! e.metaKey && ! e.ctrlKey && e.shiftKey && [ 'KeyF', 'KeyM' ].includes( e.code ) ) {
+
+			e.preventDefault();
+			transformCode( e.code === 'KeyF' ? 'format' : 'minimize' );
+
+		}
 
 		if ( ( e.metaKey || e.ctrlKey ) && e.key === 'Enter' ) {
 
@@ -490,13 +620,16 @@ function CodePanel( editor ) {
 
 		}
 
-		e.stopPropagation(); // keep editor shortcuts (delete, w/e/r) out of the code box
+		if ( e.defaultPrevented ) e.stopPropagation();
 
-	} );
+	}, true );
+	dom.addEventListener( 'keydown', ( e ) => e.stopPropagation() ); // keep editor shortcuts out of the code box
 
 	function onEdit() {
 
-		if ( setting || applying ) return;
+		if ( setting ) return;
+		editRevision ++;
+		scheduleLint();
 
 		if ( target.kind !== 'scene' ) {
 
@@ -507,10 +640,11 @@ function CodePanel( editor ) {
 		}
 
 		dirty = true;
-		ensureSceneScript( getCode() );
-		setStatus( 'Edited. ' + ( auto.checked ? 'Applying…' : 'Press Apply (Ctrl/Cmd+Enter) to update the scene.' ) );
+		setStatus( auto.checked ? 'Editing draft. Current scene stays active.' : 'Edited. Press Apply (Ctrl/Cmd+Enter) to update the scene.' );
 		clearTimeout( applyTimer );
-		if ( auto.checked ) applyTimer = setTimeout( apply, 700 );
+		clearTimeout( timer );
+		timer = 0;
+		if ( auto.checked ) applyTimer = setTimeout( autoApply, 700 );
 
 	}
 
@@ -572,15 +706,38 @@ function CodePanel( editor ) {
 
 	}
 
-	async function apply() {
+	function autoApply() {
+
+		if ( auto.checked && dirty ) apply( true );
+
+	}
+
+	async function apply( automatic = false ) {
 
 		clearTimeout( applyTimer );
+		if ( applying ) {
+
+			if ( auto.checked ) applyTimer = setTimeout( autoApply, 700 );
+			return { ok: false, error: 'An apply is already in progress.' };
+
+		}
+		const revision = editRevision;
+		const source = sceneCode();
+		const applyingTarget = target;
+		const scripts = editor.scripts;
+		const isCurrent = () => revision === editRevision && target === applyingTarget && source === sceneCode() && scripts === editor.scripts && ( ! automatic || auto.checked );
 		applying = true;
 		try {
 
+			parse( source, { ecmaVersion: 'latest', sourceType: 'module' } );
 			await assetsReady;
-			const next = await buildSceneFromCode( sceneCode(), resolve, { camera: editor.camera, renderer: viewportRenderer } );
+			const next = await buildSceneFromCode( source, resolve, { camera: editor.camera, renderer: viewportRenderer } );
+			if ( ! isCurrent() ) return { ok: false, error: 'Draft changed while applying.' };
+			clearTimeout( timer );
+			timer = 0;
 			const selectedName = editor.selected && editor.selected.name;
+			const viewportCamera = editor.viewportCamera;
+			const cameraCenter = ( editor.controls.getCenter?.( viewportCamera ) || editor.controls.center ).clone();
 
 			// scripts follow their objects (by name) because Apply rebuilds the objects with new uuids
 			const kept = [];
@@ -598,6 +755,13 @@ function CodePanel( editor ) {
 			editor.scene.fog = next.fog;
 			editor.deselect();
 			while ( next.children.length > 0 ) editor.addObject( next.children[ 0 ] );
+			const rebuiltCamera = editor.cameras[ viewportCamera.uuid ];
+			if ( rebuiltCamera && rebuiltCamera !== editor.viewportCamera ) {
+
+				editor.controls.getCenter?.( rebuiltCamera ).copy( cameraCenter );
+				editor.setViewportCamera( rebuiltCamera.uuid );
+
+			}
 
 			for ( const k of kept ) {
 
@@ -607,7 +771,7 @@ function CodePanel( editor ) {
 
 			}
 
-			ensureSceneScript( sceneCode() );
+			ensureSceneScript( source );
 			signals.sceneGraphChanged.active = true;
 			signals.sceneGraphChanged.dispatch();
 
@@ -627,8 +791,10 @@ function CodePanel( editor ) {
 			signals.materialChanged.dispatch( editor.scene );
 			requestAnimationFrame( () => {
 
+				suppressSceneSync = true;
 				signals.materialChanged.dispatch( editor.scene );
 				if ( editor.selected ) signals.objectSelected.dispatch( editor.selected );
+				suppressSceneSync = false;
 
 			} );
 
@@ -639,7 +805,7 @@ function CodePanel( editor ) {
 		} catch ( e ) {
 
 			signals.sceneGraphChanged.active = true;
-			setStatus( 'Error: ' + e.message, true );
+			if ( isCurrent() ) setStatus( 'Current scene kept. ' + e.message, true );
 			console.warn( e );
 			return { ok: false, error: e.message };
 
@@ -673,7 +839,7 @@ function CodePanel( editor ) {
 
 	function schedule() {
 
-		if ( applying ) return;
+		if ( applying || suppressSceneSync ) return;
 		clearTimeout( timer );
 		timer = setTimeout( () => {
 

@@ -6,6 +6,7 @@ import { History as _History } from './History.js';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
 import { Selector } from './Selector.js';
+import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );
 _DEFAULT_CAMERA.name = 'Camera';
@@ -40,6 +41,7 @@ function Editor( portable = false ) {
 
 		savingStarted: new Signal(),
 		savingFinished: new Signal(),
+		assetsChanged: new Signal(),
 
 		transformModeChanged: new Signal(),
 		snapChanged: new Signal(),
@@ -139,6 +141,7 @@ function Editor( portable = false ) {
 	this.cameras = {};
 
 	this.viewportCamera = this.camera;
+	this.activeSceneCameraUuid = null;
 	this.viewportShading = 'default';
 	this.viewportColor = new THREE.Color();
 
@@ -572,7 +575,7 @@ Editor.prototype = {
 
 		// the orbit point the framing should be preserved around
 
-		const center = this.controls ? this.controls.center : new THREE.Vector3();
+		const center = this.controls ? this.controls.getCenter( oldCamera ) : new THREE.Vector3();
 		const distance = oldCamera.position.distanceTo( center );
 
 		let newCamera;
@@ -613,6 +616,7 @@ Editor.prototype = {
 
 		this.camera = newCamera;
 		this.cameras[ newCamera.uuid ] = newCamera;
+		this.controls?.getCenter( newCamera ).copy( center );
 
 		if ( this.viewportCamera === oldCamera ) this.viewportCamera = newCamera;
 
@@ -627,7 +631,17 @@ Editor.prototype = {
 	setViewportCamera: function ( uuid ) {
 
 		this.viewportCamera = this.cameras[ uuid ] || this.camera;
+		if ( this.viewportCamera !== this.camera ) this.activeSceneCameraUuid = this.viewportCamera.uuid;
 		this.signals.viewportCameraChanged.dispatch();
+
+	},
+
+	get activeSceneCamera() {
+
+		const active = this.cameras[ this.activeSceneCameraUuid ];
+		if ( active && active !== this.camera ) return active;
+		if ( this.selected?.isCamera && this.selected !== this.camera && this.cameras[ this.selected.uuid ] === this.selected ) return this.selected;
+		return Object.values( this.cameras ).find( camera => camera !== this.camera );
 
 	},
 
@@ -699,6 +713,7 @@ Editor.prototype = {
 
 	clear: function () {
 
+		this.activeSceneCameraUuid = null;
 		this.history.clear();
 		this.storage.clear();
 		this.sourceFiles = new Map();
@@ -770,7 +785,7 @@ Editor.prototype = {
 
 		if ( json.controls !== undefined ) {
 
-			this.controls.fromJSON( json.controls );
+			this.controls.fromJSON( json.controls, this.camera );
 
 		}
 
@@ -783,7 +798,9 @@ Editor.prototype = {
 		this.environmentType = json.environmentType || 'Default';
 
 		this.setScene( scene );
+		this.activeSceneCameraUuid = json.activeSceneCamera || null;
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
+		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
 
 	},
 
@@ -814,13 +831,16 @@ Editor.prototype = {
 				shadows: this.config.getKey( 'project/renderer/shadows' ),
 				shadowType: this.config.getKey( 'project/renderer/shadowType' ),
 				toneMapping: this.config.getKey( 'project/renderer/toneMapping' ),
+				cameraController: this.viewportCamera === this.camera ? 'orbit' : this.viewportCamera.userData.threeditor?.cameraController || 'none',
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
 			camera: this.camera.toJSON(),
 			viewportCamera: this.viewportCamera.uuid,
-			controls: this.controls.toJSON(),
+			activeSceneCamera: this.activeSceneCameraUuid,
+			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
+			controls: this.controls.toJSON( this.camera ),
 			scene: this.scene.toJSON(),
-			scripts: this.scripts,
+			scripts: Object.fromEntries( Object.entries( scripts ).map( ( [ uuid, list ] ) => [ uuid, list.map( serializeScript ) ] ) ),
 			history: this.history.toJSON(),
 			backgroundType: this.backgroundType,
 			environmentType: this.environmentType

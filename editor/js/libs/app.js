@@ -1,15 +1,18 @@
 /* global THREE, __THREEEDITOR_RENDERER__ */
+import { createCameraController } from 'three/addons/controls/CameraController.js';
 
 const APP = {
 
 	Player: function ( importScriptModule, prepareScript ) {
 
 		let renderer;
+		let controller, controllerOptions;
 
 		const loader = new THREE.ObjectLoader();
 		let camera, scene;
 
 		let events = {};
+		let playing = false;
 
 		const dom = document.createElement( 'div' );
 
@@ -27,6 +30,8 @@ const APP = {
 
 			if ( renderer !== undefined ) {
 
+				controller?.dispose();
+				controller = undefined;
 				renderer.dispose();
 				dom.removeChild( renderer.domElement );
 				this.canvas = null;
@@ -61,6 +66,12 @@ const APP = {
 			this.setScene( loader.parse( json.scene ) );
 			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
 			this.setCamera( sceneCamera?.isCamera ? sceneCamera : loader.parse( json.camera ) );
+			const mode = project.cameraController || camera.userData.threeditor?.cameraController;
+			controllerOptions = mode && mode !== 'none' ? {
+				mode,
+				target: json.viewportTarget || json.controls?.center,
+				follow: scene.getObjectByProperty( 'uuid', camera.userData.threeditor?.cameraFollow )
+			} : null;
 
 			events = {
 				init: [],
@@ -84,10 +95,11 @@ const APP = {
 			}
 
 			const scriptWrapResultObj = {};
+			const eventParams = [];
 
 			for ( var eventKey in events ) {
 
-				scriptWrapParams += ',' + eventKey;
+				eventParams.push( eventKey );
 				scriptWrapResultObj[ eventKey ] = eventKey;
 
 			}
@@ -114,7 +126,10 @@ const APP = {
 					if ( script.generated || script.enabled === false ) continue;
 
 					const source = prepareScript ? prepareScript( script.source ) : script.source;
-					const functions = ( new Function( scriptWrapParams, source + '\nreturn ' + scriptWrapResult + ';' ).bind( object ) )( ...scriptArgs );
+					const body = source + '\nreturn ' + scriptWrapResult + ';';
+					const signature = [ scriptWrapParams, ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' );
+					const args = script.parameters ? [ ...scriptArgs, { ...script.parameters } ] : scriptArgs;
+					const functions = new Function( signature, body ).call( object, ...args );
 
 					for ( const name in functions ) {
 
@@ -190,6 +205,7 @@ const APP = {
 			if ( renderer ) {
 
 				renderer.setSize( width, height );
+				controller?.resize();
 
 			}
 
@@ -240,6 +256,7 @@ const APP = {
 
 			}
 
+			controller?.update( ( time - prevTime ) / 1000 );
 			renderer.render( scene, camera );
 
 			prevTime = time;
@@ -248,6 +265,7 @@ const APP = {
 
 		this.play = function () {
 
+			playing = true;
 			startTime = prevTime = performance.now();
 
 			document.addEventListener( 'keydown', onKeyDown );
@@ -257,6 +275,7 @@ const APP = {
 			document.addEventListener( 'pointermove', onPointerMove );
 
 			dispatch( events.start, arguments );
+			if ( controllerOptions && ! controller ) controller = createCameraController( camera, renderer.domElement, controllerOptions );
 
 			renderer.setAnimationLoop( animate );
 
@@ -264,15 +283,18 @@ const APP = {
 
 		this.stop = function () {
 
+			if ( ! playing ) return;
+			playing = false;
 			document.removeEventListener( 'keydown', onKeyDown );
 			document.removeEventListener( 'keyup', onKeyUp );
 			document.removeEventListener( 'pointerdown', onPointerDown );
 			document.removeEventListener( 'pointerup', onPointerUp );
 			document.removeEventListener( 'pointermove', onPointerMove );
 
-			dispatch( events.stop, arguments );
-
 			renderer.setAnimationLoop( null );
+			controller?.dispose();
+			controller = undefined;
+			dispatch( events.stop, arguments );
 
 		};
 
@@ -286,6 +308,8 @@ const APP = {
 
 		this.dispose = function () {
 
+			controller?.dispose();
+			controller = undefined;
 			if ( renderer ) {
 
 				renderer.dispose();

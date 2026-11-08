@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UITextArea, UIText, UINumber } from './libs/ui.js';
+import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';
 import { UIBoolean } from './libs/ui.three.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 
@@ -153,6 +153,57 @@ function SidebarObject( editor ) {
 	objectFovRow.add( objectFov );
 
 	container.add( objectFovRow );
+
+	const cameraControllerRow = new UIRow();
+	const cameraController = new UISelect().setOptions( {
+		none: 'None', orbit: 'Orbit', fly: 'Fly', firstPerson: 'First Person', thirdPerson: 'Third Person'
+	} );
+	cameraController.dom.setAttribute( 'aria-label', 'Camera controller' );
+	cameraController.dom.title = 'Camera controls for Play and exported scenes';
+	cameraControllerRow.add( new UIText( 'Controller' ).setClass( 'Label' ), cameraController );
+	container.add( cameraControllerRow );
+
+	const cameraFollowRow = new UIRow();
+	const cameraFollow = new UISelect();
+	cameraFollow.dom.setAttribute( 'aria-label', 'Follow target' );
+	cameraFollowRow.add( new UIText( 'Follow target' ).setClass( 'Label' ), cameraFollow );
+	container.add( cameraFollowRow );
+
+	function setCameraController( changes ) {
+
+		const camera = editor.selected;
+		const settings = camera.userData.threeditor || {};
+		const command = new SetValueCommand( editor, camera, 'userData', {
+			...camera.userData, threeditor: { ...settings, ...changes }
+		} );
+		command.updatable = false;
+		editor.execute( command );
+
+	}
+	cameraController.onChange( () => setCameraController( { cameraController: cameraController.getValue() } ) );
+	cameraFollow.onChange( () => setCameraController( { cameraFollow: cameraFollow.getValue() } ) );
+
+	function updateCameraController( object ) {
+
+		const sceneCamera = ( object.isPerspectiveCamera || object.isOrthographicCamera ) && object !== editor.camera;
+		const settings = object.userData.threeditor;
+		cameraControllerRow.setDisplay( sceneCamera ? '' : 'none' );
+		cameraController.setValue( settings?.cameraController || 'none' );
+		const showFollow = sceneCamera && settings?.cameraController === 'thirdPerson';
+		cameraFollowRow.setDisplay( showFollow ? '' : 'none' );
+		if ( showFollow ) {
+
+			const options = { '': 'Choose object' };
+			editor.scene.traverse( target => {
+
+				if ( target !== editor.scene && ! target.isCamera && ! target.isHelper ) options[ target.uuid ] = target.name || target.type;
+
+			} );
+			cameraFollow.setOptions( options ).setValue( settings.cameraFollow || '' );
+
+		}
+
+	}
 
 	// left
 
@@ -744,6 +795,8 @@ function SidebarObject( editor ) {
 	} );
 
 	function updateUI( object ) {
+
+		updateCameraController( object );
 
 		const locked = hasRestriction( object, 'locked' );
 		for ( const row of [ objectPositionRow, objectRotationRow, objectScaleRow ] ) {

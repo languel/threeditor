@@ -4,6 +4,7 @@ import { UIBoolean } from './libs/ui.three.js';
 
 import { SidebarSettingsShortcuts } from './Sidebar.Settings.Shortcuts.js';
 import { SidebarSettingsHistory } from './Sidebar.Settings.History.js';
+import { codeEditorSettings, setCodeEditorSettings, fonts } from './CodeEditorSettings.js';
 
 function SidebarSettings( editor ) {
 
@@ -88,6 +89,52 @@ function SidebarSettings( editor ) {
 	signals.savingStarted.add( () => autosave.text.setTextDecoration( 'underline' ) );
 	signals.savingFinished.add( () => autosave.text.setTextDecoration( 'none' ) );
 	addSection( strings.getKey( 'sidebar/settings/general' ), general, true );
+
+	const codeSettings = new UIPanel();
+	const codeControls = {};
+	function codeRow( label, key, control ) {
+
+		const row = document.createElement( 'label' );
+		row.className = 'settings-code-row';
+		const text = document.createElement( 'span' );
+		text.textContent = label;
+		control.setAttribute( 'aria-label', label );
+		row.append( text, control );
+		codeSettings.dom.appendChild( row );
+		codeControls[ key ] = control;
+		control.addEventListener( 'change', () => {
+
+			const value = control.type === 'checkbox' ? control.checked : control.type === 'number' ? Math.max( 8, Math.min( 32, Number( control.value ) || 13 ) ) : control.value;
+			setCodeEditorSettings( editor, { [ key ]: value } );
+
+		} );
+
+	}
+	const font = document.createElement( 'select' );
+	for ( const name of fonts ) font.add( new Option( name, name ) );
+	codeRow( 'Font', 'font', font );
+	const size = document.createElement( 'input' );
+	size.type = 'number'; size.min = '8'; size.max = '32'; size.step = '1';
+	codeRow( 'Font size', 'fontSize', size );
+	for ( const [ key, label ] of [ [ 'ligatures', 'Ligatures' ], [ 'completion', 'Code completion' ], [ 'lint', 'Diagnostics' ], [ 'lineNumbers', 'Line numbers' ], [ 'folding', 'Fold blocks' ], [ 'wrap', 'Wrap lines' ] ] ) {
+
+		const input = document.createElement( 'input' ); input.type = 'checkbox';
+		codeRow( label, key, input );
+
+	}
+	function refreshCodeSettings() {
+
+		const settings = codeEditorSettings( editor );
+		for ( const [ key, control ] of Object.entries( codeControls ) ) {
+
+			if ( control.type === 'checkbox' ) control.checked = settings[ key ]; else control.value = settings[ key ];
+
+		}
+
+	}
+	document.addEventListener( 'threeditor-code-settings', refreshCodeSettings );
+	refreshCodeSettings();
+	addSection( 'Code editor', codeSettings );
 
 	const themeLabel = strings.getKey( 'sidebar/settings/theme' );
 	const themePanel = new UIPanel();

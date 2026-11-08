@@ -359,6 +359,7 @@ async function collectPlayableProject( editor ) {
 	await project.moduleFile( 'three/addons/environments/ColorEnvironment.js', 'index.html' );
 	await project.moduleFile( 'three/addons/environments/RoomEnvironment.js', 'index.html' );
 	await project.moduleFile( 'three/addons/geometries/TextGeometry.js', 'index.html' );
+	await project.moduleFile( 'three/addons/controls/CameraController.js', 'js/app.js' );
 	await project.copy( 'js/app.js', 'editor/js/libs/app.js' );
 	await project.copy( 'js/app-bootstrap.js', 'editor/js/libs/app-bootstrap.js' );
 

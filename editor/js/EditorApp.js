@@ -4,9 +4,9 @@ import { Editor } from './Editor.js';
 import { Keymap } from './Keymap.js';
 import { ModalTransform } from './ModalTransform.js';
 import { applyTheme } from './Theme.js';
-import { Viewport } from './Viewport.js';
+import { Viewport } from './Viewport.js?v=camera-playback';
 import { Toolbar } from './Toolbar.js';
-import { Player } from './Player.js';
+import { Player } from './Player.js?v=preview-color';
 import { Sidebar } from './Sidebar.js';
 import { Menubar } from './Menubar.js';
 import { MenuAutoHide } from './MenuAutoHide.js';
@@ -183,6 +183,7 @@ async function startEditor( portable = null ) {
 			signals.sceneGraphChanged.add( saveState );
 			signals.scriptChanged.add( saveState );
 			signals.historyChanged.add( saveState );
+			signals.assetsChanged.add( saveState );
 
 		} );
 

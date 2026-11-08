@@ -24,8 +24,8 @@ function FlyControls( editor, viewport ) {
   if(!camera)return;const current=camera;stopping=true;if(document.pointerLockElement===canvas)document.exitPointerLock();
   if(!accept){current.position.copy(startPosition);current.rotation.copy(startRotation);}
   else if(current!==editor.camera){const cmds=[];if(!current.position.equals(startPosition))cmds.push(new SetPositionCommand(editor,current,current.position,startPosition));if(!current.rotation.equals(startRotation))cmds.push(new SetRotationCommand(editor,current,current.rotation,startRotation));if(cmds.length)editor.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(editor,cmds));}
-  if(current===editor.camera){current.updateWorldMatrix(true,false);current.getWorldDirection(direction);editor.controls.center.copy(current.position).addScaledVector(direction,4);}
-  refresh();camera=null;keys.clear();notice.hidden=true;editor.controls.enabled=editor.viewportCamera===editor.camera;stopping=false;
+  if(accept){current.getWorldDirection(direction);current.getWorldPosition(editor.controls.getCenter(current)).addScaledVector(direction,4);}
+  refresh();camera=null;keys.clear();notice.hidden=true;editor.controls.enabled=!editor.modalTransform?.active;stopping=false;
  }
  function tick(now){
   if(!camera)return;const dt=Math.min((now-last)/1000,0.05);last=now;let moving=false;
