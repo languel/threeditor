@@ -15,6 +15,12 @@ Open **File → Examples → streams**. Every scene has a preview input and runs
 
 The pinboard and reach lessons adapt the interaction from threejslessons using luminance and pose, respectively. The source lessons also use depth estimation. The earlier recorded body, Triadic, and paint adaptations are under **lessons**, where Fox is last.
 
+## First test
+
+1. In the [hosted editor](https://languel.github.io/threeditor/editor/), open **File → Examples → streams → Arduino A0**. The shape should move and change size without a board.
+2. Open **Streams → Routes**. The first route maps `serial.A0` to `map.a0`. The next two routes map that value to the shape’s horizontal position and scale.
+3. Press **Alt/Option+P** to check the same preview in Play. Connect a board only when you’re ready to replace the preview with live input.
+
 ## Routes and scripts
 
 A route maps an input interval to an output interval. Reverse either pair of bounds to invert the map. It can drive an object property, emit a `map.*` topic for another route, or send a MIDI CC, MIDI note, or serial line. Mapped topics take input from device or script topics. Device destinations require **Arm routed hardware output**. Project changes disarm them and preview samples never send to hardware.
