@@ -1,3 +1,5 @@
+import { upgradeMathScript } from './assets/MathObjects.js';
+import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
@@ -796,7 +798,18 @@ Editor.prototype = {
 		this.signals.cameraResetted.dispatch();
 
 		this.history.fromJSON( json.history );
-		this.scripts = json.scripts;
+		this.scripts = json.scripts || {};
+		for ( const [ uuid, scripts ] of Object.entries( this.scripts ) ) {
+
+			const asset = scene.getObjectByProperty( 'uuid', uuid )?.userData.assetObject;
+			for ( const script of scripts ) {
+
+				upgradeModelScript( script );
+				if ( asset?.type === 'math' ) upgradeMathScript( script, asset.definition );
+
+			}
+
+		}
 
 		this.backgroundType = json.backgroundType || 'Default';
 		this.environmentType = json.environmentType || 'Default';

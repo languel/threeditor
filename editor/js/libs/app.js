@@ -1,5 +1,6 @@
 /* global THREE, __THREEEDITOR_RENDERER__ */
 import { createCameraController } from 'three/addons/controls/CameraController.js';
+import { scriptSourceForExecution } from '../ScriptParams.js';
 
 const APP = {
 
@@ -128,7 +129,7 @@ const APP = {
 					if ( script.generated || script.enabled === false ) continue;
 
 					const source = prepareScript ? prepareScript( script.source ) : script.source;
-					const body = source + '\nreturn ' + scriptWrapResult + ';';
+					const body = scriptSourceForExecution( script, source ) + '\nreturn ' + scriptWrapResult + ';';
 					const signature = [ scriptWrapParams, ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' );
 					const args = script.parameters ? [ ...scriptArgs, { ...script.parameters } ] : scriptArgs;
 					const functions = new Function( signature, body ).call( object, ...args );

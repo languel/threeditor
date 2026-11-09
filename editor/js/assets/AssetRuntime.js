@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { serializeScript } from '../ScriptParams.js';
+import { scriptSourceForExecution, serializeScript } from '../ScriptParams.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 
 export function evaluateAssetScript( object, script, player, scene, camera, source = script.source ) {
 	const { parameters = {} } = serializeScript( script );
-	const run = new Function( 'THREE', 'params', 'player', 'scene', 'camera', 'init', 'update', 'stop', source + '\nreturn {init:typeof init==="function"?init:null, update:typeof update==="function"?update:null, stop:typeof stop==="function"?stop:null};' );
+	const run = new Function( 'THREE', 'params', 'player', 'scene', 'camera', 'init', 'update', 'stop', scriptSourceForExecution( script, source ) + '\nreturn {init:typeof init==="function"?init:null, update:typeof update==="function"?update:null, stop:typeof stop==="function"?stop:null};' );
 	return run.call( object, THREE, parameters, player, scene, camera );
 }
 

@@ -85,6 +85,15 @@ function update(event) {
 }
 ```
 
+For a numeric control, you can also put the range after a top-level constant and read the constant directly. The Script panel stores adjustments separately from the source, so resetting the control restores the declared value.
+
+```js
+const speed = 3; /* 0..3 */
+function update(event) {
+  this.rotation.y += speed * event.delta / 1000;
+}
+```
+
 In **Settings → Code editor**, choose the font, size, ligatures, completion, diagnostics, line numbers, block folding and wrapping. In the code panel, **Cmd/Ctrl + or −** changes font size, **Alt+Z** toggles wrapping, **Alt+Shift+F** formats JavaScript, and **Alt+Shift+M** minimizes the selection or the whole JavaScript document. Formatting respects a selection. A local TypeScript language service supplies JavaScript and three.js r187 completions and selected diagnostics; press **Ctrl+Space** to request suggestions. GLSL has syntax highlighting and keyword completion. Formatting and minimization currently apply to JavaScript, not GLSL or JSON.
 
 For object behavior, select an object and choose **Script → New → Edit**. Each script is enabled by default and can be disabled without removing its code. **Option/Alt+P** runs Play. **Command+Option+P** enters presentation mode and hides the editor chrome. The generated `scene.js` entry on the Scene mirrors the Code panel. Object scripts run in Play and in the playable exports.

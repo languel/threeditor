@@ -1,5 +1,5 @@
 // This implementation is copied into the object's editable script, not hidden in a viewer.
-function modelBehavior() {
+const modelBehaviorSource = `function modelBehavior() {
 	var mixer, actions = [], panel, timeInput, root = this;
 	function configure() {
 		if ( ! mixer ) return;
@@ -25,7 +25,66 @@ function modelBehavior() {
 		panel.dataset.assetObject = root.uuid;
 		panel.setAttribute( 'aria-label', this.name + ' model controls' );
 		panel.addEventListener( 'pointerdown', e => e.stopPropagation() ); panel.addEventListener( 'keydown', e => e.stopPropagation() );
-		function control( name, type, options ) {
+		function control( name, type, options = [] ) {
+			const captions = { clipA: 'Animation A', clipB: 'Animation B', blend: 'Blend', speed: 'Speed', time: 'Time', playing: 'Play', loop: 'Loop', wireframe: 'Wireframe' };
+			const caption = captions[ name ] || name;
+			const label = document.createElement( 'label' );
+			label.textContent = caption + ' ';
+
+			function setParameter( value ) {
+				params[ name ] = value;
+				if ( name === 'time' ) {
+					const clip = actions[ 0 ]?.getClip();
+					if ( clip ) mixer.setTime( params.time * clip.duration );
+				} else if ( name !== 'playing' && name !== 'speed' ) {
+					configure();
+				}
+				player.assetParameterChanged?.( root, name, value );
+			}
+
+			if ( type === 'select' ) {
+				const select = document.createElement( 'select' );
+				for ( const option of options ) select.add( new Option( option, option ) );
+				select.value = params[ name ];
+				select.oninput = () => setParameter( select.value );
+				label.append( select );
+			} else {
+				const input = document.createElement( 'input' );
+				input.type = type;
+				if ( type === 'checkbox' ) {
+					input.checked = params[ name ];
+					input.oninput = () => setParameter( input.checked );
+				} else {
+					input.min = '0';
+					input.max = name === 'speed' ? '3' : '1';
+					input.step = '0.01';
+					input.style.width = '80px';
+					input.value = String( params[ name ] );
+					input.oninput = () => setParameter( Number( input.value ) );
+					if ( name === 'time' ) timeInput = input;
+				}
+				label.append( input );
+			}
+
+			label.lastElementChild.setAttribute( 'aria-label', root.name + ' ' + caption );
+			panel.append( label );
+		}
+		var names = this.animations.map( clip => clip.name );
+		if(names.length) { control( 'clipA', 'select', names ); control( 'clipB', 'select', names ); control( 'blend', 'range' ); control( 'speed', 'range' ); control('time', 'range'); control( 'playing', 'checkbox' ); control( 'loop', 'checkbox' ); } control('wireframe', 'checkbox');
+		panel.style.top = (46 + player.dom.querySelectorAll('.asset-engine-controls').length * 70) + 'px';
+		player.dom.append( panel );
+	}
+	function update( event ) { if ( params.playing ) mixer?.update( Math.min( event.delta / 1000, 0.1 ) * params.speed ); if(timeInput && actions[0]) timeInput.value=String( actions[0].time / actions[0].getClip().duration ); }
+	function stop() { panel?.remove(); mixer?.stopAllAction(); mixer?.uncacheRoot( this ); }
+	return { init, update, stop };
+}`;
+export function modelScript( object ) {
+	const names = object.animations.map( clip => clip.name );
+	return { name: 'Model viewer · animation mixer', assetBehavior: 'model', enabled: true, source: `// Editable model controller. Clip weights blend independently on the original rig.\n// @param clipA = ${ JSON.stringify( names[ 0 ] || '' ) }\n// @options clipA = ${ JSON.stringify( names ) }\n// @param clipB = ${ JSON.stringify( names[ 1 ] || names[ 0 ] || '' ) }\n// @options clipB = ${ JSON.stringify( names ) }\n// @param time = 0 (0..1)\n// @param blend = 0 (0..1)\n// @param speed = 1 (0..3)\n// @param playing = true\n// @param loop = true\n// @param wireframe = false\n// @param showControls = true\nvar behavior = (${ modelBehaviorSource }).call(this);\nvar init = behavior.init, update = behavior.update, stop = behavior.stop;\n` };
+}
+
+// Saved projects contain their own copy of the generated model script.
+const legacyControl = `function control( name, type, options ) {
 			var captions={clipA:'Animation A',clipB:'Animation B',blend:'Blend',speed:'Speed',time:'Time',playing:'Play',loop:'Loop',wireframe:'Wireframe'};
 			var caption=captions[name]||name;
 			var label = document.createElement( 'label' ); label.textContent = caption + ' ';
@@ -37,17 +96,13 @@ function modelBehavior() {
 			input.oninput = () => { params[ name ] = type === 'checkbox' ? input.checked : type === 'range' ? Number( input.value ) : input.value; if(name === 'time') { const clip=actions[0]?.getClip(); if(clip) mixer.setTime(params.time * clip.duration); } else if ( ! [ 'playing', 'speed' ].includes( name ) ) configure(); player.assetParameterChanged?.( root, name, params[ name ] ); };
 			if(name === 'time') timeInput=input;
 			label.append( input ); panel.append( label );
-		}
-		var names = this.animations.map( clip => clip.name );
-		if(names.length) { control( 'clipA', 'select', names ); control( 'clipB', 'select', names ); control( 'blend', 'range' ); control( 'speed', 'range' ); control('time', 'range'); control( 'playing', 'checkbox' ); control( 'loop', 'checkbox' ); } control('wireframe', 'checkbox');
-		panel.style.top = (46 + player.dom.querySelectorAll('.asset-engine-controls').length * 70) + 'px';
-		player.dom.append( panel );
-	}
-	function update( event ) { if ( params.playing ) mixer?.update( Math.min( event.delta / 1000, 0.1 ) * params.speed ); if(timeInput && actions[0]) timeInput.value=actions[0].time/actions[0].getClip().duration; }
-	function stop() { panel?.remove(); mixer?.stopAllAction(); mixer?.uncacheRoot( this ); }
-	return { init, update, stop };
-}
-export function modelScript( object ) {
-	const names = object.animations.map( clip => clip.name );
-	return { name: 'Model viewer · animation mixer', assetBehavior: 'model', enabled: true, source: `// Editable model controller. Clip weights blend independently on the original rig.\n// @param clipA = ${ JSON.stringify( names[ 0 ] || '' ) }\n// @options clipA = ${ JSON.stringify( names ) }\n// @param clipB = ${ JSON.stringify( names[ 1 ] || names[ 0 ] || '' ) }\n// @options clipB = ${ JSON.stringify( names ) }\n// @param time = 0 (0..1)\n// @param blend = 0 (0..1)\n// @param speed = 1 (0..3)\n// @param playing = true\n// @param loop = true\n// @param wireframe = false\n// @param showControls = true\nvar behavior = (${ modelBehavior.toString() }).call(this);\nvar init = behavior.init, update = behavior.update, stop = behavior.stop;\n` };
+		}`;
+
+export function upgradeModelScript( script ) {
+	if ( script.assetBehavior !== 'model' || ! script.source.includes( legacyControl ) ) return;
+	const source = modelBehaviorSource;
+	const start = source.indexOf( 'function control(' );
+	const end = source.indexOf( '\n\t\tvar names', start );
+	script.source = script.source.replace( legacyControl, () => source.slice( start, end ) );
+	script.source = script.source.replace( 'timeInput.value=actions[0].time/actions[0].getClip().duration', 'timeInput.value=String( actions[0].time / actions[0].getClip().duration )' );
 }

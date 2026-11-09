@@ -118,8 +118,9 @@ function SidebarScript( editor ) {
 						else if ( typeof value === 'boolean' ) control = new UICheckbox( value );
 						else if ( typeof value === 'number' ) {
 
-							control = new UINumber( value ).setWidth( '80px' );
+							control = new UINumber().setPrecision( 3 ).setScrubDefault( field.value ).setWidth( '80px' );
 							if ( field.min !== undefined ) control.setRange( field.min, field.max );
+							control.setValue( value );
 
 						} else control = new UIInput( value );
 						control.dom.setAttribute( 'aria-label', field.name );

@@ -1,6 +1,6 @@
 // three.js code exporter (experiment addition, not part of upstream three.js editor).
 // Turns the editor scene into readable, commented JavaScript in the style of the lessons.
-import { serializeScript } from './ScriptParams.js';
+import { scriptSourceForExecution, serializeScript } from './ScriptParams.js';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
@@ -224,7 +224,7 @@ function generateThreeCode( editor ) {
 	function emitAssetBehavior( object, name ) {
 		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
 		if ( ! script ) return false;
-		assetBehaviors.push( { object: name, script: serializeScript( script ) } );
+		assetBehaviors.push( { object: name, script: { ...serializeScript( script ), source: scriptSourceForExecution( script ) } } );
 		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
 			if ( ! script.source.includes( JSON.stringify( 'assets/' + path ) ) || usedPaths.has( 'assets/' + path ) ) continue;
 			usedPaths.add( 'assets/' + path ); assets.push( { path: 'assets/' + path, file: entry.file } );

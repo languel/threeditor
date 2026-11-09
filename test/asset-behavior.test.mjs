@@ -3,8 +3,19 @@ import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { mathDefinition, mathScript, parametricGeometry } from '../editor/js/assets/MathObjects.js';
 import { modelScript } from '../editor/js/assets/ModelBehavior.js';
-import { serializeScript, scriptParams } from '../editor/js/ScriptParams.js';
+import { serializeScript, scriptParams, scriptSourceForExecution } from '../editor/js/ScriptParams.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
+
+test('Inline numeric controls use saved values without editing the script source', () => {
+ const source = 'const x = 3; /* 0..3 */\nconst y = -2; /* -4..4 */\n// @param enabled = true\nfunction init() { const x = 9; /* 0..9 */ return params.enabled ? [x, y] : []; }';
+ const script = serializeScript({source, paramValues:{x:1, y:-7}});
+ assert.deepEqual(scriptParams(source).map(field => field.name), ['enabled', 'x', 'y']);
+ assert.deepEqual(script.parameters, {enabled:true});
+ assert.equal(script.source, source);
+ const execute = new Function('params', scriptSourceForExecution(script) + '\nreturn [x, init()];');
+ assert.deepEqual(execute(script.parameters), [1, [9, -4]]);
+ assert.equal(scriptSourceForExecution({source}), source);
+});
 
 test('Mathematical payload extraction strips site scenes, cameras and controls',()=>{
  const payload={title:'Sphere',glsl:'float map(vec3 p){return length(p)-1.0;}',camera:{position:[0,1,5]},scene:{},controls:{}};

@@ -361,6 +361,8 @@ async function collectPlayableProject( editor ) {
 	await project.moduleFile( 'three/addons/geometries/TextGeometry.js', 'index.html' );
 	await project.moduleFile( 'three/addons/controls/CameraController.js', 'js/app.js' );
 	await project.copy( 'js/app.js', 'editor/js/libs/app.js' );
+	await project.copy( 'ScriptParams.js', 'editor/js/ScriptParams.js' );
+	await project.copy( 'libs/acorn/acorn.mjs', 'editor/js/libs/acorn/acorn.mjs' );
 	await project.copy( 'js/app-bootstrap.js', 'editor/js/libs/app-bootstrap.js' );
 
 	const title = editor.config.getKey( 'project/title' ) || 'untitled';

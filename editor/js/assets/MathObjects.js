@@ -69,9 +69,73 @@ void main() {
 	} );
 }
 
+function mathSource( definition, legacy = false ) {
+	const fields = definition.parameters || {};
+	const title = String( definition.title || 'Mathematical surface' ).replace( /[\r\n]/g, ' ' );
+	let headers = '// Editable mathematical asset. No viewer camera, lights or controls are imported.\n';
+	if ( legacy || ! definition.glsl ) headers += '// @param resolution = 64 (8..160)\n';
+	if ( legacy || definition.glsl ) headers += '// @param bounds = 1.6 (0.2..10)\n';
+
+	let body;
+	if ( definition.glsl ) {
+		let distanceFunction = definition.glsl;
+		let uniforms = '';
+		// Bind the known Gyroid formula explicitly. Other GLSL is imported as written.
+		if ( ! legacy && definition.id === 'gyroid-minimal-surface' &&
+			fields.scale === 2.5 && fields.thickness === 0.22 &&
+			distanceFunction.includes( 'vec3 q = p * 2.5;' ) &&
+			distanceFunction.includes( ' - 0.22) / 2.5;' ) ) {
+
+			headers += '// @param scale = ' + fields.scale + ' (0.1..10)\n';
+			headers += '// @param thickness = ' + fields.thickness + ' (0.01..1)\n';
+			distanceFunction = 'uniform float gyroidScale;\nuniform float gyroidThickness;\n' + distanceFunction
+				.replace( 'vec3 q = p * 2.5;', 'vec3 q = p * gyroidScale;' )
+				.replace( ' - 0.22) / 2.5;', ' - gyroidThickness) / gyroidScale;' );
+			uniforms = '\nmaterial.uniforms.gyroidScale = { value: params.scale };\nmaterial.uniforms.gyroidThickness = { value: params.thickness };';
+
+		}
+
+		body = `const distanceFunction = ${ JSON.stringify( distanceFunction ) };\nconst geometry = new THREE.BoxGeometry(params.bounds*2, params.bounds*2, params.bounds*2);\nconst material = (${ sdfMaterial.toString() })(THREE, distanceFunction, params.bounds);${ uniforms }`;
+	} else {
+		let parameters = JSON.stringify( fields );
+		if ( ! legacy ) {
+			const overrides = [];
+			for ( const name of [ 'u_bound', 'v_bound' ] ) {
+
+				const bound = fields[ name ];
+				if ( ! Number.isFinite( bound ) || bound <= 0 ) continue;
+				if ( definition.id === 'enneper-minimal-surface' && bound >= 0.1 && bound <= 6 ) {
+					headers += 'const ' + name + ' = ' + bound + '; /* 0.1..6 */\n';
+					overrides.push( name );
+				} else {
+					const range = bound >= 0.1 && bound <= 6 ? ' (0.1..6)' : '';
+					headers += '// @param ' + name + ' = ' + bound + range + '\n';
+					overrides.push( name + ': params.' + name );
+				}
+
+			}
+			if ( overrides.length ) parameters = '{ ...' + parameters + ', ' + overrides.join( ', ' ) + ' }';
+		}
+		const evaluator = legacy ? definition.parametric_fn :
+			`/** @type {(u: number, v: number, target: import('three').Vector3, parameters: Record<string, number>) => void} */ ( ${ definition.parametric_fn } )`;
+		if ( ! legacy ) parameters = `/** @type {Record<string, number>} */ ( ${ parameters } )`;
+		body = `const evaluate = ${ evaluator };\nconst geometry = (${ parametricGeometry.toString() })(THREE, evaluate, ${ parameters }, params.resolution);\nconst material = new THREE.MeshNormalMaterial({side:THREE.DoubleSide});`;
+	}
+
+	const receiver = legacy ? '' : "/** @this {import('three').Mesh} */\n";
+	const cleanup = legacy ? 'this.geometry?.dispose(); this.material?.dispose(); this.geometry=geometry; this.material=material;' :
+		'this.geometry?.dispose();\nfor (const previous of [this.material].flat()) previous?.dispose();\nthis.geometry = geometry;\nthis.material = material;';
+	return headers + `\n// ${ title }\n${ receiver }function init() {\n${ body }\n${ cleanup }\n}\n`;
+}
+
 export function mathScript( input ) {
 	const definition = mathDefinition( input );
-	const headers = '// Editable mathematical asset. No viewer camera, lights or controls are imported.\n// @param resolution = 64 (8..160)\n// @param bounds = 1.6 (0.2..10)\n';
-	const body = definition.glsl ? `const distanceFunction = ${ JSON.stringify( definition.glsl ) };\nconst geometry = new THREE.BoxGeometry(params.bounds*2, params.bounds*2, params.bounds*2);\nconst material = (${ sdfMaterial.toString() })(THREE, distanceFunction, params.bounds);` : `const evaluate = ${ definition.parametric_fn };\nconst geometry = (${ parametricGeometry.toString() })(THREE, evaluate, ${ JSON.stringify( definition.parameters || {} ) }, params.resolution);\nconst material = new THREE.MeshNormalMaterial({side:THREE.DoubleSide});`;
-	return { name: definition.glsl ? 'SDF code object' : 'Parametric code object', assetBehavior: 'math', enabled: true, source: headers + `\n// ${ String( definition.title || 'Mathematical surface' ).replace( /[\r\n]/g, ' ' ) }\nfunction init() {\n${ body }\nthis.geometry?.dispose(); this.material?.dispose(); this.geometry=geometry; this.material=material;\n}\n` };
+	return { name: definition.glsl ? 'SDF code object' : 'Parametric code object', assetBehavior: 'math', enabled: true, source: mathSource( definition ) };
+}
+
+export function upgradeMathScript( script, definition ) {
+	// Upgrade only the original generated source. Edited scripts remain authoritative.
+	if ( script.assetBehavior === 'math' && definition && script.source === mathSource( definition, true ) ) {
+		script.source = mathSource( definition );
+	}
 }

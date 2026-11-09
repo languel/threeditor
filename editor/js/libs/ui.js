@@ -566,69 +566,83 @@ class UINumber extends UIElement {
 
 		const changeEvent = new Event( 'change', { bubbles: true, cancelable: true } );
 
-		let distance = 0;
-		let onMouseDownValue = 0;
-
-		const pointer = { x: 0, y: 0 };
-		const prevPointer = { x: 0, y: 0 };
+		let gesture;
 
 		function onPointerDown( event ) {
 
-			if ( document.activeElement === scope.dom ) return;
+			if ( event.button !== 0 || gesture ) return;
+			if ( scope.scrubDefault === undefined && document.activeElement === scope.dom ) return;
 
 			event.preventDefault();
-
-			distance = 0;
-
-			onMouseDownValue = scope.value;
-
-			prevPointer.x = event.clientX;
-			prevPointer.y = event.clientY;
-
+			gesture = {
+				id: event.pointerId,
+				startValue: scope.value,
+				value: scope.value,
+				x: event.clientX,
+				y: event.clientY,
+				travel: 0
+			};
 			scope.dom.setPointerCapture( event.pointerId );
-
-			scope.dom.addEventListener( 'pointermove', onPointerMove );
-			scope.dom.addEventListener( 'pointerup', onPointerUp );
 
 		}
 
 		function onPointerMove( event ) {
 
-			const currentValue = scope.value;
+			if ( gesture?.id !== event.pointerId ) return;
 
-			pointer.x = event.clientX;
-			pointer.y = event.clientY;
+			const dx = event.clientX - gesture.x;
+			const dy = event.clientY - gesture.y;
+			gesture.x = event.clientX;
+			gesture.y = event.clientY;
+			gesture.travel += Math.abs( dx ) + Math.abs( dy );
+			if ( gesture.travel < 2 ) return;
 
-			distance += ( pointer.x - prevPointer.x ) - ( pointer.y - prevPointer.y );
+			const sensitivity = event.shiftKey ? 500 : 50;
+			gesture.value = Math.min( scope.max, Math.max( scope.min, gesture.value + ( dx - dy ) * scope.step / sensitivity ) );
+			const value = scope.scrubDefault === undefined ? gesture.value : Number( gesture.value.toFixed( scope.precision ) );
+			if ( value === scope.value ) return;
 
-			let value = onMouseDownValue + ( distance / ( event.shiftKey ? 5 : 50 ) ) * scope.step;
-			value = Math.min( scope.max, Math.max( scope.min, value ) );
-
-			if ( currentValue !== value ) {
-
-				scope.setValue( value );
-				scope.dom.dispatchEvent( changeEvent );
-
-			}
-
-			prevPointer.x = event.clientX;
-			prevPointer.y = event.clientY;
+			scope.setValue( value );
+			// Script commands rebuild the inspector, so keep its input mounted until release.
+			if ( scope.scrubDefault === undefined ) scope.dom.dispatchEvent( changeEvent );
 
 		}
 
-		function onPointerUp( event ) {
+		function finishPointer( event ) {
 
-			scope.dom.releasePointerCapture( event.pointerId );
+			if ( gesture?.id !== event.pointerId ) return;
 
-			scope.dom.removeEventListener( 'pointermove', onPointerMove );
-			scope.dom.removeEventListener( 'pointerup', onPointerUp );
+			const { id, startValue, travel } = gesture;
+			gesture = undefined;
+			if ( scope.dom.hasPointerCapture( id ) ) scope.dom.releasePointerCapture( id );
 
-			if ( Math.abs( distance ) < 2 ) {
+			if ( event.type !== 'pointerup' ) {
+
+				if ( scope.scrubDefault !== undefined ) scope.setValue( startValue );
+				return;
+
+			}
+
+			if ( travel < 2 ) {
 
 				scope.dom.focus();
 				scope.dom.select();
 
+			} else if ( scope.scrubDefault !== undefined && scope.value !== startValue ) {
+
+				scope.dom.dispatchEvent( changeEvent );
+
 			}
+
+		}
+
+		function resetOnDoubleClick( event ) {
+
+			if ( ! event.shiftKey || scope.scrubDefault === undefined ) return;
+			event.preventDefault();
+			const previous = scope.value;
+			scope.setValue( scope.scrubDefault );
+			if ( previous !== scope.value ) scope.dom.dispatchEvent( changeEvent );
 
 		}
 
@@ -682,6 +696,11 @@ class UINumber extends UIElement {
 
 		this.dom.addEventListener( 'keydown', onKeyDown );
 		this.dom.addEventListener( 'pointerdown', onPointerDown );
+		this.dom.addEventListener( 'pointermove', onPointerMove );
+		this.dom.addEventListener( 'pointerup', finishPointer );
+		this.dom.addEventListener( 'pointercancel', finishPointer );
+		this.dom.addEventListener( 'lostpointercapture', finishPointer );
+		this.dom.addEventListener( 'dblclick', resetOnDoubleClick );
 		this.dom.addEventListener( 'change', onChange );
 		this.dom.addEventListener( 'focus', onFocus );
 		this.dom.addEventListener( 'blur', onBlur );
@@ -726,6 +745,15 @@ class UINumber extends UIElement {
 
 		this.step = step;
 
+		return this;
+
+	}
+
+	setScrubDefault( value ) {
+
+		this.scrubDefault = value;
+		this.dom.style.touchAction = 'none';
+		this.dom.title = 'Drag horizontally or vertically to adjust. Hold Shift for fine adjustment. Shift-double-click to reset.';
 		return this;
 
 	}
