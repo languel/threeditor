@@ -84,10 +84,10 @@ function packageFiles( assets, webgpu = false ) {
 		await put( entry, blob );
 		resources.set( entry, blob );
 
-		if ( /\.(gltf|glb)$/i.test( entry ) ) {
+		if ( /\.(gltf|glb|vrm)$/i.test( entry ) ) {
 
 			let json;
-			if ( /\.glb$/i.test( entry ) ) {
+			if ( /\.(glb|vrm)$/i.test( entry ) ) {
 
 				const bytes = files.get( entry );
 				const view = new DataView( bytes.buffer, bytes.byteOffset, bytes.byteLength );
@@ -361,6 +361,7 @@ async function collectPlayableProject( editor ) {
 	await project.moduleFile( 'three/addons/geometries/TextGeometry.js', 'index.html' );
 	await project.moduleFile( 'three/addons/controls/CameraController.js', 'js/app.js' );
 	await project.copy( 'js/app.js', 'editor/js/libs/app.js' );
+	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
 	await project.copy( 'ScriptParams.js', 'editor/js/ScriptParams.js' );
 	await project.copy( 'libs/acorn/acorn.mjs', 'editor/js/libs/acorn/acorn.mjs' );

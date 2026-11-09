@@ -1,3 +1,4 @@
+import { StreamRouter } from '../streams/StreamRouter.js';
 /* global THREE, __THREEEDITOR_RENDERER__ */
 import { createCameraController } from 'three/addons/controls/CameraController.js';
 import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
@@ -5,7 +6,7 @@ import { scriptSourceForExecution } from '../ScriptParams.js';
 
 const APP = {
 
-	Player: function ( importScriptModule, prepareScript ) {
+	Player: function ( importScriptModule, prepareScript, streams = new StreamRouter() ) {
 
 		let renderer;
 		let controller, controllerOptions, cameraTarget;
@@ -20,6 +21,7 @@ const APP = {
 		const dom = document.createElement( 'div' );
 
 		this.dom = dom;
+		this.streams = streams;
 		this.canvas = null;
 
 		this.width = 500;
@@ -291,6 +293,7 @@ const APP = {
 
 			}
 
+			streams.tick( scene );
 			controller?.update( ( time - prevTime ) / 1000 );
 			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
 
@@ -336,6 +339,7 @@ const APP = {
 		this.render = function ( time ) {
 
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
+			streams.tick( scene );
 
 			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
 

@@ -85,7 +85,7 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 test( 'Editable HTML resources follow nested examples and include lesson source assets', async () => {
 	const resources = exampleResources();
-	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 11 );
+	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 19 );
 	assert.ok( resources.includes( '../demos/fox-follow/assets/fox.glb' ) );
 	assert.ok( resources.includes( 'examples/threejs/arkanoid.app.json' ) );
 	for ( const path of resources ) assert.ok( ( await readFile( new URL( '../editor/' + path, import.meta.url ) ) ).length > 0 );

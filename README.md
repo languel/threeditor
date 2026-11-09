@@ -115,6 +115,12 @@ The script player binds `this` to the script's object. It provides `THREE`, `sce
 
 The **bottom timeline** previews one stored animation clip at a time. Select the imported model's root to show its clips, then use the transport or scrub the tracks. The bundled [spinner model](test-models/spinner.glb) has two clips to try. Use a script with `THREE.AnimationMixer` for playback that mixes clips.
 
+## Streams and devices
+
+Open **Streams** to connect MIDI, Web Serial, a microphone, webcam, or local media. MediaPipe can track pose, hands, or face on the video input. Routes map scalar topics to scene properties, derived topics, MIDI, or serial. Connect and arm hardware output explicitly before using output routes.
+
+**File → Examples → streams** includes Arduino A0, MIDI and audio, video pinboard, pose reach, laser harp, body drum, humanoid pose capture, and a one-line portrait. All eight have previews that run without devices. See the [Streams example guide](editor/examples/streams/README.md) for setup and topic names.
+
 ## Publish
 
 | File → Publish | Contents and use |

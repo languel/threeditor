@@ -16,7 +16,7 @@ function Player( editor ) {
 
 	//
 
-	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript );
+	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript, editor.streams );
 	const parameters = editor.viewportParameters;
 	const parameterHome = parameters.dom.parentElement;
 	signals.scriptChanged.add( ( script, attribute ) => {
@@ -102,6 +102,7 @@ function Player( editor ) {
 
 			applyShading();
 			player.setSize( container.dom.clientWidth, container.dom.clientHeight );
+			editor.streams.playing = true;
 			player.play();
 
 		} catch ( error ) {
@@ -213,6 +214,7 @@ function Player( editor ) {
 	signals.stopPlayer.add( function () {
 
 		container.setDisplay( 'none' );
+		editor.streams.playing = false;
 		parameters.close();
 		parameterHome.appendChild( parameters.dom );
 

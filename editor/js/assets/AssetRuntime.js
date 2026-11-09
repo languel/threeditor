@@ -14,7 +14,7 @@ export class AssetRuntime {
 	constructor( editor ) {
 		this.editor = editor; this.active = new Map(); this.changingHUD = false; this.suspended = false;
 		const rebuild = () => this.refresh();
-		for ( const name of [ 'objectAdded', 'objectRemoved', 'projectLoaded', 'editorCleared', 'scriptAdded', 'scriptRemoved' ] ) editor.signals[ name ].add( rebuild );
+		for ( const name of [ 'objectAdded', 'objectRemoved', 'sceneGraphChanged', 'projectLoaded', 'editorCleared', 'scriptAdded', 'scriptRemoved' ] ) editor.signals[ name ].add( rebuild );
 		editor.signals.objectChanged.add( ( object, attribute ) => {
 
 			if ( attribute === 'userData' ) this.refresh();
@@ -52,7 +52,7 @@ export class AssetRuntime {
 				if ( ! source.includes( literal ) ) continue;
 				const url = URL.createObjectURL( file ); urls.push( url ); source = source.replaceAll( literal, JSON.stringify( url ) );
 			}
-			const player = { dom: document.querySelector( '#viewport' ) || document.body, assetParameterChanged: ( target, key, value ) => {
+			const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, assetParameterChanged: ( target, key, value ) => {
 				this.changingHUD = true;
 				try { editor.execute( new SetScriptValueCommand( editor, target, script, 'paramValues', { ...script.paramValues, [ key ]: value } ) ); } finally { this.changingHUD = false; }
 			} };

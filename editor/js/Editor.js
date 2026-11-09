@@ -1,3 +1,4 @@
+import { StreamRouter } from './streams/StreamRouter.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
@@ -122,6 +123,7 @@ function Editor( portable = false ) {
 
 	this.camera = _DEFAULT_CAMERA.clone();
 
+	this.streams = new StreamRouter();
 	this.scene = new THREE.Scene();
 	this.scene.name = 'Scene';
 

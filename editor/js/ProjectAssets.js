@@ -1,6 +1,6 @@
 const imageExtensions = /\.(avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i;
 const textureExtensions = /\.(exr|hdr|ktx2|pic|tga)$/i;
-const importExtensions = /\.(3dm|3ds|3mf|amf|dae|drc|fbx|glb|gltf|js|json|kmz|ldr|md2|mpd|obj|pcd|ply|stl|svg|usd|usda|usdc|usdz|vox|wrl|xyz|zip)$/i;
+const importExtensions = /\.(3dm|3ds|3mf|amf|dae|drc|fbx|glb|gltf|js|json|kmz|ldr|md2|mpd|obj|pcd|ply|stl|svg|usd|usda|usdc|usdz|vox|vrm|wrl|xyz|zip)$/i;
 
 function isImageAsset( file ) {
 

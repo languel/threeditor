@@ -6,7 +6,7 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
 const RESERVED = new Set( [ 'scene', 'camera', 'renderer', 'controls', 'THREE', 'mixers', 'gltfLoader', 'objLoader', 'last', 'pmrem', 'dt', 't' ] );
-const MODEL_RE = /\.(glb|gltf|obj)$/i;
+const MODEL_RE = /\.(glb|gltf|obj|vrm)$/i;
 
 const n = ( v ) => {
 
@@ -42,6 +42,11 @@ function generateThreeCode( editor ) {
 	let usesTextures = false;
 
 	const scene = editor.scene;
+	const routedObjects = new Set( ( scene.userData.streamRoutes || [] ).filter( route => route?.target?.kind === 'object' ).map( route => route.target.uuid ) );
+	scene.traverse( object => {
+		if ( editor.scripts?.[ object.uuid ]?.some( script => script.assetBehavior === 'stream' ) ) routedObjects.add( object.uuid );
+		for ( const uuid of Object.values( object.userData.vrmBones || {} ) ) routedObjects.add( uuid );
+	} );
 	const camera = editor.viewportCamera || editor.camera;
 	const controllerSettings = cameraControllerSettings( editor, camera );
 	const controllerMode = controllerSettings.mode;
@@ -57,7 +62,7 @@ function generateThreeCode( editor ) {
 
 	function ident( object, fallback ) {
 
-		let base = ( object.name || '' ).replace( /\.(glb|gltf|obj)$/i, '' ).replace( /[^A-Za-z0-9]+(.)?/g, ( m, c ) => c ? c.toUpperCase() : '' );
+		let base = ( object.name || '' ).replace( /\.(glb|gltf|obj|vrm)$/i, '' ).replace( /[^A-Za-z0-9]+(.)?/g, ( m, c ) => c ? c.toUpperCase() : '' );
 		if ( base === '' ) base = fallback;
 		else if ( /^[0-9]/.test( base ) ) base = fallback + base;
 		base = base[ 0 ].toLowerCase() + base.slice( 1 );
@@ -203,9 +208,11 @@ function generateThreeCode( editor ) {
 
 	function transform( name, o ) {
 
-		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
+		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) || routedObjects.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
 		if ( o.userData.asset ) out( `${ name }.userData.asset = ${ q( o.userData.asset ) };` );
 		if ( o.userData.assetObject ) out( `${ name }.userData.assetObject = ${ q( o.userData.assetObject ) };` );
+		if ( o.userData.vrmBones ) out( `${ name }.userData.vrmBones = ${ q( o.userData.vrmBones ) };` );
+		if ( o.userData.vrmRest ) out( `${ name }.userData.vrmRest = ${ q( o.userData.vrmRest ) };` );
 		if ( o.isCamera && o.userData.threeditor?.cameraController ) {
 
 			out( `${ name }.userData.threeditor = ${ q( o.userData.threeditor ) };` );
@@ -223,7 +230,7 @@ function generateThreeCode( editor ) {
 
 	const assetBehaviors = [];
 	function emitAssetBehavior( object, name ) {
-		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
+		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.assetBehavior !== 'stream' && script.enabled !== false );
 		if ( ! script || hasRestriction( object, 'disabled' ) ) return false;
 		assetBehaviors.push( { object: name, script: { ...serializeScript( script ), source: scriptSourceForExecution( script ) } } );
 		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
@@ -285,7 +292,7 @@ function generateThreeCode( editor ) {
 
 				const childReference = `${ reference }.children[${ index }]`;
 				const guardedReference = childReference.replaceAll( '.children[', '?.children[' );
-				if ( followTargets.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
+				if ( followTargets.has( child.uuid ) || routedObjects.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
 				if ( child.userData.threeditor?.disabled === true ) out( `if (${ guardedReference }) ${ childReference }.visible = false;` );
 				emitModelChildOverrides( child, childReference );
 

@@ -587,6 +587,7 @@ function Animation( editor ) {
 	// Update when scene changes
 	signals.editorCleared.add( clear );
 	signals.objectAdded.add( update );
+	signals.objectChanged.add( ( object, attribute ) => { if ( attribute === 'animations' ) update(); } );
 	signals.objectRemoved.add( update );
 
 	// Show panel on initial load

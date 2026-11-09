@@ -1,3 +1,4 @@
+import { poseScript } from '../streams/PoseDriver.js';
 import * as THREE from 'three';
 import { storeSourceFiles, isImportAsset, isTextureAsset } from '../ProjectAssets.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -54,7 +55,7 @@ export class AssetController {
 		}
 		const key = record.path || file.name;
 		fileMap[ key ] = file;
-		if ( /\.gl(tf|b)$/i.test( file.name ) ) {
+		if ( /\.(gltf|glb|vrm)$/i.test( file.name ) ) {
 			const gltf = await gltfDocument( file );
 			const base = record.url && new URL( '.', record.url );
 			const dir = key.slice( 0, key.lastIndexOf( '/' ) + 1 );
@@ -123,9 +124,9 @@ export class AssetController {
 			if ( map === 'envMap' ) texture.mapping = THREE.EquirectangularReflectionMapping;
 			if ( ! canCommit() ) throw new Error( 'The project changed while loading this texture. Try again.' );
 			this.editor.execute( new SetMaterialMapCommand( this.editor, object, map, texture, materialSlot ) );
-		} else if ( /\.gl(tf|b)$/i.test( entry.file.name ) ) {
+		} else if ( /\.(gltf|glb|vrm)$/i.test( entry.file.name ) ) {
 			const model = await this.editor.loader.importGLTFAsset( entry.path, { metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit, commit: false, stripPresentation: true } );
-			return this.commit( model, entry, modelScript( model ), position, canCommit );
+			return this.commit( model, entry, model.userData.vrmBones ? poseScript() : modelScript( model ), position, canCommit );
 		} else if ( isImportAsset( entry.file ) ) {
 			this.editor.loader.loadAsset( entry.path, { position, metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit } );
 		} else {

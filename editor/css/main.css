@@ -1605,3 +1605,14 @@ body.presenting #player:has( > .presentation-exit.always-visible ) > .viewport-p
 .script-param-slider-group > .script-param-slider { flex: 1; width: 0; min-width: 0; margin: 0; }
 .script-param-slider-group > .Input { flex: 0 1 52px; min-width: 0; box-sizing: border-box; }
 .viewport-parameter-list .script-param-slider-group .Input { max-width: 49px; }
+
+.stream-panel { padding: 10px; }
+.stream-panel details { margin-bottom: 9px; padding-bottom: 7px; border-bottom: 1px solid #8885; }
+.stream-panel summary { cursor: pointer; padding: 5px 0; }
+.stream-panel label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+.stream-panel label[hidden] { display: none; }
+.stream-panel input:not([type="checkbox"]), .stream-panel select { width: 54%; min-width: 0; }
+.stream-panel button { margin: 3px 3px 3px 0; }
+.stream-panel output, .stream-panel small { display: block; overflow-wrap: anywhere; margin: 4px 0; }
+.stream-panel video { width: 100%; max-height: 145px; }
+.stream-ranges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 6px; }

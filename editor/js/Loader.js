@@ -1,3 +1,4 @@
+import { vrmBoneMap } from './streams/PoseDriver.js';
 import * as THREE from 'three';
 
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
@@ -61,6 +62,8 @@ function Loader( editor ) {
 			if ( canCommit && ! canCommit() ) throw new Error( 'The project changed while importing this model. Try again.' );
 			if ( failed.length ) throw new Error( 'Model dependency could not be decoded: ' + failed.join( ', ' ) );
 			const object = result.scene;
+			const bones = vrmBoneMap( result );
+			if ( bones && Object.keys( bones ).length ) object.userData.vrmBones = bones;
 			if ( stripPresentation ) {
 				const remove = []; object.traverse( child => { if ( child.isCamera || child.isLight || child.isHelper ) remove.push( child ); } );
 				for ( const child of remove ) child.removeFromParent();
@@ -422,6 +425,7 @@ function Loader( editor ) {
 
 			}
 
+			case 'vrm':
 			case 'glb':
 
 			{
