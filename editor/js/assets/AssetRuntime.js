@@ -23,8 +23,9 @@ export class AssetRuntime {
 		editor.signals.scriptChanged.add( ( script, attribute ) => {
 			if ( this.changingHUD || attribute === 'favoriteParams' ) return;
 			if ( attribute === 'paramValues' ) {
-				for ( const [ object, runtime ] of this.active ) {
+				for ( const runtime of this.active.values() ) {
 					if ( runtime.script !== script || ! runtime.setParameters ) continue;
+					const { object } = runtime;
 					runtime.setParameters.call( object, serializeScript( script ).parameters || {} );
 					editor.signals.objectChanged.dispatch( object );
 					return;
@@ -40,29 +41,31 @@ export class AssetRuntime {
 		const { editor } = this;
 		const live = new Set();
 		editor.scene.traverse( object => {
-			const script = editor.scripts[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
-			if ( ! script || hasRestriction( object, 'disabled' ) ) return;
-			live.add( object );
-			if ( changedScript === script || this.active.get( object )?.script !== script ) this.stop( object );
-			if ( this.active.has( object ) ) return;
-			const urls = [];
-			let source = script.source;
-			for ( const [ path, { file } ] of editor.sourceFiles || [] ) {
-				const literal = JSON.stringify( 'assets/' + path );
-				if ( ! source.includes( literal ) ) continue;
-				const url = URL.createObjectURL( file ); urls.push( url ); source = source.replaceAll( literal, JSON.stringify( url ) );
+			if ( hasRestriction( object, 'disabled' ) ) return;
+			for ( const script of editor.scripts[ object.uuid ] || [] ) {
+				if ( ! script.assetBehavior || script.enabled === false ) continue;
+				live.add( script );
+				if ( changedScript === script ) this.stop( script );
+				if ( this.active.has( script ) ) continue;
+				const urls = [];
+				let source = script.source;
+				for ( const [ path, { file } ] of editor.sourceFiles || [] ) {
+					const literal = JSON.stringify( 'assets/' + path );
+					if ( ! source.includes( literal ) ) continue;
+					const url = URL.createObjectURL( file ); urls.push( url ); source = source.replaceAll( literal, JSON.stringify( url ) );
+				}
+				const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, assetParameterChanged: ( target, key, value ) => {
+					this.changingHUD = true;
+					try { editor.execute( new SetScriptValueCommand( editor, target, script, 'paramValues', { ...script.paramValues, [ key ]: value } ) ); } finally { this.changingHUD = false; }
+				} };
+				try {
+					const runtime = evaluateAssetScript( object, script, player, editor.scene, editor.viewportCamera, source );
+					runtime.init?.call( object ); this.active.set( script, { ...runtime, object, script, urls } );
+					editor.signals.objectChanged.dispatch( object );
+				} catch ( error ) { for ( const url of urls ) URL.revokeObjectURL( url ); editor.assetBrowser?.status?.( 'Asset script: ' + error.message, true ); console.error( error ); }
 			}
-			const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, assetParameterChanged: ( target, key, value ) => {
-				this.changingHUD = true;
-				try { editor.execute( new SetScriptValueCommand( editor, target, script, 'paramValues', { ...script.paramValues, [ key ]: value } ) ); } finally { this.changingHUD = false; }
-			} };
-			try {
-				const runtime = evaluateAssetScript( object, script, player, editor.scene, editor.viewportCamera, source );
-				runtime.init?.call( object ); this.active.set( object, { ...runtime, script, urls } );
-				editor.signals.objectChanged.dispatch( object );
-			} catch ( error ) { for ( const url of urls ) URL.revokeObjectURL( url ); editor.assetBrowser?.status?.( 'Asset script: ' + error.message, true ); console.error( error ); }
 		} );
-		for ( const object of this.active.keys() ) if ( ! live.has( object ) ) this.stop( object );
+		for ( const script of this.active.keys() ) if ( ! live.has( script ) ) this.stop( script );
 	}
 	update( delta ) {
 		let animated = false;
@@ -70,14 +73,15 @@ export class AssetRuntime {
 			const root = this.editor.scene.getObjectByProperty( 'uuid', panel.dataset.assetObject );
 			panel.hidden = ! root || ! this.editor.selected || ! root.getObjectByProperty( 'uuid', this.editor.selected.uuid );
 		}
-		for ( const [ object, runtime ] of this.active ) {
+		for ( const runtime of this.active.values() ) {
+			const { object } = runtime;
 			if ( runtime.update || object.userData.assetObject?.type === 'video' ) animated = true;
 			runtime.update?.call( object, { delta: delta * 1000, time: performance.now() } );
 		}
 		return animated;
 	}
-	stop( object ) { const runtime = this.active.get( object ); if ( ! runtime ) return; runtime.stop?.call( object ); for ( const url of runtime.urls ) URL.revokeObjectURL( url ); this.active.delete( object ); }
-	dispose() { for ( const object of this.active.keys() ) this.stop( object ); }
+	stop( script ) { const runtime = this.active.get( script ); if ( ! runtime ) return; runtime.stop?.call( runtime.object ); for ( const url of runtime.urls ) URL.revokeObjectURL( url ); this.active.delete( script ); }
+	dispose() { for ( const script of this.active.keys() ) this.stop( script ); }
 }
 
 export function mediaPlaybackJSON( json, sourceFiles ) {

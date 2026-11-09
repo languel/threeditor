@@ -1,3 +1,6 @@
+import { drawStreamPreview } from './streams/LandmarkPreview.js';
+import { isStillInput } from './assets/AssetController.js';
+import { openAssetBrowser } from './AssetBrowser.js';
 import { AnimationClip, QuaternionKeyframeTrack } from 'three';
 import { UIPanel } from './libs/ui.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
@@ -182,37 +185,125 @@ function SidebarStreams( editor ) {
 
 	const mediaPanel = section( panel.dom, 'Audio and video' );
 	const mediaStatus = node( 'output', 'Stopped', mediaPanel );
-	const preview = node( 'div', '', mediaPanel );
-	const media = new MediaStreams( bus );
-	async function startMedia( options ) {
+	const preview = node( 'canvas', '', mediaPanel );
+	preview.hidden = true;
+	preview.setAttribute( 'aria-label', 'Assigned input preview' );
+	const mediaRack = node( 'div', '', document.body );
+	mediaRack.className = 'stream-media-rack';
+	mediaRack.setAttribute( 'aria-hidden', 'true' );
+	const inputs = new Map();
+	const sourceSelect = select( mediaPanel, 'Assigned input', [] );
+	let primary = '';
+	function refreshInputs() {
 
-		const video = document.createElement( 'video' );
-		video.playsInline = true;
-		video.controls = !! options.file;
-		video.hidden = !! options.microphone && ! options.camera;
-		preview.replaceChildren( video );
-		await media.start( video, options );
-		mediaStatus.textContent = 'Input active';
+		const old = sourceSelect.value;
+		for ( const control of [ sourceSelect, visionInput ] ) {
+
+			const previous = control.value;
+			const options = [ ...inputs ].filter( ( [ , item ] ) => control === sourceSelect || ! item.options.audioOnly );
+			control.replaceChildren( ...options.map( ( [ id, item ] ) => new Option( item.title, id ) ) );
+			if ( options.some( ( [ id ] ) => id === previous ) ) control.value = previous;
+
+		}
+		if ( inputs.has( old ) ) sourceSelect.value = old;
+		choosePreview();
 
 	}
-	button( mediaPanel, 'Webcam', () => startMedia( { camera: true } ), mediaStatus );
-	button( mediaPanel, 'Webcam + mic', () => startMedia( { camera: true, microphone: true } ), mediaStatus );
-	button( mediaPanel, 'Microphone', () => startMedia( { microphone: true } ), mediaStatus );
-	const file = input( mediaPanel, 'Open media', '', 'file' );
-	file.accept = 'audio/*,video/*';
-	file.onchange = async () => {
+	function choosePreview() {
 
-		if ( ! file.files[ 0 ] ) return;
-		try { await startMedia( { file: file.files[ 0 ] } ); }
-		catch ( error ) { mediaStatus.textContent = error.message; }
-		file.value = '';
+		if ( primary !== sourceSelect.value ) {
+
+			bus.clear( 'video.' );
+			bus.clear( 'audio.' );
+			primary = sourceSelect.value;
+			inputs.get( primary )?.media.refreshFrame();
+			preview.getContext( '2d' ).clearRect( 0, 0, preview.width, preview.height );
+
+		}
+		const item = inputs.get( primary );
+		preview.hidden = ! item || !! item.options.audioOnly;
+		mediaStatus.textContent = item ? item.title + ( item.busy ? ' · Connecting…' : item.media.paused ? ' · Paused' : ' · Active' ) : 'No asset assigned';
+		pauseInput.disabled = ! item || item.busy;
+		pauseInput.textContent = item?.media.paused ? 'Resume input' : 'Pause input';
+
+	}
+	sourceSelect.onchange = choosePreview;
+	async function startMedia( options, id = crypto.randomUUID(), title = 'Input' ) {
+
+		if ( inputs.has( id ) ) {
+
+			sourceSelect.value = id;
+			choosePreview();
+			return id;
+
+		}
+		const video = document.createElement( options.still ? 'img' : 'video' );
+		mediaRack.append( video );
+		video.playsInline = true;
+		video.controls = false;
+		video.loop = !! options.file;
+
+		const media = new MediaStreams( bus, id, () => primary === id );
+		const item = { title, video, media, options, busy: true };
+		inputs.set( id, item );
+		refreshInputs();
+		sourceSelect.value = id;
+		choosePreview();
+		try { await media.start( video, options ); }
+		catch ( error ) { media.stop(); video.remove(); inputs.delete( id ); refreshInputs(); throw error; }
+		item.busy = false;
+		refreshInputs();
+		sourceSelect.value = id;
+		choosePreview();
+		if ( visionEnabled.checked && ! tracking ) await updateTracking();
+		return id;
+
+	}
+	editor.getMediaInput = id => inputs.get( id )?.media.element;
+	editor.assignMediaAsset = ( { record, file, texture } ) => {
+
+		const { id, title, kind, deviceId } = record;
+		const options = kind === 'webcam' ? { camera: true, deviceId } :
+			kind === 'microphone' ? { microphone: true, deviceId, audioOnly: true } : isStillInput( record ) ? { file, image: texture?.image, still: true } : { file, audioOnly: kind === 'audio' };
+		return startMedia( options, id, title );
 
 	};
-	button( mediaPanel, 'Stop input', () => {
+	button( mediaPanel, 'Assign asset…', () => openAssetBrowser( editor, { kind: 'input', onPick: editor.assignMediaAsset } ), mediaStatus );
+	const pauseInput = button( mediaPanel, 'Pause input', async () => {
 
-		media.stop();
-		preview.replaceChildren();
-		mediaStatus.textContent = 'Stopped';
+		const item = inputs.get( sourceSelect.value );
+		if ( ! item || item.busy ) return;
+		item.busy = true;
+		try {
+
+			if ( item.media.paused ) await item.media.resume( item.video, item.options );
+			else item.media.pause();
+
+		} finally {
+
+			item.busy = false;
+			choosePreview();
+
+		}
+
+	}, mediaStatus );
+	pauseInput.disabled = true;
+	button( mediaPanel, 'Unassign input', async () => {
+
+		const id = sourceSelect.value;
+		const item = inputs.get( id );
+		if ( ! item || item.busy ) return;
+		if ( tracking === item.media ) {
+
+			visionEnabled.checked = false;
+			await updateTracking();
+
+		}
+		item.media.stop();
+		item.video.remove();
+		inputs.delete( id );
+		refreshInputs();
+		mediaStatus.textContent = 'Input unassigned';
 
 	}, mediaStatus );
 	button( mediaPanel, 'Enable instrument sound', async () => {
@@ -225,21 +316,38 @@ function SidebarStreams( editor ) {
 
 	const vision = section( panel.dom, 'MediaPipe' );
 	const visionStatus = node( 'output', 'Stopped', vision );
-	const mode = select( vision, 'Tracker', [ [ 'pose', 'Pose' ], [ 'hand', 'Hand' ], [ 'face', 'Face' ] ] );
-	node( 'small', 'Uses the webcam or video from Audio and video.', vision );
-	button( vision, 'Start tracker', async () => {
+	const visionInput = select( vision, 'Input stream', [] );
+	const mode = select( vision, 'Tracker', [ [ 'holistic', 'Holistic' ], [ 'pose', 'Pose' ], [ 'hand', 'Hand' ], [ 'face', 'Face' ] ] );
+	const visionEnabled = input( vision, 'Enable MediaPipe', '', 'checkbox' );
+	const visualizer = node( 'canvas', '', vision );
+	visualizer.hidden = true;
+	visualizer.setAttribute( 'aria-label', 'MediaPipe landmark preview' );
+	let tracking, trackingVersion = 0;
+	async function updateTracking() {
 
+		const version = ++ trackingVersion;
+		if ( tracking ) await tracking.track( '' );
+		if ( version !== trackingVersion ) return;
+		tracking = visionEnabled.checked ? inputs.get( visionInput.value )?.media : null;
+		if ( ! tracking ) { visionStatus.textContent = visionEnabled.checked ? 'Choose an input stream' : 'Stopped'; return; }
 		visionStatus.textContent = 'Loading tracker…';
-		await media.track( mode.value );
-		visionStatus.textContent = 'Tracking ' + mode.value;
+		try {
 
-	}, visionStatus );
-	button( vision, 'Stop tracker', async () => {
+			await tracking.track( mode.value );
+			if ( version === trackingVersion ) visionStatus.textContent = 'Tracking ' + mode.value;
 
-		await media.track( '' );
-		visionStatus.textContent = 'Stopped';
+		} catch ( error ) {
 
-	}, visionStatus );
+			if ( version !== trackingVersion ) return;
+			visionEnabled.checked = false;
+			void tracking.track( '' );
+			tracking = null;
+			visionStatus.textContent = error.message;
+
+		}
+
+	}
+	visionEnabled.onchange = visionInput.onchange = mode.onchange = updateTracking;
 	let capture;
 	button( vision, 'Record motion', () => {
 
@@ -275,7 +383,14 @@ function SidebarStreams( editor ) {
 		try {
 
 			const now = performance.now();
-			media.tick( now );
+			for ( const { media } of inputs.values() ) media.tick( now );
+			if ( mediaPanel.open && ! preview.hidden ) drawStreamPreview( preview, inputs.get( primary )?.media.element );
+			if ( vision.open ) {
+
+				const input = inputs.get( visionInput.value )?.media;
+				visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
+
+			}
 			if ( capture && ! bus.playing && bus.get( 'vision.pose.landmarks' ) ) {
 
 				capture.times.push( ( now - capture.start ) / 1000 );
@@ -285,7 +400,7 @@ function SidebarStreams( editor ) {
 			}
 
 		}
-		catch ( error ) { void media.track( '' ); visionStatus.textContent = error.message; }
+		catch ( error ) { visionEnabled.checked = false; void updateTracking(); visionStatus.textContent = error.message; }
 
 	}, 50 );
 

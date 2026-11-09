@@ -21,6 +21,12 @@ The pinboard and reach lessons adapt the interaction from threejslessons using l
 2. Open **Streams → Routes**. The first route maps `serial.A0` to `map.a0`. The next two routes map that value to the shape’s horizontal position and scale.
 3. Press **Alt/Option+P** to check the same preview in Play. Connect a board only when you’re ready to replace the preview with live input.
 
+## Media inputs and tracking
+
+Create a reusable webcam or microphone with **Assets → Add webcam…** or **Add microphone…**, or upload a still image, movie, or audio file. Use **Streams → Assign asset…** to choose an existing asset. You can also choose **Use as input stream** from the asset. Inputs run concurrently. In **Streams → MediaPipe**, choose an input, select **Holistic**, **Pose**, **Hand**, or **Face**, then turn on **Enable MediaPipe**. The MediaPipe preview overlays pose, hand, face, and iris landmarks on the selected source. Turning MediaPipe off stops tracking while the source keeps running. Pause or resume individual inputs in **Audio and video**. Pausing a live source releases the device and keeps the asset assigned. Webcam planes hold the last frame.
+
+Each source publishes under `input.<id>.*`. The selected preview also supplies the shared `video.*` and `audio.*` topics. The tracked input supplies `vision.*` and its own namespaced vision topics. Iris centers are at index 0 in `vision.iris.left.landmarks` and `vision.iris.right.landmarks` when present.
+
 ## Routes and scripts
 
 A route maps an input interval to an output interval. Reverse either pair of bounds to invert the map. It can drive an object property, emit a `map.*` topic for another route, or send a MIDI CC, MIDI note, or serial line. Mapped topics take input from device or script topics. Device destinations require **Arm routed hardware output**. Project changes disarm them and preview samples never send to hardware.

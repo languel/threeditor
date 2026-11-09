@@ -70,3 +70,15 @@ test( 'Source export preserves an attached follow controller and its parameter o
 	assert.ok( ! generateThreeCode( editor ).code.includes( 'const controls = createCameraController(' ) );
 
 } );
+
+test( 'Source export uses the assigned main camera independently of the viewport', () => {
+
+	const scene = new THREE.Scene();
+	const director = new THREE.PerspectiveCamera();
+	const main = new THREE.PerspectiveCamera();
+	main.position.set( 2, 3, 4 );
+	scene.add( main );
+	const { code } = generateThreeCode( { scene, camera: director, viewportCamera: director, mainCamera: main, scripts: {}, config: { getKey() {} } } );
+	assert.match( code, /camera\.position\.set\(2, 3, 4\)/ );
+
+} );

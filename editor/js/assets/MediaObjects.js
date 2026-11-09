@@ -24,7 +24,7 @@ function legacyMediaScript( path, type = 'video' ) {
  ${ type === 'audio' ? "media.controls=true; media.style.cssText='position:absolute;bottom:12px;right:12px;z-index:5'; player.dom.append(media);" : '' }\n ${ type === 'video' ? `const canvas = document.createElement('canvas'); canvas.width=512; canvas.height=Math.max(1,Math.round(512*(this.userData.assetObject.height||1)/(this.userData.assetObject.width||1)));\n if(this.material.map?.image?.width) canvas.getContext('2d').drawImage(this.material.map.image,0,0,canvas.width,canvas.height);\n texture = new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace;\n this.material.map?.dispose(); this.material.map=texture; this.material.needsUpdate=true;\n previousRender = this.onBeforeRender;\n this.onBeforeRender = function() { if(media.readyState >= 2) { canvas.getContext('2d').drawImage(media,0,0,canvas.width,canvas.height);texture.needsUpdate=true; } };` : '' }\n if(params.showControls && ${ JSON.stringify( type !== 'audio' ) }) controls=(${ mediaControls.toString() })(media,this,player,params);\n if(params.playing) media.play().catch(()=>{});\n}\nfunction stop() { this.assetMedia=null; controls?.remove(); media?.pause(); if(media) { media.removeAttribute('src'); media.load(); media.remove(); } ${ type === 'video' ? 'this.onBeforeRender = previousRender || function(){}; ' : '' } }\n` };
 }
 
-export function mediaScript( path, type = 'video' ) {
+export function mediaScript( path, type = 'video', plane = type === 'video', expose = true ) {
 
 	const audio = type === 'audio';
 	return {
@@ -65,12 +65,12 @@ function setParameters(next) {
 }
 function init() {
  media = document.createElement(${ JSON.stringify( type ) });
- this.assetMedia = media;
+ ${ expose ? 'this.assetMedia = media;' : '' }
  media.crossOrigin = 'anonymous';
  media.playsInline = true;
  media.addEventListener('loadedmetadata', seek);
  media.src = ${ JSON.stringify( 'assets/' + path ) };
- ${ audio ? '' : `const canvas = document.createElement('canvas');
+ ${ ! plane ? '' : `const canvas = document.createElement('canvas');
  canvas.width = 512;
  canvas.height = Math.max(1, Math.round(512 * this.userData.assetObject.height / this.userData.assetObject.width));
  const ctx = canvas.getContext('2d');
@@ -90,12 +90,12 @@ function init() {
  setParameters(params);
 }
 function stop() {
- this.assetMedia = null;
+ ${ expose ? 'this.assetMedia = null;' : '' }
  media.removeEventListener('loadedmetadata', seek);
  media.pause();
  media.removeAttribute('src');
  media.load();
- ${ audio ? '' : 'this.onBeforeRender = previousRender;' }
+ ${ plane ? 'this.onBeforeRender = previousRender;' : '' }
 }
 `
 	};
@@ -136,4 +136,59 @@ export async function mediaPlane( editor, entry ) {
 	const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 2 * aspect, 2 ), new THREE.MeshBasicMaterial( { map: texture, side: THREE.DoubleSide, transparent: ! video, toneMapped: false } ) );
 	mesh.userData.assetObject = { type: video ? 'video' : 'image', path, width, height };
 	return { object: mesh, script: video ? mediaScript( path ) : null };
+}
+
+// Binding IDs live on the texture so replacing or undoing a map disables the
+// old driver without overwriting the replacement.
+export function movingTextureScript( entry, binding, slot, map ) {
+
+	const webcam = entry.record.kind === 'webcam';
+	const movie = webcam ? '' : mediaScript( entry.path, 'video', false, false ).source;
+	return {
+		name: ( webcam ? 'Webcam' : 'Movie' ) + ' · ' + map,
+		assetBehavior: 'media', enabled: true,
+		source: movie + `
+let surfaceCanvas, lastFrame = -1${ webcam ? '' : ', wasBound = true' };
+function update() {
+ const material = Array.isArray(this.material) ? this.material[${ slot }] : this.material;
+ const texture = material?.[${ JSON.stringify( map ) }];
+ const video = ${ webcam ? `player.streams?.get(${ JSON.stringify( 'input.' + entry.record.id + '.video.frame' ) })` : 'media' };
+ const bound = texture?.userData.mediaBinding === ${ JSON.stringify( binding ) };
+ ${ webcam ? '' : `if (bound !== wasBound) {
+  wasBound = bound;
+  if (!bound) media.pause();
+  else if (current.playing) media.play().catch(() => {});
+ }` }
+ if (!bound || !video || video.readyState < 2 || !video.videoWidth) return;
+ if (surfaceCanvas !== texture.image || !surfaceCanvas?.getContext) {
+  const previous = texture.image;
+  surfaceCanvas = previous?.getContext ? previous : document.createElement('canvas');
+  if (surfaceCanvas !== previous) {
+   surfaceCanvas.width = previous?.width || 512;
+   surfaceCanvas.height = previous?.height || Math.max(1, Math.round(512 * video.videoHeight / video.videoWidth));
+  }
+  texture.image = surfaceCanvas;
+  lastFrame = -1;
+ }
+ if (lastFrame === video.currentTime) return;
+ lastFrame = video.currentTime;
+ surfaceCanvas.getContext('2d').drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
+ texture.needsUpdate = true;
+}
+`
+	};
+
+}
+
+export function webcamPlane( entry ) {
+
+	const canvas = document.createElement( 'canvas' );
+	canvas.width = 512;
+	canvas.height = 288;
+	const texture = new THREE.CanvasTexture( canvas );
+	texture.colorSpace = THREE.SRGBColorSpace;
+	const binding = texture.userData.mediaBinding = crypto.randomUUID();
+	const object = new THREE.Mesh( new THREE.PlaneGeometry( 32 / 9, 2 ), new THREE.MeshBasicMaterial( { map: texture, side: THREE.DoubleSide, toneMapped: false } ) );
+	return { object, script: movingTextureScript( entry, binding, 0, 'map' ) };
+
 }

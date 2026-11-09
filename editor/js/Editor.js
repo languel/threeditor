@@ -646,6 +646,13 @@ Editor.prototype = {
 
 	},
 
+	get mainCamera() {
+
+		const camera = this.cameras[ this.scene.userData.mainCamera ];
+		return camera?.isCamera && ! hasRestriction( camera, 'disabled' ) ? camera : this.camera;
+
+	},
+
 	get activeSceneCamera() {
 
 		const active = this.cameras[ this.activeSceneCameraUuid ];
@@ -823,7 +830,12 @@ Editor.prototype = {
 
 		this.setScene( scene );
 		this.activeSceneCameraUuid = json.activeSceneCamera || null;
+		if ( ! Object.hasOwn( this.scene.userData, 'mainCamera' ) ) {
+			const legacy = this.cameras[ json.mainCamera || json.viewportCamera || savedCamera.uuid ];
+			this.scene.userData.mainCamera = legacy && legacy !== this.camera ? legacy.uuid : null;
+		}
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
+		if ( json.mainCameraTarget ) this.controls.getCenter( this.mainCamera ).fromArray( json.mainCameraTarget );
 		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
 		this.config.setKey( 'project/title', json.project?.title || '' );
 		this.userProjectPath = json.project?.libraryPath || '';
@@ -860,11 +872,13 @@ Editor.prototype = {
 				shadows: this.config.getKey( 'project/renderer/shadows' ),
 				shadowType: this.config.getKey( 'project/renderer/shadowType' ),
 				toneMapping: this.config.getKey( 'project/renderer/toneMapping' ),
-				cameraController: cameraControllerSettings( this, this.viewportCamera ).mode || 'none',
+				cameraController: cameraControllerSettings( this, this.mainCamera ).mode || 'none',
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
 			camera: this.camera.toJSON(),
 			viewportCamera: this.viewportCamera.uuid,
+			mainCamera: this.mainCamera.uuid,
+			mainCameraTarget: ( this.controls.getCenter?.( this.mainCamera ) || this.controls.center ).toArray(),
 			activeSceneCamera: this.activeSceneCameraUuid,
 			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
 			controls: this.controls.toJSON( this.camera ),

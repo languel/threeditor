@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { StreamRouter, mapValue } from '../editor/js/streams/StreamRouter.js';
 import { SerialDevice, midiTopics, serialValues } from '../editor/js/streams/DeviceStreams.js';
+import { MediaStreams } from '../editor/js/streams/MediaStreams.js';
 import { vrmBoneMap, poseScript } from '../editor/js/streams/PoseDriver.js';
 import { serializeScript } from '../editor/js/ScriptParams.js';
 
@@ -120,5 +121,50 @@ test( 'VRM node indices bind limb directions and stop restores the rest pose', (
 	assert.ok( new THREE.Vector3( 1, 0, 0 ).applyQuaternion( arm.quaternion ).distanceTo( new THREE.Vector3( 0, -1, 0 ) ) < 1e-5 );
 	run.stop();
 	assert.equal( arm.quaternion.angleTo( new THREE.Quaternion() ), 0 );
+
+} );
+
+test( 'Holistic publishes iris, pose and hand topics for its selected input', async () => {
+
+	const bus = new StreamRouter();
+	const media = new MediaStreams( bus, 'camera', () => false );
+	media.element = { readyState: 2, videoWidth: 640, currentTime: 1 };
+	media.mode = 'holistic';
+	const face = Array.from( { length: 478 }, ( _, index ) => ( { x: index / 478, y: .5, z: 0 } ) );
+	const pose = [ { x: .1, y: .2, z: .3 } ];
+	media.tracker = { close() {}, detectForVideo: () => ( { faceLandmarks: [ face ], poseLandmarks: [ pose ], rightHandLandmarks: [ pose ] } ) };
+	media.tick( 100 );
+	assert.deepEqual( bus.get( 'vision.iris.left.landmarks' ), face.slice( 473 ) );
+	assert.equal( bus.get( 'input.camera.vision.iris.right.0.x' ), face[ 468 ].x );
+	assert.equal( bus.get( 'vision.pose.landmarks' ), pose );
+	assert.equal( bus.get( 'vision.rightHand.landmarks' ), pose );
+	assert.equal( bus.get( 'video.frame' ), undefined );
+	assert.equal( bus.get( 'input.camera.video.frame' ), media.element );
+	await media.track( '' );
+	assert.equal( bus.get( 'vision.iris.left.landmarks' ), undefined );
+	assert.equal( bus.get( 'input.camera.video.frame' ), media.element );
+
+} );
+
+test( 'A still image stays available to a tracker started after input assignment', async () => {
+
+	const bus = new StreamRouter();
+	const media = new MediaStreams( bus, 'still' );
+	const image = { width: 320, height: 240 };
+	await media.start( null, { still: true, image } );
+	media.tick( 100 );
+	assert.equal( bus.get( 'input.still.video.frame' ), image );
+	let frames = 0;
+	media.mode = 'face';
+	media.tracker = { detectForVideo( frame ) { assert.equal( frame, image ); frames ++; return {}; } };
+	media.refreshFrame();
+	media.tick( 200 );
+	media.tick( 300 );
+	assert.equal( frames, 1 );
+	media.pause();
+	assert.equal( bus.get( 'input.still.video.frame' ), undefined );
+	await media.resume( null, { still: true } );
+	media.tick( 400 );
+	assert.equal( frames, 2 );
 
 } );

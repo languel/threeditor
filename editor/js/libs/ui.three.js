@@ -8,11 +8,12 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 
 import { openAssetBrowser } from '../AssetBrowser.js';
 import { loadAssetTexture } from '../assets/AssetTexture.js';
+import { isMovingAsset } from '../assets/AssetController.js';
 import { ASSET_MIME } from '../assets/AssetLibrary.js';
 
 class UITexture extends UISpan {
 
-	constructor( editor ) {
+	constructor( editor, applyMoving ) {
 
 		super();
 
@@ -45,8 +46,7 @@ class UITexture extends UISpan {
 			if ( asset ) {
 				editor.assetBrowser.run( async () => {
 					const entry = await editor.assetBrowser.materialize( asset );
-					if ( entry.texture ) deliver( entry.texture, entry.path );
-					else await loadFile( entry.file, entry.path );
+					await chooseEntry( entry );
 				} );
 				return;
 			}
@@ -60,9 +60,17 @@ class UITexture extends UISpan {
 
 			openAssetBrowser( editor, {
 				kind: 'texture',
-				onPick: ( { texture, file, path } ) => texture ? deliver( texture, texture.userData.sourceAssetPath ) : loadFile( file, path ),
+				moving: !! applyMoving,
+				onPick: chooseEntry,
 				onUpload: ( [ file ] ) => loadFile( file )
 			} );
+
+		}
+
+		function chooseEntry( entry ) {
+
+			if ( applyMoving && isMovingAsset( entry.record ) ) return applyMoving( entry );
+			return entry.texture ? deliver( entry.texture, entry.path ) : loadFile( entry.file, entry.path );
 
 		}
 

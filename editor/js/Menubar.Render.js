@@ -207,7 +207,7 @@ class RenderImageDialog {
 			const loader = new THREE.ObjectLoader();
 
 			const scene = await loader.parseAsync( json.scene );
-			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
+			const sceneCamera = scene.getObjectByProperty( 'uuid', json.mainCamera || json.viewportCamera || json.camera.object.uuid );
 			const camera = sceneCamera?.isCamera ? sceneCamera : await loader.parseAsync( json.camera );
 
 			const aspect = imageWidth.getValue() / imageHeight.getValue();

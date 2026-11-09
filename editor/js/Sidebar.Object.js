@@ -174,21 +174,27 @@ function SidebarObject( editor ) {
 	cameraControllerRow.add( new UIText( 'Controller' ).setClass( 'Label' ), cameraController );
 	container.add( cameraControllerRow );
 
+	const mainCameraRow = new UIRow();
+	const mainCameraButton = new UIButton( 'Set as main camera' ).onClick( () => {
+
+		const camera = editor.selected;
+		if ( ! camera?.isCamera || hasRestriction( camera, 'disabled' ) ) return;
+		const command = new SetValueCommand( editor, editor.scene, 'userData', {
+			...editor.scene.userData, mainCamera: camera === editor.camera ? null : camera.uuid
+		} );
+		command.updatable = false;
+		editor.execute( command );
+		updateCameraController( camera );
+
+	} );
+	mainCameraRow.add( new UIText( 'Export camera' ).setClass( 'Label' ), mainCameraButton );
+	container.add( mainCameraRow );
+
 	const cameraFollowRow = new UIRow();
 	const cameraFollow = new UISelect();
 	cameraFollow.dom.setAttribute( 'aria-label', 'Follow target' );
 	cameraFollowRow.add( new UIText( 'Follow target' ).setClass( 'Label' ), cameraFollow );
 	container.add( cameraFollowRow );
-	const cameraControllerEditRow = new UIRow();
-	const cameraControllerEdit = new UIButton( 'Edit controller script' ).onClick( () => {
-
-		const script = cameraControllerScript( editor, editor.selected );
-		if ( script ) signals.editScript.dispatch( editor.selected, script );
-
-	} );
-	cameraControllerEditRow.add( cameraControllerEdit );
-	container.add( cameraControllerEditRow );
-
 	function setCameraController( changes ) {
 
 		const camera = editor.selected;
@@ -233,11 +239,14 @@ function SidebarObject( editor ) {
 	function updateCameraController( object ) {
 
 		const isCamera = object.isCamera && object !== editor.camera;
+		mainCameraRow.setDisplay( object.isCamera ? '' : 'none' );
+		const isMain = editor.mainCamera === object;
+		mainCameraButton.dom.textContent = isMain ? '★ Main camera' : 'Set as main camera';
+		mainCameraButton.setDisabled( isMain || hasRestriction( object, 'disabled' ) );
 		const settings = cameraControllerSettings( editor, object );
 		directorNavigationRow.setDisplay( object === editor.camera ? '' : 'none' );
 		cameraControllerRow.setDisplay( isCamera ? '' : 'none' );
 		cameraController.setValue( settings.mode || 'none' );
-		cameraControllerEditRow.setDisplay( isCamera && cameraControllerScript( editor, object ) ? '' : 'none' );
 		const showFollow = isCamera && settings.mode === 'thirdPerson';
 		cameraFollowRow.setDisplay( showFollow ? '' : 'none' );
 		if ( showFollow ) {
@@ -827,6 +836,7 @@ function SidebarObject( editor ) {
 
 	signals.objectChanged.add( function ( object ) {
 
+		if ( object === editor.scene && editor.selected?.isCamera ) updateCameraController( editor.selected );
 		let selected = editor.selected;
 		while ( selected && selected !== object ) selected = selected.parent;
 		if ( ! selected ) return;

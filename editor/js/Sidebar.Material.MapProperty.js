@@ -18,7 +18,7 @@ function SidebarMaterialMapProperty( editor, property, name ) {
 	const enabled = new UICheckbox( false ).setMarginRight( '8px' ).onChange( onChange );
 	container.add( enabled );
 
-	const map = new UITexture( editor ).onChange( onMapChange );
+	const map = new UITexture( editor, entry => editor.assetBrowser.assignMoving( entry, object, materialSlot, property, material ) ).onChange( onMapChange );
 	container.add( map );
 
 	const settings = new UIButton( '⚙' ).setClass( 'TextureSettingsButton' ).setMarginRight( '4px' ).onClick( onSettingsClick );
@@ -151,6 +151,7 @@ function SidebarMaterialMapProperty( editor, property, name ) {
 		}
 
 		enabled.setDisabled( false );
+		enabled.setValue( texture !== null );
 		settings.setDisabled( texture === null );
 
 		onChange();

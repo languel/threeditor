@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
+import { ASSET_MIME } from './assets/AssetLibrary.js';
 
 function SidebarScene( editor ) {
 
@@ -24,6 +25,29 @@ function SidebarScene( editor ) {
 		option.innerHTML = buildHTML( object );
 		addRestrictions( option, object );
 		option.value = object.id;
+		if ( object.material ) {
+
+			option.addEventListener( 'dragover', event => {
+
+				if ( ! event.dataTransfer.types.includes( ASSET_MIME ) ) return;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				event.dataTransfer.dropEffect = 'copy';
+
+			} );
+			option.addEventListener( 'drop', event => {
+
+				const id = event.dataTransfer.getData( ASSET_MIME );
+				if ( ! id ) return;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				const browser = editor.assetBrowser;
+				browser.cancelPicker();
+				browser.run( () => browser.applyToObject( id, object ) );
+
+			} );
+
+		}
 		option.addEventListener( 'click', event => {
 
 			if ( ! event.target.closest( '.Script' ) ) return;
@@ -170,6 +194,7 @@ function SidebarScene( editor ) {
 
 		}
 
+		if ( object === editor.mainCamera ) html += ' <span class="main-camera-glyph" title="Main camera for Play and export" aria-label="Main camera">★</span>';
 		html += getScript( object.uuid );
 
 		return html;
@@ -592,9 +617,16 @@ function SidebarScene( editor ) {
 	signals.sceneGraphChanged.add( refreshUI );
 
 	signals.cameraResetted.add( refreshUI );
+	signals.projectLoaded.add( refreshUI );
 
-	signals.objectChanged.add( function ( object ) {
+	signals.objectChanged.add( function ( object, attribute ) {
 
+		if ( attribute === 'userData' ) {
+
+			refreshUI();
+			return;
+
+		}
 		const options = outliner.options;
 
 		for ( let i = 0; i < options.length; i ++ ) {

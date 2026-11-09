@@ -69,11 +69,11 @@ const APP = {
 			this.canvas = renderer.domElement;
 
 			this.setScene( loader.parse( json.scene ) );
-			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
+			const sceneCamera = scene.getObjectByProperty( 'uuid', json.mainCamera || json.viewportCamera || json.camera.object.uuid );
 			this.setCamera( sceneCamera?.isCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : loader.parse( json.camera ) );
 			const hasControllerScript = json.scripts?.[ camera.uuid ]?.some( script => script.cameraController === true );
 			const mode = hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
-			cameraTarget = json.viewportTarget || json.controls?.center;
+			cameraTarget = json.mainCameraTarget || json.viewportTarget || json.controls?.center;
 			controllerOptions = mode && mode !== 'none' ? {
 				mode,
 				target: cameraTarget,

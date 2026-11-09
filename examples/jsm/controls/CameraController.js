@@ -1,7 +1,81 @@
-import { Quaternion, Vector3 } from 'three';
+import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { OrbitControls } from './OrbitControls.js';
-import { FlyControls } from './FlyControls.js';
 import { FirstPersonControls } from './FirstPersonControls.js';
+
+// Match the director's fly axes, sensitivity and speed wheel while keeping
+// pointer capture local to the canvas and requiring a drag for mouse look.
+function dragFly( view, element, movementSpeed, lookSpeed ) {
+
+	const keys = new Set();
+	const euler = new Euler().setFromQuaternion( view.quaternion, 'YXZ' );
+	const right = new Vector3(), forward = new Vector3();
+	const win = element.ownerDocument.defaultView;
+	const listeners = new AbortController();
+	const { signal } = listeners;
+	let pointer = null;
+	let speed = movementSpeed;
+	const tracked = [ 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight' ];
+
+	element.addEventListener( 'pointerdown', event => {
+
+		if ( event.button !== 0 || pointer !== null ) return;
+		pointer = event.pointerId;
+		element.setPointerCapture( pointer );
+		event.preventDefault();
+
+	}, { signal } );
+	element.addEventListener( 'pointermove', event => {
+
+		if ( event.pointerId !== pointer ) return;
+		const sensitivity = .002 * lookSpeed / .08;
+		euler.y -= event.movementX * sensitivity;
+		euler.x = MathUtils.clamp( euler.x - event.movementY * sensitivity, - Math.PI / 2 + .01, Math.PI / 2 - .01 );
+		view.quaternion.setFromEuler( euler );
+
+	}, { signal } );
+	for ( const type of [ 'pointerup', 'pointercancel', 'lostpointercapture' ] ) {
+
+		element.addEventListener( type, event => { if ( event.pointerId === pointer ) pointer = null; }, { signal } );
+
+	}
+	element.addEventListener( 'wheel', event => {
+
+		event.preventDefault();
+		speed = MathUtils.clamp( speed * Math.exp( - event.deltaY * .001 ), .05, 100 );
+
+	}, { signal, passive: false } );
+	win.addEventListener( 'keydown', event => {
+
+		if ( ! tracked.includes( event.code ) || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey ||
+			event.target?.closest?.( 'input, textarea, select, button, [contenteditable]' ) ) return;
+		event.preventDefault();
+		event.stopPropagation();
+		keys.add( event.code );
+
+	}, { signal, capture: true } );
+	win.addEventListener( 'keyup', event => keys.delete( event.code ), { signal } );
+	win.addEventListener( 'blur', () => keys.clear(), { signal } );
+
+	return {
+		update( delta ) {
+
+			const step = speed * ( keys.has( 'ShiftLeft' ) || keys.has( 'ShiftRight' ) ? 3 : 1 ) * delta;
+			forward.set( 0, 0, -1 ).applyQuaternion( view.quaternion );
+			right.set( 1, 0, 0 ).applyQuaternion( view.quaternion );
+			view.position.addScaledVector( forward, step * ( Number( keys.has( 'KeyW' ) ) - Number( keys.has( 'KeyS' ) ) ) );
+			view.position.addScaledVector( right, step * ( Number( keys.has( 'KeyD' ) ) - Number( keys.has( 'KeyA' ) ) ) );
+			view.position.y += step * ( Number( keys.has( 'KeyE' ) ) - Number( keys.has( 'KeyQ' ) ) );
+
+		},
+		dispose() {
+
+			listeners.abort();
+			if ( pointer !== null && element.hasPointerCapture( pointer ) ) element.releasePointerCapture( pointer );
+
+		}
+	};
+
+}
 
 function createCameraController( camera, element, { mode, target, follow, movementSpeed = 4, lookSpeed = 0.08, rotateSpeed = 1, zoomSpeed = 1, panSpeed = 1, enablePan = true, enableZoom = true } ) {
 
@@ -36,9 +110,7 @@ function createCameraController( camera, element, { mode, target, follow, moveme
 
 	if ( mode === 'fly' ) {
 
-		controls = new FlyControls( view, element );
-		controls.dragToLook = true;
-		controls.movementSpeed = movementSpeed;
+		controls = dragFly( view, element, movementSpeed, lookSpeed );
 
 	} else if ( mode === 'firstPerson' ) {
 
@@ -49,7 +121,7 @@ function createCameraController( camera, element, { mode, target, follow, moveme
 
 	} else {
 
-		view.up.set( 0, 1, 0 ).applyQuaternion( rotation );
+		view.up.set( 0, 1, 0 );
 		controls = new OrbitControls( view, element );
 		controls.rotateSpeed = rotateSpeed;
 		controls.zoomSpeed = zoomSpeed;

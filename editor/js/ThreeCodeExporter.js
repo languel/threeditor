@@ -47,7 +47,7 @@ function generateThreeCode( editor ) {
 		if ( editor.scripts?.[ object.uuid ]?.some( script => script.assetBehavior === 'stream' ) ) routedObjects.add( object.uuid );
 		for ( const uuid of Object.values( object.userData.vrmBones || {} ) ) routedObjects.add( uuid );
 	} );
-	const camera = editor.viewportCamera || editor.camera;
+	const camera = editor.mainCamera || editor.viewportCamera || editor.camera;
 	const controllerSettings = cameraControllerSettings( editor, camera );
 	const controllerMode = controllerSettings.mode;
 	const useController = controllerMode && controllerMode !== 'none';
@@ -143,6 +143,7 @@ function generateThreeCode( editor ) {
 		}
 
 		if ( tex.colorSpace || COLOR_MAPS.has( key ) ) texLines.push( `${ v }.colorSpace = ${ q( tex.colorSpace || 'srgb' ) };` );
+		if ( tex.userData?.mediaBinding ) texLines.push( `${ v }.userData.mediaBinding = ${ q( tex.userData.mediaBinding ) };` );
 		if ( tex.mapping !== 300 ) texLines.push( `${ v }.mapping = ${ tex.mapping };` );
 		if ( pixels ) {
 
@@ -230,14 +231,16 @@ function generateThreeCode( editor ) {
 
 	const assetBehaviors = [];
 	function emitAssetBehavior( object, name ) {
-		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.assetBehavior !== 'stream' && script.enabled !== false );
-		if ( ! script || hasRestriction( object, 'disabled' ) ) return false;
-		assetBehaviors.push( { object: name, script: { ...serializeScript( script ), source: scriptSourceForExecution( script ) } } );
-		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
-			if ( ! script.source.includes( JSON.stringify( 'assets/' + path ) ) || usedPaths.has( 'assets/' + path ) ) continue;
-			usedPaths.add( 'assets/' + path ); assets.push( { path: 'assets/' + path, file: entry.file } );
+		if ( hasRestriction( object, 'disabled' ) ) return false;
+		const scripts = editor.scripts?.[ object.uuid ]?.filter( script => script.assetBehavior && script.assetBehavior !== 'stream' && script.enabled !== false ) || [];
+		for ( const script of scripts ) {
+			assetBehaviors.push( { object: name, script: { ...serializeScript( script ), source: scriptSourceForExecution( script ) } } );
+			for ( const [ path, entry ] of editor.sourceFiles || [] ) {
+				if ( ! script.source.includes( JSON.stringify( 'assets/' + path ) ) || usedPaths.has( 'assets/' + path ) ) continue;
+				usedPaths.add( 'assets/' + path ); assets.push( { path: 'assets/' + path, file: entry.file } );
+			}
 		}
-		return true;
+		return scripts.some( script => script.assetBehavior === 'model' );
 	}
 
 	function emitModel( o, parent ) {
