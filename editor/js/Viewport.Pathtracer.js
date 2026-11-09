@@ -1,5 +1,6 @@
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
 import { ShaderChunk } from 'three';
+import { withEnabledObjects } from './ObjectRestrictions.js';
 import cubeUVReflection from './libs/cube_uv_reflection_fragment.js';
 
 // WebGL path tracer still references the pre-r187 cube-UV shader chunk.
@@ -18,7 +19,7 @@ function ViewportPathtracer( renderer ) {
 
 		}
 
-		pathTracer.setScene( scene, camera );
+		withEnabledObjects( scene, () => pathTracer.setScene( scene, camera ) );
 
 	}
 

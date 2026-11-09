@@ -598,7 +598,9 @@ class UINumber extends UIElement {
 			if ( gesture.travel < 2 ) return;
 
 			const sensitivity = event.shiftKey ? 500 : 50;
-			gesture.value = Math.min( scope.max, Math.max( scope.min, gesture.value + ( dx - dy ) * scope.step / sensitivity ) );
+			const min = scope.scrubRange?.[ 0 ] ?? scope.min;
+			const max = scope.scrubRange?.[ 1 ] ?? scope.max;
+			gesture.value = Math.min( max, Math.max( min, gesture.value + ( dx - dy ) * scope.step / sensitivity ) );
 			const value = scope.scrubDefault === undefined ? gesture.value : Number( gesture.value.toFixed( scope.precision ) );
 			if ( value === scope.value ) return;
 
@@ -718,6 +720,7 @@ class UINumber extends UIElement {
 		if ( value !== undefined ) {
 
 			value = parseFloat( value );
+			if ( this.scrubDefault !== undefined && ! Number.isFinite( value ) ) value = this.value;
 
 			if ( value < this.min ) value = this.min;
 			if ( value > this.max ) value = this.max;
@@ -753,7 +756,15 @@ class UINumber extends UIElement {
 
 		this.scrubDefault = value;
 		this.dom.style.touchAction = 'none';
-		this.dom.title = 'Drag horizontally or vertically to adjust. Hold Shift for fine adjustment. Shift-double-click to reset.';
+		this.dom.title = 'Drag to adjust, Shift-drag for finer steps, or Shift-double-click to reset.';
+		return this;
+
+	}
+
+	setScrubRange( min, max ) {
+
+		this.scrubRange = [ min, max ];
+		this.dom.title += ' Click and type to enter a value outside the range.';
 		return this;
 
 	}

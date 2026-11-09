@@ -1,6 +1,7 @@
 // three.js code exporter (experiment addition, not part of upstream three.js editor).
 // Turns the editor scene into readable, commented JavaScript in the style of the lessons.
 import { scriptSourceForExecution, serializeScript } from './ScriptParams.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
@@ -216,14 +217,14 @@ function generateThreeCode( editor ) {
 		if ( o.scale.x !== 1 || o.scale.y !== 1 || o.scale.z !== 1 ) out( `${ name }.scale.set(${ vec( o.scale.x, o.scale.y, o.scale.z ) });` );
 		if ( o.castShadow ) out( `${ name }.castShadow = true;` );
 		if ( o.receiveShadow ) out( `${ name }.receiveShadow = true;` );
-		if ( o.visible === false ) out( `${ name }.visible = false;` );
+		if ( o.visible === false || o.userData.threeditor?.disabled === true ) out( `${ name }.visible = false;` );
 
 	}
 
 	const assetBehaviors = [];
 	function emitAssetBehavior( object, name ) {
 		const script = editor.scripts?.[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
-		if ( ! script ) return false;
+		if ( ! script || hasRestriction( object, 'disabled' ) ) return false;
 		assetBehaviors.push( { object: name, script: { ...serializeScript( script ), source: scriptSourceForExecution( script ) } } );
 		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
 			if ( ! script.source.includes( JSON.stringify( 'assets/' + path ) ) || usedPaths.has( 'assets/' + path ) ) continue;
@@ -278,23 +279,24 @@ function generateThreeCode( editor ) {
 		if ( o.name ) out( `${ name }.name = ${ q( o.name ) };` );
 		transform( name, o );
 		if ( o.userData.assetObject?.stripPresentation ) out( `{const discard=[]; ${ name }.traverse(node=>{if(node.isCamera||node.isLight||node.isHelper)discard.push(node);}); for(const node of discard)node.removeFromParent();}` );
-		function emitFollowTargets( node, reference ) {
+		function emitModelChildOverrides( node, reference ) {
 
 			node.children.forEach( ( child, index ) => {
 
 				const childReference = `${ reference }.children[${ index }]`;
 				const guardedReference = childReference.replaceAll( '.children[', '?.children[' );
 				if ( followTargets.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
-				emitFollowTargets( child, childReference );
+				if ( child.userData.threeditor?.disabled === true ) out( `if (${ guardedReference }) ${ childReference }.visible = false;` );
+				emitModelChildOverrides( child, childReference );
 
 			} );
 
 		}
-		if ( followTargets.size ) emitFollowTargets( o, name );
+		emitModelChildOverrides( o, name );
 		out( `${ parent }.add(${ name });` );
 		const clips = o.animations || [];
 		const hasAssetBehavior = emitAssetBehavior( o, name );
-		if ( clips.length > 0 && ! isObj && ! hasAssetBehavior ) {
+		if ( clips.length > 0 && ! isObj && ! hasAssetBehavior && ! hasRestriction( o, 'disabled' ) ) {
 
 			needsMixers = true;
 			out( `// Animations in this file: ${ clips.map( ( c ) => q( c.name ) ).join( ', ' ) }` );
@@ -405,6 +407,8 @@ function generateThreeCode( editor ) {
 	}
 
 	// Build the body first so we know which imports are needed.
+
+if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;' );
 
 	if ( scene.background ) {
 

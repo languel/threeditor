@@ -1,4 +1,6 @@
+import { hasRestriction } from './ObjectRestrictions.js';
 import { UIPanel, UISelect } from './libs/ui.js';
+import { ViewportParameters } from './Viewport.Parameters.js';
 
 function ViewportControls( editor ) {
 
@@ -24,7 +26,15 @@ function ViewportControls( editor ) {
 	signals.cameraAdded.add( update );
 	signals.cameraRemoved.add( update );
 	signals.viewportCameraChanged.add( () => cameraSelect.setValue( editor.viewportCamera.uuid ) );
-	signals.objectChanged.add( function ( object ) {
+	signals.objectChanged.add( function ( object, attribute ) {
+
+		if ( attribute === 'userData' ) {
+
+			updateCameraList();
+			if ( hasRestriction( editor.viewportCamera, 'disabled' ) ) editor.setViewportCamera( editor.camera.uuid );
+			return;
+
+		}
 
 		if ( object.isCamera ) {
 
@@ -44,7 +54,9 @@ function ViewportControls( editor ) {
 		editor.setViewportShading( this.getValue() );
 
 	} );
-	container.add( shadingSelect );
+	const parameters = new ViewportParameters( editor );
+	editor.viewportParameters = parameters;
+	container.add( shadingSelect, parameters );
 	signals.viewportShadingChanged.add( () => shadingSelect.setValue( editor.viewportShading ) );
 
 	signals.editorCleared.add( function () {
@@ -71,7 +83,7 @@ function ViewportControls( editor ) {
 		for ( const key in cameras ) {
 
 			const camera = cameras[ key ];
-			options[ camera.uuid ] = camera.name;
+			if ( ! hasRestriction( camera, 'disabled' ) ) options[ camera.uuid ] = camera.name;
 
 		}
 

@@ -2,6 +2,8 @@ import { UIPanel, UIText, UIButton, UINumber } from './libs/ui.js';
 
 import { AnimationPathHelper } from 'three/addons/helpers/AnimationPathHelper.js';
 
+import { hasRestriction } from './ObjectRestrictions.js';
+
 function Animation( editor ) {
 
 	const signals = editor.signals;
@@ -108,6 +110,7 @@ function Animation( editor ) {
 	} );
 	controlsPanel.add( stopButton );
 	editor.animationCommands = {
+		isEnabled: () => ! hasRestriction( currentRoot, 'disabled' ),
 		animationPlay: () => { if ( currentAction?.isRunning() && ! currentAction.paused ) pauseButton.dom.click(); else playButton.dom.click(); },
 		animationPause: () => pauseButton.dom.click(),
 		animationStop: () => stopButton.dom.click()
@@ -188,7 +191,7 @@ function Animation( editor ) {
 		const x = Math.max( 0, Math.min( clientX - rect.left - timelineStart, timelineWidth ) );
 		const percent = x / timelineWidth;
 
-		if ( currentAction && currentClip ) {
+		if ( currentAction && currentClip && ! hasRestriction( currentRoot, 'disabled' ) ) {
 
 			const time = percent * currentClip.duration;
 			currentAction.play();
@@ -542,7 +545,7 @@ function Animation( editor ) {
 	// Update time display and playhead during playback
 	function updateTime() {
 
-		if ( currentAction && currentClip ) {
+		if ( currentAction && currentClip && ! hasRestriction( currentRoot, 'disabled' ) ) {
 
 			const time = currentAction.time % currentClip.duration;
 			timeText.setValue( time.toFixed( 2 ) );

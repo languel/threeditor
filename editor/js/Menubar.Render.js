@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIButton, UIInteger, UISelect, UIText } from './libs/ui.js';
 
+import { withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { APP } from './libs/app.js';
 import { setupRenderEnvironment, setupPathTracingEnvironment } from './RenderEnvironment.js';
@@ -316,7 +317,7 @@ class RenderImageDialog {
 				case 'wireframe':
 
 					scene.overrideMaterial = shadingTypeSelect.getValue() === 'normals' ? new THREE.MeshNormalMaterial() : shadingTypeSelect.getValue() === 'wireframe' ? new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } ) : null;
-					renderer.render( scene, camera );
+					withEnabledObjects( scene, () => renderer.render( scene, camera ) );
 					scene.overrideMaterial?.dispose();
 					environmentTarget?.dispose();
 					renderer.dispose();
@@ -345,7 +346,7 @@ class RenderImageDialog {
 						pathTracer.useMegakernel( true );
 						pathTracer.renderDelay = 0;
 						pathTracer.dynamicLowRes = false;
-						pathTracer.setScene( scene, camera );
+						withEnabledObjects( scene, () => pathTracer.setScene( scene, camera ) );
 
 					} catch ( error ) {
 

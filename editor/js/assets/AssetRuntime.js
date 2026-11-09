@@ -1,10 +1,11 @@
+import { hasRestriction } from '../ObjectRestrictions.js';
 import * as THREE from 'three';
 import { scriptSourceForExecution, serializeScript } from '../ScriptParams.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 
 export function evaluateAssetScript( object, script, player, scene, camera, source = script.source ) {
 	const { parameters = {} } = serializeScript( script );
-	const run = new Function( 'THREE', 'params', 'player', 'scene', 'camera', 'init', 'update', 'stop', scriptSourceForExecution( script, source ) + '\nreturn {init:typeof init==="function"?init:null, update:typeof update==="function"?update:null, stop:typeof stop==="function"?stop:null};' );
+	const run = new Function( 'THREE', 'params', 'player', 'scene', 'camera', 'init', 'update', 'stop', 'setParameters', scriptSourceForExecution( script, source ) + '\nreturn {init:typeof init==="function"?init:null, update:typeof update==="function"?update:null, stop:typeof stop==="function"?stop:null, setParameters:typeof setParameters==="function"?setParameters:null};' );
 	return run.call( object, THREE, parameters, player, scene, camera );
 }
 
@@ -14,7 +15,23 @@ export class AssetRuntime {
 		this.editor = editor; this.active = new Map(); this.changingHUD = false; this.suspended = false;
 		const rebuild = () => this.refresh();
 		for ( const name of [ 'objectAdded', 'objectRemoved', 'projectLoaded', 'editorCleared', 'scriptAdded', 'scriptRemoved' ] ) editor.signals[ name ].add( rebuild );
-		editor.signals.scriptChanged.add( script => { if ( ! this.changingHUD ) this.refresh( script ); } );
+		editor.signals.objectChanged.add( ( object, attribute ) => {
+
+			if ( attribute === 'userData' ) this.refresh();
+
+		} );
+		editor.signals.scriptChanged.add( ( script, attribute ) => {
+			if ( this.changingHUD || attribute === 'favoriteParams' ) return;
+			if ( attribute === 'paramValues' ) {
+				for ( const [ object, runtime ] of this.active ) {
+					if ( runtime.script !== script || ! runtime.setParameters ) continue;
+					runtime.setParameters.call( object, serializeScript( script ).parameters || {} );
+					editor.signals.objectChanged.dispatch( object );
+					return;
+				}
+			}
+			this.refresh( script );
+		} );
 		editor.signals.startPlayer.add( () => { this.suspended = true; this.dispose(); } );
 		editor.signals.stopPlayer.add( () => { this.suspended = false; this.refresh(); } );
 	}
@@ -24,7 +41,7 @@ export class AssetRuntime {
 		const live = new Set();
 		editor.scene.traverse( object => {
 			const script = editor.scripts[ object.uuid ]?.find( script => script.assetBehavior && script.enabled !== false );
-			if ( ! script ) return;
+			if ( ! script || hasRestriction( object, 'disabled' ) ) return;
 			live.add( object );
 			if ( changedScript === script || this.active.get( object )?.script !== script ) this.stop( object );
 			if ( this.active.has( object ) ) return;

@@ -1530,3 +1530,78 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .asset-preview-stage select { position: absolute; bottom: 5px; left: 5px; max-width: calc(100% - 10px); }
 .asset-engine-controls[hidden] { display: none !important; }
 .asset-engine-controls input, .asset-engine-controls select { max-width: 120px; }
+
+/* Script parameters are edited in the sidebar or in the viewport favorites. */
+#viewport .asset-engine-controls, #player .asset-engine-controls { display: none !important; }
+
+.script-param-favorite {
+	flex: 0 0 20px;
+	margin: 0 4px 0 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--theme-text);
+	font-size: 15px;
+	line-height: 22px;
+	cursor: pointer;
+	opacity: 0.55;
+}
+
+.script-param-favorite:hover, .script-param-favorite:focus-visible,
+.script-param-favorite[aria-pressed="true"] { opacity: 1; }
+.script-param-favorite[aria-pressed="true"] { color: var(--theme-accent); }
+
+.viewport-parameters { position: relative; display: inline-block; margin-left: 6px; z-index: 6; }
+.viewport-parameters[hidden], .viewport-parameter-list[hidden] { display: none; }
+.viewport-parameters > .viewport-parameter-trigger {
+	background: transparent;
+	color: var(--theme-text);
+	border: 0;
+	padding: 5px 7px;
+	cursor: pointer;
+	opacity: 0.25;
+}
+.viewport-parameters > .viewport-parameter-trigger:hover, .viewport-parameters > .viewport-parameter-trigger:focus-visible,
+.viewport-parameters > .viewport-parameter-trigger[aria-expanded="true"] {
+	background: transparent;
+	color: var(--theme-accent);
+	opacity: 1;
+}
+#player > .viewport-parameters { position: absolute; top: 10px; right: 10px; }
+body.presenting #player > .viewport-parameters { top: 6px; right: 6px; }
+body.presenting #player > .viewport-parameters > .viewport-parameter-trigger { display: none; }
+body.presenting #player > .viewport-parameters > .viewport-parameter-list { top: 0; }
+body.presenting #player:has( > .presentation-exit.always-visible ) > .viewport-parameters { top: 54px; }
+
+.viewport-parameter-list {
+	position: absolute;
+	right: 0;
+	top: 100%;
+	width: min(192px, 80vw);
+	max-height: min(50vh, 420px);
+	overflow: auto;
+	padding: 6px 8px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--theme-background), transparent 8%);
+	color: var(--theme-text);
+	box-shadow: 0 2px 10px #0004;
+}
+
+.viewport-parameter-group + .viewport-parameter-group { margin-top: 6px; }
+.viewport-parameter-title, .viewport-parameter-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewport-parameter-title { display: block; font-size: 11px; opacity: 0.75; margin-bottom: 3px; }
+.viewport-parameter-group > .Row { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 22px; }
+.viewport-parameter-list .Select, .viewport-parameter-list .Input { max-width: 108px; box-sizing: border-box; }
+.script-parameter-row > .Label, .viewport-parameter-label { flex: 0 1 38%; min-width: 0; }
+#sidebar .script-parameter-row > .Label { width: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.script-parameter-row > .script-param-slider-group,
+.viewport-parameter-group .script-param-slider-group {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	min-width: 0;
+	gap: 5px;
+}
+.script-param-slider-group > .script-param-slider { flex: 1; width: 0; min-width: 0; margin: 0; }
+.script-param-slider-group > .Input { flex: 0 1 52px; min-width: 0; box-sizing: border-box; }
+.viewport-parameter-list .script-param-slider-group .Input { max-width: 49px; }

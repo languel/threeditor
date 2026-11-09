@@ -46,6 +46,7 @@ Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`.
 
 - The four icons beside the gear toggle the **Code panel**, **sidebar**, **timeline**, and **transform toolbar**. Double-click a resize bar to collapse its panel. Hover at the corresponding edge for a temporary reveal.
 - The **gear** opens **Settings**, with collapsible General, Theme, Shortcuts, and History sections. General holds language, autosave, and an option to auto-hide the top menu; move to the top edge to reveal it. Theme offers System, Light, Dark, Mono Light, Mono Dark, and Warm Dark presets. Adjust the palette colors, enter a name, and choose **Save theme** to keep a custom theme; select a saved theme to edit or delete it. Themes also color the code editor. Hosted editor preferences and autosaved projects are stored in the browser; editable HTML exports include the saved themes.
+- Use the outliner’s power icon to disable an object and its children. They leave the rendered scene and their behaviors stop. Turning them back on restores their existing visibility settings.
 - The viewport camera dropdown chooses the view used for preview and publishing. The top **Camera** in the outliner is the editor's orbit camera. Added cameras keep their own transforms and can be parented to objects.
 - Mouse navigation defaults to **Standard**: left-drag to orbit, Shift-left-drag or right-drag to pan, and scroll to zoom. **Settings → General → Mouse navigation** can switch to Blender middle-mouse navigation independently of the keyboard shortcut preset. Backtick activates WASD fly navigation with either mouse mode.
 - The top **Camera** is the director view: standard mouse navigation and backtick/WASD fly navigation are always available. For scene cameras, **Object → Controller** attaches an editable Orbit, Fly, First Person, or Third Person script for Play and playable exports. Third Person offers a **Follow target**. Choose **Edit controller script** to change its behavior; the Script tab exposes speed, sensitivity, zoom, pan and follow parameters. Scene cameras start with no controller. Source exports retain the controller preset and parameters; use playable exports for custom script behavior.
@@ -75,7 +76,7 @@ For example, `await threeditor.call('threeditor_object_create', { type: 'box', n
 
 Open **Code** to see the generated scene. Scene changes regenerate the code. Edit the section between `// @key Scene contents` and `// @/key`, then choose **Apply**, press **Ctrl/Cmd+Enter**, or enable **auto** to apply after a pause. Auto is off by default. The Code panel also opens object scripts and material shader editors.
 
-Use `@param` comments in an object script to expose controls under that script in Properties. Numbers can include an optional range. Booleans and double-quoted strings are also supported. Read the values from `params` in Play or a playable export.
+Use `@param` comments in an object script to expose controls under that script in Properties. Numbers can include a range for sliders and dragging. Click and type to enter a value outside that range. Shift-drag makes finer adjustments, and Shift-double-click restores the declared default. Booleans and double-quoted strings are also supported. Read the values from `params` in Play or a playable export.
 
 ```js
 // @param speed = 1 (0..5)
@@ -93,6 +94,12 @@ function update(event) {
   this.rotation.y += speed * event.delta / 1000;
 }
 ```
+
+Star a control in **Script** to add it to the viewport’s favorites. Hover over the star in the top-right corner or press **Shift+P** to open the menu. The shortcut also works in Play and presentation. In presentation, the star stays hidden and the menu opens at the top-right edge. The project saves your favorites and the current values.
+
+Audio and video expose playback, mute, loop, volume, seek, and speed in the Script panel. Favorite the controls you want to use during playback.
+
+The stock GLB mixer provides one global **Speed** slider, a **Mix** slider for every clip, and a slider for every blendshape. The global speed can be negative for reverse playback. Resetting a blendshape slider to its imported value returns control to the animation.
 
 In **Settings → Code editor**, choose the font, size, ligatures, completion, diagnostics, line numbers, block folding and wrapping. In the code panel, **Cmd/Ctrl + or −** changes font size, **Alt+Z** toggles wrapping, **Alt+Shift+F** formats JavaScript, and **Alt+Shift+M** minimizes the selection or the whole JavaScript document. Formatting respects a selection. A local TypeScript language service supplies JavaScript and three.js r187 completions and selected diagnostics; press **Ctrl+Space** to request suggestions. GLSL has syntax highlighting and keyword completion. Formatting and minimization currently apply to JavaScript, not GLSL or JSON.
 

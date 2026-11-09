@@ -78,7 +78,7 @@ const modelBehaviorSource = `function modelBehavior() {
 	function stop() { panel?.remove(); mixer?.stopAllAction(); mixer?.uncacheRoot( this ); }
 	return { init, update, stop };
 }`;
-export function modelScript( object ) {
+function legacyModelScript( object ) {
 	const names = object.animations.map( clip => clip.name );
 	return { name: 'Model viewer · animation mixer', assetBehavior: 'model', enabled: true, source: `// Editable model controller. Clip weights blend independently on the original rig.\n// @param clipA = ${ JSON.stringify( names[ 0 ] || '' ) }\n// @options clipA = ${ JSON.stringify( names ) }\n// @param clipB = ${ JSON.stringify( names[ 1 ] || names[ 0 ] || '' ) }\n// @options clipB = ${ JSON.stringify( names ) }\n// @param time = 0 (0..1)\n// @param blend = 0 (0..1)\n// @param speed = 1 (0..3)\n// @param playing = true\n// @param loop = true\n// @param wireframe = false\n// @param showControls = true\nvar behavior = (${ modelBehaviorSource }).call(this);\nvar init = behavior.init, update = behavior.update, stop = behavior.stop;\n` };
 }
@@ -98,11 +98,167 @@ const legacyControl = `function control( name, type, options ) {
 			label.append( input ); panel.append( label );
 		}`;
 
-export function upgradeModelScript( script ) {
+function repairLegacyModelScript( script ) {
 	if ( script.assetBehavior !== 'model' || ! script.source.includes( legacyControl ) ) return;
 	const source = modelBehaviorSource;
 	const start = source.indexOf( 'function control(' );
 	const end = source.indexOf( '\n\t\tvar names', start );
 	script.source = script.source.replace( legacyControl, () => source.slice( start, end ) );
 	script.source = script.source.replace( 'timeInput.value=actions[0].time/actions[0].getClip().duration', 'timeInput.value=String( actions[0].time / actions[0].getClip().duration )' );
+}
+
+
+// Embedded in the attached script so the controls and animation behavior travel with the model.
+function modelMixer( THREE, root, params, morphs ) {
+
+	const mixer = new THREE.AnimationMixer( root );
+	const actions = root.animations.map( clip => mixer.clipAction( clip ).play() );
+	const targets = morphs.map( ( { uuid, path, name, index, key, rest } ) => {
+
+		const node = root.getObjectByProperty( 'uuid', uuid ) || path.reduce( ( parent, child ) => parent?.children[ child ], root );
+		return { influences: node?.name === name ? node.morphTargetInfluences : undefined, index, key, rest, base: /** @type {number | undefined} */ ( undefined ) };
+
+	} );
+	let current;
+
+	function applyMorphs( restore = false ) {
+
+		for ( const target of targets ) {
+
+			const { influences, index, key, rest } = target;
+			if ( ! influences ) continue;
+			if ( restore ) {
+
+				if ( target.base !== undefined ) influences[ index ] = target.base;
+				target.base = undefined;
+
+			} else if ( Number.isFinite( current[ key ] ) && current[ key ] !== rest ) {
+
+				target.base = influences[ index ];
+				influences[ index ] = current[ key ];
+
+			}
+
+		}
+
+	}
+
+	function setParameters( next ) {
+
+		const seek = next.time !== current?.time;
+		applyMorphs( true );
+		current = next;
+		root.traverse( node => {
+
+			for ( const material of [ node.material ].flat() ) if ( material ) material.wireframe = current.wireframe;
+
+		} );
+		actions.forEach( ( action, index ) => {
+
+			action.setLoop( current.loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity );
+			action.clampWhenFinished = ! current.loop;
+			action.setEffectiveWeight( current[ 'mix_' + index ] );
+			if ( seek ) {
+
+				action.reset();
+				action.time = current.time * action.getClip().duration;
+
+			}
+
+		} );
+		mixer.update( 0 );
+		applyMorphs();
+
+	}
+
+	function init() {
+
+		for ( const { influences, index, rest } of targets ) if ( influences ) influences[ index ] = rest;
+		setParameters( params );
+
+	}
+
+	function update( event ) {
+
+		if ( ! current.playing ) return;
+		applyMorphs( true );
+		mixer.update( Math.min( event.delta / 1000, 0.1 ) * current.speed );
+		applyMorphs();
+
+	}
+
+	function stop() {
+
+		applyMorphs( true );
+		mixer.stopAllAction();
+		mixer.uncacheRoot( root );
+
+	}
+
+	return { init, update, stop, setParameters };
+
+}
+
+export function modelScript( object ) {
+
+	let source = '// Editable model mixer. Each animation has an independent weight.\n';
+	function slider( key, label, value, min, max ) {
+
+		source += `// @param ${ key } = ${ value } (${ min }..${ max })\n// @label ${ key } = ${ JSON.stringify( label ) }\n// @slider ${ key }\n`;
+
+	}
+
+	if ( object.animations.length ) {
+
+		slider( 'speed', 'Speed', 1, 0, 3 );
+		slider( 'time', 'Time', 0, 0, 1 );
+		source += '// @param playing = true\n// @param loop = true\n';
+		object.animations.forEach( ( clip, index ) => {
+
+			slider( 'mix_' + index, ( clip.name || 'Clip ' + ( index + 1 ) ) + ' mix', index === 0 ? 1 : 0, 0, 1 );
+
+		} );
+
+	}
+
+	source += '// @param wireframe = false\n';
+	const morphs = [];
+	function collectMorphs( node, path ) {
+
+		const names = Object.entries( node.morphTargetDictionary || {} );
+		node.morphTargetInfluences?.forEach( ( rest, index ) => {
+
+			const name = names.find( ( [ , targetIndex ] ) => targetIndex === index )?.[ 0 ] || 'Blendshape ' + ( index + 1 );
+			const key = 'morph_' + morphs.length;
+			slider( key, [ node.name, name ].filter( Boolean ).join( ' · ' ), rest, Math.min( 0, rest ), Math.max( 1, rest ) );
+			morphs.push( { uuid: node.uuid, path, name: node.name, index, key, rest } );
+
+		} );
+		node.children.forEach( ( child, index ) => collectMorphs( child, [ ...path, index ] ) );
+
+	}
+	collectMorphs( object, [] );
+	source += `var behavior = (${ modelMixer.toString() })(THREE, this, params, /** @type {{uuid: string, path: number[], name: string, index: number, key: string, rest: number}[]} */ (${ JSON.stringify( morphs ) }));\nvar init = behavior.init, update = behavior.update, stop = behavior.stop, setParameters = behavior.setParameters;\n`;
+	return { name: 'Model viewer · animation mixer', assetBehavior: 'model', enabled: true, source };
+
+}
+
+export function upgradeModelScript( script, object ) {
+
+	repairLegacyModelScript( script );
+	if ( script.assetBehavior !== 'model' || ! object || script.source !== legacyModelScript( object ).source ) return;
+
+	const { clipA, clipB, blend = 0, showControls, ...values } = script.paramValues || {};
+	const clips = object.animations;
+	const a = clips.find( clip => clip.name === ( clipA ?? clips[ 0 ]?.name ) );
+	const b = clips.find( clip => clip.name === ( clipB ?? clips[ 1 ]?.name ?? clips[ 0 ]?.name ) );
+	const mix = Math.max( 0, Math.min( 1, blend ) );
+	clips.forEach( ( clip, index ) => {
+
+		values[ 'mix_' + index ] = clip === a ? a === b ? 1 : 1 - mix : clip === b ? mix : 0;
+
+	} );
+	script.paramValues = values;
+	script.source = modelScript( object ).source;
+
 }

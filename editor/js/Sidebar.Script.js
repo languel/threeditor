@@ -1,9 +1,10 @@
-import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText, UINumber, UISelect } from './libs/ui.js';
+import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
+import { scriptParameterControl } from './ScriptParameterControl.js';
 
 function SidebarScript( editor ) {
 
@@ -19,6 +20,7 @@ function SidebarScript( editor ) {
 	//
 
 	const scriptsContainer = new UIRow();
+	let parameterControls = [];
 	container.add( scriptsContainer );
 
 	const newScript = new UIButton( strings.getKey( 'sidebar/script/new' ) );
@@ -41,6 +43,7 @@ function SidebarScript( editor ) {
 	function update() {
 
 		scriptsContainer.clear();
+		parameterControls = [];
 		scriptsContainer.setDisplay( 'none' );
 
 		const object = editor.selected;
@@ -112,28 +115,26 @@ function SidebarScript( editor ) {
 
 					if ( ! script.generated ) for ( const field of scriptParams( script.source ) ) {
 
-						const value = scriptParamValue( script, field );
-						let control;
-						if ( field.options?.length ) control = new UISelect().setOptions( Object.fromEntries( field.options.map( value => [ value, value ] ) ) ).setValue( value );
-						else if ( typeof value === 'boolean' ) control = new UICheckbox( value );
-						else if ( typeof value === 'number' ) {
+						const favorites = new Set( script.favoriteParams || [] );
+						const favorite = new UIButton( favorites.has( field.name ) ? '★' : '☆' ).setClass( 'script-param-favorite' );
+						const label = 'Favorite ' + ( field.label || field.name );
+						favorite.dom.title = label;
+						favorite.dom.setAttribute( 'aria-label', label );
+						favorite.dom.setAttribute( 'aria-pressed', String( favorites.has( field.name ) ) );
+						favorite.onClick( () => {
 
-							control = new UINumber().setPrecision( 3 ).setScrubDefault( field.value ).setWidth( '80px' );
-							if ( field.min !== undefined ) control.setRange( field.min, field.max );
-							control.setValue( value );
-
-						} else control = new UIInput( value );
-						control.dom.setAttribute( 'aria-label', field.name );
-						control.onChange( () => {
-
-							const command = new SetScriptValueCommand( editor, object, script, 'paramValues', {
-								...script.paramValues, [ field.name ]: control.getValue()
-							} );
+							if ( favorites.has( field.name ) ) favorites.delete( field.name );
+							else favorites.add( field.name );
+							const command = new SetScriptValueCommand( editor, object, script, 'favoriteParams', [ ...favorites ] );
 							command.updatable = false;
 							editor.execute( command );
 
 						} );
-						scriptsContainer.add( new UIRow().add( new UIText( field.name ).setClass( 'Label' ), control ) );
+						const control = scriptParameterControl( editor, object, script, field );
+						const caption = new UIText( field.label || field.name ).setClass( 'Label' );
+						caption.dom.title = caption.dom.textContent;
+						parameterControls.push( { script, field, control } );
+						scriptsContainer.add( new UIRow().addClass( 'script-parameter-row' ).add( favorite, caption, control ) );
 
 					}
 
@@ -165,7 +166,22 @@ function SidebarScript( editor ) {
 
 	signals.scriptAdded.add( update );
 	signals.scriptRemoved.add( update );
-	signals.scriptChanged.add( update );
+	signals.scriptChanged.add( ( script, attribute ) => {
+
+		if ( attribute !== 'paramValues' ) {
+
+			update();
+			return;
+
+		}
+
+		for ( const entry of parameterControls ) {
+
+			if ( entry.script === script ) entry.control.setValue( scriptParamValue( script, entry.field ) );
+
+		}
+
+	} );
 
 	return container;
 

@@ -18,13 +18,13 @@ test( 'Director defaults to orbit and scene cameras require an attached controll
 
 } );
 
-test( 'Controller parameters serialize, clamp and drive the editable start handler', () => {
+test( 'Controller parameters preserve overrides and drive the editable start handler', () => {
 
 	const camera = { uuid: 'camera', userData: {} };
 	const script = createCameraControllerScript( { mode: 'thirdPerson', follow: 'fox', movementSpeed: 200, enablePan: false } );
 	const editor = { scripts: { camera: [ script ] } };
 	const settings = cameraControllerSettings( editor, camera );
-	assert.equal( settings.movementSpeed, 100 );
+	assert.equal( settings.movementSpeed, 200 );
 	assert.equal( settings.enablePan, false );
 	const saved = serializeScript( script );
 	assert.deepEqual( saved.parameters, settings );
@@ -36,7 +36,7 @@ test( 'Controller parameters serialize, clamp and drive the editable start handl
 	start.call( camera );
 	assert.equal( attached.object, camera );
 	assert.equal( attached.options.follow, fox );
-	assert.equal( attached.options.movementSpeed, 100 );
+	assert.equal( attached.options.movementSpeed, 200 );
 	script.enabled = false;
 	assert.equal( cameraControllerSettings( editor, camera ).mode, 'none' );
 

@@ -68,6 +68,14 @@ function scriptParams( source ) {
 		if ( ! match || ! fields.has( match[ 1 ] ) ) continue;
 		try { const choices = JSON.parse( match[ 2 ] ); if ( Array.isArray( choices ) && choices.every( value => typeof value === 'string' ) ) fields.get( match[ 1 ] ).options = choices; } catch { /* invalid choices leave a normal text field */ }
 	}
+	for ( const comment of comments ) for ( const line of comment.value.split( '\n' ) ) {
+		const slider = line.match( /^\s*@slider\s+([\w$]+)\s*$/ );
+		const label = line.match( /^\s*@label\s+([\w$]+)\s*=\s*("(?:[^"\\]|\\.)*")\s*$/ );
+		if ( slider && fields.get( slider[ 1 ] )?.min !== undefined ) fields.get( slider[ 1 ] ).slider = true;
+		if ( label && fields.has( label[ 1 ] ) ) {
+			try { fields.get( label[ 1 ] ).label = JSON.parse( label[ 2 ] ); } catch { /* Keep the parameter name. */ }
+		}
+	}
 	return [ ...fields.values() ];
 
 }
@@ -92,8 +100,8 @@ function scriptSourceForExecution( script, source = script.source ) {
 function scriptParamValue( script, field ) {
 
 	const override = Object.hasOwn( script.paramValues || {}, field.name ) ? script.paramValues[ field.name ] : undefined;
-	const value = typeof override === typeof field.value ? override : field.value;
-	return field.min === undefined ? value : Math.min( field.max, Math.max( field.min, value ) );
+	if ( typeof override !== typeof field.value ) return field.value;
+	return typeof override === 'number' && ! Number.isFinite( override ) ? field.value : override;
 
 }
 

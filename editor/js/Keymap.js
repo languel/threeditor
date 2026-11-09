@@ -68,7 +68,7 @@ class Keymap {
  onKey(e){
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, button, .CodeMirror, [contenteditable="true"]'))return;
-  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && action.id!=='presentation'))return;
+  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
   e.preventDefault();action.run();
  }
  registerMenu(menu){

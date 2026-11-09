@@ -2,6 +2,7 @@ import { UIPanel } from './libs/ui.js';
 import * as THREE from 'three';
 import { APP } from './libs/app.js';
 import { mediaPlaybackJSON } from './assets/AssetRuntime.js';
+import { serializeScript } from './ScriptParams.js';
 import { setupRenderEnvironment } from './RenderEnvironment.js';
 
 function Player( editor ) {
@@ -16,6 +17,21 @@ function Player( editor ) {
 	//
 
 	const player = new APP.Player( editor.portable?.importModule, editor.portable?.prepareScript );
+	const parameters = editor.viewportParameters;
+	const parameterHome = parameters.dom.parentElement;
+	signals.scriptChanged.add( ( script, attribute ) => {
+
+		if ( attribute !== 'paramValues' || ! player.getScene() ) return;
+		for ( const [ uuid, scripts ] of Object.entries( editor.scripts ) ) {
+
+			const index = scripts.indexOf( script );
+			if ( index === -1 ) continue;
+			player.setScriptParameters( uuid, index, serializeScript( script ).parameters || {} );
+			break;
+
+		}
+
+	} );
 	let environmentTarget = null;
 	let disposeMediaURLs = () => {};
 	signals.stopPlayer.add( () => { disposeMediaURLs(); disposeMediaURLs = () => {}; } );
@@ -61,6 +77,8 @@ function Player( editor ) {
 	signals.startPlayer.add( async function () {
 
 		container.setDisplay( '' );
+		parameters.close();
+		container.add( parameters );
 
 		try {
 
@@ -157,6 +175,15 @@ function Player( editor ) {
 
 	document.addEventListener( 'keydown', function ( event ) {
 
+		if ( presenting && event.key === 'Escape' && parameters.isOpen() ) {
+
+			event.preventDefault();
+			event.stopPropagation();
+			parameters.close();
+			return;
+
+		}
+
 		if ( presenting && event.key === 'Escape' && ! document.fullscreenElement ) {
 
 			event.preventDefault();
@@ -186,6 +213,8 @@ function Player( editor ) {
 	signals.stopPlayer.add( function () {
 
 		container.setDisplay( 'none' );
+		parameters.close();
+		parameterHome.appendChild( parameters.dom );
 
 		try {
 

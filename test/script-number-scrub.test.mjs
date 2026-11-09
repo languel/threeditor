@@ -20,7 +20,7 @@ test( 'Script numbers retain pointer capture and commit one change per scrub', (
 	globalThis.document = { createElement: () => new Input(), activeElement: null };
 	try {
 
-		const field = new UINumber( 0.2 ).setPrecision( 3 ).setRange( 0, 1 ).setScrubDefault( 0 );
+		const field = new UINumber( 0.2 ).setPrecision( 3 ).setScrubDefault( 0 ).setScrubRange( 0, 1 );
 		const changes = [];
 		field.onChange( () => changes.push( field.getValue() ) );
 		const send = ( type, properties = {} ) => {
@@ -50,6 +50,17 @@ test( 'Script numbers retain pointer capture and commit one change per scrub', (
 
 		send( 'dblclick', { shiftKey: true } );
 		assert.deepEqual( changes, [ 0.6, 0 ] );
+
+		send( 'pointerdown' );
+		send( 'pointermove', { clientX: 150 } );
+		send( 'pointerup' );
+		assert.equal( field.getValue(), 1 );
+		field.dom.value = '-1';
+		send( 'change' );
+		assert.equal( field.getValue(), -1 );
+		field.dom.value = '3';
+		send( 'change' );
+		assert.equal( field.getValue(), 3 );
 
 	} finally {
 

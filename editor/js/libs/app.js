@@ -1,5 +1,6 @@
 /* global THREE, __THREEEDITOR_RENDERER__ */
 import { createCameraController } from 'three/addons/controls/CameraController.js';
+import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
 import { scriptSourceForExecution } from '../ScriptParams.js';
 
 const APP = {
@@ -13,6 +14,7 @@ const APP = {
 		let camera, scene;
 
 		let events = {};
+		const scriptParameters = new Map();
 		let playing = false;
 
 		const dom = document.createElement( 'div' );
@@ -66,7 +68,7 @@ const APP = {
 
 			this.setScene( loader.parse( json.scene ) );
 			const sceneCamera = scene.getObjectByProperty( 'uuid', json.viewportCamera || json.camera.object.uuid );
-			this.setCamera( sceneCamera?.isCamera ? sceneCamera : loader.parse( json.camera ) );
+			this.setCamera( sceneCamera?.isCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : loader.parse( json.camera ) );
 			const hasControllerScript = json.scripts?.[ camera.uuid ]?.some( script => script.cameraController === true );
 			const mode = hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
 			cameraTarget = json.viewportTarget || json.controls?.center;
@@ -76,6 +78,7 @@ const APP = {
 				follow: scene.getObjectByProperty( 'uuid', camera.userData.threeditor?.cameraFollow )
 			} : null;
 
+			scriptParameters.clear();
 			events = {
 				init: [],
 				start: [],
@@ -126,13 +129,20 @@ const APP = {
 
 					const script = scripts[ i ];
 
-					if ( script.generated || script.enabled === false ) continue;
+					if ( script.generated || script.enabled === false || hasRestriction( object, 'disabled' ) ) continue;
 
 					const source = prepareScript ? prepareScript( script.source ) : script.source;
-					const body = scriptSourceForExecution( script, source ) + '\nreturn ' + scriptWrapResult + ';';
+					const body = scriptSourceForExecution( script, source ) + '\nreturn { events: ' + scriptWrapResult + ', setParameters: typeof setParameters === "function" ? setParameters : null };';
 					const signature = [ scriptWrapParams, ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' );
-					const args = script.parameters ? [ ...scriptArgs, { ...script.parameters } ] : scriptArgs;
-					const functions = new Function( signature, body ).call( object, ...args );
+					const params = script.parameters && { ...script.parameters };
+					const args = params ? [ ...scriptArgs, params ] : scriptArgs;
+					const { events: functions, setParameters } = new Function( signature, body ).call( object, ...args );
+					if ( params ) scriptParameters.set( uuid + ':' + i, next => {
+
+						if ( setParameters ) setParameters.call( object, next );
+						Object.assign( params, next );
+
+					} );
 
 					for ( const name in functions ) {
 
@@ -154,6 +164,12 @@ const APP = {
 			}
 
 			dispatch( events.init, arguments );
+
+		};
+
+		this.setScriptParameters = function ( uuid, index, parameters ) {
+
+			scriptParameters.get( uuid + ':' + index )?.( parameters );
 
 		};
 
@@ -276,7 +292,7 @@ const APP = {
 			}
 
 			controller?.update( ( time - prevTime ) / 1000 );
-			renderer.render( scene, camera );
+			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
 
 			prevTime = time;
 
@@ -321,7 +337,7 @@ const APP = {
 
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 
-			renderer.render( scene, camera );
+			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
 
 		};
 
@@ -335,6 +351,7 @@ const APP = {
 
 			}
 
+			scriptParameters.clear();
 			camera = undefined;
 			scene = undefined;
 

@@ -74,6 +74,7 @@ function SidebarScene( editor ) {
 		const name = object.name || getObjectType( object );
 		const flags = object.userData?.threeditor || {};
 		const items = [
+			...( object === editor.camera ? [] : [ { key: 'disabled', on: ! flags.disabled, label: flags.disabled ? 'Enable' : 'Disable', svg: '<path d="M8 1v7M5 3a5.5 5.5 0 106 0"/>' } ] ),
 			{ key: 'visible', on: object.visible, label: object.visible ? 'Hide' : 'Show', svg: '<path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2"/>' },
 			{ key: 'unselectable', on: ! flags.unselectable, label: flags.unselectable ? 'Enable viewport selection for' : 'Disable viewport selection for', svg: '<path d="M3 2l9 7-4 1-2 4z"/>' },
 			{ key: 'locked', on: ! flags.locked, label: flags.locked ? 'Unlock transforms for' : 'Lock transforms for', svg: flags.locked ? '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/>' : '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 015-2"/>' }

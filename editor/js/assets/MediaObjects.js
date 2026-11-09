@@ -19,9 +19,95 @@ function mediaControls( media, root, player, params ) {
 	player.dom.append( panel ); return panel;
 }
 
-export function mediaScript( path, type = 'video' ) {
+function legacyMediaScript( path, type = 'video' ) {
 	return { name: type === 'audio' ? 'Audio playback' : 'Video plane playback', assetBehavior: 'media', enabled: true, source: `// Editable media behavior. Original bytes are packaged with the project.\n// @param playing = true\n// @param loop = true\n// @param muted = ${ type !== 'audio' }\n// @param volume = 1 (0..1)\n// @param startTime = 0 (0..86400)\n// @param showControls = true\n// @param speed = 1 (0.1..3)\nvar media, texture, previousRender, controls;\nfunction init() {\n media = document.createElement(${ JSON.stringify( type ) }); this.assetMedia=media;\n media.crossOrigin = 'anonymous'; media.playsInline = true;\n media.loop = params.loop; media.muted = params.muted; media.volume = params.volume; media.playbackRate = params.speed;\n media.src = ${ JSON.stringify( 'assets/' + path ) };
  ${ type === 'audio' ? "media.controls=true; media.style.cssText='position:absolute;bottom:12px;right:12px;z-index:5'; player.dom.append(media);" : '' }\n ${ type === 'video' ? `const canvas = document.createElement('canvas'); canvas.width=512; canvas.height=Math.max(1,Math.round(512*(this.userData.assetObject.height||1)/(this.userData.assetObject.width||1)));\n if(this.material.map?.image?.width) canvas.getContext('2d').drawImage(this.material.map.image,0,0,canvas.width,canvas.height);\n texture = new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace;\n this.material.map?.dispose(); this.material.map=texture; this.material.needsUpdate=true;\n previousRender = this.onBeforeRender;\n this.onBeforeRender = function() { if(media.readyState >= 2) { canvas.getContext('2d').drawImage(media,0,0,canvas.width,canvas.height);texture.needsUpdate=true; } };` : '' }\n if(params.showControls && ${ JSON.stringify( type !== 'audio' ) }) controls=(${ mediaControls.toString() })(media,this,player,params);\n if(params.playing) media.play().catch(()=>{});\n}\nfunction stop() { this.assetMedia=null; controls?.remove(); media?.pause(); if(media) { media.removeAttribute('src'); media.load(); media.remove(); } ${ type === 'video' ? 'this.onBeforeRender = previousRender || function(){}; ' : '' } }\n` };
+}
+
+export function mediaScript( path, type = 'video' ) {
+
+	const audio = type === 'audio';
+	return {
+		name: audio ? 'Audio playback' : 'Video plane playback',
+		assetBehavior: 'media', enabled: true,
+		source: `// Editable media playback.
+ // @param playing = true
+ // @label playing = "Playing"
+ // @param loop = true
+ // @label loop = "Loop"
+ // @param muted = ${ ! audio }
+ // @label muted = "Mute"
+ // @param volume = 1 (0..1)
+ // @label volume = "Volume"
+ // @slider volume
+ // @param startTime = 0 (0..86400)
+ // @label startTime = "Seek (s)"
+ // @param speed = 1 (0.1..3)
+ // @label speed = "Speed"
+ // @slider speed
+let media, previousRender, current;
+function seek() {
+ if (Number.isFinite(media.duration)) media.currentTime = Math.max(0, Math.min(current.startTime, media.duration));
+}
+function setParameters(next) {
+ const seekChanged = next.startTime !== current?.startTime;
+ const playChanged = next.playing !== current?.playing;
+ current = next;
+ media.loop = next.loop;
+ media.muted = next.muted;
+ media.volume = Math.max(0, Math.min(next.volume, 1));
+ media.playbackRate = Math.max(0.0625, Math.min(next.speed, 16));
+ if (seekChanged) seek();
+ if (playChanged) {
+  if (next.playing) media.play().catch(() => {});
+  else media.pause();
+ }
+}
+function init() {
+ media = document.createElement(${ JSON.stringify( type ) });
+ this.assetMedia = media;
+ media.crossOrigin = 'anonymous';
+ media.playsInline = true;
+ media.addEventListener('loadedmetadata', seek);
+ media.src = ${ JSON.stringify( 'assets/' + path ) };
+ ${ audio ? '' : `const canvas = document.createElement('canvas');
+ canvas.width = 512;
+ canvas.height = Math.max(1, Math.round(512 * this.userData.assetObject.height / this.userData.assetObject.width));
+ const ctx = canvas.getContext('2d');
+ if (this.material.map?.image?.width) ctx.drawImage(this.material.map.image, 0, 0, canvas.width, canvas.height);
+ const texture = new THREE.CanvasTexture(canvas);
+ texture.colorSpace = THREE.SRGBColorSpace;
+ this.material.map?.dispose();
+ this.material.map = texture;
+ this.material.needsUpdate = true;
+ previousRender = this.onBeforeRender;
+ this.onBeforeRender = function () {
+  if (media.readyState >= 2) {
+   ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
+   texture.needsUpdate = true;
+  }
+ };` }
+ setParameters(params);
+}
+function stop() {
+ this.assetMedia = null;
+ media.removeEventListener('loadedmetadata', seek);
+ media.pause();
+ media.removeAttribute('src');
+ media.load();
+ ${ audio ? '' : 'this.onBeforeRender = previousRender;' }
+}
+`
+	};
+
+}
+
+export function upgradeMediaScript( script, asset ) {
+
+	if ( script.assetBehavior !== 'media' || ! asset?.path ) return;
+	if ( script.source !== legacyMediaScript( asset.path, asset.type ).source ) return;
+	script.source = mediaScript( asset.path, asset.type ).source;
+
 }
 
 export async function mediaPlane( editor, entry ) {

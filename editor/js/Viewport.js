@@ -9,7 +9,7 @@ import { EditorControls } from './EditorControls.js?v=camera-playback';
 
 import { ViewportControls } from './Viewport.Controls.js';
 import { FlyControls } from './FlyControls.js';
-import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
 
 import { ViewHelper } from './Viewport.ViewHelper.js';
@@ -979,7 +979,7 @@ function Viewport( editor ) {
 
 		const actions = mixer.stats.actions;
 
-		if ( actions.inUse > 0 || prevActionsInUse > 0 ) {
+		if ( ( actions.inUse > 0 || prevActionsInUse > 0 ) && editor.animationCommands?.isEnabled() !== false ) {
 
 			prevActionsInUse = actions.inUse;
 
@@ -1081,7 +1081,7 @@ function Viewport( editor ) {
 		startTime = performance.now();
 
 		renderer.setViewport( 0, 0, container.dom.offsetWidth, container.dom.offsetHeight );
-		renderer.render( scene, editor.viewportCamera );
+		withEnabledObjects( scene, () => renderer.render( scene, editor.viewportCamera ) );
 
 		// 'preview' shows the scene exactly as the exported code renders it: no grid, helpers or gizmos
 		if ( camera === editor.viewportCamera && editor.viewportShading !== 'preview' ) {

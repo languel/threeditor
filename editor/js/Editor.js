@@ -1,3 +1,5 @@
+import { upgradeMediaScript } from './assets/MediaObjects.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
@@ -635,7 +637,8 @@ Editor.prototype = {
 
 	setViewportCamera: function ( uuid ) {
 
-		this.viewportCamera = this.cameras[ uuid ] || this.camera;
+		const requested = this.cameras[ uuid ];
+		this.viewportCamera = requested && ! hasRestriction( requested, 'disabled' ) ? requested : this.camera;
 		if ( this.viewportCamera !== this.camera ) this.activeSceneCameraUuid = this.viewportCamera.uuid;
 		this.signals.viewportCameraChanged.dispatch();
 
@@ -644,9 +647,9 @@ Editor.prototype = {
 	get activeSceneCamera() {
 
 		const active = this.cameras[ this.activeSceneCameraUuid ];
-		if ( active && active !== this.camera ) return active;
-		if ( this.selected?.isCamera && this.selected !== this.camera && this.cameras[ this.selected.uuid ] === this.selected ) return this.selected;
-		return Object.values( this.cameras ).find( camera => camera !== this.camera );
+		if ( active && active !== this.camera && ! hasRestriction( active, 'disabled' ) ) return active;
+		if ( this.selected?.isCamera && this.selected !== this.camera && this.cameras[ this.selected.uuid ] === this.selected && ! hasRestriction( this.selected, 'disabled' ) ) return this.selected;
+		return Object.values( this.cameras ).find( camera => camera !== this.camera && ! hasRestriction( camera, 'disabled' ) );
 
 	},
 
@@ -801,10 +804,12 @@ Editor.prototype = {
 		this.scripts = json.scripts || {};
 		for ( const [ uuid, scripts ] of Object.entries( this.scripts ) ) {
 
-			const asset = scene.getObjectByProperty( 'uuid', uuid )?.userData.assetObject;
+			const object = scene.getObjectByProperty( 'uuid', uuid );
+			const asset = object?.userData.assetObject;
 			for ( const script of scripts ) {
 
-				upgradeModelScript( script );
+				upgradeModelScript( script, object );
+				upgradeMediaScript( script, asset );
 				if ( asset?.type === 'math' ) upgradeMathScript( script, asset.definition );
 
 			}
