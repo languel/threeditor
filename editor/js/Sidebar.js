@@ -13,6 +13,13 @@ function Sidebar( editor ) {
 
 	const container = new UITabbedPanel();
 	container.setId( 'sidebar' );
+	const selectTab = container.select.bind( container );
+	container.select = function ( id ) {
+
+		container.dom.classList.toggle( 'assets-active', id === 'assets' );
+		return selectTab( id );
+
+	};
 
 	const sidebarProperties = new SidebarProperties( editor );
 

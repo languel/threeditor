@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Asset sidebar preview checks</title>
+<button id="run">Run asset sidebar checks</button><pre id="result" role="status">Ready</pre>
+<iframe id="editor" title="Test editor" src="../editor/" style="width: 100%; height: 720px; border: 0"></iframe>
+<script type="module">
+import { AssetLibrary } from '../editor/js/assets/AssetLibrary.js';
+
+const result = document.querySelector( '#result' );
+const frame = document.querySelector( '#editor' );
+const waitFor = async predicate => {
+	for ( let i = 0; i < 100; i ++ ) {
+		const value = predicate();
+		if ( value ) return value;
+		await new Promise( resolve => setTimeout( resolve, 100 ) );
+	}
+	throw new Error( 'Timed out waiting for asset sidebar.' );
+};
+document.querySelector( '#run' ).onclick = async () => {
+	const id = 'sidebar-preview-test:' + crypto.randomUUID();
+	const library = new AssetLibrary();
+	result.textContent = 'Running';
+	try {
+		const doc = frame.contentDocument;
+		await waitFor( () => doc.querySelector( '[aria-label="Open asset browser"]' ) );
+		await library.put( { id, title: 'Preview test', kind: 'texture', file: new File( [ 'test' ], 'preview.png', { type: 'image/png' } ), folder: '', tags: [] } );
+		doc.querySelector( '[aria-label="Open asset browser"]' ).click();
+		[ ...doc.querySelectorAll( '.asset-sources button' ) ].find( button => button.textContent === 'My assets' ).click();
+		const card = await waitFor( () => [ ...doc.querySelectorAll( '.asset-card' ) ].find( element => element.dataset.assetId === id ) );
+		card.click();
+		await new Promise( resolve => frame.contentWindow.requestAnimationFrame( resolve ) );
+		const sidebar = doc.querySelector( '#sidebar' );
+		const grid = doc.querySelector( '.asset-grid' );
+		const detail = doc.querySelector( '.asset-detail' );
+		const preview = detail.querySelector( '.asset-preview-stage' );
+		const panelRect = detail.getBoundingClientRect(), previewRect = preview.getBoundingClientRect();
+		if ( ! sidebar.classList.contains( 'assets-active' ) ) throw new Error( 'Assets tab does not constrain the sidebar.' );
+		if ( grid.clientHeight > sidebar.clientHeight ) throw new Error( 'Asset grid expanded beyond the sidebar.' );
+		if ( ! preview.querySelector( 'img' ) || previewRect.top < panelRect.top || previewRect.bottom > panelRect.bottom + 1 ) throw new Error( 'Selected asset preview is not visible in the detail panel.' );
+		result.textContent = 'ALL PASSED';
+	} catch ( error ) {
+		result.textContent = 'FAIL ' + error.stack;
+		console.error( error );
+	} finally {
+		await library.remove( id );
+	}
+};
+</script></html>

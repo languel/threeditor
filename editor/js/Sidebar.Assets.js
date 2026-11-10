@@ -392,7 +392,7 @@ export function SidebarAssets( editor ) {
 			await editor.assignMediaAsset( entry );
 			if ( selection.has( record.id ) ) showDetail( record );
 		} ), row );
-		const previewHost = el( 'div', undefined, 'asset-preview-stage' ); previewHost.setAttribute( 'aria-label', record.title + ' preview' ); detail.insertBefore( previewHost, detail.children[ 2 ] || null );
+		const previewHost = el( 'div', undefined, 'asset-preview-stage' ); previewHost.setAttribute( 'aria-label', record.title + ' preview' ); detail.insertBefore( previewHost, row );
 		const sourcePath = controller.paths.get( record.id ) || record.projectPath;
 		if ( record.kind === 'webcam' ) {
 			const video = el( 'video' ); video.muted = true; video.playsInline = true;
