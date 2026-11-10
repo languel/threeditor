@@ -112,6 +112,8 @@ export function SidebarAssets( editor ) {
 			dialog.showModal();
 		} );
 		if ( ! chosen ) return;
+		const existing = ( await library.all() ).find( r => r.kind === kind && ( r.deviceId || '' ) === ( chosen.deviceId || '' ) && r.title === ( chosen.label || title ) );
+		if ( existing ) { source = 'mine'; folder = ''; selection.clear(); selection.add( existing.id ); await refresh(); return; }
 		const record = { id: kind + ':' + crypto.randomUUID(), kind, title: chosen.label || title, deviceId: chosen.deviceId, folder: '', tags: [] };
 		await library.put( record );
 		source = 'mine'; folder = ''; selection.clear(); selection.add( record.id ); await refresh();
@@ -422,18 +424,40 @@ export function SidebarAssets( editor ) {
 		const sourcePath = controller.paths.get( record.id ) || record.projectPath;
 		if ( record.kind === 'webcam' ) {
 			const canvas = el( 'canvas' ); previewHost.append( canvas );
-			const note = el( 'span', 'Use as input stream to see the live preview.' ); previewHost.append( note );
+			const note = el( 'span', 'Starting camera preview…' ); previewHost.append( note );
+			let saved = {}; try { saved = JSON.parse( localStorage.getItem( 'threeditor/inputSettings/' + record.id ) || '{}' ); } catch { /* ignore */ }
+			const current = { flipX: false, flipY: false, rotate: 0, left: 0, top: 0, right: 0, bottom: 0, ...saved };
+			// Own camera stream for the preview when the webcam is not an active input, so a live feed shows without assigning it.
+			let own = null, ownVideo = null;
+			const stopOwn = () => { own?.getTracks().forEach( t => t.stop() ); own = null; if ( ownVideo ) { ownVideo.srcObject = null; ownVideo = null; } };
+			const startOwn = async () => {
+				try {
+					const stream = await navigator.mediaDevices.getUserMedia( { video: record.deviceId ? { deviceId: { exact: record.deviceId } } : true } );
+					if ( ! canvas.isConnected ) { stream.getTracks().forEach( t => t.stop() ); return; }
+					own = stream; ownVideo = el( 'video' ); ownVideo.muted = true; ownVideo.playsInline = true; ownVideo.srcObject = stream; await ownVideo.play();
+				} catch ( error ) { note.textContent = 'Camera preview unavailable: ' + error.message; }
+			};
 			const draw = () => {
-				if ( ! canvas.isConnected ) return;
-				const frame = editor.getMediaFrame?.( record.id ), w = frame?.videoWidth || frame?.width, h = frame?.videoHeight || frame?.height;
+				if ( ! canvas.isConnected ) { stopOwn(); return; }
+				const assigned = editor.getMediaFrame?.( record.id );
+				if ( ! assigned && ! own && ! startOwn.started ) { startOwn.started = true; startOwn(); }
+				if ( assigned && own ) stopOwn();
+				const frame = assigned || ownVideo, w = frame?.videoWidth || frame?.width, h = frame?.videoHeight || frame?.height;
 				note.hidden = !! w; canvas.hidden = ! w;
-				if ( w && h && ( frame.readyState === undefined || frame.readyState >= 2 ) ) { if ( canvas.width !== 320 || canvas.height !== Math.round( 320 * h / w ) ) { canvas.width = 320; canvas.height = Math.round( 320 * h / w ); } canvas.getContext( '2d' )?.drawImage( frame, 0, 0, canvas.width, canvas.height ); }
+				if ( w && h && ( frame.readyState === undefined || frame.readyState >= 2 ) ) {
+					const t = current, quarter = t.rotate === 90 || t.rotate === 270;
+					// Raw camera frames get the same flip/rotate/crop as an assigned input.
+					const raw = frame === ownVideo, sx = raw ? t.left * w : 0, sy = raw ? t.top * h : 0, cw = raw ? Math.max( 1, w - sx - t.right * w ) : w, ch = raw ? Math.max( 1, h - sy - t.bottom * h ) : h;
+					const ow = 320, oh = Math.round( ow * ( quarter && raw ? cw / ch : ch / cw ) );
+					if ( canvas.width !== ow || canvas.height !== oh ) { canvas.width = ow; canvas.height = oh; }
+					const ctx = canvas.getContext( '2d' );
+					if ( ctx && raw ) { const dw = quarter ? oh : ow, dh = quarter ? ow : oh; ctx.save(); ctx.translate( ow / 2, oh / 2 ); ctx.rotate( t.rotate * Math.PI / 180 ); ctx.scale( t.flipX ? - 1 : 1, t.flipY ? - 1 : 1 ); ctx.drawImage( frame, sx, sy, cw, ch, - dw / 2, - dh / 2, dw, dh ); ctx.restore(); }
+					else ctx?.drawImage( frame, 0, 0, ow, oh );
+				}
 				requestAnimationFrame( draw );
 			};
 			draw();
 			// Input settings: shared with Streams → Audio and video → Input settings (same saved values).
-			let saved = {}; try { saved = JSON.parse( localStorage.getItem( 'threeditor/inputSettings/' + record.id ) || '{}' ); } catch { /* ignore */ }
-			const current = { flipX: false, flipY: false, rotate: 0, left: 0, top: 0, right: 0, bottom: 0, ...saved };
 			const box = el( 'details', undefined, 'asset-input-settings' ); box.open = true; box.append( el( 'summary', 'Input settings' ) );
 			const push = patch => { Object.assign( current, patch ); editor.setMediaInputSettings?.( record.id, { ...current } ); };
 			const row = ( label, control ) => { const l = el( 'label', label ); l.append( control ); box.append( l ); return control; };

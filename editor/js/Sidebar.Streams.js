@@ -351,6 +351,18 @@ function SidebarStreams( editor ) {
 		mediaStatus.textContent = 'Input unassigned';
 
 	}, mediaStatus );
+	// A new scene or loaded project releases every camera, microphone and media input.
+	async function clearInputs() {
+
+		if ( tracking ) { visionEnabled.checked = false; await updateTracking(); }
+		for ( const item of inputs.values() ) { item.media.stop(); item.video.remove(); }
+		inputs.clear();
+		refreshInputs();
+		mediaStatus.textContent = 'No asset assigned';
+		choosePreview();
+
+	}
+	editor.signals.editorCleared.add( () => clearInputs().catch( () => {} ) );
 	button( mediaPanel, 'Enable instrument sound', async () => {
 
 		bus.audio ||= new AudioContext();
