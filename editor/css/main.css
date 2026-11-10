@@ -1351,10 +1351,12 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .TabbedPanel .Tab.selected, #tabs span.selected { background-color: var(--theme-background); color: var(--theme-text); }
 .TabbedPanel .Tab, #tabs span { color: color-mix(in srgb, var(--theme-text), var(--theme-background) 40%); }
 .Outliner, .Listbox, .cm-s-editor.CodeMirror { background-color: var(--theme-surface); color: var(--theme-text); }
-.Input, .TextArea, .Button { background-color: var(--theme-surface); color: var(--theme-text); }
+.Input, .TextArea { background-color: var(--theme-surface); color: var(--theme-text); }
+/* Buttons share the panel backdrop; fill appears only on hover or when active. */
+.Button { background-color: transparent; color: var(--theme-text); }
 .Select { background-color: transparent; border-color: transparent; color: var(--theme-text); }
 .Select:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
-.Button:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
+.Button:hover { background-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 12%); color: var(--theme-text); }
 @supports (appearance: base-select) {
 	.Select, .Select::picker(select) { appearance: base-select; }
 	.Select::picker(select) { background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); }
@@ -2034,3 +2036,17 @@ body.glyph-fields #sidebar .Row .Label[data-glyph] {
 	display: inline-flex;
 	align-items: center;
 }
+
+/* Dimmer line numbers. */
+.cm-s-editor .CodeMirror-linenumber { color: color-mix(in srgb, var(--theme-background), var(--theme-text) 28%); }
+
+/* Compact glyph buttons: one consistent footprint, icons centered. */
+body.glyph-buttons[data-ui-style="compact"] .Button[data-glyph] {
+	min-width: 28px;
+	padding: 4px 6px;
+	text-align: center;
+}
+
+/* Menubar glyphs match the right-hand panel toggles (19px) with tighter gaps. */
+body.glyph-menus #menubar .menu > .title[data-glyph] .glyph svg { width: 19px; height: 19px; }
+body.glyph-menus[data-ui-style="compact"] #menubar .menu > .title[data-glyph] { padding: 6px 7px; }

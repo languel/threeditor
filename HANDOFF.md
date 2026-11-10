@@ -108,3 +108,11 @@ Verification covered 30 Node tests and Chrome checks for camera controls, map as
 - `Glyphs.js` replaces text labels with 15px stroke icons and keeps the original text as the hover tip. Settings → General has five independent scopes: tabs, buttons, section headers, field labels and menubar titles (`settings/glyph<Scope>`, body classes `glyph-<scope>`). `applyGlyphMode` runs from `uiStyleChanged`, so toggles apply and revert live. Matching uses `data-glyph-key` (a strings key, locale independent) before the English `LABELS` fallback. The MutationObserver scans only newly added nodes, batched per animation frame. Add new icons to `ICONS` and map them in `KEY_ICONS` or `LABELS`; any new UI string needs entries in all six locales in `Strings.js` or it shows `???`.
 - Known gap: one `???` button appears in the Scene panel under the Persian locale; its string key was never traced. Menu dropdown items are not glyphed.
 - The viewport recreates its renderer on `webglcontextlost` (up to 3 automatic retries, plus a **Restore** button) through the `rendererReset` signal handled in `Sidebar.Project.Renderer.js`. After deploying, hard reload to avoid stale cached modules.
+
+## Interface design principles
+
+- Controls share the panel backdrop. Buttons are transparent by default and gain a fill only on hover or when active, selected or pressed. Text inputs and number fields may keep a surface fill; dropdowns also share the backdrop.
+- Active and selected states use a low-opacity accent tint, never a solid accent fill.
+- Compact mode keeps one text size and weight, tight gaps, and a consistent footprint for icon buttons (28px minimum, 4px 6px padding). Menubar icons are 19px, matching the right-hand panel toggles.
+- Icons replace labels only through `Glyphs.js`, and the original text must remain as the hover tip.
+- Code line numbers are deliberately dim (28% text over background) so they do not compete with code.
