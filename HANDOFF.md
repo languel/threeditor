@@ -124,3 +124,15 @@ The asset sidebar uses the explicit `assets-active` class rather than a dynamic 
 - Compact mode keeps one text size and weight, tight gaps, and a consistent footprint for icon buttons (28px minimum, 4px 6px padding). All glyphs, including menubar icons and the right-hand panel toggles, are 15px.
 - Icons replace labels only through `Glyphs.js`, and the original text must remain as the hover tip.
 - Code line numbers are deliberately dim (28% text over background) so they do not compete with code.
+
+## Recent fixes
+
+### Null 2D context in `context.drawImage` (webcam input)
+
+`libs/ui.three.js` `UITexture.setValue()` and `editor/js/assets/MediaObjects.js` `movingTextureScript()` both called `context.drawImage()` without guarding against a null 2D context. When a webcam or media texture was assigned and the canvas was not visible, `getContext('2d')` could return null, throwing `null is not an object (evaluating 'context.drawImage')`. Both call sites now return early or guard the `drawImage` call with a null check. Fix committed as `0ab5e5b`.
+
+### Remaining open work
+
+- Landmarks appear flipped — likely a coordinate system or canvas transform issue in `drawStreamPreview` in `editor/js/streams/LandmarkPreview.js`.
+- Auto-assign video input stream not appearing on startup — check `editor/js/EditorApp.js` `assignMediaAsset` / `startMedia` wiring.
+- Physical webcam, microphone, MIDI, and serial device testing still pending.
