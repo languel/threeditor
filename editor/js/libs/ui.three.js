@@ -106,12 +106,10 @@ class UITexture extends UISpan {
 		const context = canvas.getContext( '2d' );
 
 		// Seems like context can be null if the canvas is not visible
-		if ( context ) {
+		if ( ! context ) return;
 
-			// Always clear the context before set new texture, because new texture may has transparency
-			context.clearRect( 0, 0, canvas.width, canvas.height );
-
-		}
+		// Always clear the context before set new texture, because new texture may has transparency
+		context.clearRect( 0, 0, canvas.width, canvas.height );
 
 		if ( texture !== null ) {
 

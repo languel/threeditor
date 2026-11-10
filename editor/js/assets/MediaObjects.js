@@ -172,7 +172,8 @@ function update() {
  }
  if (lastFrame === video.currentTime) return;
  lastFrame = video.currentTime;
- surfaceCanvas.getContext('2d').drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
+ const ctx = surfaceCanvas.getContext('2d');
+ if (ctx) ctx.drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
  texture.needsUpdate = true;
 }
 `
