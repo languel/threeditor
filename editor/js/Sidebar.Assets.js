@@ -9,6 +9,9 @@ import { AssetController, isInputAsset, isMapAsset, isMovingAsset } from './asse
 import { loadCatalog, mediathequeBase, search, facet, creditLine, state } from './assets/Mediatheque.js';
 import { textureEntries } from './AssetBrowser.js';
 
+// Devices first, then moving media, audio, and still images.
+function inputRank( r ) { return r.kind === 'webcam' ? 0 : r.kind === 'microphone' ? 1 : isMovingAsset( r ) ? 2 : r.kind === 'audio' ? 3 : 4; }
+
 function el( tag, text, className ) {
 	const node = document.createElement( tag );
 	if ( text !== undefined ) node.textContent = text;
@@ -43,7 +46,7 @@ export function SidebarAssets( editor ) {
 	}
 	editor.signals.startPlayer.add( () => preview.clear() );
 	for ( const signal of [ editor.signals.editorCleared, editor.signals.projectLoaded ] ) signal.add( () => { for ( const key of previewCache.keys() ) if ( key.startsWith( 'project:' ) ) previewCache.delete( key ); for ( const key of queuedThumbnails ) if ( key.startsWith( 'project:' ) ) queuedThumbnails.delete( key ); } );
-	let source = 'project', folder = '', tag = '', collection = '', records = [], catalog = [], local = [], selection = new Set(), generation = 0;
+	let merged = false, source = 'project', folder = '', tag = '', collection = '', records = [], catalog = [], local = [], selection = new Set(), generation = 0;
 	const urls = [];
 	const tabs = el( 'div', undefined, 'asset-sources' ); panel.dom.append( tabs );
 	const sourceButtons = new Map();
@@ -82,7 +85,7 @@ export function SidebarAssets( editor ) {
 	const tools = el( 'div', undefined, 'asset-tools' ); panel.dom.append( tools );
 	const query = el( 'input' ); query.type = 'search'; query.placeholder = 'Search assets or #tag…'; query.setAttribute( 'aria-label', 'Search assets' ); tools.append( query );
 	query.addEventListener( 'input', draw );
-	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
+	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'inputs', 'Input streams' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
 	const actions = el( 'div', undefined, 'asset-actions' ); panel.dom.append( actions );
 	const input = el( 'input' ); input.type = 'file'; input.multiple = true; input.hidden = true;
 	const directory = el( 'input' ); directory.type = 'file'; directory.multiple = true; directory.webkitdirectory = true; directory.hidden = true;
@@ -286,7 +289,10 @@ export function SidebarAssets( editor ) {
 		try {
 			try { local = await library.all(); } catch ( error ) { local = []; controller.status( 'Local asset storage unavailable: ' + error.message, true ); }
 			if ( current !== generation ) return;
-			records = source === 'project' ? projectRecords() : source === 'mine' ? local : catalog.map( r => ( { ...r, ...local.find( item => item.id === 'mediatheque:' + r.id ), id: 'mediatheque:' + r.id, catalogId: r.id, url: r.kind === 'animation' && r.abs.video ? r.abs.video : r.abs.url, preview: r.abs.thumb, page: r.abs.page, credit: creditLine( r ), kind: r.kind === 'image' ? 'texture' : r.kind } ) );
+			const catalogRecords = () => catalog.map( r => ( { ...r, ...local.find( item => item.id === 'mediatheque:' + r.id ), id: 'mediatheque:' + r.id, catalogId: r.id, url: r.kind === 'animation' && r.abs.video ? r.abs.video : r.abs.url, preview: r.abs.thumb, page: r.abs.page, credit: creditLine( r ), kind: r.kind === 'image' ? 'texture' : r.kind } ) );
+			merged = controller.picker?.kind === 'input';
+			records = merged ? [ ...projectRecords(), ...local.filter( r => ! String( r.id ).startsWith( 'mediatheque:' ) ), ...catalogRecords() ] : source === 'project' ? projectRecords() : source === 'mine' ? local : catalogRecords();
+
 			for ( const record of records ) controller.records.set( record.id, record );
 			draw();
 		} catch ( error ) { controller.status( 'Local asset storage unavailable: ' + error.message, true ); }
@@ -332,14 +338,16 @@ export function SidebarAssets( editor ) {
 		if ( source === 'mine' && folder ) {
 			button( 'Remove folder', () => controller.run( async () => { const old = folder; folder = folder.split( '/' ).slice( 0, -1 ).join( '/' ); await library.removeFolder( old ); await refresh(); } ), folders ).title = 'Remove this folder and move its assets to the parent folder';
 		}
-		const visible = search( records, query.value, { kind: kind.value, tags: tag ? [ tag ] : [], collection: source === 'catalog' ? collection : '' } ).filter( r => {
+		const visible = search( records, query.value, { kind: kind.value === 'inputs' ? 'all' : kind.value, tags: tag ? [ tag ] : [], collection: source === 'catalog' ? collection : '' } ).filter( r => {
+			if ( kind.value === 'inputs' && ! isInputAsset( r ) ) return false;
+			if ( merged || kind.value === 'inputs' && ! folder ) return true;
 			if ( source !== 'catalog' && ! query.value && ( r.folder || '' ) !== folder ) return false;
 			if ( source !== 'catalog' && query.value && folder && r.folder !== folder && ! r.folder?.startsWith( folder + '/' ) ) return false;
 			if ( controller.picker?.kind === 'texture' && r.kind !== 'texture' && ! ( controller.picker.moving && isMovingAsset( r ) ) ) return false;
 			if ( controller.picker?.kind === 'input' && ! isInputAsset( r ) ) return false;
 			if ( controller.picker?.kind === 'import' && r.kind !== 'model' ) return false;
 			return true;
-		} ).sort( ( a, b ) => a.title.localeCompare( b.title ) );
+		} ).sort( ( a, b ) => ( merged || kind.value === 'inputs' ? inputRank( a ) - inputRank( b ) : 0 ) || a.title.localeCompare( b.title ) );
 		if ( ! visible.length ) grid.append( el( 'p', source === 'catalog' && state.status === 'loading' ? 'Loading catalog…' : 'No matching assets. Upload files, add a URL, or browse Mediatheque.' ) );
 		for ( const record of visible ) {
 			const card = el( 'div', undefined, 'asset-card' ); card.dataset.assetId = record.id; card.tabIndex = 0; card.draggable = true; card.setAttribute( 'role', 'listitem' ); card.setAttribute( 'aria-label', record.title ); card.classList.toggle( 'selected', selection.has( record.id ) );
