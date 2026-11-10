@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Editor } from './Editor.js';
 import { Keymap } from './Keymap.js';
 import { ModalTransform } from './ModalTransform.js';
-import { applyTheme } from './Theme.js';
+import { applyTheme, applyUIStyle } from './Theme.js';
 import { Viewport } from './Viewport.js?v=camera-playback';
 import { Toolbar } from './Toolbar.js';
 import { Player } from './Player.js?v=preview-color';
@@ -50,6 +50,9 @@ async function startEditor( portable = null ) {
 
 	const updateTheme = () => applyTheme( editor.config, systemTheme.matches );
 	editor.signals.themeChanged.add( updateTheme );
+	const updateUIStyle = () => applyUIStyle( editor.config );
+	editor.signals.uiStyleChanged.add( updateUIStyle );
+	updateUIStyle();
 	systemTheme.addEventListener( 'change', function () {
 
 		if ( editor.config.getKey( 'settings/theme' ) === 'system' ) editor.signals.themeChanged.dispatch();

@@ -36,6 +36,23 @@ function Viewport( editor ) {
 	container.add( new ViewportControls( editor ) );
 	container.add( new ViewportInfo( editor ) );
 
+	// Shown when the GPU drops the WebGL context so the viewport
+	// never fails silently with a dark screen.
+
+	const contextNotice = document.createElement( 'div' );
+	contextNotice.className = 'viewport-context-notice';
+	contextNotice.hidden = true;
+	const contextText = document.createElement( 'span' );
+	contextText.textContent = 'Graphics context lost. Reload the tab to restore the viewport.';
+	contextNotice.appendChild( contextText );
+	const contextReload = document.createElement( 'button' );
+	contextReload.type = 'button';
+	contextReload.className = 'Button';
+	contextReload.textContent = 'Reload';
+	contextReload.addEventListener( 'click', () => location.reload() );
+	contextNotice.appendChild( contextReload );
+	container.dom.appendChild( contextNotice );
+
 	//
 
 	let renderer = null;
@@ -505,6 +522,24 @@ function Viewport( editor ) {
 		}
 
 		container.dom.appendChild( renderer.domElement );
+
+		if ( renderer.isWebGLRenderer ) {
+
+			renderer.domElement.addEventListener( 'webglcontextlost', function ( event ) {
+
+				event.preventDefault();
+				console.warn( 'Viewport: WebGL context lost.' );
+				contextNotice.hidden = false;
+
+			} );
+			renderer.domElement.addEventListener( 'webglcontextrestored', function () {
+
+				contextNotice.hidden = true;
+				render();
+
+			} );
+
+		}
 
 		signals.sceneEnvironmentChanged.dispatch( editor.environmentType, environment );
 

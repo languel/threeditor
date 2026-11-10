@@ -94,6 +94,7 @@ function Editor( portable = false ) {
 		menuAutoHideChanged: new Signal(),
 		themeChanged: new Signal(),
 		themePreviewChanged: new Signal(),
+		uiStyleChanged: new Signal(),
 
 		showHelpersChanged: new Signal(),
 		refreshSidebarObject3D: new Signal(),

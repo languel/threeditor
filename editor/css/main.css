@@ -1351,9 +1351,10 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .TabbedPanel .Tab.selected, #tabs span.selected { background-color: var(--theme-background); color: var(--theme-text); }
 .TabbedPanel .Tab, #tabs span { color: color-mix(in srgb, var(--theme-text), var(--theme-background) 40%); }
 .Outliner, .Listbox, .cm-s-editor.CodeMirror { background-color: var(--theme-surface); color: var(--theme-text); }
-.Input, .TextArea, .Select, .Button { background-color: var(--theme-surface); color: var(--theme-text); }
-.Select { border-color: var(--theme-surface); }
-.Select:hover, .Button:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
+.Input, .TextArea, .Button { background-color: var(--theme-surface); color: var(--theme-text); }
+.Select { background-color: transparent; border-color: transparent; color: var(--theme-text); }
+.Select:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
+.Button:hover { background-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 12%); color: var(--theme-text); }
 @supports (appearance: base-select) {
 	.Select, .Select::picker(select) { appearance: base-select; }
 	.Select::picker(select) { background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%); }
@@ -1373,7 +1374,7 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .Outliner .option, .Listbox .ListboxItem { color: var(--theme-text); }
 .Outliner .option.active, .Listbox .ListboxItem.active { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 70%); }
 .Outliner .option:hover, .Listbox .ListboxItem:hover { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 87%); }
-.Button.selected, #menubar .menu .options .option:hover { background-color: var(--theme-accent); color: var(--theme-surface); }
+.Button.selected, #menubar .menu .options .option:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 85%); color: var(--theme-text); }
 .panel-toggles button[aria-pressed="true"] { color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent), transparent 85%); }
 .panel-toggles button:hover, .settings-section > summary:hover { background: color-mix(in srgb, var(--theme-accent), transparent 90%); }
 #resizer:hover, #animation-resizer:hover, #code-resizer:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 45%); }
@@ -1426,7 +1427,7 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .example-folder > summary { cursor: pointer; padding: 6px 4px; font-weight: 600; }
 .example-folder > div { padding-left: 12px; }
 .example-library button { display: block; width: 100%; border: 0; padding: 6px 8px; background: transparent; color: var(--theme-text); text-align: left; cursor: pointer; }
-.example-library button:hover, .example-library button:focus-visible { background: var(--theme-accent); color: #fff; }
+.example-library button:hover, .example-library button:focus-visible { background: color-mix(in srgb, var(--theme-accent), transparent 85%); color: var(--theme-text); }
 .example-library-status { margin: 6px 4px; font-size: 11px; color: var(--theme-text); opacity: .75; white-space: normal; }
 .project-save-dialog { width: 380px; max-width: calc(100vw - 48px); padding: 20px; border: 1px solid color-mix(in srgb, var(--theme-text), transparent 65%); background: var(--theme-background); color: var(--theme-text); }
 .project-save-dialog::backdrop { background: #0007; }
@@ -1470,7 +1471,7 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .assets-panel a { color: inherit; text-decoration: underline; }
 .asset-sources { display: flex; gap: 4px; margin-bottom: 10px; }
 .asset-sources button { flex: 1; padding: 6px 3px; }
-.asset-sources button[aria-pressed=true] { border-bottom-color: #08f; }
+.asset-sources button[aria-pressed=true] { border-color: color-mix(in srgb, var(--theme-accent), transparent 40%); background: color-mix(in srgb, var(--theme-accent), transparent 85%); }
 .asset-tools { display: flex; gap: 5px; flex-wrap: wrap; }
 .asset-tools input { flex: 1 1 140px; width: 100%; }
 .asset-tools select { flex: 1; }
@@ -1623,3 +1624,367 @@ body.presenting #player:has( > .presentation-exit.always-visible ) > .viewport-p
 .stream-media-rack { position: fixed; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .stream-media-rack > * { width: 1px; height: 1px; }
 .stream-panel canvas { width: 100%; max-height: 210px; object-fit: contain; }
+
+/* Interface styles: Default keeps the legacy look.
+   Compact and Clean share one consistent type scale and tighter rhythm;
+   they differ only in density. */
+
+body[data-ui-style="compact"],
+body[data-ui-style="clean"] {
+	font-family: var(--ui-font-family, system-ui, -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif);
+	letter-spacing: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+body[data-ui-style="compact"] { font-size: 12px; }
+body[data-ui-style="clean"] { font-size: 13px; }
+
+body[data-ui-style="compact"] .Button,
+body[data-ui-style="clean"] .Button,
+body[data-ui-style="compact"] .Select,
+body[data-ui-style="clean"] .Select,
+body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="compact"] #tabs span,
+body[data-ui-style="clean"] #tabs span,
+body[data-ui-style="compact"] #menubar .menu .title,
+body[data-ui-style="clean"] #menubar .menu .title,
+body[data-ui-style="compact"] .Dialog-title,
+body[data-ui-style="clean"] .Dialog-title,
+body[data-ui-style="compact"] #code-panel .code-bar,
+body[data-ui-style="clean"] #code-panel .code-bar,
+body[data-ui-style="compact"] .shortcut-category,
+body[data-ui-style="clean"] .shortcut-category,
+body[data-ui-style="compact"] .context-menu-section,
+body[data-ui-style="clean"] .context-menu-section,
+body[data-ui-style="compact"] .TextureParametersDialog-groupHeading,
+body[data-ui-style="clean"] .TextureParametersDialog-groupHeading {
+	text-transform: none;
+	letter-spacing: normal;
+}
+
+body[data-ui-style="compact"] .Button,
+body[data-ui-style="clean"] .Button,
+body[data-ui-style="compact"] .Select,
+body[data-ui-style="clean"] .Select,
+body[data-ui-style="compact"] .Input,
+body[data-ui-style="clean"] .Input,
+body[data-ui-style="compact"] .TextArea,
+body[data-ui-style="clean"] .TextArea,
+body[data-ui-style="compact"] .Listbox,
+body[data-ui-style="clean"] .Listbox,
+body[data-ui-style="compact"] .Outliner,
+body[data-ui-style="clean"] .Outliner,
+body[data-ui-style="compact"] #menubar .menu .title,
+body[data-ui-style="clean"] #menubar .menu .title,
+body[data-ui-style="compact"] #menubar .menu .options .option,
+body[data-ui-style="clean"] #menubar .menu .options .option,
+body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="compact"] #tabs span,
+body[data-ui-style="clean"] #tabs span,
+body[data-ui-style="compact"] #code-panel .code-bar,
+body[data-ui-style="clean"] #code-panel .code-bar {
+	font-family: inherit;
+	font-weight: 400;
+}
+
+body[data-ui-style="compact"] .Dialog-title,
+body[data-ui-style="clean"] .Dialog-title,
+body[data-ui-style="compact"] .settings-section > summary,
+body[data-ui-style="clean"] .settings-section > summary {
+	font-family: inherit;
+	font-weight: 600;
+}
+
+body[data-ui-style="compact"] .Button,
+body[data-ui-style="compact"] .Select,
+body[data-ui-style="compact"] .Input,
+body[data-ui-style="compact"] .Listbox,
+body[data-ui-style="compact"] .Outliner,
+body[data-ui-style="compact"] #menubar .menu .options .option,
+body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="compact"] #tabs span,
+body[data-ui-style="compact"] #code-panel .code-bar,
+body[data-ui-style="compact"] #code-panel .code-target,
+body[data-ui-style="compact"] #code-panel .code-status {
+	font-size: 12px;
+}
+
+body[data-ui-style="clean"] .Button,
+body[data-ui-style="clean"] .Select,
+body[data-ui-style="clean"] .Input,
+body[data-ui-style="clean"] .Listbox,
+body[data-ui-style="clean"] .Outliner,
+body[data-ui-style="clean"] #menubar .menu .options .option,
+body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab,
+body[data-ui-style="clean"] #tabs span,
+body[data-ui-style="clean"] #code-panel .code-bar,
+body[data-ui-style="clean"] #code-panel .code-target,
+body[data-ui-style="clean"] #code-panel .code-status {
+	font-size: 13px;
+}
+
+body[data-ui-style="compact"] .Input.Number { font-size: 12px; }
+body[data-ui-style="clean"] .Input.Number { font-size: 13px; }
+
+/* Secondary / hint text shares one quiet scale */
+body[data-ui-style="compact"] .shortcut-note,
+body[data-ui-style="compact"] .example-library-status,
+body[data-ui-style="compact"] .context-menu-key,
+body[data-ui-style="compact"] .shortcut-category,
+body[data-ui-style="compact"] .context-menu-section,
+body[data-ui-style="compact"] .viewport-parameter-title,
+body[data-ui-style="compact"] .asset-card small,
+body[data-ui-style="compact"] .asset-credit,
+body[data-ui-style="compact"] .asset-status,
+body[data-ui-style="compact"] .theme-colors label,
+body[data-ui-style="compact"] .project-save-dialog p {
+	font-size: 11px;
+}
+
+body[data-ui-style="clean"] .shortcut-note,
+body[data-ui-style="clean"] .example-library-status,
+body[data-ui-style="clean"] .context-menu-key,
+body[data-ui-style="clean"] .shortcut-category,
+body[data-ui-style="clean"] .context-menu-section,
+body[data-ui-style="clean"] .viewport-parameter-title,
+body[data-ui-style="clean"] .asset-card small,
+body[data-ui-style="clean"] .asset-credit,
+body[data-ui-style="clean"] .asset-status,
+body[data-ui-style="clean"] .theme-colors label,
+body[data-ui-style="clean"] .project-save-dialog p {
+	font-size: 12px;
+}
+
+/* Consistent row rhythm */
+body[data-ui-style="compact"] #sidebar .Row,
+body[data-ui-style="clean"] #sidebar .Row,
+body[data-ui-style="compact"] .Dialog-body .Row,
+body[data-ui-style="clean"] .Dialog-body .Row {
+	align-items: center;
+}
+
+body[data-ui-style="compact"] #sidebar .Row,
+body[data-ui-style="compact"] .Dialog-body .Row {
+	min-height: 22px;
+	margin-bottom: 4px;
+}
+
+body[data-ui-style="clean"] #sidebar .Row,
+body[data-ui-style="clean"] .Dialog-body .Row {
+	min-height: 26px;
+	margin-bottom: 8px;
+}
+
+body[data-ui-style="compact"] #sidebar .Panel { padding: 6px 8px; }
+body[data-ui-style="clean"] #sidebar .Panel { padding: 10px 12px; }
+
+body[data-ui-style="compact"] #sidebar .Row .Label,
+body[data-ui-style="clean"] #sidebar .Row .Label,
+body[data-ui-style="compact"] .Dialog-body .Row .Label,
+body[data-ui-style="clean"] .Dialog-body .Row .Label {
+	font-weight: 400;
+	opacity: 0.85;
+}
+
+body[data-ui-style="compact"] .settings-section > summary { padding: 7px 8px; }
+body[data-ui-style="clean"] .settings-section > summary { padding: 9px 12px; }
+
+/* Menubar + tabs: same type, less air */
+body[data-ui-style="compact"] { --menubar-height: 32px; }
+body[data-ui-style="compact"] #menubar .menu .title { padding: 8px; line-height: 16px; }
+body[data-ui-style="compact"] #menubar .menu .options .option,
+body[data-ui-style="compact"] #menubar .menu .options .inactive { line-height: 22px; }
+body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab { padding: 7px 8px; }
+body[data-ui-style="compact"] #tabs span { padding: 7px 8px; }
+body[data-ui-style="compact"] .panel-toggles { height: 32px; }
+
+body[data-ui-style="clean"] #menubar .menu .options .option,
+body[data-ui-style="clean"] #menubar .menu .options .inactive { line-height: 24px; }
+body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab { padding: 8px 10px; }
+
+/* Buttons / selects: consistent height, no shouty caps */
+body[data-ui-style="compact"] .Button,
+body[data-ui-style="clean"] .Button {
+	padding: 5px 10px;
+	border-radius: 4px;
+}
+
+body[data-ui-style="compact"] .Select,
+body[data-ui-style="clean"] .Select {
+	border-width: 1px;
+	border-radius: 4px;
+	padding: 3px 6px;
+}
+
+body[data-ui-style="compact"] #toolbar { height: 30px; bottom: calc(var(--timeline-h) + var(--sidebar-bottom) + 12px); }
+
+/* Outliner rows: keep glyphs, labels and side controls on one baseline (all styles). */
+.Outliner .option {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+#outliner .opener,
+.Outliner .opener {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 16px;
+	margin: 0 2px;
+	line-height: 1;
+}
+
+.Outliner .type {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 16px;
+	line-height: 1;
+}
+
+.Outliner button.Script {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 16px;
+	line-height: 1;
+}
+
+.outliner-restrictions {
+	float: none;
+	margin-left: auto;
+	flex: none;
+}
+
+/* Compact + Clean: squarer dropdowns and checkboxes. */
+body[data-ui-style="compact"] .Select,
+body[data-ui-style="clean"] .Select {
+	border-radius: 2px;
+}
+
+body[data-ui-style="compact"] input[type="checkbox"],
+body[data-ui-style="clean"] input[type="checkbox"] {
+	appearance: none;
+	-webkit-appearance: none;
+	flex: none;
+	width: 1em;
+	height: 1em;
+	margin: 0;
+	padding: 0;
+	border: 1px solid color-mix(in srgb, var(--theme-text), transparent 25%);
+	border-radius: 2px;
+	background: transparent;
+	cursor: pointer;
+	vertical-align: -0.1em;
+}
+
+body[data-ui-style="compact"] input[type="checkbox"]:checked,
+body[data-ui-style="clean"] input[type="checkbox"]:checked {
+	background: var(--theme-accent);
+	border-color: var(--theme-accent);
+	box-shadow: inset 0 0 0 2.5px var(--theme-surface);
+}
+
+/* Compact + Clean: square-in-square for toggles, dot for selections, chevrons. */
+body[data-ui-style="compact"] #menubar .menu .options .option.toggle::before,
+body[data-ui-style="clean"] #menubar .menu .options .option.toggle::before {
+	content: ' ';
+}
+
+body[data-ui-style="compact"] #menubar .menu .options .option.toggle-on::before,
+body[data-ui-style="clean"] #menubar .menu .options .option.toggle-on::before {
+	content: '▣';
+	font-size: 12px;
+}
+
+body[data-ui-style="compact"] .submenu-title::after,
+body[data-ui-style="clean"] .submenu-title::after {
+	content: '›';
+}
+
+body[data-ui-style="compact"] .settings-section > summary,
+body[data-ui-style="clean"] .settings-section > summary,
+body[data-ui-style="compact"] .example-folder > summary,
+body[data-ui-style="clean"] .example-folder > summary,
+body[data-ui-style="compact"] .stream-panel summary,
+body[data-ui-style="clean"] .stream-panel summary,
+body[data-ui-style="compact"] .asset-facets > summary,
+body[data-ui-style="clean"] .asset-facets > summary {
+	list-style: none;
+}
+
+body[data-ui-style="compact"] .settings-section > summary::-webkit-details-marker,
+body[data-ui-style="clean"] .settings-section > summary::-webkit-details-marker,
+body[data-ui-style="compact"] .example-folder > summary::-webkit-details-marker,
+body[data-ui-style="clean"] .example-folder > summary::-webkit-details-marker,
+body[data-ui-style="compact"] .stream-panel summary::-webkit-details-marker,
+body[data-ui-style="clean"] .stream-panel summary::-webkit-details-marker,
+body[data-ui-style="compact"] .asset-facets > summary::-webkit-details-marker,
+body[data-ui-style="clean"] .asset-facets > summary::-webkit-details-marker {
+	display: none;
+}
+
+body[data-ui-style="compact"] .settings-section > summary::before,
+body[data-ui-style="clean"] .settings-section > summary::before,
+body[data-ui-style="compact"] .example-folder > summary::before,
+body[data-ui-style="clean"] .example-folder > summary::before,
+body[data-ui-style="compact"] .stream-panel summary::before,
+body[data-ui-style="clean"] .stream-panel summary::before,
+body[data-ui-style="compact"] .asset-facets > summary::before,
+body[data-ui-style="clean"] .asset-facets > summary::before {
+	content: '⌄';
+	display: inline-block;
+	margin-right: 6px;
+	opacity: 0.7;
+	transition: transform 0.12s ease;
+}
+
+body[data-ui-style="compact"] .settings-section:not([open]) > summary::before,
+body[data-ui-style="clean"] .settings-section:not([open]) > summary::before,
+body[data-ui-style="compact"] .example-folder:not([open]) > summary::before,
+body[data-ui-style="clean"] .example-folder:not([open]) > summary::before,
+body[data-ui-style="compact"] .stream-panel details:not([open]) > summary::before,
+body[data-ui-style="clean"] .stream-panel details:not([open]) > summary::before,
+body[data-ui-style="compact"] .asset-facets:not([open]) > summary::before,
+body[data-ui-style="clean"] .asset-facets:not([open]) > summary::before {
+	transform: rotate(-90deg);
+}
+
+@supports (appearance: base-select) {
+	body[data-ui-style="compact"] .Select option::checkmark,
+	body[data-ui-style="clean"] .Select option::checkmark {
+		content: '•';
+		color: var(--theme-accent);
+	}
+}
+
+/* WebGL context loss notice: floats over the viewport until reload or restore. */
+.viewport-context-notice {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 8px 8px 12px;
+	border-radius: 6px;
+	border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 25%);
+	background: var(--theme-background);
+	color: var(--theme-text);
+	box-shadow: 0 8px 25px #0005;
+	white-space: nowrap;
+}
+
+.viewport-context-notice[hidden] {
+	display: none;
+}

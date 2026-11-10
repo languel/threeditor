@@ -34,6 +34,8 @@ function Config( persist = true ) {
 		'settings/autoHideMenubar': false,
 		'settings/theme': 'system',
 		'settings/userThemes': {},
+		'settings/uiStyle': 'default',
+		'settings/uiFont': 'system',
 		'settings/codeEditor': { font: 'Menlo', fontSize: 13, ligatures: false, completion: true, lint: true, lineNumbers: true, folding: true, wrap: false },
 
 		'settings/shortcuts/translate': 'w',

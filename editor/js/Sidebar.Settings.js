@@ -1,5 +1,5 @@
 import { UIDiv, UIPanel, UIRow, UISelect, UIText } from './libs/ui.js';
-import { presets, resolveTheme } from './Theme.js';
+import { presets, resolveTheme, uiStyles, resolveUIStyle, uiFonts, resolveUIFont } from './Theme.js';
 import { UIBoolean } from './libs/ui.three.js';
 
 import { SidebarSettingsShortcuts } from './Sidebar.Settings.Shortcuts.js';
@@ -79,6 +79,33 @@ function SidebarSettings( editor ) {
 	} );
 	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ), mouseNavigation );
 	general.add( mouseNavigationRow );
+
+	const uiStyleRow = new UIRow();
+	const uiStyle = new UISelect().setOptions( uiStyles );
+	uiStyle.dom.setAttribute( 'aria-label', 'Interface style' );
+	uiStyle.dom.title = 'Default keeps the current look. Compact is denser with consistent type. Clean keeps comfortable spacing with consistent type.';
+	uiStyle.setValue( resolveUIStyle( config ) );
+	uiStyle.onChange( function () {
+
+		config.setKey( 'settings/uiStyle', this.getValue() );
+		signals.uiStyleChanged.dispatch();
+
+	} );
+	uiStyleRow.add( new UIText( 'Interface style' ).setClass( 'Label' ), uiStyle );
+	general.add( uiStyleRow );
+
+	const uiFontRow = new UIRow();
+	const uiFont = new UISelect().setOptions( uiFonts );
+	uiFont.dom.setAttribute( 'aria-label', 'Interface font' );
+	uiFont.setValue( resolveUIFont( config ) );
+	uiFont.onChange( function () {
+
+		config.setKey( 'settings/uiFont', this.getValue() );
+		signals.uiStyleChanged.dispatch();
+
+	} );
+	uiFontRow.add( new UIText( 'Interface font' ).setClass( 'Label' ), uiFont );
+	general.add( uiFontRow );
 
 	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)' );
 	const emulateMouseLabel = document.createElement( 'label' );
