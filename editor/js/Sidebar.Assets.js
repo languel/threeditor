@@ -413,9 +413,27 @@ export function SidebarAssets( editor ) {
 		const previewHost = el( 'div', undefined, 'asset-preview-stage' ); previewHost.setAttribute( 'aria-label', record.title + ' preview' ); detail.insertBefore( previewHost, row );
 		const sourcePath = controller.paths.get( record.id ) || record.projectPath;
 		if ( record.kind === 'webcam' ) {
-			const video = el( 'video' ); video.muted = true; video.playsInline = true;
-			video.srcObject = editor.getMediaInput?.( record.id )?.srcObject || null;
-			if ( video.srcObject ) { previewHost.append( video ); video.play().catch( () => {} ); }
+			const canvas = el( 'canvas' ); previewHost.append( canvas );
+			const note = el( 'span', 'Use as input stream to see the live preview.' ); previewHost.append( note );
+			const draw = () => {
+				if ( ! canvas.isConnected ) return;
+				const frame = editor.getMediaFrame?.( record.id ), w = frame?.videoWidth || frame?.width, h = frame?.videoHeight || frame?.height;
+				note.hidden = !! w; canvas.hidden = ! w;
+				if ( w && h && ( frame.readyState === undefined || frame.readyState >= 2 ) ) { if ( canvas.width !== 320 || canvas.height !== Math.round( 320 * h / w ) ) { canvas.width = 320; canvas.height = Math.round( 320 * h / w ); } canvas.getContext( '2d' )?.drawImage( frame, 0, 0, canvas.width, canvas.height ); }
+				requestAnimationFrame( draw );
+			};
+			draw();
+			// Input settings: shared with Streams → Audio and video → Input settings (same saved values).
+			let saved = {}; try { saved = JSON.parse( localStorage.getItem( 'threeditor/inputSettings/' + record.id ) || '{}' ); } catch { /* ignore */ }
+			const current = { flipX: false, flipY: false, rotate: 0, left: 0, top: 0, right: 0, bottom: 0, ...saved };
+			const box = el( 'details', undefined, 'asset-input-settings' ); box.open = true; box.append( el( 'summary', 'Input settings' ) );
+			const push = patch => { Object.assign( current, patch ); editor.setMediaInputSettings?.( record.id, { ...current } ); };
+			const row = ( label, control ) => { const l = el( 'label', label ); l.append( control ); box.append( l ); return control; };
+			const check = ( label, key ) => { const c = el( 'input' ); c.type = 'checkbox'; c.checked = current[ key ]; c.addEventListener( 'change', () => push( { [ key ]: c.checked } ) ); return row( label, c ); };
+			check( 'Flip horizontal', 'flipX' ); check( 'Flip vertical', 'flipY' );
+			const rot = el( 'select' ); for ( const d of [ 0, 90, 180, 270 ] ) rot.add( new Option( d + '°', d ) ); rot.value = current.rotate; rot.addEventListener( 'change', () => push( { rotate: Number( rot.value ) } ) ); row( 'Rotate', rot );
+			for ( const edge of [ 'left', 'top', 'right', 'bottom' ] ) { const r = el( 'input' ); r.type = 'range'; r.min = 0; r.max = 90; r.value = Math.round( current[ edge ] * 100 ); r.addEventListener( 'input', () => push( { [ edge ]: r.value / 100 } ) ); row( 'Crop ' + edge, r ); }
+			detail.append( box );
 		} else preview.show( { ...record, file: editor.sourceFiles.get( sourcePath )?.file || record.file, projectPath: sourcePath }, previewHost );
 		let owner = editor.selected;
 		while ( owner && ! editor.scripts[ owner.uuid ]?.some( script => script.assetBehavior ) ) owner = owner.parent;

@@ -274,6 +274,15 @@ function SidebarStreams( editor ) {
 
 	}
 	editor.getMediaInput = id => inputs.get( id )?.media.element;
+	editor.getMediaFrame = id => inputs.get( id )?.media.frame;
+	editor.setMediaInputSettings = ( id, values ) => {
+
+		const item = inputs.get( id );
+		if ( item ) item.media.setSettings( values );
+		try { localStorage.setItem( 'threeditor/inputSettings/' + id, JSON.stringify( { ...( item?.media.settings || {} ), ...values } ) ); } catch { /* storage unavailable */ }
+		if ( id === sourceSelect.value ) showSettings();
+
+	};
 	editor.assignMediaAsset = ( { record, file, texture } ) => {
 
 		const { id, title, kind, deviceId } = record;

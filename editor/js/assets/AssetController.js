@@ -98,7 +98,7 @@ export class AssetController {
 		editor.signals.assetsChanged.dispatch();
 		return { file, path, record };
 	}
-	async applyToObject( id, object, materialSlot = 0 ) {
+	async applyToObject( id, object, materialSlot = 0, position ) {
 		if ( hasRestriction( object, 'locked' ) ) throw new Error( 'This object is locked.' );
 		const epoch = this.epoch;
 		const record = await this.record( id );
@@ -106,6 +106,7 @@ export class AssetController {
 		if ( epoch !== this.epoch || this.editor.scene.getObjectByProperty( 'uuid', object?.uuid ) !== object ) throw new Error( 'The texture target is no longer in the scene.' );
 		const choice = await chooseTextureMap( object, materialSlot );
 		if ( ! choice ) return;
+		if ( choice.plane ) return this.use( id, { position, mode: 'plane' } );
 		if ( epoch !== this.epoch || this.editor.scene.getObjectByProperty( 'uuid', object.uuid ) !== object ) throw new Error( 'The texture target is no longer in the scene.' );
 		return this.use( id, { ...choice, object, mode: 'texture' } );
 	}
@@ -237,7 +238,7 @@ export class AssetController {
 			this.cancelPicker();
 			this.run( async () => {
 				const record = await this.record( id );
-				if ( hit && ! event.altKey && isMapAsset( record ) ) return this.applyToObject( id, hit.object, hit.face?.materialIndex || 0 );
+				if ( hit && ! event.altKey && isMapAsset( record ) ) return this.applyToObject( id, hit.object, hit.face?.materialIndex || 0, position );
 				return this.use( id, { position, mode: 'plane' } );
 			} );
 		} );

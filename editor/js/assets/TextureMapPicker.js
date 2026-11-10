@@ -60,6 +60,10 @@ export function chooseTextureMap( object, initialSlot ) {
 		}
 		select.onchange = draw;
 		draw();
+		const plane = document.createElement( 'button' );
+		plane.type = 'button';
+		plane.textContent = 'Add as textured plane';
+		plane.onclick = () => finish( { plane: true } );
 		const cancel = document.createElement( 'button' );
 		cancel.type = 'button';
 		cancel.textContent = 'Cancel';
@@ -68,7 +72,7 @@ export function chooseTextureMap( object, initialSlot ) {
 		dialog.addEventListener( 'cancel', event => { event.preventDefault(); finish(); } );
 		dialog.append( heading, target );
 		if ( slots.length > 1 ) dialog.append( select );
-		dialog.append( actions, cancel );
+		dialog.append( actions, plane, cancel );
 		document.body.append( dialog );
 		dialog.showModal();
 
