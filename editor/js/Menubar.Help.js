@@ -10,6 +10,7 @@ function MenubarHelp( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/help' ) );
+	title.dom.dataset.glyphKey = 'menubar/help';
 	container.add( title );
 
 	const options = new UIPanel();

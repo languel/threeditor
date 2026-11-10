@@ -43,19 +43,20 @@ function Viewport( editor ) {
 	contextNotice.className = 'viewport-context-notice';
 	contextNotice.hidden = true;
 	const contextText = document.createElement( 'span' );
-	contextText.textContent = 'Graphics context lost. Reload the tab to restore the viewport.';
+	contextText.textContent = 'Graphics context lost.';
 	contextNotice.appendChild( contextText );
 	const contextReload = document.createElement( 'button' );
 	contextReload.type = 'button';
 	contextReload.className = 'Button';
-	contextReload.textContent = 'Reload';
-	contextReload.addEventListener( 'click', () => location.reload() );
+	contextReload.textContent = 'Restore';
+	contextReload.addEventListener( 'click', () => signals.rendererReset.dispatch() );
 	contextNotice.appendChild( contextReload );
 	container.dom.appendChild( contextNotice );
 
 	//
 
 	let renderer = null;
+	let contextRetries = 0;
 	let pmremGenerator = null;
 	let environmentTarget = null;
 	let pathtracer = null;
@@ -497,6 +498,7 @@ function Viewport( editor ) {
 		}, true );
 		transformControls.connect( newRenderer.domElement );
 
+		contextNotice.hidden = true;
 		renderer = newRenderer;
 		editor.renderer = newRenderer;
 
@@ -525,16 +527,20 @@ function Viewport( editor ) {
 
 		if ( renderer.isWebGLRenderer ) {
 
+			const lostRenderer = renderer;
 			renderer.domElement.addEventListener( 'webglcontextlost', function ( event ) {
 
 				event.preventDefault();
 				console.warn( 'Viewport: WebGL context lost.' );
 				contextNotice.hidden = false;
+				// Recreate the renderer automatically (limited, so a failing GPU cannot loop).
+				if ( contextRetries ++ < 3 ) setTimeout( () => { if ( renderer === lostRenderer ) signals.rendererReset.dispatch(); }, 300 );
 
 			} );
 			renderer.domElement.addEventListener( 'webglcontextrestored', function () {
 
 				contextNotice.hidden = true;
+				contextRetries = 0;
 				render();
 
 			} );

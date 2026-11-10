@@ -191,7 +191,10 @@ function CodePanel( editor ) {
 		if ( auto.checked && dirty ) applyTimer = setTimeout( autoApply, 700 );
 
 	} );
-	autoLabel.append( auto, ' auto' );
+	const autoText = document.createElement( 'span' );
+	autoText.className = 'glyph-auto';
+	autoText.textContent = 'auto';
+	autoLabel.append( auto, autoText );
 	autoLabel.title = 'Apply valid scene code after a pause while typing';
 	bar.appendChild( autoLabel );
 	const regenBtn = button( 'Regenerate', 'code-regen', 'Throw away edits and rebuild the code from the scene', () => {

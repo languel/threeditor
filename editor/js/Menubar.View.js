@@ -11,6 +11,7 @@ function MenubarView( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/view' ) );
+	title.dom.dataset.glyphKey = 'menubar/view';
 	container.add( title );
 
 	const options = new UIPanel();

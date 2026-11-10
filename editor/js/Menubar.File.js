@@ -16,6 +16,7 @@ function MenubarFile( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/file' ) );
+	title.dom.dataset.glyphKey = 'menubar/file';
 	container.add( title );
 
 	const options = new UIPanel();

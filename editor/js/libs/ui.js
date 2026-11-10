@@ -279,6 +279,14 @@ class UIText extends UISpan {
 
 	}
 
+	// Tag a label with its i18n key so glyph mode can match it in any locale.
+	setGlyphKey( key ) {
+
+		this.dom.dataset.glyphKey = key;
+		return this;
+
+	}
+
 }
 
 
@@ -1156,10 +1164,11 @@ class UITabbedPanel extends UIDiv {
 
 	}
 
-	addTab( id, label, items ) {
+	addTab( id, label, items, glyphKey ) {
 
 		const tab = new UITab( label, this );
 		tab.setId( id );
+		if ( glyphKey ) tab.setGlyphKey( glyphKey );
 		this.tabs.push( tab );
 		this.tabsDiv.add( tab );
 

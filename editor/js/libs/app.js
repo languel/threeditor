@@ -3,6 +3,58 @@ import { StreamRouter } from '../streams/StreamRouter.js';
 import { createCameraController } from 'three/addons/controls/CameraController.js';
 import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
 import { scriptSourceForExecution } from '../ScriptParams.js';
+import { createP5Sketch } from '../P5Sketch.js';
+
+// Body for p5 sketch scripts: runs the student's global-mode source in a p5
+// instance and projects its canvas onto the host mesh as a live texture.
+// Loading is async, so update() simply no-ops until the texture exists.
+function p5ScriptBody( script, source ) {
+
+	return `
+const __p5target = this;
+let __p5api = null;
+let __p5texture = null;
+let __p5prevMap = null;
+let __p5material = null;
+createP5Sketch( ${ JSON.stringify( source ) } ).then( ( api ) => {
+
+	__p5api = api;
+	const canvas = api.canvas;
+	if ( ! canvas ) return;
+	__p5texture = new THREE.CanvasTexture( canvas );
+	__p5texture.colorSpace = THREE.SRGBColorSpace;
+	if ( __p5target.isMesh && __p5target.material ) {
+
+		__p5material = __p5target.material;
+		__p5prevMap = __p5material.map || null;
+		__p5material.map = __p5texture;
+		__p5material.needsUpdate = true;
+
+	}
+
+} ).catch( ( error ) => console.error( 'p5 sketch failed:', error ) );
+function update( event ) {
+
+	if ( __p5texture ) __p5texture.needsUpdate = true;
+
+}
+function stop() {
+
+	try { __p5api?.remove(); } catch ( error ) { console.warn( 'p5 cleanup:', error ); }
+	__p5api = null;
+	__p5texture = null;
+	if ( __p5material ) {
+
+		__p5material.map = __p5prevMap;
+		__p5material.needsUpdate = true;
+		__p5material = null;
+
+	}
+
+}
+return { events: { update, stop }, setParameters: null };`;
+
+}
 
 const APP = {
 
@@ -134,10 +186,15 @@ const APP = {
 					if ( script.generated || script.enabled === false || hasRestriction( object, 'disabled' ) ) continue;
 
 					const source = prepareScript ? prepareScript( script.source ) : script.source;
-					const body = scriptSourceForExecution( script, source ) + '\nreturn { events: ' + scriptWrapResult + ', setParameters: typeof setParameters === "function" ? setParameters : null };';
-					const signature = [ scriptWrapParams, ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' );
+					const isP5 = script.type === 'p5';
+					const body = isP5
+						? p5ScriptBody( script, scriptSourceForExecution( script, source ) )
+						: scriptSourceForExecution( script, source ) + '\nreturn { events: ' + scriptWrapResult + ', setParameters: typeof setParameters === "function" ? setParameters : null };';
+					const signature = isP5
+						? [ scriptWrapParams, 'createP5Sketch', ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' )
+						: [ scriptWrapParams, ...( script.parameters ? [ 'params' ] : [] ), ...eventParams ].join( ',' );
 					const params = script.parameters && { ...script.parameters };
-					const args = params ? [ ...scriptArgs, params ] : scriptArgs;
+					const args = params ? [ ...scriptArgs, ...( isP5 ? [ createP5Sketch ] : [] ), params ] : [ ...scriptArgs, ...( isP5 ? [ createP5Sketch ] : [] ) ];
 					const { events: functions, setParameters } = new Function( signature, body ).call( object, ...args );
 					if ( params ) scriptParameters.set( uuid + ':' + i, next => {
 

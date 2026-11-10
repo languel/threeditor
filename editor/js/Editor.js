@@ -54,6 +54,7 @@ function Editor( portable = false ) {
 		snapChanged: new Signal(),
 		spaceChanged: new Signal(),
 		rendererCreated: new Signal(),
+		rendererReset: new Signal(),
 		rendererUpdated: new Signal(),
 		rendererDetectKTX2Support: new Signal(),
 

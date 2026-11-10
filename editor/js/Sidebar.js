@@ -23,11 +23,11 @@ function Sidebar( editor ) {
 	const project = new SidebarProject( editor );
 	const settings = new SidebarSettings( editor );
 
-	container.addTab( 'scene', strings.getKey( 'sidebar/scene' ), scene );
-	container.addTab( 'assets', 'Assets', new SidebarAssets( editor ) );
-	container.addTab( 'streams', 'Streams', new SidebarStreams( editor ) );
-	container.addTab( 'project', strings.getKey( 'sidebar/project' ), project );
-	container.addTab( 'settings', strings.getKey( 'sidebar/settings' ), settings );
+	container.addTab( 'scene', strings.getKey( 'sidebar/scene' ), scene, 'sidebar/scene' );
+	container.addTab( 'assets', 'Assets', new SidebarAssets( editor ), 'assets' );
+	container.addTab( 'streams', 'Streams', new SidebarStreams( editor ), 'streams' );
+	container.addTab( 'project', strings.getKey( 'sidebar/project' ), project, 'sidebar/project' );
+	container.addTab( 'settings', strings.getKey( 'sidebar/settings' ), settings, 'sidebar/settings' );
 	container.select( 'scene' );
 
 	// Reveal inspector tabs while an asset is being dragged, so texture slots

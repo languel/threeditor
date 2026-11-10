@@ -750,7 +750,7 @@ class UIPoints3 extends UIPoints {
 
 class UIBoolean extends UISpan {
 
-	constructor( boolean, text ) {
+	constructor( boolean, text, glyphKey ) {
 
 		super();
 
@@ -758,6 +758,7 @@ class UIBoolean extends UISpan {
 
 		this.checkbox = new UICheckbox( boolean );
 		this.text = new UIText( text ).setMarginLeft( '3px' );
+		if ( glyphKey ) this.text.setGlyphKey( glyphKey );
 
 		this.add( this.checkbox );
 		this.add( this.text );

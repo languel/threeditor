@@ -36,6 +36,11 @@ function Config( persist = true ) {
 		'settings/userThemes': {},
 		'settings/uiStyle': 'default',
 		'settings/uiFont': 'system',
+		'settings/glyphTabs': false,
+		'settings/glyphButtons': false,
+		'settings/glyphHeaders': false,
+		'settings/glyphFields': false,
+		'settings/glyphMenus': false,
 		'settings/codeEditor': { font: 'Menlo', fontSize: 13, ligatures: false, completion: true, lint: true, lineNumbers: true, folding: true, wrap: false },
 
 		'settings/shortcuts/translate': 'w',

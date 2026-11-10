@@ -133,6 +133,8 @@ function SidebarProjectRenderer( editor ) {
 
 	//
 
+	signals.rendererReset.add( () => createRenderer() );
+
 	async function createRenderer() {
 
 		const request = ++ rendererRequest;

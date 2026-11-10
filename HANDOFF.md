@@ -100,3 +100,11 @@ Texture slots apply a clicked asset directly. **Apply to selection…** and drop
 Assets is the entry point for uploaded files and reusable webcam and microphone records. **Streams → Assign asset…** accepts images, movies, audio, and live devices. Pausing a live source releases capture and keeps the assignment. Video elements stay mounted while users switch panels or sources. Webcam planes update in the editor and keep the last frame on pause. MediaPipe can use a still image or a live source, and its preview overlays pose, hands, face, and iris landmarks. The source menu, global tracker switch, and per-input topic names are described in the [Streams guide](editor/examples/streams/README.md).
 
 Verification covered 30 Node tests and Chrome checks for camera controls, map assignment, renaming and undo, simulated webcam and microphone assignment, live editor texture updates, paused frames, and still-image input. Physical capture hardware remains to be tested.
+
+
+## p5 sketches, glyph mode, and context recovery
+
+- `P5Sketch.js` and `P5Preview.js` attach p5.js sketches to objects such as planes so pasted demos run in the editor. The p5 path still has an open report of "not quite working"; symptoms were not collected.
+- `Glyphs.js` replaces text labels with 15px stroke icons and keeps the original text as the hover tip. Settings → General has five independent scopes: tabs, buttons, section headers, field labels and menubar titles (`settings/glyph<Scope>`, body classes `glyph-<scope>`). `applyGlyphMode` runs from `uiStyleChanged`, so toggles apply and revert live. Matching uses `data-glyph-key` (a strings key, locale independent) before the English `LABELS` fallback. The MutationObserver scans only newly added nodes, batched per animation frame. Add new icons to `ICONS` and map them in `KEY_ICONS` or `LABELS`; any new UI string needs entries in all six locales in `Strings.js` or it shows `???`.
+- Known gap: one `???` button appears in the Scene panel under the Persian locale; its string key was never traced. Menu dropdown items are not glyphed.
+- The viewport recreates its renderer on `webglcontextlost` (up to 3 automatic retries, plus a **Restore** button) through the `rendererReset` signal handled in `Sidebar.Project.Renderer.js`. After deploying, hard reload to avoid stale cached modules.

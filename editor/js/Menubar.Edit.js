@@ -20,6 +20,7 @@ function MenubarEdit( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/edit' ) );
+	title.dom.dataset.glyphKey = 'menubar/edit';
 	container.add( title );
 
 	const options = new UIPanel();

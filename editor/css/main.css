@@ -1988,3 +1988,49 @@ body[data-ui-style="clean"] .asset-facets:not([open]) > summary::before {
 .viewport-context-notice[hidden] {
 	display: none;
 }
+
+/* Glyph mode: icon replaces label; original text stays as hover tip (title). */
+
+.glyph {
+	display: none;
+}
+
+.glyph svg {
+	display: block;
+	width: 15px;
+	height: 15px;
+}
+
+.glyph-label {
+	display: inline;
+}
+
+body.glyph-tabs .Tab[data-glyph] .glyph,
+body.glyph-buttons .Button[data-glyph] .glyph,
+body.glyph-buttons .glyph-auto[data-glyph] .glyph,
+body.glyph-headers .settings-section > summary[data-glyph] .glyph,
+body.glyph-fields .Label[data-glyph] .glyph,
+body.glyph-menus #menubar .menu > .title[data-glyph] .glyph {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+}
+
+body.glyph-tabs .Tab[data-glyph] .glyph-label,
+body.glyph-buttons .Button[data-glyph] .glyph-label,
+body.glyph-buttons .glyph-auto[data-glyph] .glyph-label,
+body.glyph-headers .settings-section > summary[data-glyph] .glyph-label,
+body.glyph-fields .Label[data-glyph] .glyph-label,
+body.glyph-menus #menubar .menu > .title[data-glyph] .glyph-label {
+	display: none;
+}
+
+body.glyph-tabs .TabbedPanel .Tab[data-glyph] {
+	padding-left: 10px;
+	padding-right: 10px;
+}
+
+body.glyph-fields #sidebar .Row .Label[data-glyph] {
+	display: inline-flex;
+	align-items: center;
+}

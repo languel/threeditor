@@ -3,6 +3,7 @@ import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText } from '
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
+import { P5_TEMPLATE } from './P5Sketch.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
 import { scriptParameterControl } from './ScriptParameterControl.js';
 
@@ -31,6 +32,15 @@ function SidebarScript( editor ) {
 
 	} );
 	container.add( newScript );
+
+	const newP5Script = new UIButton( strings.getKey( 'sidebar/script/new-p5' ) );
+	newP5Script.onClick( function () {
+
+		const script = { name: 'sketch', type: 'p5', source: P5_TEMPLATE, enabled: true, preview: true };
+		editor.execute( new AddScriptCommand( editor, editor.selected, script ) );
+
+	} );
+	container.add( newP5Script );
 
 	/*
 	let loadScript = new UI.Button( 'Load' );
@@ -110,6 +120,34 @@ function SidebarScript( editor ) {
 
 					} );
 					if ( ! script.generated ) scriptsContainer.add( remove );
+
+					if ( script.type === 'p5' && ! script.generated ) {
+
+						const preview = new UICheckbox( script.preview === true );
+						preview.setMarginLeft( '4px' );
+						preview.dom.title = strings.getKey( 'sidebar/script/preview' );
+						preview.dom.setAttribute( 'aria-label', strings.getKey( 'sidebar/script/preview' ) );
+						preview.onChange( function () {
+
+							const command = new SetScriptValueCommand( editor, object, script, 'preview', this.getValue() );
+							command.updatable = false;
+							editor.execute( command );
+
+						} );
+						scriptsContainer.add( preview );
+
+						const pause = new UIButton( script.paused === true ? strings.getKey( 'sidebar/script/resume' ) : strings.getKey( 'sidebar/script/pause' ) );
+						pause.setMarginLeft( '4px' );
+						pause.onClick( function () {
+
+							const command = new SetScriptValueCommand( editor, object, script, 'paused', script.paused !== true );
+							command.updatable = false;
+							editor.execute( command );
+
+						} );
+						scriptsContainer.add( pause );
+
+					}
 
 					scriptsContainer.add( new UIBreak() );
 

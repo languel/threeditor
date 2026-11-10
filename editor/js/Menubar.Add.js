@@ -18,6 +18,7 @@ function MenubarAdd( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/add' ) );
+	title.dom.dataset.glyphKey = 'menubar/add';
 	container.add( title );
 
 	const options = new UIPanel();

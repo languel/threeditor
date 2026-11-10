@@ -11,13 +11,14 @@ function SidebarSettings( editor ) {
 	const { config, signals, strings } = editor;
 	const container = new UIDiv().setClass( 'settings' );
 
-	function addSection( label, content, open = false ) {
+	function addSection( label, content, open = false, glyphKey ) {
 
 		const details = document.createElement( 'details' );
 		details.className = 'settings-section';
 		details.open = open;
 		const summary = document.createElement( 'summary' );
 		summary.textContent = label;
+		if ( glyphKey ) summary.dataset.glyphKey = glyphKey;
 		details.append( summary, content.dom );
 		container.dom.appendChild( details );
 
@@ -39,10 +40,10 @@ function SidebarSettings( editor ) {
 		config.setKey( 'language', this.getValue() );
 
 	} );
-	languageRow.add( new UIText( languageLabel ).setClass( 'Label' ), language );
+	languageRow.add( new UIText( languageLabel ).setClass( 'Label' ).setGlyphKey( 'sidebar/settings/language' ), language );
 	general.add( languageRow );
 
-	const autosave = new UIBoolean( config.getKey( 'autosave' ), strings.getKey( 'sidebar/settings/autosave' ) );
+	const autosave = new UIBoolean( config.getKey( 'autosave' ), strings.getKey( 'sidebar/settings/autosave' ), 'sidebar/settings/autosave' );
 	const autosaveLabel = document.createElement( 'label' );
 	autosaveLabel.className = 'settings-checkbox';
 	autosaveLabel.appendChild( autosave.dom );
@@ -54,7 +55,7 @@ function SidebarSettings( editor ) {
 	}
 	general.dom.appendChild( autosaveLabel );
 
-	const autoHideMenubar = new UIBoolean( config.getKey( 'settings/autoHideMenubar' ), 'Auto-hide top menu' );
+	const autoHideMenubar = new UIBoolean( config.getKey( 'settings/autoHideMenubar' ), 'Auto-hide top menu', 'autohide' );
 	const autoHideLabel = document.createElement( 'label' );
 	autoHideLabel.className = 'settings-checkbox';
 	autoHideLabel.style.display = 'block';
@@ -77,7 +78,7 @@ function SidebarSettings( editor ) {
 		config.setKey( 'settings/mouseNavigation', this.getValue() );
 
 	} );
-	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ), mouseNavigation );
+	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ).setGlyphKey( 'mouse' ), mouseNavigation );
 	general.add( mouseNavigationRow );
 
 	const uiStyleRow = new UIRow();
@@ -91,7 +92,7 @@ function SidebarSettings( editor ) {
 		signals.uiStyleChanged.dispatch();
 
 	} );
-	uiStyleRow.add( new UIText( 'Interface style' ).setClass( 'Label' ), uiStyle );
+	uiStyleRow.add( new UIText( 'Interface style' ).setClass( 'Label' ).setGlyphKey( 'style' ), uiStyle );
 	general.add( uiStyleRow );
 
 	const uiFontRow = new UIRow();
@@ -104,10 +105,10 @@ function SidebarSettings( editor ) {
 		signals.uiStyleChanged.dispatch();
 
 	} );
-	uiFontRow.add( new UIText( 'Interface font' ).setClass( 'Label' ), uiFont );
+	uiFontRow.add( new UIText( 'Interface font' ).setClass( 'Label' ).setGlyphKey( 'font' ), uiFont );
 	general.add( uiFontRow );
 
-	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)' );
+	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)', 'mouse' );
 	const emulateMouseLabel = document.createElement( 'label' );
 	emulateMouseLabel.className = 'settings-checkbox';
 	emulateMouseLabel.style.display = 'block';
@@ -119,6 +120,24 @@ function SidebarSettings( editor ) {
 		config.setKey( 'settings/emulateThreeButtonMouse', this.getValue() );
 
 	} );
+
+	for ( const [ scope, key ] of [ [ 'tabs', 'glyphTabs' ], [ 'buttons', 'glyphButtons' ], [ 'headers', 'glyphHeaders' ], [ 'fields', 'glyphFields' ], [ 'menus', 'glyphMenus' ] ] ) {
+
+		const toggle = new UIBoolean( !! config.getKey( 'settings/' + key ), strings.getKey( 'sidebar/settings/glyphs/' + scope ), 'sidebar/settings/glyphs/' + scope );
+		const label = document.createElement( 'label' );
+		label.className = 'settings-checkbox';
+		label.style.display = 'block';
+		label.title = 'Replace ' + scope + ' labels with icons (hover for the name)';
+		label.appendChild( toggle.dom );
+		general.dom.appendChild( label );
+		toggle.onChange( function () {
+
+			config.setKey( 'settings/' + key, this.getValue() );
+			signals.uiStyleChanged.dispatch();
+
+		} );
+
+	}
 	autosave.onChange( function () {
 
 		const value = this.getValue();
@@ -128,7 +147,7 @@ function SidebarSettings( editor ) {
 	} );
 	signals.savingStarted.add( () => autosave.text.setTextDecoration( 'underline' ) );
 	signals.savingFinished.add( () => autosave.text.setTextDecoration( 'none' ) );
-	addSection( strings.getKey( 'sidebar/settings/general' ), general, true );
+	addSection( strings.getKey( 'sidebar/settings/general' ), general, true, 'sidebar/settings/general' );
 
 	const codeSettings = new UIPanel();
 	const codeControls = {};
@@ -174,7 +193,7 @@ function SidebarSettings( editor ) {
 	}
 	document.addEventListener( 'threeditor-code-settings', refreshCodeSettings );
 	refreshCodeSettings();
-	addSection( 'Code editor', codeSettings );
+	addSection( 'Code editor', codeSettings, false, 'code' );
 
 	const themeLabel = strings.getKey( 'sidebar/settings/theme' );
 	const themePanel = new UIPanel();
@@ -323,10 +342,10 @@ function SidebarSettings( editor ) {
 	refreshThemes();
 	refreshColors();
 	remove.disabled = ! config.getKey( 'settings/theme' )?.startsWith( 'user:' );
-	addSection( themeLabel, themePanel, true );
+	addSection( themeLabel, themePanel, true, 'sidebar/settings/theme' );
 
-	addSection( strings.getKey( 'sidebar/settings/shortcuts' ), new SidebarSettingsShortcuts( editor ) );
-	addSection( strings.getKey( 'sidebar/history' ), new SidebarSettingsHistory( editor ) );
+	addSection( strings.getKey( 'sidebar/settings/shortcuts' ), new SidebarSettingsShortcuts( editor ), false, 'sidebar/settings/shortcuts' );
+	addSection( strings.getKey( 'sidebar/history' ), new SidebarSettingsHistory( editor ), false, 'sidebar/history' );
 
 	return container;
 

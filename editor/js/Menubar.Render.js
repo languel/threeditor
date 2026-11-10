@@ -17,6 +17,7 @@ function MenubarRender( editor ) {
 	const title = new UIPanel();
 	title.setClass( 'title' );
 	title.setTextContent( strings.getKey( 'menubar/render' ) );
+	title.dom.dataset.glyphKey = 'menubar/render';
 	container.add( title );
 
 	const options = new UIPanel();
