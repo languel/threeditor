@@ -113,6 +113,6 @@ Verification covered 30 Node tests and Chrome checks for camera controls, map as
 
 - Controls share the panel backdrop. Buttons are transparent by default and gain a fill only on hover or when active, selected or pressed. Text inputs and number fields may keep a surface fill; dropdowns also share the backdrop.
 - Active and selected states use a low-opacity accent tint, never a solid accent fill.
-- Compact mode keeps one text size and weight, tight gaps, and a consistent footprint for icon buttons (28px minimum, 4px 6px padding). Menubar icons are 19px, matching the right-hand panel toggles.
+- Compact mode keeps one text size and weight, tight gaps, and a consistent footprint for icon buttons (28px minimum, 4px 6px padding). All glyphs, including menubar icons and the right-hand panel toggles, are 15px.
 - Icons replace labels only through `Glyphs.js`, and the original text must remain as the hover tip.
 - Code line numbers are deliberately dim (28% text over background) so they do not compete with code.

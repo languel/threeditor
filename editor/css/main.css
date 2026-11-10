@@ -544,7 +544,7 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	cursor: pointer;
 }
 
-.panel-toggles svg { width: 19px; height: 19px; }
+.panel-toggles svg { width: 15px; height: 15px; }
 .panel-toggles button:hover { background: #08f2; }
 .panel-toggles button[aria-pressed="true"] { background: #08f2; color: #167ac4; }
 
@@ -2047,6 +2047,5 @@ body.glyph-buttons[data-ui-style="compact"] .Button[data-glyph] {
 	text-align: center;
 }
 
-/* Menubar glyphs match the right-hand panel toggles (19px) with tighter gaps. */
-body.glyph-menus #menubar .menu > .title[data-glyph] .glyph svg { width: 19px; height: 19px; }
+/* Every glyph is 15px; panel toggles match, menubar gaps stay tight. */
 body.glyph-menus[data-ui-style="compact"] #menubar .menu > .title[data-glyph] { padding: 6px 7px; }
