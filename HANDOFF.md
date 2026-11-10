@@ -139,9 +139,18 @@ The asset sidebar uses the explicit `assets-active` class rather than a dynamic 
 - **Landmark visualization:** all trackers are mapped from normalized image coordinates into one upright space (fixes upside-down figure and misaligned face). Each part is a named Points/LineSegments pair (Head, Torso, Left/Right arm, Left/Right leg, Face, hands, irises) with `showHead/showTorso/showArms/showLegs` params plus existing toggles. Old landmark objects keep their old script; create a new landmark asset.
 - **Consistency:** one outline chevron style (v open, > closed) for summaries, outliner openers and the asset preview minimize button (end of `main.css`). `UIConsistency.js` adds `Button`/`Select`/`Input` classes to raw controls built by panels; value fields have no borders.
 
+### Session update 2: defaults, pickers, webcam assets
+
+- **Defaults:** new sessions start with Interface style Compact, 3-button mouse emulation, and icon tabs/buttons/menus (`Config.js`). Saved browser settings still override these.
+- **Look:** outline chevrons for summaries, openers, selects (`::picker-icon`, with an SVG fallback) and the preview minimize button; themed range sliders (accent thumb); all at the end of `main.css`.
+- **Texture drops:** the "Choose texture map" dialog has **Add as textured plane**, placed at the drop point (`applyToObject(id, object, slot, position)`). Alt-drop still skips the dialog.
+- **Webcam assets:** the asset detail panel shows Input settings (flip/rotate/crop, shared with Streams through `editor.setMediaInputSettings` and the same localStorage key) and a live preview. An unassigned webcam opens its own `getUserMedia` stream for the preview and releases it when the panel changes; an assigned one uses `editor.getMediaFrame`. Adding the same device twice reuses the existing card.
+- **Input picker:** "Assign asset…" merges Project, My assets and Mediatheque, ignoring folders, ranks webcams, microphones, moving media, audio, then stills (`inputRank`), and the type filter has an **Input streams** entry.
+- **New scene:** `editorCleared` now stops and removes every input and turns tracking off (`clearInputs` in `Sidebar.Streams.js`). The saved My assets library is untouched.
+
 ### Unverified / follow-ups
 
-- Browser agents' last checks were unreliable because of the cleanup service worker and cached modules. Hard-reload and re-check: landmark part names and toggles in the outliner/Script tab, face alignment, the viewport webcam texture responding to Input settings, and the raw-control restyling in Streams/Assets/dialogs.
+- Not yet browser-verified: the items in session update 2, plus the ones below. Browser agents' last checks were unreliable because of the cleanup service worker and cached modules. Hard-reload and re-check: landmark part names and toggles in the outliner/Script tab, face alignment, the viewport webcam texture responding to Input settings, and the raw-control restyling in Streams/Assets/dialogs.
 - One agent reported a `Selector.js:218` `Cannot read properties of undefined (reading 'uuid')` during landmark interactions; not investigated.
 - The `UIConsistency.js` restyle may need per-control polish: slider thumbs, Assets source tabs, dialog device buttons, and the Code panel back button were flagged as visually different.
 
