@@ -1,3 +1,5 @@
+import { encodeSourceFiles, decodeSourceFiles } from './assets/StoredFile.js';
+
 function projectPath( value ) {
 
 	const path = String( value || '' ).trim().replace( /\\/g, '/' ).replace( /\.json$/i, '' );
@@ -91,7 +93,11 @@ class ProjectLibrary {
 		return new Promise( ( resolve, reject ) => {
 
 			const request = database.transaction( 'projects', 'readonly' ).objectStore( 'projects' ).get( projectPath( path ) );
-			request.onsuccess = () => resolve( request.result );
+			request.onsuccess = () => {
+				const record = request.result;
+				if ( record?.sourceFiles ) record.sourceFiles = decodeSourceFiles( record.sourceFiles );
+				resolve( record );
+			};
 			request.onerror = () => reject( request.error );
 
 		} );
@@ -101,12 +107,13 @@ class ProjectLibrary {
 	async save( record ) {
 
 		const database = await this.open();
+		const stored = record.sourceFiles ? { ...record, sourceFiles: await encodeSourceFiles( record.sourceFiles ) } : record;
 		return new Promise( ( resolve, reject ) => {
 
 			const transaction = database.transaction( [ 'projects', 'entries' ], 'readwrite' );
 			transaction.oncomplete = () => resolve( record );
 			transaction.onabort = transaction.onerror = () => reject( transaction.error || new Error( 'Could not save the project in browser storage.' ) );
-			transaction.objectStore( 'projects' ).put( record );
+			transaction.objectStore( 'projects' ).put( stored );
 			const { path, title, updatedAt } = record;
 			transaction.objectStore( 'entries' ).put( { path, title, updatedAt } );
 

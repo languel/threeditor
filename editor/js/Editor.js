@@ -140,6 +140,7 @@ function Editor( portable = false ) {
 	this.materials = {};
 	this.textures = {};
 	this.scripts = {};
+	this.sourceFiles = new Map();
 
 	this.materialsRefCounter = new Map(); // tracks how often is a material used by a 3D object
 

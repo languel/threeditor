@@ -185,13 +185,14 @@ function SidebarStreams( editor ) {
 
 	const mediaPanel = section( panel.dom, 'Audio and video' );
 	const mediaStatus = node( 'output', 'Stopped', mediaPanel );
-	const preview = node( 'canvas', '', mediaPanel );
+	let preview = node( 'canvas', '', mediaPanel );
 	preview.hidden = true;
 	preview.setAttribute( 'aria-label', 'Assigned input preview' );
 	const mediaRack = node( 'div', '', document.body );
 	mediaRack.className = 'stream-media-rack';
 	mediaRack.setAttribute( 'aria-hidden', 'true' );
 	const inputs = new Map();
+	let previewAvailable = true;
 	const sourceSelect = select( mediaPanel, 'Assigned input', [] );
 	let primary = '';
 	function refreshInputs() {
@@ -217,12 +218,23 @@ function SidebarStreams( editor ) {
 			bus.clear( 'audio.' );
 			primary = sourceSelect.value;
 			inputs.get( primary )?.media.refreshFrame();
-			preview.getContext( '2d' ).clearRect( 0, 0, preview.width, preview.height );
+			let context = preview.getContext( '2d' );
+			if ( ! context ) {
+
+				const replacement = preview.cloneNode( false );
+				preview.replaceWith( replacement );
+				preview = replacement;
+				context = preview.getContext( '2d' );
+
+			}
+			previewAvailable = !! context;
+			if ( context ) context.clearRect( 0, 0, preview.width, preview.height );
+			else console.warn( 'Streams: input preview is unavailable because a 2D canvas could not be created.' );
 
 		}
 		const item = inputs.get( primary );
-		preview.hidden = ! item || !! item.options.audioOnly;
-		mediaStatus.textContent = item ? item.title + ( item.busy ? ' · Connecting…' : item.media.paused ? ' · Paused' : ' · Active' ) : 'No asset assigned';
+		preview.hidden = ! item || !! item.options.audioOnly || ! previewAvailable;
+		mediaStatus.textContent = item ? item.title + ( item.busy ? ' · Connecting…' : item.media.paused ? ' · Paused' : ' · Active' ) + ( ! previewAvailable && ! item.options.audioOnly ? ' · Preview unavailable' : '' ) : 'No asset assigned';
 		pauseInput.disabled = ! item || item.busy;
 		pauseInput.textContent = item?.media.paused ? 'Resume input' : 'Pause input';
 
@@ -388,7 +400,12 @@ function SidebarStreams( editor ) {
 			if ( vision.open ) {
 
 				const input = inputs.get( visionInput.value )?.media;
-				visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
+				try {
+					visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
+				} catch ( error ) {
+					visualizer.hidden = true;
+					visionStatus.textContent = error.message;
+				}
 
 			}
 			if ( capture && ! bus.playing && bus.get( 'vision.pose.landmarks' ) ) {

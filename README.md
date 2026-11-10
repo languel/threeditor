@@ -26,6 +26,8 @@ Named projects use IndexedDB independently of the current workspace autosave. **
 
 The **Assets** sidebar tab (also available from the folder button in the top bar) has three sources: **Project** for files already retained with the scene, **My assets** for a reusable browser library, and **Mediatheque** for the full public catalog at [languel/mediatheque](https://github.com/languel/mediatheque). Search words or exact `#tags`, filter by type and collection, and inspect credits, rights, originals and BVH links. **Catalog connection** accepts another CORS-enabled catalog host.
 
+Right-click an asset for the available scene, input, and storage actions. Drag an asset onto **Project** to retain its file in the project without adding an object, or onto **My assets** to save a reusable local copy. Drag an image or video onto a scene object to choose a material map; hold **Option/Alt** while dropping to create a plane instead.
+
 Shift-click a folder or asset label, or focus it and press **F2**, to rename it in place. Project labels preserve the original file paths used by scripts and companion files.
 
 Select an asset to preview it in the sidebar. Images show their full frame; video and audio have playback controls; GLB/glTF and math objects have orbitable previews. The model preview lets you play a clip before importing it. Imported files without catalog posters get thumbnails when they can be decoded.

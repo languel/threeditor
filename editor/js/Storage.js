@@ -1,3 +1,5 @@
+import { encodeSourceFiles, decodeSourceFiles } from './assets/StoredFile.js';
+
 function Storage() {
 
 	const indexedDB = window.indexedDB;
@@ -13,6 +15,7 @@ function Storage() {
 	const version = 1;
 
 	let database;
+	let pendingWrites = Promise.resolve();
 
 	return {
 
@@ -68,7 +71,9 @@ function Storage() {
 
 				const hydrationStart = performance.now();
 
-				callback( event.target.result );
+				const state = event.target.result;
+				if ( state?.sourceFiles ) state.sourceFiles = new Map( decodeSourceFiles( state.sourceFiles ) );
+				callback( state );
 
 				const hydrationDuration = performance.now() - hydrationStart;
 
@@ -89,23 +94,21 @@ function Storage() {
 		set: function ( data ) {
 
 			const start = performance.now();
+			const sourceFiles = data.sourceFiles ? [ ...data.sourceFiles ] : null;
 
-			const transaction = database.transaction( [ 'states' ], 'readwrite' );
-			const objectStore = transaction.objectStore( 'states' );
+			pendingWrites = pendingWrites.then( async () => {
 
-			transaction.oncomplete = function () {
+				const stored = sourceFiles ? { ...data, sourceFiles: await encodeSourceFiles( sourceFiles ) } : data;
+				await new Promise( ( resolve, reject ) => {
+					const transaction = database.transaction( [ 'states' ], 'readwrite' );
+					transaction.oncomplete = resolve;
+					transaction.onabort = transaction.onerror = () => reject( transaction.error || new Error( 'Autosave failed.' ) );
+					transaction.objectStore( 'states' ).put( stored, 0 );
+				} );
 
 				console.log( '[' + /\d\d\:\d\d\:\d\d/.exec( new Date() )[ 0 ] + ']', 'Saved state to IndexedDB. ' + ( performance.now() - start ).toFixed( 2 ) + 'ms' );
 
-			};
-
-			transaction.onerror = function ( event ) {
-
-				console.error( 'Storage: IndexedDB put failed:', event.target.error );
-
-			};
-
-			objectStore.put( data, 0 );
+			} ).catch( error => console.error( 'Storage: IndexedDB put failed:', error ) );
 
 		},
 
@@ -113,22 +116,13 @@ function Storage() {
 
 			if ( database === undefined ) return;
 
-			const transaction = database.transaction( [ 'states' ], 'readwrite' );
-			const objectStore = transaction.objectStore( 'states' );
-
-			transaction.oncomplete = function () {
-
-				console.log( '[' + /\d\d\:\d\d\:\d\d/.exec( new Date() )[ 0 ] + ']', 'Cleared IndexedDB.' );
-
-			};
-
-			transaction.onerror = function ( event ) {
-
-				console.error( 'Storage: IndexedDB clear failed:', event.target.error );
-
-			};
-
-			objectStore.clear();
+			pendingWrites = pendingWrites.then( () => new Promise( ( resolve, reject ) => {
+				const transaction = database.transaction( [ 'states' ], 'readwrite' );
+				transaction.oncomplete = resolve;
+				transaction.onabort = transaction.onerror = () => reject( transaction.error || new Error( 'Autosave clear failed.' ) );
+				transaction.objectStore( 'states' ).clear();
+			} ) ).then( () => console.log( '[' + /\d\d\:\d\d\:\d\d/.exec( new Date() )[ 0 ] + ']', 'Cleared IndexedDB.' ) )
+				.catch( error => console.error( 'Storage: IndexedDB clear failed:', error ) );
 
 		}
 

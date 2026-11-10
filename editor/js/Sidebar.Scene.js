@@ -43,7 +43,7 @@ function SidebarScene( editor ) {
 				event.stopImmediatePropagation();
 				const browser = editor.assetBrowser;
 				browser.cancelPicker();
-				browser.run( () => browser.applyToObject( id, object ) );
+				browser.run( () => event.altKey ? browser.use( id, { mode: 'plane' } ) : browser.applyToObject( id, object ) );
 
 			} );
 

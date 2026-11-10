@@ -47,20 +47,21 @@ export class AssetController {
 		}
 		return this.pending.get( id );
 	}
-	async prepare( id ) {
-		const { editor, epoch } = this;
-		const record = await this.record( id );
-		if ( [ 'webcam', 'microphone' ].includes( record.kind ) ) return { record };
-		if ( record.projectPath && editor.sourceFiles.has( record.projectPath ) ) return { ...editor.sourceFiles.get( record.projectPath ), path: record.projectPath, record };
-		if ( record.texture ) return { texture: record.texture, path: record.texture.userData.sourceAssetPath, record };
-		const oldPath = this.paths.get( id ) || [ ...( editor.sourceFiles || [] ) ].find( ( [ , entry ] ) => entry.asset?.id === id )?.[ 0 ];
-		if ( oldPath && editor.sourceFiles.get( oldPath )?.asset?.id === id ) return { ...editor.sourceFiles.get( oldPath ), path: oldPath, record };
-		const file = record.file || await this.fetchFile( record.url );
+	async filesFor( record ) {
+		const { editor } = this;
+		const projectEntry = record.projectPath && editor.sourceFiles.get( record.projectPath );
+		const file = projectEntry?.file || record.file || await this.fetchFile( record.url );
 		const fileMap = Object.create( null );
-		if ( record.batch ) for ( const sibling of await this.library.all() ) {
+		if ( projectEntry ) {
+			for ( const path of projectEntry.batch || [ record.projectPath ] ) {
+				const entry = editor.sourceFiles.get( path );
+				if ( ! entry?.file ) throw new Error( 'Missing project companion file: ' + path );
+				fileMap[ path ] = entry.file;
+			}
+		} else if ( record.batch ) for ( const sibling of await this.library.all() ) {
 			if ( sibling.batch === record.batch && sibling.file ) fileMap[ sibling.path || sibling.file.name ] = sibling.file;
 		}
-		const key = record.path || file.name;
+		const key = record.projectPath || record.path || file.name;
 		fileMap[ key ] = file;
 		if ( /\.(gltf|glb|vrm)$/i.test( file.name ) ) {
 			const gltf = await gltfDocument( file );
@@ -76,6 +77,17 @@ export class AssetController {
 				fileMap[ dependencyKey ] = await this.fetchFile( url.href );
 			}
 		}
+		return { file, fileMap, key };
+	}
+	async prepare( id ) {
+		const { editor, epoch } = this;
+		const record = await this.record( id );
+		if ( [ 'webcam', 'microphone' ].includes( record.kind ) ) return { record };
+		if ( record.projectPath && editor.sourceFiles.has( record.projectPath ) ) return { ...editor.sourceFiles.get( record.projectPath ), path: record.projectPath, record };
+		if ( record.texture ) return { texture: record.texture, path: record.texture.userData.sourceAssetPath, record };
+		const oldPath = this.paths.get( id ) || [ ...( editor.sourceFiles || [] ) ].find( ( [ , entry ] ) => entry.asset?.id === id )?.[ 0 ];
+		if ( oldPath && editor.sourceFiles.get( oldPath )?.asset?.id === id ) return { ...editor.sourceFiles.get( oldPath ), path: oldPath, record };
+		const { file, fileMap } = await this.filesFor( record );
 		if ( epoch !== this.epoch ) throw new Error( 'The project changed while loading this asset. Try again.' );
 		const paths = storeSourceFiles( editor, fileMap );
 		const path = paths.get( file );
@@ -216,7 +228,7 @@ export class AssetController {
 			this.cancelPicker();
 			this.run( async () => {
 				const record = await this.record( id );
-				if ( hit && isMapAsset( record ) ) return this.applyToObject( id, hit.object, hit.face?.materialIndex || 0 );
+				if ( hit && ! event.altKey && isMapAsset( record ) ) return this.applyToObject( id, hit.object, hit.face?.materialIndex || 0 );
 				return this.use( id, { position, mode: 'plane' } );
 			} );
 		} );

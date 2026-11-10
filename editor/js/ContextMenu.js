@@ -147,7 +147,7 @@ function ContextMenu( editor, viewport ) {
 
 	} );
 	document.addEventListener( 'pointerdown', event => { if ( ! menu.hidden && ! menu.contains( event.target ) ) close( false ); }, true );
-	return { openAdd, openObject, openPalette, close };
+	return { openAdd, openObject, openPalette, show, close };
 
 }
 

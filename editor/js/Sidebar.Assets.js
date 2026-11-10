@@ -50,6 +50,25 @@ export function SidebarAssets( editor ) {
 	for ( const [ id, title ] of [ [ 'project', 'Project' ], [ 'mine', 'My assets' ], [ 'catalog', 'Mediatheque' ] ] ) {
 		sourceButtons.set( id, button( title, () => { source = id; folder = ''; tag = ''; selection.clear(); refresh(); }, tabs ) );
 	}
+	for ( const destination of [ 'project', 'mine' ] ) {
+		const target = sourceButtons.get( destination );
+		target.addEventListener( 'dragover', event => {
+			if ( event.dataTransfer.types.includes( ASSET_MIME ) ) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
+		} );
+		target.addEventListener( 'drop', event => {
+			const id = event.dataTransfer.getData( ASSET_MIME );
+			if ( ! id ) return;
+			event.preventDefault(); event.stopPropagation();
+			controller.run( async () => {
+				const record = await controller.record( id );
+				if ( destination === 'project' ) {
+					const entry = await controller.materialize( id );
+					if ( ! entry.file && ! entry.path ) throw new Error( 'This asset cannot be copied to the project.' );
+				} else if ( source !== 'mine' ) await keep( record, true, '' );
+				source = destination; folder = ''; selection.clear(); await refresh();
+			} );
+		} );
+	}
 	const picker = el( 'div', undefined, 'asset-picker' ); picker.hidden = true; panel.dom.append( picker );
 	const pickerLabel = el( 'span' ); picker.append( pickerLabel );
 	controller.cancelPicker = () => { controller.picker = null; picker.hidden = true; draw(); };
@@ -123,7 +142,7 @@ export function SidebarAssets( editor ) {
 	const folders = el( 'div', undefined, 'asset-folders' ); panel.dom.append( folders );
 	const grid = el( 'div', undefined, 'asset-grid' ); grid.setAttribute( 'role', 'list' ); grid.setAttribute( 'aria-label', 'Assets' ); panel.dom.append( grid );
 	const detail = el( 'div', undefined, 'asset-detail' ); panel.dom.append( detail );
-	const status = el( 'p', 'Drag assets into the viewport. Drop images on objects to choose a map, or onto empty space to add a plane.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
+	const status = el( 'p', 'Drag images onto objects to choose a map, or hold Option/Alt to add a plane. Drop assets on Project or My assets to copy them.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
 	controller.status = ( message, error = false ) => { status.textContent = message; status.classList.toggle( 'error', error ); };
 	panel.dom.addEventListener( 'keydown', event => { event.stopPropagation(); if ( event.key === 'Escape' ) controller.cancelPicker(); } );
 	panel.dom.addEventListener( 'drop', event => {
@@ -284,7 +303,16 @@ export function SidebarAssets( editor ) {
 				const path = [ folder, child ].filter( Boolean ).join( '/' );
 				const node = button( '▸ ' + folderName( path, mine ), () => { folder = path; selection.clear(); draw(); }, folders );
 				renameFolderLabel( node, path, mine );
-				node.addEventListener( 'drop', event => { const id = event.dataTransfer.getData( ASSET_MIME ); if ( source === 'mine' && id ) { event.preventDefault(); event.stopPropagation(); controller.run( () => library.update( id, { folder: path } ) ); } } );
+				node.addEventListener( 'drop', event => {
+					const id = event.dataTransfer.getData( ASSET_MIME );
+					if ( source !== 'mine' || ! id ) return;
+					event.preventDefault(); event.stopPropagation();
+					controller.run( async () => {
+						const record = await controller.record( id );
+						if ( await library.get( id ) ) await library.update( id, { folder: path } );
+						else await keep( record, true, path );
+					} );
+				} );
 			}
 		}
 		if ( source === 'mine' && folder ) {
@@ -321,6 +349,18 @@ export function SidebarAssets( editor ) {
 			};
 			card.addEventListener( 'click', choose ); card.addEventListener( 'keydown', event => { if ( event.key === 'Enter' ) use( record ); else if ( event.key === ' ' ) { event.preventDefault(); choose( event ); } } );
 			card.addEventListener( 'dblclick', () => { if ( ! pickedFromSlot ) use( record, 'auto' ); } );
+			card.addEventListener( 'contextmenu', event => {
+				event.preventDefault();
+				selection.clear(); selection.add( record.id );
+				for ( const node of grid.children ) node.classList.toggle( 'selected', node.dataset.assetId === record.id );
+				showDetail( record );
+				const actions = [ ...detail.querySelectorAll( '.asset-actions button' ) ].filter( node => ! node.disabled ).map( node => ( { label: node.textContent, run: () => node.click() } ) );
+				if ( controller.picker && ! actions.some( action => action.label === 'Choose' ) ) actions.unshift( { label: 'Choose', run: () => use( record ) } );
+				if ( ! controller.picker && source !== 'project' && ! [ 'webcam', 'microphone' ].includes( record.kind ) ) actions.push( {
+					label: 'Copy to project assets', run: () => controller.run( () => controller.materialize( record.id ) )
+				} );
+				editor.contextMenu.show( record.title, actions, { x: event.clientX, y: event.clientY } );
+			} );
 			card.addEventListener( 'dragstart', event => { event.dataTransfer.setData( ASSET_MIME, record.id ); event.dataTransfer.effectAllowed = 'copy'; } );
 			grid.append( card );
 			if ( ! preview && ( [ 'model', 'sdf', 'video', 'splat' ].includes( record.kind ) || record.file?.type.startsWith( 'video/' ) ) ) queueThumbnail( record );
@@ -374,8 +414,8 @@ export function SidebarAssets( editor ) {
 		}
 		if ( record.page ) { const page = el( 'a', 'Catalog details ↗' ); page.href = record.page; page.target = '_blank'; page.rel = 'noopener'; detail.append( page ); }
 		if ( source !== 'mine' && ! record.texture ) {
-			button( 'Keep link', () => keep( record, false ), row ).disabled = ! record.url;
-			button( 'Save local copy', () => keep( record, true ), row );
+			button( 'Keep link', () => controller.run( () => keep( record, false ) ), row ).disabled = ! record.url;
+			button( 'Save local copy', () => controller.run( () => keep( record, true ) ), row );
 		}
 		if ( source === 'mine' ) {
 			if ( selection.size > 1 ) button( 'Move selected…', () => controller.run( async () => { const path = prompt( 'Move selected assets to folder', folder ); if ( path === null ) return; const next = folderPath( path ); for ( const id of selection ) await library.update( id, { folder: next } ); selection.clear(); await refresh(); } ), row );
@@ -387,7 +427,7 @@ export function SidebarAssets( editor ) {
 				field.addEventListener( 'change', () => controller.run( () => library.update( record.id, apply( field.value ) ) ) ); line.append( field ); detail.append( line );
 			}
 			const rating = select( 'Asset rating', [ 0, 1, 2, 3, 4, 5 ].map( n => [ n, n ? '★'.repeat( n ) : 'Unrated' ] ), detail, () => controller.run( () => library.update( record.id, { rating: Number( rating.value ) } ) ) ); rating.value = record.rating || 0;
-			if ( ! record.file ) button( 'Download local copy', () => keep( record, true ), row );
+			if ( ! record.file && ! [ 'webcam', 'microphone' ].includes( record.kind ) ) button( 'Download local copy', () => controller.run( () => keep( record, true ) ), row );
 			button( 'Delete selected', () => controller.run( async () => {
 				if ( ! confirm( `Delete ${ selection.size || 1 } asset(s) from My assets? Copies already used in projects are retained.` ) ) return;
 				for ( const id of selection.size ? selection : [ record.id ] ) await library.remove( id ); selection.clear(); await refresh();
@@ -395,26 +435,23 @@ export function SidebarAssets( editor ) {
 		}
 		if ( record.url ) { const address = el( 'input' ); address.readOnly = true; address.value = record.url; address.setAttribute( 'aria-label', 'Asset URL' ); detail.append( address ); }
 	}
-	async function keep( record, copy ) {
-		return controller.run( async () => {
-			const id = record.catalogId ? 'mediatheque:' + record.catalogId : record.id.startsWith( 'project:' ) ? crypto.randomUUID() : record.id;
-			const existing = await library.get( id );
-			if ( ! copy && existing?.file ) { controller.status( 'A local copy is already saved.' ); return; }
-			const saved = { ...record, id, projectPath: undefined, folder: existing?.folder || ( record.catalogId ? 'Mediatheque/' + ( record.collections?.[ 0 ] || record.kind ) : folder ), created: existing?.created || Date.now() };
-			if ( copy ) {
-				const entry = await controller.materialize( record.id ); saved.file = entry.file;
-				// Save the model and companions as a batch, so reusing it works offline.
-				const batch = crypto.randomUUID(); saved.batch = batch;
-				const sourceEntry = editor.sourceFiles.get( entry.path );
-				saved.path = entry.path;
-				for ( const path of sourceEntry.batch || [] ) {
-					if ( path === entry.path ) continue;
-					const file = editor.sourceFiles.get( path ).file;
-					await library.put( { id: crypto.randomUUID(), title: file.name, file, path, batch, kind: fileKind( file ), folder: saved.folder, tags: [] } );
-				}
+	async function keep( record, copy, destinationFolder ) {
+		const id = record.catalogId ? 'mediatheque:' + record.catalogId : record.id.startsWith( 'project:' ) ? crypto.randomUUID() : record.id;
+		const existing = await library.get( id );
+		if ( ! copy && existing?.file ) { controller.status( 'A local copy is already saved.' ); return; }
+		const saved = { ...record, id, projectPath: undefined, folder: destinationFolder ?? ( existing?.folder || ( record.catalogId ? 'Mediatheque/' + ( record.collections?.[ 0 ] || record.kind ) : folder ) ), created: existing?.created || Date.now() };
+		if ( copy ) {
+			if ( ! record.file && ! record.url && ! record.projectPath ) throw new Error( 'This asset has no file to save locally.' );
+			const { file, fileMap, key } = await controller.filesFor( record ); saved.file = file;
+			// Save the model and companions as a batch, so reusing it works offline.
+			const batch = crypto.randomUUID(); saved.batch = batch;
+			saved.path = key;
+			for ( const [ path, companion ] of Object.entries( fileMap ) ) {
+				if ( path === key ) continue;
+				await library.put( { id: crypto.randomUUID(), title: companion.name, file: companion, path, batch, kind: fileKind( companion ), folder: saved.folder, tags: [] } );
 			}
-			await library.put( saved ); controller.records.set( id, saved ); await refresh();
-		} );
+		}
+		await library.put( saved ); controller.records.set( id, saved ); await refresh();
 	}
 	function updateFacets() {
 		collections.replaceChildren( new Option( 'All collections', '' ), ...facet( catalog, 'collections', 100 ).map( ( [ value, count ] ) => new Option( `${ value } (${ count })`, value ) ) );

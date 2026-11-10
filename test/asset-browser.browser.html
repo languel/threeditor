@@ -19,11 +19,15 @@ document.querySelector('#run').onclick = async () => {
  result.textContent = 'Running';
  try {
   const editor = new Editor(); editor.controls = { center:new THREE.Vector3(), toJSON:()=>({}) };
+  assert(editor.sourceFiles instanceof Map,'new editors initialize their project asset store');
   const controller = new AssetController(editor, library); controller.cancelPicker=()=>{controller.picker=null;};
   const records = await library.importFiles([new File(['abc'],'geometry.bin'), new File(['model'],'sample.obj')], '__asset_test__'); created.push(...records.map(r=>r.id));
   const saved = await new AssetLibrary().get(records[0].id);
   assert(await saved.file.text()==='abc','IndexedDB must retain File bytes');
   assert(saved.batch===records[1].batch,'companions must share an import batch');
+  const projectFilesBefore=editor.sourceFiles.size;
+  const libraryCopy=await controller.filesFor(records[1]);
+  assert(libraryCopy.fileMap['geometry.bin'] && editor.sourceFiles.size===projectFilesBefore,'preparing a library copy must retain companions without adding project assets');
   report('PASS IndexedDB Files and companion batches');
   const fox={id:'test-fox',title:'Fox',kind:'model',url:'https://languel.github.io/mediatheque/items/gltf-fox/media.glb',credit:'Fox attribution'};
   controller.records.set(fox.id,fox);
@@ -88,7 +92,15 @@ document.querySelector('#run').onclick = async () => {
   let placed;controller.use=async(id,options)=>{placed={id,options};};
   const transfer=new DataTransfer();transfer.setData(ASSET_MIME,fox.id);
   viewport.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,clientX:250,clientY:350,bubbles:true,cancelable:true}));
-  await new Promise(resolve=>setTimeout(resolve,0));assert(placed?.id===fox.id&&placed.options.position.isVector3,'viewport drop must resolve ray placement');viewport.remove();
+  await new Promise(resolve=>setTimeout(resolve,0));assert(placed?.id===fox.id&&placed.options.position.isVector3,'viewport drop must resolve ray placement');
+  editor.viewportCamera.position.set(0,0,5);editor.viewportCamera.lookAt(0,0,0);editor.viewportCamera.updateMatrixWorld(true);
+  let applied=false;controller.applyToObject=async()=>{applied=true;};placed=null;
+  const imageTransfer=new DataTransfer();imageTransfer.setData(ASSET_MIME,textureRecord.id);
+  viewport.dispatchEvent(new DragEvent('drop',{dataTransfer:imageTransfer,clientX:250,clientY:350,altKey:true,bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setTimeout(resolve,0));assert(!applied&&placed?.id===textureRecord.id&&placed.options.mode==='plane','Alt-drop on a mesh must create a plane instead of assigning a map');
+  placed=null;
+  viewport.dispatchEvent(new DragEvent('drop',{dataTransfer:imageTransfer,clientX:250,clientY:350,bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setTimeout(resolve,0));assert(applied&&!placed,'ordinary drop on a mesh must offer map assignment');viewport.remove();
   editor.assetBrowser=controller;
   const widget=new UITexture(editor);document.body.append(widget.dom);controller.open=options=>{controller.picker=options;};
   widget.dom.querySelector('canvas').click();

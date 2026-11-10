@@ -1,5 +1,6 @@
 // Persistent asset records and folders, following the AMS assetStore model.
 import { isTextureAsset, isImportAsset } from '../ProjectAssets.js';
+import { encodeFile, decodeFile } from './StoredFile.js';
 
 export const ASSET_MIME = 'application/x-threeditor-asset';
 export function fileKind( file ) {
@@ -34,12 +35,19 @@ export class AssetLibrary {
 			const tx = this.db.transaction( 'assets', mode );
 			const request = action( tx.objectStore( 'assets' ) );
 			tx.oncomplete = () => resolve( request.result );
-			tx.onerror = tx.onabort = () => reject( tx.error || new Error( 'Asset storage failed.' ) );
+			tx.onerror = tx.onabort = () => reject( request.error || tx.error || new Error( 'Asset storage failed.' ) );
 		} );
 	}
-	all() { return this.transaction( 'readonly', s => s.getAll() ); }
-	get( id ) { return this.transaction( 'readonly', s => s.get( id ) ); }
-	async put( record ) { await this.transaction( 'readwrite', s => s.put( record ) ); this.emit(); return record; }
+	decode( record ) {
+		if ( ! record?.file ) return record;
+		return { ...record, file: decodeFile( record.file ) };
+	}
+	async all() { return ( await this.transaction( 'readonly', s => s.getAll() ) ).map( record => this.decode( record ) ); }
+	async get( id ) { return this.decode( await this.transaction( 'readonly', s => s.get( id ) ) ); }
+	async put( record ) {
+		const stored = record.file ? { ...record, file: await encodeFile( record.file ) } : record;
+		await this.transaction( 'readwrite', s => s.put( stored ) ); this.emit(); return record;
+	}
 	async remove( id ) { await this.transaction( 'readwrite', s => s.delete( id ) ); this.emit(); }
 	async update( id, patch ) { const record = await this.get( id ); if ( ! record ) throw new Error( 'Asset no longer exists.' ); return this.put( { ...record, ...patch } ); }
 	folders() { try { return JSON.parse( localStorage.getItem( 'threeditor_asset_folders' ) || '[]' ); } catch { return []; } }
