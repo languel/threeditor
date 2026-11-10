@@ -21,10 +21,27 @@ export class AssetPreview {
 				return canvas.toDataURL( 'image/webp' );
 			} finally { video.removeAttribute( 'src' ); video.load(); if ( record.file ) URL.revokeObjectURL( url ); }
 		}
+		const source = record.texture?.image;
+		if ( source && ! record.texture.image.src ) {
+			const width = source.videoWidth || source.naturalWidth || source.width, height = source.videoHeight || source.naturalHeight || source.height;
+			if ( width && height ) {
+				const canvas = document.createElement( 'canvas' ); canvas.width = 240; canvas.height = Math.max( 1, Math.round( 240 * height / width ) );
+				try { const ctx = canvas.getContext( '2d' ); if ( ctx ) { ctx.drawImage( source, 0, 0, canvas.width, canvas.height ); return canvas.toDataURL( 'image/webp' ); } } catch { /* tainted or unreadable source */ }
+			}
+		}
+		if ( [ 'audio', 'webcam', 'microphone' ].includes( record.kind ) ) return this.placeholder( record.kind );
 		const host = document.createElement( 'div' );
 		let thumbnail;
 		this.onThumbnail = ( record, image ) => { thumbnail = image; };
 		try { await this.show( record, host ); return thumbnail; } finally { this.clear(); this.onThumbnail = null; }
+	}
+
+	placeholder( kind ) {
+		const canvas = document.createElement( 'canvas' ); canvas.width = 240; canvas.height = 180; const ctx = canvas.getContext( '2d' ); if ( ! ctx ) return undefined;
+		ctx.fillStyle = '#1a1c20'; ctx.fillRect( 0, 0, 240, 180 ); ctx.fillStyle = '#6ce5ff';
+		if ( kind === 'webcam' ) { ctx.fillRect( 80, 60, 80, 60 ); ctx.beginPath(); ctx.arc( 120, 90, 14, 0, Math.PI * 2 ); ctx.fillStyle = '#1a1c20'; ctx.fill(); }
+		else for ( let i = 0; i < 24; i ++ ) { const h = 14 + Math.abs( Math.sin( i * 0.7 ) ) * 80; ctx.fillRect( 24 + i * 8.5, 90 - h / 2, 5, h ); }
+		return canvas.toDataURL( 'image/webp' );
 	}
 
 	async show( record, host ) {

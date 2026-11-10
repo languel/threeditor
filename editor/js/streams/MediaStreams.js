@@ -33,6 +33,45 @@ class MediaStreams {
 	}
 
 	refreshFrame() { this.#lastFrame = -1; }
+
+	// Input settings: mirror, rotate and crop (fractions trimmed from each edge) applied before routing and tracking.
+	settings = { flipX: false, flipY: false, rotate: 0, left: 0, top: 0, right: 0, bottom: 0 };
+	#canvas = null;
+
+	get transformed() {
+
+		const t = this.settings;
+		return t.flipX || t.flipY || t.rotate || t.left || t.top || t.right || t.bottom;
+
+	}
+
+	setSettings( values ) { Object.assign( this.settings, values ); this.refreshFrame(); }
+
+	// The frame consumers should read: the raw element, or a canvas with the settings applied.
+	get frame() { return this.transformed && this.#canvas ? this.#canvas : this.element; }
+
+	#process( source ) {
+
+		const t = this.settings;
+		const sw = source.videoWidth || source.naturalWidth || source.width, sh = source.videoHeight || source.naturalHeight || source.height;
+		const sx = Math.min( t.left, .9 ) * sw, sy = Math.min( t.top, .9 ) * sh;
+		const cw = Math.max( 1, sw - sx - Math.min( t.right, .9 ) * sw ), ch = Math.max( 1, sh - sy - Math.min( t.bottom, .9 ) * sh );
+		const quarter = t.rotate === 90 || t.rotate === 270;
+		const canvas = this.#canvas ||= document.createElement( 'canvas' );
+		const w = Math.round( quarter ? ch : cw ), h = Math.round( quarter ? cw : ch );
+		if ( canvas.width !== w || canvas.height !== h ) { canvas.width = w; canvas.height = h; }
+		const ctx = canvas.getContext( '2d' );
+		if ( ! ctx ) return source;
+		ctx.save();
+		ctx.translate( w / 2, h / 2 );
+		ctx.rotate( t.rotate * Math.PI / 180 );
+		ctx.scale( t.flipX ? - 1 : 1, t.flipY ? - 1 : 1 );
+		ctx.drawImage( source, sx, sy, cw, ch, - cw / 2, - ch / 2, cw, ch );
+		ctx.restore();
+		return canvas;
+
+	}
+
 	#epoch = 0;
 	#trackerEpoch = 0;
 	#lastFrame = - 1;
@@ -185,10 +224,11 @@ class MediaStreams {
 		const frameTime = this.still ? 0 : video.currentTime;
 		if ( ! ( this.still ? video.naturalWidth || video.width : video.videoWidth ) || frameTime === this.#lastFrame ) return;
 		this.#lastFrame = frameTime;
+		const frame = this.transformed ? this.#process( video ) : video;
 		this.publish( 'video.time', frameTime );
-		this.publish( 'video.frame', video );
+		this.publish( 'video.frame', frame );
 		if ( ! this.tracker ) return;
-		const result = this.tracker.detectForVideo( video, now );
+		const result = this.tracker.detectForVideo( frame, now );
 		const first = points => Array.isArray( points?.[ 0 ] ) ? points[ 0 ] : points;
 		if ( this.mode === 'holistic' ) {
 

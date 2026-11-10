@@ -131,6 +131,20 @@ The asset sidebar uses the explicit `assets-active` class rather than a dynamic 
 
 `libs/ui.three.js` `UITexture.setValue()` and `editor/js/assets/MediaObjects.js` `movingTextureScript()` both called `context.drawImage()` without guarding against a null 2D context. When a webcam or media texture was assigned and the canvas was not visible, `getContext('2d')` could return null, throwing `null is not an object (evaluating 'context.drawImage')`. Both call sites now return early or guard the `drawImage` call with a null check. Fix committed as `0ab5e5b`.
 
+### Session update: assets, webcam, snapping, landmarks, UI consistency
+
+- **Asset browser:** every card queues a thumbnail (scene textures drawn from their image, audio/webcam get generated placeholders). A Zoom slider (`--asset-zoom`, saved in localStorage `threeditor/assetZoom`) sizes the grid. The minimized preview now truly collapses (late CSS rule at the end of `main.css`) so the grid reclaims the space.
+- **Input settings:** `MediaStreams.settings` (flipX/flipY/rotate/crop edges) with `setSettings()` and a `frame` getter. When any setting is active a canvas is published as `video.frame` and fed to the trackers, so overlays, previews and routes agree. UI is Streams → Audio and video → Input settings, saved per input id in localStorage. `movingTextureScript` in `MediaObjects.js` now accepts canvas frames (no `readyState`/`currentTime`).
+- **Transform snap:** Ctrl state is read from window pointer/key events during a drag (`Viewport.js`). Ctrl+Shift+drag in translate mode drops the lowest bounding-box point to y = 0 (`dropToGround`), single, group and parented objects.
+- **Landmark visualization:** all trackers are mapped from normalized image coordinates into one upright space (fixes upside-down figure and misaligned face). Each part is a named Points/LineSegments pair (Head, Torso, Left/Right arm, Left/Right leg, Face, hands, irises) with `showHead/showTorso/showArms/showLegs` params plus existing toggles. Old landmark objects keep their old script; create a new landmark asset.
+- **Consistency:** one outline chevron style (v open, > closed) for summaries, outliner openers and the asset preview minimize button (end of `main.css`). `UIConsistency.js` adds `Button`/`Select`/`Input` classes to raw controls built by panels; value fields have no borders.
+
+### Unverified / follow-ups
+
+- Browser agents' last checks were unreliable because of the cleanup service worker and cached modules. Hard-reload and re-check: landmark part names and toggles in the outliner/Script tab, face alignment, the viewport webcam texture responding to Input settings, and the raw-control restyling in Streams/Assets/dialogs.
+- One agent reported a `Selector.js:218` `Cannot read properties of undefined (reading 'uuid')` during landmark interactions; not investigated.
+- The `UIConsistency.js` restyle may need per-control polish: slider thumbs, Assets source tabs, dialog device buttons, and the Code panel back button were flagged as visually different.
+
 ### Remaining open work
 
 - Landmarks appear flipped — likely a coordinate system or canvas transform issue in `drawStreamPreview` in `editor/js/streams/LandmarkPreview.js`.

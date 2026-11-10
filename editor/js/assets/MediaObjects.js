@@ -159,19 +159,20 @@ function update() {
   if (!bound) media.pause();
   else if (current.playing) media.play().catch(() => {});
  }` }
- if (!bound || !video || video.readyState < 2 || !video.videoWidth) return;
+ const vw = video?.videoWidth || video?.width, vh = video?.videoHeight || video?.height;
+ if (!bound || !video || (video.readyState !== undefined && video.readyState < 2) || !vw) return;
  if (surfaceCanvas !== texture.image || !surfaceCanvas?.getContext) {
   const previous = texture.image;
   surfaceCanvas = previous?.getContext ? previous : document.createElement('canvas');
   if (surfaceCanvas !== previous) {
    surfaceCanvas.width = previous?.width || 512;
-   surfaceCanvas.height = previous?.height || Math.max(1, Math.round(512 * video.videoHeight / video.videoWidth));
+   surfaceCanvas.height = previous?.height || Math.max(1, Math.round(512 * vh / vw));
   }
   texture.image = surfaceCanvas;
   lastFrame = -1;
  }
- if (lastFrame === video.currentTime) return;
- lastFrame = video.currentTime;
+ if (video.currentTime !== undefined) { if (lastFrame === video.currentTime) return; lastFrame = video.currentTime; }
+ if (surfaceCanvas.height !== Math.max(1, Math.round(surfaceCanvas.width * vh / vw))) surfaceCanvas.height = Math.max(1, Math.round(surfaceCanvas.width * vh / vw));
  const ctx = surfaceCanvas.getContext('2d');
  if (ctx) ctx.drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
  texture.needsUpdate = true;

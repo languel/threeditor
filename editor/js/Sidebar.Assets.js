@@ -150,11 +150,15 @@ export function SidebarAssets( editor ) {
 	const tags = el( 'div', undefined, 'asset-tags' ); facets.append( tags );
 	const crumbs = el( 'nav', undefined, 'asset-crumbs' ); crumbs.setAttribute( 'aria-label', 'Asset folders' ); panel.dom.append( crumbs );
 	const folders = el( 'div', undefined, 'asset-folders' ); panel.dom.append( folders );
+	const zoomRow = el( 'label', 'Zoom', 'asset-zoom' ); const zoom = el( 'input' ); zoom.type = 'range'; zoom.min = 70; zoom.max = 300; zoom.step = 10; zoom.setAttribute( 'aria-label', 'Thumbnail size' );
+	const setZoom = value => { panel.dom.style.setProperty( '--asset-zoom', value + 'px' ); try { localStorage.setItem( 'threeditor/assetZoom', value ); } catch { /* storage unavailable */ } };
+	zoom.value = ( () => { try { return localStorage.getItem( 'threeditor/assetZoom' ) || 110; } catch { return 110; } } )(); panel.dom.style.setProperty( '--asset-zoom', zoom.value + 'px' );
+	zoom.addEventListener( 'input', () => setZoom( zoom.value ) ); zoomRow.append( zoom ); panel.dom.append( zoomRow );
 	const grid = el( 'div', undefined, 'asset-grid' ); grid.setAttribute( 'role', 'list' ); grid.setAttribute( 'aria-label', 'Assets' ); panel.dom.append( grid );
 	const detail = el( 'div', undefined, 'asset-detail' ); panel.dom.append( detail );
 	const status = el( 'p', 'Drag images onto objects to choose a map, or hold Option/Alt to add a plane. Drop assets on Project or My assets to copy them.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
 	controller.status = ( message, error = false ) => { status.textContent = message; status.classList.toggle( 'error', error ); };
-	document.addEventListener( 'keydown', event => { if ( event.key === 'Escape' ) { if ( detail.children.length > 1 ) { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); const btn = detail.querySelector( '.asset-detail-header button' ); if ( btn ) btn.textContent = detail.classList.contains( 'asset-detail-minimized' ) ? '⌃' : '⌄'; } else if ( controller.picker ) controller.cancelPicker(); } } );
+	document.addEventListener( 'keydown', event => { if ( event.key === 'Escape' ) { if ( detail.children.length > 1 ) { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); const btn = detail.querySelector( '.asset-detail-header button' ); if ( btn ) btn.classList.toggle( 'collapsed', detailMinimized ); } else if ( controller.picker ) controller.cancelPicker(); } } );
 	panel.dom.addEventListener( 'drop', event => {
 		event.preventDefault(); event.stopPropagation();
 		if ( event.dataTransfer.files.length ) controller.run( async () => { await library.importFiles( event.dataTransfer.files, folder ); source = 'mine'; await refresh(); } );
@@ -311,7 +315,7 @@ export function SidebarAssets( editor ) {
 			}
 			for ( const child of [ ...children ].sort() ) {
 				const path = [ folder, child ].filter( Boolean ).join( '/' );
-				const node = button( '▸ ' + folderName( path, mine ), () => { folder = path; selection.clear(); draw(); }, folders );
+				const node = button( '› ' + folderName( path, mine ), () => { folder = path; selection.clear(); draw(); }, folders );
 				renameFolderLabel( node, path, mine );
 				node.addEventListener( 'drop', event => {
 					const id = event.dataTransfer.getData( ASSET_MIME );
@@ -373,7 +377,7 @@ export function SidebarAssets( editor ) {
 			} );
 			card.addEventListener( 'dragstart', event => { event.dataTransfer.setData( ASSET_MIME, record.id ); event.dataTransfer.effectAllowed = 'copy'; } );
 			grid.append( card );
-			if ( ! preview && ( [ 'model', 'sdf', 'video', 'splat', 'webcam', 'landmark', 'landmark-texture' ].includes( record.kind ) || record.file?.type.startsWith( 'video/' ) ) ) queueThumbnail( record );
+			if ( ! preview ) queueThumbnail( record );
 		}
 		const selected = records.find( r => selection.has( r.id ) ); if ( selected ) showDetail( selected );
 	}
@@ -386,8 +390,8 @@ export function SidebarAssets( editor ) {
 		panel.dom.focus();
 		preview.clear();
 		const heading = el( 'strong', selection.size > 1 ? `${ selection.size } selected` : record.title );
-		const minimize = el( 'button', '⌄' ); minimize.type = 'button'; minimize.setAttribute( 'aria-label', 'Minimize preview' );
-		minimize.addEventListener( 'click', () => { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); minimize.textContent = detailMinimized ? '⌃' : '⌄'; } );
+		const minimize = el( 'button', undefined, 'chevron-button' ); minimize.classList.toggle( 'collapsed', detailMinimized ); minimize.type = 'button'; minimize.setAttribute( 'aria-label', 'Minimize preview' );
+		minimize.addEventListener( 'click', () => { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); minimize.classList.toggle( 'collapsed', detailMinimized ); } );
 		const header = el( 'div', undefined, 'asset-detail-header' ); header.append( heading, minimize ); detail.replaceChildren( header );
 		if ( selection.size <= 1 && source !== 'catalog' && ! controller.picker ) {
 			heading.tabIndex = 0;

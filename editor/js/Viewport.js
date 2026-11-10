@@ -113,25 +113,48 @@ function Viewport( editor ) {
 
 	const transformControls = new TransformControls( camera );
 	let translationSnap = null;
-	function setControlSnap( held ) {
+	let snapHeld = false, groundHeld = false;
+	// Ctrl snaps to the grid; Ctrl+Shift drops the lowest point onto the ground plane (y = 0) instead.
+	function setControlSnap( held, ground = false ) {
 
-		transformControls.setTranslationSnap( held ? translationSnap ?? 1 : translationSnap );
-		transformControls.setRotationSnap( held ? Math.PI / 12 : null );
-		transformControls.setScaleSnap( held ? 0.1 : null );
+		snapHeld = held && ! ground;
+		groundHeld = held && ground;
+		transformControls.setTranslationSnap( snapHeld ? translationSnap ?? 1 : translationSnap );
+		transformControls.setRotationSnap( snapHeld ? Math.PI / 12 : null );
+		transformControls.setScaleSnap( snapHeld ? 0.1 : null );
 
 	}
 
-	// Update before TransformControls handles the pointer, including modifier changes mid-drag.
+	const groundBox = new THREE.Box3(), groundDelta = new THREE.Vector3();
+	function dropToGround() {
+
+		const object = transformControls.object;
+		if ( ! groundHeld || ! object || transformControls.mode !== 'translate' ) return;
+		if ( object === selector.group ) selector.getSelectionBox( groundBox ); else groundBox.setFromObject( object );
+		if ( groundBox.isEmpty() || ! Number.isFinite( groundBox.min.y ) ) return;
+		groundDelta.set( 0, - groundBox.min.y, 0 );
+		if ( object.parent ) {
+
+			object.parent.updateWorldMatrix( true, false );
+			const world = object.getWorldPosition( new THREE.Vector3() ).add( groundDelta );
+			object.position.copy( object.parent.worldToLocal( world ) );
+
+		} else object.position.add( groundDelta );
+		object.updateMatrixWorld( true );
+
+	}
+
+	// Track modifiers from the window so Ctrl works even when pressed mid-drag, without pointer movement, or outside the viewport.
+	const updateSnap = event => { if ( transformControls.dragging ) setControlSnap( event.ctrlKey, event.shiftKey ); };
 	container.dom.addEventListener( 'pointerdown', event => {
 
-		if ( event.button === 0 ) setControlSnap( event.ctrlKey );
+		if ( event.button === 0 || event.ctrlKey ) setControlSnap( event.ctrlKey, event.shiftKey );
 
 	}, true );
-	container.dom.addEventListener( 'pointermove', event => {
-
-		if ( transformControls.dragging ) setControlSnap( event.ctrlKey );
-
-	}, true );
+	window.addEventListener( 'pointermove', updateSnap, true );
+	window.addEventListener( 'keydown', updateSnap, true );
+	window.addEventListener( 'keyup', updateSnap, true );
+	window.addEventListener( 'blur', () => setControlSnap( false ) );
 	container.dom.addEventListener( 'pointercancel', () => setControlSnap( false ), true );
 	container.dom.addEventListener( 'contextmenu', event => {
 
@@ -147,6 +170,7 @@ function Viewport( editor ) {
 	} );
 	transformControls.addEventListener( 'objectChange', function () {
 
+		dropToGround();
 		signals.objectChanged.dispatch( transformControls.object );
 
 	} );

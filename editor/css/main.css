@@ -1485,7 +1485,7 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .asset-catalog-settings input { width: 100%; margin: 8px 0; }
 .asset-tags { max-height: 70px; overflow: auto; }
 .asset-tags button { font-size: 10px; padding: 3px 5px; }
-.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; align-content: start; }
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--asset-zoom, 110px), 1fr)); gap: 8px; align-content: start; }
 .asset-card { display: flex; flex-direction: column; cursor: grab; overflow: hidden; border: 1px solid transparent; padding: 4px; border-radius: 5px; min-width: 0; }
 .asset-card:hover { background: color-mix(in srgb, var(--theme-background), var(--theme-text) 6%); }
 .asset-card.selected { border-color: color-mix(in srgb, var(--theme-accent), transparent 40%); background: color-mix(in srgb, var(--theme-accent), transparent 90%); }
@@ -2054,3 +2054,44 @@ body.glyph-buttons[data-ui-style="compact"] .Button[data-glyph] {
 
 /* Every glyph is 15px; panel toggles match, menubar gaps stay tight. */
 body.glyph-menus[data-ui-style="compact"] #menubar .menu > .title[data-glyph] { padding: 6px 7px; }
+
+/* Zoom slider and minimized preview: the grid reclaims all space freed by the preview. */
+.asset-zoom { display: flex; align-items: center; gap: 8px; margin: 4px 0; opacity: .8; }
+.asset-zoom input { flex: 1; }
+.asset-detail.asset-detail-minimized, .asset-detail.asset-detail-minimized:not(:empty) { flex: 0 0 auto; flex-basis: auto; height: auto; min-height: 0; max-height: 24px; overflow: hidden; margin: 0; padding: 0; border-top: 0; }
+.asset-thumb { min-height: 0; }
+
+/* Disclosure chevrons: one outline style everywhere. Open is v, closed is >. */
+summary { list-style: none !important; }
+summary::-webkit-details-marker, summary::marker { display: none !important; content: '' !important; }
+summary::before,
+#outliner .opener::after, .Outliner .opener::after,
+.chevron-button::before {
+	content: '' !important;
+	display: inline-block !important;
+	box-sizing: border-box;
+	width: 6px; height: 6px;
+	border: solid currentColor !important;
+	border-width: 0 1.5px 1.5px 0 !important;
+	background: none !important;
+	opacity: .7;
+	transform: translateY(-2px) rotate(45deg) !important;
+	transition: transform .12s ease;
+}
+summary::before { margin: 0 8px 0 2px !important; }
+details:not([open]) > summary::before,
+.stream-panel details:not([open]) > summary::before,
+#outliner .opener.closed::after, .Outliner .opener.closed::after,
+.chevron-button.collapsed::before {
+	transform: translateX(-1px) rotate(-45deg) !important;
+}
+#outliner .opener, .Outliner .opener { display: inline-flex; align-items: center; justify-content: center; width: 14px; }
+.chevron-button { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; }
+.chevron-button::before { margin: 0 !important; }
+
+/* Value fields never carry borders; panel-built controls share the stock dropdown and button look. */
+.Input, .TextArea, .Input.Number { border: 0 !important; border-radius: 3px; }
+.stream-panel .Input:not([type="checkbox"]), .stream-panel .Select, .assets-panel .Input, .assets-panel .Select, .asset-detail .Select, .asset-detail .Input { box-sizing: border-box; }
+.stream-panel .Select, .assets-panel .Select, .asset-detail .Select, .asset-preview-stage .Select { text-overflow: ellipsis; }
+.assets-panel .Button, .stream-panel .Button, .asset-detail .Button { white-space: nowrap; }
+.asset-detail-header button.Button { border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 20%); }

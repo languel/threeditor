@@ -35,7 +35,7 @@ const FACE_CONNECTIONS = faceOvalConnections( FACE_OVAL );
 export function landmarkScript( config = {} ) {
 
 	const {
-		showPose = true, showFace = true, showHands = true, showIris = false,
+		showPose = true, showHead = true, showTorso = true, showArms = true, showLegs = true, showFace = true, showHands = true, showIris = false,
 		pointSize = 0.02, pointColor = '#00ff00', lineColor = '#00ffff'
 	} = config;
 
@@ -43,6 +43,10 @@ export function landmarkScript( config = {} ) {
 		'// MediaPipe landmark visualization.',
 		'// Draws tracking results as Three.js points and lines.',
 		`// @param showPose = ${ showPose }`,
+		`// @param showHead = ${ showHead }`,
+		`// @param showTorso = ${ showTorso }`,
+		`// @param showArms = ${ showArms }`,
+		`// @param showLegs = ${ showLegs }`,
 		`// @param showFace = ${ showFace }`,
 		`// @param showHands = ${ showHands }`,
 		`// @param showIris = ${ showIris }`,
@@ -50,6 +54,10 @@ export function landmarkScript( config = {} ) {
 		`// @param pointColor = ${ JSON.stringify( pointColor ) }`,
 		`// @param lineColor = ${ JSON.stringify( lineColor ) }`,
 		'// @options showPose = [true, false]',
+		'// @options showHead = [true, false]',
+		'// @options showTorso = [true, false]',
+		'// @options showArms = [true, false]',
+		'// @options showLegs = [true, false]',
 		'// @options showFace = [true, false]',
 		'// @options showHands = [true, false]',
 		'// @options showIris = [true, false]',
@@ -62,119 +70,77 @@ const FACE_CONNECTIONS = ${ JSON.stringify( FACE_CONNECTIONS ) };
 const HAND_CONNECTIONS = ${ JSON.stringify( HAND_CONNECTIONS ) };
 const IRIS_CONNECTIONS = ${ JSON.stringify( IRIS_CONNECTIONS ) };
 
-let posePts, facePts, lhPts, rhPts, ilPts, irPts;
-let poseLn, faceLn, lhLn, rhLn, ilLn, irLn;
+// All trackers report normalized image coordinates (x right, y down), so they share one space.
+// Map it to a centered, upright (y up) frame one unit tall, scaled by the video aspect ratio.
+let aspect = 4 / 3;
+const range = ( from, to ) => Array.from( { length: to - from + 1 }, ( _, i ) => from + i );
+const only = ( conns, idx ) => conns.filter( ( [ a, b ] ) => idx.includes( a ) && idx.includes( b ) );
+const ALL = range( 0, 32 );
+const ARM_L = [ 11, 13, 15, 17, 19, 21 ], ARM_R = [ 12, 14, 16, 18, 20, 22 ];
+const LEG_L = [ 23, 25, 27, 29, 31 ], LEG_R = [ 24, 26, 28, 30, 32 ];
+const HEAD = range( 0, 10 ), TORSO = [ 11, 12, 23, 24 ];
+// Each semantic part becomes a named Points + LineSegments pair in the outliner.
+const PARTS = [
+	{ name: 'Head', topic: 'pose', idx: HEAD, conns: only( POSE_CONNECTIONS, HEAD ), show: () => params.showPose && params.showHead },
+	{ name: 'Torso', topic: 'pose', idx: TORSO, conns: only( POSE_CONNECTIONS, TORSO ), show: () => params.showPose && params.showTorso },
+	{ name: 'Left arm', topic: 'pose', idx: ARM_L, conns: only( POSE_CONNECTIONS, ARM_L ), show: () => params.showPose && params.showArms },
+	{ name: 'Right arm', topic: 'pose', idx: ARM_R, conns: only( POSE_CONNECTIONS, ARM_R ), show: () => params.showPose && params.showArms },
+	{ name: 'Left leg', topic: 'pose', idx: LEG_L, conns: only( POSE_CONNECTIONS, LEG_L ), show: () => params.showPose && params.showLegs },
+	{ name: 'Right leg', topic: 'pose', idx: LEG_R, conns: only( POSE_CONNECTIONS, LEG_R ), show: () => params.showPose && params.showLegs },
+	{ name: 'Face', topic: 'face', idx: range( 0, 467 ), conns: FACE_CONNECTIONS, show: () => params.showFace },
+	{ name: 'Left hand', topic: 'leftHand', idx: range( 0, 20 ), conns: HAND_CONNECTIONS, show: () => params.showHands },
+	{ name: 'Right hand', topic: 'rightHand', idx: range( 0, 20 ), conns: HAND_CONNECTIONS, show: () => params.showHands },
+	{ name: 'Left iris', topic: 'iris.left', idx: range( 0, 4 ), conns: IRIS_CONNECTIONS, show: () => params.showIris },
+	{ name: 'Right iris', topic: 'iris.right', idx: range( 0, 4 ), conns: IRIS_CONNECTIONS, show: () => params.showIris }
+];
 
-function makePoints( n, color, size ) {
+function put( attr, k, p ) {
 
-	const geo = new THREE.BufferGeometry();
-	geo.setAttribute( 'position', new THREE.Float32BufferAttribute( new Float32Array( n * 3 ), 3 ) );
-	const mat = new THREE.PointsMaterial( { color, size, sizeAttenuation: true, depthTest: false } );
-	const pts = new THREE.Points( geo, mat );
-	pts.frustumCulled = false;
-	pts.userData.landmark = true;
-	return { pts, geo, mat };
-
-}
-
-function makeLines( conns, color ) {
-
-	const pos = [];
-	for ( const [ a, b ] of conns ) pos.push( 0, 0, 0, 0, 0, 0 );
-	const geo = new THREE.BufferGeometry();
-	geo.setAttribute( 'position', new THREE.Float32BufferAttribute( new Float32Array( pos ), 3 ) );
-	const mat = new THREE.LineBasicMaterial( { color, depthTest: false } );
-	const ln = new THREE.LineSegments( geo, mat );
-	ln.frustumCulled = false;
-	ln.userData.landmark = true;
-	return { ln, geo, mat };
-
-}
-
-function setPts( pts, lm, vis, world ) {
-
-	if ( ! vis || ! lm?.length ) { pts.visible = false; return; }
-	pts.visible = true;
-	const attr = pts.geometry.attributes.position;
-	const useW = world?.length === lm.length;
-	for ( let i = 0; i < lm.length; i ++ ) {
-
-		const p = useW ? world[ i ] : lm[ i ];
-		attr.setXYZ( i, p.x, p.y, p.z );
-
-	}
-	attr.needsUpdate = true;
-
-}
-
-function setLn( ln, lm, vis, conns, world ) {
-
-	if ( ! vis || ! lm?.length ) { ln.visible = false; return; }
-	ln.visible = true;
-	const attr = ln.geometry.attributes.position;
-	const useW = world?.length === lm.length;
-	let k = 0;
-	for ( const [ a, b ] of conns ) {
-
-		const pa = useW ? world[ a ] : lm[ a ];
-		const pb = useW ? world[ b ] : lm[ b ];
-		attr.setXYZ( k, pa.x, pa.y, pa.z );
-		attr.setXYZ( k + 1, pb.x, pb.y, pb.z );
-		k += 2;
-
-	}
-	attr.needsUpdate = true;
+	attr.setXYZ( k, ( p.x - 0.5 ) * aspect, 0.5 - p.y, - p.z * aspect );
 
 }
 
 function init() {
 
-	const size = params.pointSize;
 	const pC = new THREE.Color( params.pointColor ).getHex();
 	const lC = new THREE.Color( params.lineColor ).getHex();
+	for ( const part of PARTS ) {
 
-	const pr = makePoints( 33, pC, size ); posePts = pr.pts; this.add( posePts );
-	const pl = makeLines( POSE_CONNECTIONS, lC ); poseLn = pl.ln; this.add( poseLn );
+		const pg = new THREE.BufferGeometry();
+		pg.setAttribute( 'position', new THREE.Float32BufferAttribute( new Float32Array( part.idx.length * 3 ), 3 ) );
+		part.points = new THREE.Points( pg, new THREE.PointsMaterial( { color: pC, size: params.pointSize, sizeAttenuation: true, depthTest: false } ) );
+		const lg = new THREE.BufferGeometry();
+		lg.setAttribute( 'position', new THREE.Float32BufferAttribute( new Float32Array( part.conns.length * 6 ), 3 ) );
+		part.lines = new THREE.LineSegments( lg, new THREE.LineBasicMaterial( { color: lC, depthTest: false } ) );
+		part.points.name = part.name + ' points';
+		part.lines.name = part.name + ' lines';
+		for ( const object of [ part.points, part.lines ] ) { object.frustumCulled = false; object.userData.landmark = true; this.add( object ); }
 
-	const fr = makePoints( 468, pC, size ); facePts = fr.pts; this.add( facePts );
-	const fl = makeLines( FACE_CONNECTIONS, lC ); faceLn = fl.ln; this.add( faceLn );
-
-	const lhr = makePoints( 21, pC, size ); lhPts = lhr.pts; this.add( lhPts );
-	const lhl = makeLines( HAND_CONNECTIONS, lC ); lhLn = lhl.ln; this.add( lhLn );
-
-	const rhr = makePoints( 21, pC, size ); rhPts = rhr.pts; this.add( rhPts );
-	const rhl = makeLines( HAND_CONNECTIONS, lC ); rhLn = rhl.ln; this.add( rhLn );
-
-	const ilr = makePoints( 5, pC, size ); ilPts = ilr.pts; this.add( ilPts );
-	const ill = makeLines( IRIS_CONNECTIONS, lC ); ilLn = ill.ln; this.add( ilLn );
-
-	const irr = makePoints( 5, pC, size ); irPts = irr.pts; this.add( irPts );
-	const irl = makeLines( IRIS_CONNECTIONS, lC ); irLn = irl.ln; this.add( irLn );
+	}
 
 }
 
 function update( { delta, time } ) {
 
 	const bus = player.streams;
-	const g = ( t ) => bus.get( t );
+	const frame = bus.get( 'video.frame' );
+	const fw = frame?.videoWidth || frame?.naturalWidth || frame?.width, fh = frame?.videoHeight || frame?.naturalHeight || frame?.height;
+	if ( fw && fh ) aspect = fw / fh;
+	for ( const part of PARTS ) {
 
-	setPts( posePts, g( 'vision.pose.landmarks' ), params.showPose, g( 'vision.pose.world' ) );
-	setLn( poseLn, g( 'vision.pose.landmarks' ), params.showPose, POSE_CONNECTIONS, g( 'vision.pose.world' ) );
+		const lm = bus.get( 'vision.' + part.topic + '.landmarks' );
+		const visible = !! lm?.length && part.show() && part.idx.every( i => lm[ i ] );
+		part.points.visible = part.lines.visible = visible;
+		if ( ! visible ) continue;
+		part.points.material.size = params.pointSize;
+		part.points.material.color.set( params.pointColor );
+		part.lines.material.color.set( params.lineColor );
+		const pa = part.points.geometry.attributes.position, la = part.lines.geometry.attributes.position;
+		part.idx.forEach( ( index, k ) => put( pa, k, lm[ index ] ) );
+		part.conns.forEach( ( [ a, b ], k ) => { put( la, k * 2, lm[ a ] ); put( la, k * 2 + 1, lm[ b ] ); } );
+		pa.needsUpdate = la.needsUpdate = true;
 
-	setPts( facePts, g( 'vision.face.landmarks' ), params.showFace, g( 'vision.face.world' ) );
-	setLn( faceLn, g( 'vision.face.landmarks' ), params.showFace, FACE_CONNECTIONS, g( 'vision.face.world' ) );
-
-	setPts( lhPts, g( 'vision.leftHand.landmarks' ), params.showHands, g( 'vision.leftHand.world' ) );
-	setLn( lhLn, g( 'vision.leftHand.landmarks' ), params.showHands, HAND_CONNECTIONS, g( 'vision.leftHand.world' ) );
-
-	setPts( rhPts, g( 'vision.rightHand.landmarks' ), params.showHands, g( 'vision.rightHand.world' ) );
-	setLn( rhLn, g( 'vision.rightHand.landmarks' ), params.showHands, HAND_CONNECTIONS, g( 'vision.rightHand.world' ) );
-
-	setPts( ilPts, g( 'vision.iris.left.landmarks' ), params.showIris );
-	setLn( ilLn, g( 'vision.iris.left.landmarks' ), params.showIris, IRIS_CONNECTIONS );
-
-	setPts( irPts, g( 'vision.iris.right.landmarks' ), params.showIris );
-	setLn( irLn, g( 'vision.iris.right.landmarks' ), params.showIris, IRIS_CONNECTIONS );
+	}
 
 }
 
@@ -240,13 +206,11 @@ function drawPoints( lm, vis, world, radius, color ) {
 
 	if ( ! vis || ! lm?.length ) return;
 	ctx.fillStyle = color;
-	const useW = world?.length === lm.length;
-	for ( let i = 0; i < lm.length; i ++ ) {
+		for ( let i = 0; i < lm.length; i ++ ) {
 
-		const p = useW ? world[ i ] : lm[ i ];
-		// Normalize world coords to canvas space (roughly)
-		const x = ( p.x + 0.5 ) * canvasSize;
-		const y = ( 1 - ( p.y + 0.5 ) ) * canvasSize;
+		const p = lm[ i ];
+		const x = p.x * canvasSize;
+		const y = p.y * canvasSize;
 		ctx.beginPath();
 		ctx.arc( x, y, radius, 0, Math.PI * 2 );
 		ctx.fill();
@@ -260,15 +224,11 @@ function drawLines( lm, vis, conns, world, color ) {
 	if ( ! vis || ! lm?.length ) return;
 	ctx.strokeStyle = color;
 	ctx.lineWidth = 2;
-	const useW = world?.length === lm.length;
-	for ( const [ a, b ] of conns ) {
+		for ( const [ a, b ] of conns ) {
 
-		const pa = useW ? world[ a ] : lm[ a ];
-		const pb = useW ? world[ b ] : lm[ b ];
-		const x1 = ( pa.x + 0.5 ) * canvasSize;
-		const y1 = ( 1 - ( pa.y + 0.5 ) ) * canvasSize;
-		const x2 = ( pb.x + 0.5 ) * canvasSize;
-		const y2 = ( 1 - ( pb.y + 0.5 ) ) * canvasSize;
+		const pa = lm[ a ], pb = lm[ b ];
+		const x1 = pa.x * canvasSize, y1 = pa.y * canvasSize;
+		const x2 = pb.x * canvasSize, y2 = pb.y * canvasSize;
 		ctx.beginPath();
 		ctx.moveTo( x1, y1 );
 		ctx.lineTo( x2, y2 );

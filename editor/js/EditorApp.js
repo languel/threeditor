@@ -6,6 +6,7 @@ import { ModalTransform } from './ModalTransform.js';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js';
+import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=camera-playback';
 import { Toolbar } from './Toolbar.js';
 import { Player } from './Player.js?v=preview-color';
@@ -52,6 +53,7 @@ async function startEditor( portable = null ) {
 
 	const updateTheme = () => applyTheme( editor.config, systemTheme.matches );
 	editor.signals.themeChanged.add( updateTheme );
+	applyUIConsistency();
 	const updateUIStyle = () => { applyUIStyle( editor.config ); applyGlyphMode( editor.config ); };
 	editor.signals.uiStyleChanged.add( updateUIStyle );
 	updateUIStyle();

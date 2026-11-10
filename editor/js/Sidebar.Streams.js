@@ -256,11 +256,13 @@ function SidebarStreams( editor ) {
 		video.loop = !! options.file;
 
 		const media = new MediaStreams( bus, id, () => primary === id );
+		try { Object.assign( media.settings, JSON.parse( localStorage.getItem( 'threeditor/inputSettings/' + id ) || '{}' ) ); } catch { /* ignore bad saved settings */ }
 		const item = { title, video, media, options, busy: true };
 		inputs.set( id, item );
 		refreshInputs();
 		sourceSelect.value = id;
 		choosePreview();
+		showSettings();
 		try { await media.start( video, options ); }
 		catch ( error ) { media.stop(); video.remove(); inputs.delete( id ); refreshInputs(); throw error; }
 		item.busy = false;
@@ -300,6 +302,28 @@ function SidebarStreams( editor ) {
 
 	}, mediaStatus );
 	pauseInput.disabled = true;
+	// Input settings: flip, rotate and crop for the selected input. Saved per input id.
+	const settingsPanel = section( mediaPanel, 'Input settings' );
+	const flipX = input( settingsPanel, 'Flip horizontal', '', 'checkbox' ), flipY = input( settingsPanel, 'Flip vertical', '', 'checkbox' );
+	const rotate = select( settingsPanel, 'Rotate', [ [ 0, '0°' ], [ 90, '90°' ], [ 180, '180°' ], [ 270, '270°' ] ] );
+	const crops = Object.fromEntries( [ 'left', 'top', 'right', 'bottom' ].map( edge => { const c = input( settingsPanel, 'Crop ' + edge, 0, 'range' ); c.min = 0; c.max = 90; c.step = 1; return [ edge, c ]; } ) );
+	const settingsKey = id => 'threeditor/inputSettings/' + id;
+	function readSettings() { return { flipX: flipX.checked, flipY: flipY.checked, rotate: Number( rotate.value ), ...Object.fromEntries( Object.entries( crops ).map( ( [ edge, c ] ) => [ edge, c.value / 100 ] ) ) }; }
+	function showSettings() {
+		const item = inputs.get( sourceSelect.value ), t = item?.media.settings;
+		for ( const c of [ flipX, flipY, rotate, ...Object.values( crops ) ] ) c.disabled = ! item;
+		if ( ! t ) return;
+		flipX.checked = t.flipX; flipY.checked = t.flipY; rotate.value = t.rotate;
+		for ( const edge in crops ) crops[ edge ].value = Math.round( t[ edge ] * 100 );
+	}
+	function applySettings() {
+		const id = sourceSelect.value, item = inputs.get( id ); if ( ! item ) return;
+		item.media.setSettings( readSettings() );
+		try { localStorage.setItem( settingsKey( id ), JSON.stringify( item.media.settings ) ); } catch { /* storage unavailable */ }
+	}
+	for ( const c of [ flipX, flipY, rotate, ...Object.values( crops ) ] ) c.addEventListener( 'input', applySettings );
+	button( settingsPanel, 'Reset input settings', () => { flipX.checked = flipY.checked = false; rotate.value = 0; for ( const c of Object.values( crops ) ) c.value = 0; applySettings(); }, mediaStatus );
+	sourceSelect.addEventListener( 'change', showSettings );
 	button( mediaPanel, 'Unassign input', async () => {
 
 		const id = sourceSelect.value;
@@ -408,7 +432,7 @@ function SidebarStreams( editor ) {
 					ctx = preview.getContext( '2d' );
 
 				}
-				drawStreamPreview( preview, inputs.get( primary )?.media.element );
+				drawStreamPreview( preview, inputs.get( primary )?.media.frame );
 
 			}
 			if ( vision.open ) {
@@ -424,7 +448,7 @@ function SidebarStreams( editor ) {
 					vctx = visualizer.getContext( '2d' );
 
 				}
-				visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
+				visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.frame, topic => bus.get( input.prefix + topic ) );
 
 			}
 			if ( capture && ! bus.playing && bus.get( 'vision.pose.landmarks' ) ) {
