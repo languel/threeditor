@@ -140,6 +140,44 @@ async function startEditor( portable = null ) {
 
 				finishStartup();
 
+				// Auto-assign a compatible project video asset as media input for MediaPipe testing
+				if ( editor.assignMediaAsset ) {
+
+					let videoEntry = [ ...editor.sourceFiles.values() ].find( entry =>
+
+						entry.file && ( entry.file.type.startsWith( 'video/' ) || /\.(mp4|webm|mov)$/i.test( entry.file.name ) )
+
+					);
+
+					// Also check project assets stored in the asset library
+					if ( ! videoEntry && editor.assetBrowser?.library ) {
+
+						const records = await editor.assetBrowser.library.all();
+						const videoRecord = records.find( record =>
+
+							record.kind === 'video' && record.file
+
+						);
+						if ( videoRecord ) videoEntry = { file: videoRecord.file };
+
+					}
+
+					if ( videoEntry ) {
+
+						editor.assignMediaAsset( {
+
+							record: { id: crypto.randomUUID(), title: videoEntry.file.name, kind: 'video' },
+
+							file: videoEntry.file,
+
+							texture: undefined
+
+						} );
+
+					}
+
+				}
+
 			} );
 
 			//

@@ -24,7 +24,7 @@ function select( label, values, parent, change ) {
 	node.addEventListener( 'change', change ); parent.append( node ); return node;
 }
 export function SidebarAssets( editor ) {
-	const panel = new UISpan(); panel.dom.className = 'assets-panel';
+	const panel = new UISpan(); panel.dom.className = 'assets-panel'; panel.dom.tabIndex = 0;
 	const library = new AssetLibrary();
 	const controller = new AssetController( editor, library ); editor.assetBrowser = controller;
 	const preview = new AssetPreview( editor, library );
@@ -82,7 +82,7 @@ export function SidebarAssets( editor ) {
 	const tools = el( 'div', undefined, 'asset-tools' ); panel.dom.append( tools );
 	const query = el( 'input' ); query.type = 'search'; query.placeholder = 'Search assets or #tag…'; query.setAttribute( 'aria-label', 'Search assets' ); tools.append( query );
 	query.addEventListener( 'input', draw );
-	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'file', 'Other files' ] ], tools, draw );
+	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
 	const actions = el( 'div', undefined, 'asset-actions' ); panel.dom.append( actions );
 	const input = el( 'input' ); input.type = 'file'; input.multiple = true; input.hidden = true;
 	const directory = el( 'input' ); directory.type = 'file'; directory.multiple = true; directory.webkitdirectory = true; directory.hidden = true;
@@ -116,6 +116,16 @@ export function SidebarAssets( editor ) {
 	}
 	button( 'Add webcam…', () => controller.run( () => addDevice( 'webcam' ) ), actions );
 	button( 'Add microphone…', () => controller.run( () => addDevice( 'microphone' ) ), actions );
+	button( 'New landmark asset', () => controller.run( async () => {
+		const id = crypto.randomUUID();
+		await library.put( { id, kind: 'landmark', title: 'Landmark visualization', file: null, path: '', folder, tags: [], rating: 0, created: Date.now() } );
+		source = 'mine'; folder = ''; selection.clear(); selection.add( id ); await refresh();
+	} ), actions );
+	button( 'New landmark texture', () => controller.run( async () => {
+		const id = crypto.randomUUID();
+		await library.put( { id, kind: 'landmark-texture', title: 'Landmark texture', file: null, path: '', folder, tags: [], rating: 0, created: Date.now() } );
+		source = 'mine'; folder = ''; selection.clear(); selection.add( id ); await refresh();
+	} ), actions );
 	button( 'Link URL…', () => controller.run( async () => {
 		const address = prompt( 'Asset URL (CORS-enabled HTTP or HTTPS)' ); if ( ! address ) return;
 		const url = new URL( address ); if ( ! [ 'http:', 'https:' ].includes( url.protocol ) ) throw new Error( 'Use an HTTP(S) asset URL.' );
@@ -144,7 +154,7 @@ export function SidebarAssets( editor ) {
 	const detail = el( 'div', undefined, 'asset-detail' ); panel.dom.append( detail );
 	const status = el( 'p', 'Drag images onto objects to choose a map, or hold Option/Alt to add a plane. Drop assets on Project or My assets to copy them.', 'asset-status' ); status.setAttribute( 'role', 'status' ); panel.dom.append( status );
 	controller.status = ( message, error = false ) => { status.textContent = message; status.classList.toggle( 'error', error ); };
-	panel.dom.addEventListener( 'keydown', event => { event.stopPropagation(); if ( event.key === 'Escape' ) controller.cancelPicker(); } );
+	document.addEventListener( 'keydown', event => { if ( event.key === 'Escape' ) { if ( detail.children.length > 1 ) { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); const btn = detail.querySelector( '.asset-detail-header button' ); if ( btn ) btn.textContent = detail.classList.contains( 'asset-detail-minimized' ) ? '⌃' : '⌄'; } else if ( controller.picker ) controller.cancelPicker(); } } );
 	panel.dom.addEventListener( 'drop', event => {
 		event.preventDefault(); event.stopPropagation();
 		if ( event.dataTransfer.files.length ) controller.run( async () => { await library.importFiles( event.dataTransfer.files, folder ); source = 'mine'; await refresh(); } );
@@ -363,7 +373,7 @@ export function SidebarAssets( editor ) {
 			} );
 			card.addEventListener( 'dragstart', event => { event.dataTransfer.setData( ASSET_MIME, record.id ); event.dataTransfer.effectAllowed = 'copy'; } );
 			grid.append( card );
-			if ( ! preview && ( [ 'model', 'sdf', 'video', 'splat' ].includes( record.kind ) || record.file?.type.startsWith( 'video/' ) ) ) queueThumbnail( record );
+			if ( ! preview && ( [ 'model', 'sdf', 'video', 'splat', 'webcam', 'landmark', 'landmark-texture' ].includes( record.kind ) || record.file?.type.startsWith( 'video/' ) ) ) queueThumbnail( record );
 		}
 		const selected = records.find( r => selection.has( r.id ) ); if ( selected ) showDetail( selected );
 	}
@@ -371,10 +381,14 @@ export function SidebarAssets( editor ) {
 		controller.run( () => controller.use( record.id, { mode } ) );
 	}
 
+	let detailMinimized = false;
 	function showDetail( record ) {
+		panel.dom.focus();
 		preview.clear();
 		const heading = el( 'strong', selection.size > 1 ? `${ selection.size } selected` : record.title );
-		detail.replaceChildren( heading );
+		const minimize = el( 'button', '⌄' ); minimize.type = 'button'; minimize.setAttribute( 'aria-label', 'Minimize preview' );
+		minimize.addEventListener( 'click', () => { detailMinimized = ! detailMinimized; detail.classList.toggle( 'asset-detail-minimized', detailMinimized ); minimize.textContent = detailMinimized ? '⌃' : '⌄'; } );
+		const header = el( 'div', undefined, 'asset-detail-header' ); header.append( heading, minimize ); detail.replaceChildren( header );
 		if ( selection.size <= 1 && source !== 'catalog' && ! controller.picker ) {
 			heading.tabIndex = 0;
 			renameAssetLabel( heading, heading, record );
@@ -384,7 +398,7 @@ export function SidebarAssets( editor ) {
 		if ( record.credit ) detail.append( el( 'p', record.credit, 'asset-credit' ) );
 		if ( record.rights?.license ) detail.append( el( 'p', record.rights.license ) );
 		const row = el( 'div', undefined, 'asset-actions' ); detail.insertBefore( row, detail.children[ 1 ] || null );
-		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add point cloud' };
+		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add point cloud', landmark: 'Add landmark visualization', 'landmark-texture': 'Add landmark texture' };
 		if ( ! [ 'texture', 'input' ].includes( controller.picker?.kind ) && ( labels[ record.kind ] || controller.picker ) ) button( controller.picker ? 'Choose' : labels[ record.kind ], () => use( record ), row );
 		if ( isMapAsset( record ) && ! controller.picker && editor.selected?.material ) button( 'Apply to selection…', () => controller.run( () => controller.applyToObject( record.id, editor.selected ) ), row );
 		if ( ! controller.picker && isInputAsset( record ) ) button( 'Use as input stream', () => controller.run( async () => {

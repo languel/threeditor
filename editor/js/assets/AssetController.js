@@ -7,6 +7,7 @@ import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { mathDefinition, mathScript } from './MathObjects.js';
 import { modelScript } from './ModelBehavior.js';
 import { mediaPlane, mediaScript, movingTextureScript, webcamPlane } from './MediaObjects.js';
+import { landmarkScript, landmarkTextureScript } from './LandmarkObjects.js';
 import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js';
 import { ASSET_MIME } from './AssetLibrary.js';
 import { loadAssetTexture } from './AssetTexture.js';
@@ -82,7 +83,7 @@ export class AssetController {
 	async prepare( id ) {
 		const { editor, epoch } = this;
 		const record = await this.record( id );
-		if ( [ 'webcam', 'microphone' ].includes( record.kind ) ) return { record };
+		if ( [ 'webcam', 'microphone', 'landmark', 'landmark-texture' ].includes( record.kind ) ) return { record };
 		if ( record.projectPath && editor.sourceFiles.has( record.projectPath ) ) return { ...editor.sourceFiles.get( record.projectPath ), path: record.projectPath, record };
 		if ( record.texture ) return { texture: record.texture, path: record.texture.userData.sourceAssetPath, record };
 		const oldPath = this.paths.get( id ) || [ ...( editor.sourceFiles || [] ) ].find( ( [ , entry ] ) => entry.asset?.id === id )?.[ 0 ];
@@ -146,6 +147,14 @@ export class AssetController {
 			cloud.userData.assetObject = { type: 'splat-points' };
 			const script = { name: 'Point cloud display', assetBehavior: 'points', enabled: true, source: '// @param pointSize = 0.025 (0.001..1)\n// @param opacity = 1 (0..1)\nfunction init(){this.material.size=params.pointSize;this.material.opacity=params.opacity;this.material.transparent=true;this.material.needsUpdate=true;}\n' };
 			return this.commit( cloud, entry, script, position, canCommit );
+		} else if ( record.kind === 'landmark' ) {
+			const root = new THREE.Group();
+			root.userData.assetObject = { type: 'landmark' };
+			return this.commit( root, entry, landmarkScript(), position, canCommit );
+		} else if ( record.kind === 'landmark-texture' ) {
+			const plane = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), new THREE.MeshBasicMaterial( { side: THREE.DoubleSide, toneMapped: false } ) );
+			plane.userData.assetObject = { type: 'landmark-texture' };
+			return this.commit( plane, entry, landmarkTextureScript(), position, canCommit );
 		} else if ( isMovingAsset( record ) || /^video\//.test( entry.file?.type || '' ) || /\.(webm|mp4|mov)$/i.test( entry.file?.name || '' ) || ( ( entry.texture || isTextureAsset( entry.file ) ) && mode !== 'texture' && ( mode === 'plane' || ! object?.material ) ) ) {
 			const plane = await mediaPlane( this.editor, entry );
 			return this.commit( plane.object, entry, plane.script, position, canCommit );

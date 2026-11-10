@@ -49,7 +49,14 @@ export class AssetPreview {
 			if ( [ 'texture', 'image', 'animation' ].includes( record.kind ) && ( record.texture?.image?.src || /\.(avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#]|$)/i.test( record.file?.name || url || '' ) ) ) {
 				const image = document.createElement( 'img' ); image.alt = record.title; image.src = record.texture?.image?.src || url; host.replaceChildren( image ); return;
 			}
-			if ( ! [ 'model', 'sdf', 'splat', 'texture' ].includes( record.kind ) ) { message.textContent = 'No visual preview for this file type.'; return; }
+			if ( [ 'landmark', 'landmark-texture' ].includes( record.kind ) ) {
+			const canvas = document.createElement( 'canvas' ); canvas.width = 260; canvas.height = 210;
+			const ctx = canvas.getContext( '2d' ); ctx.fillStyle = '#1a1a1a'; ctx.fillRect( 0, 0, 260, 210 );
+			ctx.fillStyle = '#666'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+			ctx.fillText( record.kind === 'landmark' ? 'Landmark visualization' : 'Landmark texture', 130, 105 );
+			host.replaceChildren( canvas ); this.onThumbnail?.( record, canvas.toDataURL( 'image/webp' ) ); return;
+		}
+		if ( ! [ 'model', 'sdf', 'splat', 'texture' ].includes( record.kind ) ) { message.textContent = 'No visual preview for this file type.'; return; }
 			const renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
 			renderer.setPixelRatio( Math.min( devicePixelRatio, 2 ) ); renderer.setSize( Math.max( host.clientWidth, 260 ), 210 );
 			disposers.push( () => { renderer.setAnimationLoop( null ); renderer.dispose(); renderer.forceContextLoss(); } );

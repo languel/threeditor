@@ -1495,6 +1495,11 @@ body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-doc
 .asset-card small, .asset-credit { opacity: .65; font-size: 10px; line-height: 1.5; }
 .asset-detail { margin-top: 12px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 15%); overflow-wrap: anywhere; }
 .asset-detail:empty { display: none; }
+.asset-detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.asset-detail-header button { font-size: 11px; padding: 2px 6px; background: transparent; border: 1px solid color-mix(in srgb, var(--theme-background), var(--theme-text) 20%); }
+.asset-detail-minimized { max-height: 0; min-height: 0; overflow: hidden; padding-top: 0; border-top: 0; margin-top: 0; }
+.asset-detail-minimized .asset-detail-header { margin-bottom: 0; }
+.asset-detail-minimized > :not(.asset-detail-header) { display: none; }
 .asset-detail label { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
 .asset-detail input { flex: 1; width: 100%; }
 .asset-detail > input { margin-top: 8px; }

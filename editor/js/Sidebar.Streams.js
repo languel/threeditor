@@ -331,7 +331,7 @@ function SidebarStreams( editor ) {
 	const visionInput = select( vision, 'Input stream', [] );
 	const mode = select( vision, 'Tracker', [ [ 'holistic', 'Holistic' ], [ 'pose', 'Pose' ], [ 'hand', 'Hand' ], [ 'face', 'Face' ] ] );
 	const visionEnabled = input( vision, 'Enable MediaPipe', '', 'checkbox' );
-	const visualizer = node( 'canvas', '', vision );
+	let visualizer = node( 'canvas', '', vision );
 	visualizer.hidden = true;
 	visualizer.setAttribute( 'aria-label', 'MediaPipe landmark preview' );
 	let tracking, trackingVersion = 0;
@@ -396,16 +396,35 @@ function SidebarStreams( editor ) {
 
 			const now = performance.now();
 			for ( const { media } of inputs.values() ) media.tick( now );
-			if ( mediaPanel.open && ! preview.hidden ) drawStreamPreview( preview, inputs.get( primary )?.media.element );
+			// preview: ensure 2d context is available before drawing (canvas may lose context under WebGL pressure)
+			if ( mediaPanel.open && ! preview.hidden ) {
+
+				let ctx = preview.getContext( '2d' );
+				if ( ! ctx ) {
+
+					const replacement = preview.cloneNode( false );
+					preview.parentNode?.replaceChild( replacement, preview );
+					preview = replacement;
+					ctx = preview.getContext( '2d' );
+
+				}
+				drawStreamPreview( preview, inputs.get( primary )?.media.element );
+
+			}
 			if ( vision.open ) {
 
 				const input = inputs.get( visionInput.value )?.media;
-				try {
-					visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
-				} catch ( error ) {
-					visualizer.hidden = true;
-					visionStatus.textContent = error.message;
+				// visualizer: ensure 2d context is available before drawing
+				let vctx = visualizer.getContext( '2d' );
+				if ( ! vctx ) {
+
+					const vreplacement = visualizer.cloneNode( false );
+					visualizer.parentNode?.replaceChild( vreplacement, visualizer );
+					visualizer = vreplacement;
+					vctx = visualizer.getContext( '2d' );
+
 				}
+				visualizer.hidden = ! input || ! drawStreamPreview( visualizer, input.element, topic => bus.get( input.prefix + topic ) );
 
 			}
 			if ( capture && ! bus.playing && bus.get( 'vision.pose.landmarks' ) ) {
