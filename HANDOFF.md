@@ -101,6 +101,14 @@ Assets is the entry point for uploaded files and reusable webcam and microphone 
 
 Verification covered 30 Node tests and Chrome checks for camera controls, map assignment, renaming and undo, simulated webcam and microphone assignment, live editor texture updates, paused frames, and still-image input. Physical capture hardware remains to be tested.
 
+## Asset browser and embedded WebKit
+
+Selecting a card shows its preview and actions in the sidebar; right-click opens the same available actions in a context menu. Drag onto **Project** to retain the file without adding an object, or onto **My assets** to save a reusable local copy. Image and video drops on objects offer material-map selection; Option/Alt-drop creates a plane instead. Copying to My assets does not add a project asset, and glTF companion files are retained. Card selection and focus use the theme accent.
+
+The embedded WebKit host rejected IndexedDB writes containing even small `File` or `Blob` values. `assets/StoredFile.js` encodes file bytes and metadata for asset-library records, project saves, and autosave, then restores `File` objects on read; existing file records remain readable. `AssetController.filesFor` prepares local-copy files without changing project state. The Streams input preview replaces its canvas if that canvas already has an incompatible WebGL context, and reports a 2D context failure instead of preventing input assignment.
+
+The asset sidebar uses the explicit `assets-active` class rather than a dynamic `:has()` selector: the embedded browser sometimes left its catalog grid at content height and placed the selected preview off-screen. The preview is above the action buttons and the grid scrolls independently. `test/asset-sidebar.browser.html` exercises selection and visibility in the embedded view; `test/asset-browser.browser.html` covers asset import, storage, and drag routing. The latest pass ran 31 Node tests and the browser integration checks. Assigning a Mediatheque video as an input worked in the embedded view, but MediaPipe inference with the user's asset and physical capture devices still need verification.
+
 
 ## p5 sketches, glyph mode, and context recovery
 
