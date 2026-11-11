@@ -148,14 +148,17 @@ The asset sidebar uses the explicit `assets-active` class rather than a dynamic 
 - **Input picker:** "Assign asset…" merges Project, My assets and Mediatheque, ignoring folders, ranks webcams, microphones, moving media, audio, then stills (`inputRank`), and the type filter has an **Input streams** entry.
 - **New scene:** `editorCleared` now stops and removes every input and turns tracking off (`clearInputs` in `Sidebar.Streams.js`). The saved My assets library is untouched.
 
+### Session update 3: assets, drivers/events, Gaussian-Splat-Lite, post-processing, Serpentine stage
+
+- **Assets & webcam cleanup:** `AssetLibrary.cleanup()` enforces one webcam device asset per camera and deduplicates default landmark templates (`AssetLibrary.js`, `Sidebar.Assets.js`). `AssetPreview.js` draws single-frame webcam snapshots with flip/rotate/crop transforms and renders procedural landmark thumbnails cleanly.
+- **Webcam plane & Streams lists:** `MediaObjects.js` updates `movingTextureScript` with `Playing`, `Flip horizontal`, and `Flip vertical` parameters plus automatic `getUserMedia` fallback when an assigned stream is not already active. `Sidebar.Streams.js` auto-populates `Assigned input` and MediaPipe `Input stream` dropdowns from active sources (`refreshAvailableSources`, `rebuildSelects`).
+- **Driver & Event system:** `StreamRouter.js`, `Sidebar.Streams.js`, `AssetRuntime.js`, and `libs/app.js` add target kinds for `object` (expanded channels incl. `color.*`, `material.*`, `intensity`), `morph`, `param` (`streams.getParam` / `setParam`), `scene` (fog and `postprocessing.*`), and `map.*`, with shaping curves (`linear`, `easeIn`, `easeOut`, `smoothstep`, `step`) and smoothing, plus declarative `streamEvents` edge/threshold rules (`emit`/`on`, play-mode keyboard/pointer topics).
+- **Gaussian-Splat-Lite:** Vendored `gaussian-splat-lite@1.7.0` (`editor/js/libs/gaussian-splat-lite.module.js`) with `SplatObjects.js` and `SplatHost.js` for `.spz`, `.sog`, `.rad`, and 3DGS `.ply` classification, thumbnail rendering in `AssetPreview.js`, viewport rendering (`Viewport.js`), and Play/Publish runtime (`Publish.js`, `libs/app.js`).
+- **Bloom & Focus:** `PostProcessing.js` adds per-scene UnrealBloom + Bokeh/Focus (`scene.userData.postprocessing`) configurable from `Sidebar.Scene.js` and packaged cleanly via `Publish.js` (`runtimeOnly` helper objects skipped from the Outliner).
+- **Serpentine particles demo (`streams` & `lessons`):** Built by `tools/build-stream-examples.mjs` (`examples/streams/serpentine-particles.app.json` and `examples/lessons/serpentine-particles.app.json`, listed in `ExampleCatalog.js` in `streams` and before Fox in `lessons`). Features the central circular *Danse serpentine* (1897) video framed inside a spinning 24-jewel `Orrery bezel disk`, 3D analytical curl-noise round particles, 4 rotating `Stage halo` rings with orb lights, `Floor sweep lights`, `Floor beacons`, volumetric haze layers, bloom/focus post-processing, stream drivers, and burst events.
+
 ### Unverified / follow-ups
 
-- Not yet browser-verified: the items in session update 2, plus the ones below. Browser agents' last checks were unreliable because of the cleanup service worker and cached modules. Hard-reload and re-check: landmark part names and toggles in the outliner/Script tab, face alignment, the viewport webcam texture responding to Input settings, and the raw-control restyling in Streams/Assets/dialogs.
-- One agent reported a `Selector.js:218` `Cannot read properties of undefined (reading 'uuid')` during landmark interactions; not investigated.
-- The `UIConsistency.js` restyle may need per-control polish: slider thumbs, Assets source tabs, dialog device buttons, and the Code panel back button were flagged as visually different.
-
-### Remaining open work
-
-- Landmarks appear flipped — likely a coordinate system or canvas transform issue in `drawStreamPreview` in `editor/js/streams/LandmarkPreview.js`.
-- Auto-assign video input stream not appearing on startup — check `editor/js/EditorApp.js` `assignMediaAsset` / `startMedia` wiring.
-- Physical webcam, microphone, MIDI, and serial device testing still pending.
+- **Node suite (`node --test test/*.test.mjs`):** 35/35 pass covering catalog round-trips, asset cleanup, 3DGS PLY detection, and driver/event routing.
+- **Browser-verified in this update:** single webcam reuse & thumbnails, webcam plane `Playing`/`Flip` parameters, auto-populated Streams dropdowns, Driver/Event rule `Test fire`, Bloom & Focus post-processing, and `File → Examples → lessons → Serpentine particles` playback with 0 console errors.
+- **Not yet browser-verified:** live interactive browser `.ply`/`.spz` Gaussian splat file upload hit an `UPLOAD_PERMISSION_REQUIRED` prompt timeout in the browser test harness (detector, script generation, and asset library classification are unit-tested); still unverified from earlier updates: landmark part names/alignment (`LandmarkPreview.js`), physical MIDI/Serial hardware I/O, and the `Selector.js:218` report mentioned in update 2.

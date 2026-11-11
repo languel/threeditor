@@ -23,6 +23,8 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
+import { SplatHost } from './assets/SplatHost.js';
+import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
 
@@ -56,6 +58,21 @@ function Viewport( editor ) {
 	//
 
 	let renderer = null;
+	const splatHost = new SplatHost();
+	const postHost = new PostProcessingHost();
+	let splatRenderQueued = false;
+	const queueSplatRender = () => {
+
+		if ( splatRenderQueued ) return;
+		splatRenderQueued = true;
+		requestAnimationFrame( () => {
+
+			splatRenderQueued = false;
+			if ( editor.viewportShading !== 'realistic' ) render();
+
+		} );
+
+	};
 	let contextRetries = 0;
 	let pmremGenerator = null;
 	let environmentTarget = null;
@@ -1147,7 +1164,20 @@ function Viewport( editor ) {
 		startTime = performance.now();
 
 		renderer.setViewport( 0, 0, container.dom.offsetWidth, container.dom.offsetHeight );
-		withEnabledObjects( scene, () => renderer.render( scene, editor.viewportCamera ) );
+		postHost.render(
+			renderer,
+			scene,
+			editor.viewportCamera,
+			container.dom.offsetWidth,
+			container.dom.offsetHeight,
+			() => splatHost.render(
+				renderer,
+				scene,
+				() => withEnabledObjects( scene, () => renderer.render( scene, editor.viewportCamera ) ),
+				queueSplatRender
+			),
+			queueSplatRender
+		);
 
 		// 'preview' shows the scene exactly as the exported code renders it: no grid, helpers or gizmos
 		if ( camera === editor.viewportCamera && editor.viewportShading !== 'preview' ) {

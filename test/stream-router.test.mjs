@@ -168,3 +168,88 @@ test( 'A still image stays available to a tracker started after input assignment
 	assert.equal( frames, 2 );
 
 } );
+
+test( 'Drivers target materials, morphs, curves, smoothing, and script parameters', () => {
+
+	const bus = new StreamRouter(), scene = new THREE.Scene();
+	const mesh = new THREE.Mesh(
+		new THREE.BoxGeometry(),
+		new THREE.MeshStandardMaterial( { color: 0xffffff, opacity: 1 } )
+	);
+	mesh.morphTargetDictionary = { jawOpen: 0 };
+	mesh.morphTargetInfluences = [ 0 ];
+	scene.add( mesh );
+	const params = { turbulence: 0.5, playing: true };
+	bus.getParam = ( uuid, idx, key ) => uuid === mesh.uuid && idx === 0 ? params[ key ] : undefined;
+	bus.setParam = ( uuid, idx, key, value ) => { if ( uuid === mesh.uuid && idx === 0 ) { params[ key ] = value; return true; } return false; };
+
+	scene.userData.streamRoutes = [
+		{ source: 'a', input: [ 0, 1 ], output: [ 0, 1 ], curve: 'smoothstep', target: { kind: 'object', uuid: mesh.uuid, property: 'material.opacity' } },
+		{ source: 'b', input: [ 0, 1 ], output: [ 0, 1 ], smooth: 0.5, target: { kind: 'morph', uuid: mesh.uuid, morph: 'jawOpen' } },
+		{ source: 'c', input: [ 0, 10 ], output: [ 1, 3 ], target: { kind: 'param', uuid: mesh.uuid, scriptIndex: 0, param: 'turbulence' } },
+		{ source: 'd', input: [ 0, 1 ], output: [ 0, 1 ], target: { kind: 'object', uuid: mesh.uuid, property: 'color.hue' } }
+	];
+
+	bus.publish( 'a', 0.5 );
+	bus.publish( 'b', 0 );
+	bus.publish( 'c', 5 );
+	bus.publish( 'd', 1 / 3 );
+	assert.equal( bus.tick( scene ), true );
+	assert.equal( mesh.material.opacity, 0.5 );
+	assert.equal( mesh.material.transparent, true );
+	assert.equal( mesh.morphTargetInfluences[ 0 ], 0 );
+	assert.equal( params.turbulence, 2 );
+	assert.ok( mesh.material.color.g > 0.99 && mesh.material.color.r < 0.01 );
+
+	bus.publish( 'b', 1 );
+	bus.tick( scene );
+	assert.equal( mesh.morphTargetInfluences[ 0 ], 0.5 );
+	bus.tick( scene );
+	assert.equal( mesh.morphTargetInfluences[ 0 ], 0.75 );
+
+} );
+
+test( 'Event rules fire edge triggers, emit named events, modify objects/params, and respect preview safety', () => {
+
+	const bus = new StreamRouter(), scene = new THREE.Scene(), light = new THREE.PointLight();
+	scene.add( light );
+	const params = { active: false };
+	bus.getParam = ( uuid, idx, key ) => uuid === light.uuid ? params[ key ] : undefined;
+	bus.setParam = ( uuid, idx, key, value ) => { if ( uuid === light.uuid ) { params[ key ] = value; return true; } return false; };
+	const hardwareSent = [];
+	bus.outputs.set( 'serial', ( action, val ) => hardwareSent.push( [ action.key, val ] ) );
+	const emitted = [];
+	const unsub = bus.on( 'burst', ( detail ) => emitted.push( detail.value ) );
+
+	scene.userData.streamEvents = [
+		{ source: 'audio.rms', fallback: 'demo.rms', trigger: 'rising', threshold: 0.5, action: { kind: 'emit', name: 'burst', value: 42 } },
+		{ source: 'burst', trigger: 'event', action: { kind: 'addProperty', uuid: light.uuid, property: 'intensity', value: 2 } },
+		{ source: 'burst', trigger: 'event', action: { kind: 'setParam', uuid: light.uuid, scriptIndex: 0, param: 'active', toggle: true } },
+		{ source: 'serial.line', trigger: 'match', match: 'GO', action: { kind: 'toggleVisible', uuid: light.uuid } },
+		{ source: 'audio.rms', fallback: 'demo.rms', trigger: 'rising', threshold: 0.5, action: { kind: 'serial', key: 'PING', value: 1 } }
+	];
+
+	// Preview sample should fire scene actions and named events, but block hardware output.
+	bus.publish( 'demo.rms', 0.8 );
+	assert.equal( bus.tick( scene ), true );
+	assert.deepEqual( emitted, [ 42 ] );
+	assert.equal( light.intensity, 3 );
+	assert.equal( params.active, true );
+	assert.deepEqual( hardwareSent, [] );
+
+	// Match trigger toggles visibility; real sample triggers hardware output.
+	bus.publish( 'serial.line', 'NOPE' );
+	bus.tick( scene );
+	assert.equal( light.visible, true );
+	bus.publish( 'serial.line', 'GO' );
+	bus.tick( scene );
+	assert.equal( light.visible, false );
+
+	bus.publish( 'audio.rms', 0.2 );
+	bus.tick( scene );
+	bus.publish( 'audio.rms', 0.9 );
+	bus.tick( scene );
+	assert.deepEqual( hardwareSent, [ [ 'PING', 1 ] ] );
+	unsub();
+
+} );

@@ -1,4 +1,4 @@
-import { StreamRouter } from './streams/StreamRouter.js';
+import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';

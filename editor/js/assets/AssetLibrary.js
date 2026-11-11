@@ -4,7 +4,7 @@ import { encodeFile, decodeFile } from './StoredFile.js';
 
 export const ASSET_MIME = 'application/x-threeditor-asset';
 export function fileKind( file ) {
-	if ( /\.spz$/i.test( file.name ) ) return 'splat';
+	if ( /\.(spz|sog|rad)$/i.test( file.name ) ) return 'splat';
 	if ( isTextureAsset( file ) ) return 'texture';
 	if ( isImportAsset( file ) ) return 'model';
 	if ( file.type.startsWith( 'video/' ) || /\.(mp4|webm|mov)$/i.test( file.name ) ) return 'video';
@@ -34,8 +34,8 @@ export class AssetLibrary {
 		return new Promise( ( resolve, reject ) => {
 			const tx = this.db.transaction( 'assets', mode );
 			const request = action( tx.objectStore( 'assets' ) );
-			tx.oncomplete = () => resolve( request.result );
-			tx.onerror = tx.onabort = () => reject( request.error || tx.error || new Error( 'Asset storage failed.' ) );
+			tx.oncomplete = () => resolve( request?.result );
+			tx.onerror = tx.onabort = () => reject( request?.error || tx.error || new Error( 'Asset storage failed.' ) );
 		} );
 	}
 	decode( record ) {
@@ -81,9 +81,89 @@ export class AssetLibrary {
 			let kind = fileKind( file );
 			if ( /\.json$/i.test( file.name ) ) {
 				try { const { mathDefinition } = await import( './MathObjects.js' ); mathDefinition( JSON.parse( await file.text() ) ); kind = 'sdf'; } catch { /* ordinary JSON keeps its existing importer */ }
+			} else if ( /\.ply$/i.test( file.name ) ) {
+				try { const { isGaussianSplatFile } = await import( './SplatObjects.js' ); if ( await isGaussianSplatFile( file ) ) kind = 'splat'; } catch { /* non-splat PLY keeps model importer */ }
 			}
 			records.push( await this.put( { id: crypto.randomUUID(), title: file.name, kind, file, path, batch, folder, tags: [], rating: 0, created: Date.now() } ) );
 		}
 		return records;
+	}
+
+	async cleanup( { activeDeviceIds = null, onMerge = null } = {} ) {
+
+		const records = await this.all();
+		const active = activeDeviceIds ? new Set( activeDeviceIds ) : null;
+		const seenById = new Map(), seenByTitle = new Map(), seenLandmark = new Map();
+		const removed = [];
+		const sorted = [ ...records ].sort( ( a, b ) => {
+
+			const aActive = a.deviceId && active?.has( a.deviceId ) ? 1 : 0;
+			const bActive = b.deviceId && active?.has( b.deviceId ) ? 1 : 0;
+			if ( aActive !== bActive ) return bActive - aActive;
+			const aId = a.deviceId ? 1 : 0;
+			const bId = b.deviceId ? 1 : 0;
+			if ( aId !== bId ) return bId - aId;
+			return ( b.created || 0 ) - ( a.created || 0 );
+
+		} );
+
+		for ( const record of sorted ) {
+
+			if ( record.kind === 'webcam' || record.kind === 'microphone' ) {
+
+				const idKey = record.deviceId ? `${ record.kind }:id:${ record.deviceId }` : null;
+				const titleKey = record.title ? `${ record.kind }:title:${ record.title }` : `${ record.kind }:default`;
+				const isActive = Boolean( record.deviceId && active?.has( record.deviceId ) );
+				const genericTitle = record.kind === 'webcam' ? 'Webcam' : 'Microphone';
+				const redundantGeneric = ! record.deviceId && record.title === genericTitle
+					? sorted.find( other => other !== record && other.kind === record.kind && other.deviceId && ( ! active || active.has( other.deviceId ) ) )
+					: null;
+				const keeper = redundantGeneric || ( idKey && seenById.get( idKey ) ) || ( ! isActive && seenByTitle.get( titleKey ) );
+				if ( keeper ) {
+
+					onMerge?.( keeper, record );
+					removed.push( record.id );
+					continue;
+
+				}
+				if ( idKey ) seenById.set( idKey, record );
+				if ( ! seenByTitle.has( titleKey ) ) seenByTitle.set( titleKey, record );
+				continue;
+
+			}
+
+			if ( ( record.kind === 'landmark' || record.kind === 'landmark-texture' ) && ! record.tags?.length && ! record.rating ) {
+
+				const defaultTitle = record.kind === 'landmark' ? 'Landmark visualization' : 'Landmark texture';
+				if ( record.title === defaultTitle ) {
+
+					const key = `${ record.kind }:${ record.folder || '' }`;
+					const keeper = seenLandmark.get( key );
+					if ( keeper ) {
+
+						onMerge?.( keeper, record );
+						removed.push( record.id );
+						continue;
+
+					}
+					seenLandmark.set( key, record );
+
+				}
+
+			}
+
+		}
+
+		if ( ! removed.length ) return 0;
+		await this.transaction( 'readwrite', store => {
+
+			let req;
+			for ( const id of removed ) req = store.delete( id );
+			return req;
+
+		} );
+		this.emit();
+		return removed.length;
+
 	}
 }

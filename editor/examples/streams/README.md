@@ -12,6 +12,7 @@ Open **File → Examples → streams**. Every scene has a preview input and runs
 | Body drum | Enable instrument sound and start MediaPipe Pose. Move either wrist into a pad. |
 | Humanoid pose driver | Use MediaPipe Pose to move the avatar. Select its root, choose **Record motion**, then **Save motion clip**. Disable the live pose script to preview the baked clip in the timeline. |
 | One-line portrait | Use MediaPipe Face with a webcam or video to draw a continuous line from the face landmarks. |
+| Serpentine particles | Plays Lumiere *Danse serpentine* (1897) inside a spinning light-encrusted bezel disk, driving 3D curl-noise round particles, a 4-ring orrery with orb lights, floor sweep lights, bloom, focus, and burst events. |
 
 The pinboard and reach lessons adapt the interaction from threejslessons using luminance and pose, respectively. The source lessons also use depth estimation. The earlier recorded body, Triadic, and paint adaptations are under **lessons**, where Fox is last.
 
@@ -27,13 +28,15 @@ Create a reusable webcam or microphone with **Assets → Add webcam…** or **Ad
 
 Each source publishes under `input.<id>.*`. The selected preview also supplies the shared `video.*` and `audio.*` topics. The tracked input supplies `vision.*` and its own namespaced vision topics. Iris centers are at index 0 in `vision.iris.left.landmarks` and `vision.iris.right.landmarks` when present.
 
-## Routes and scripts
+## Drivers, routes, and events
 
-A route maps an input interval to an output interval. Reverse either pair of bounds to invert the map. It can drive an object property, emit a `map.*` topic for another route, or send a MIDI CC, MIDI note, or serial line. Mapped topics take input from device or script topics. Device destinations require **Arm routed hardware output**. Project changes disarm them and preview samples never send to hardware.
+A route maps an input interval to an output interval using `linear`, `easeIn`, `easeOut`, `smoothstep`, or `step` curves with optional smoothing (`0..0.99`). Reverse either pair of bounds to invert the map. Drivers can target an object property (`position`, `rotation`, `scale`, `visible`, `intensity`, `color.*`, `material.*`, custom properties), a mesh **Morph target**, a script **Parameter**, **Scene / post-processing** settings (`fog.density`, `postprocessing.bloomStrength`, `postprocessing.focus`, etc.), another `map.*` topic, or hardware MIDI/serial outputs. Device destinations require **Arm routed hardware output**. Project changes disarm them and preview samples never send to hardware.
+
+The **Events** section in **Streams** evaluates edge or threshold rules (`change`, `rising`, `falling`, `above`, `below`, `equal`) over stream topics or play-mode keyboard/pointer inputs (`input.key.*`, `input.pointer.*`) and triggers object/parameter assignments or named events (`player.streams.emit(name, value)` / `player.streams.on(name, fn)`).
 
 Common inputs include `serial.A0`, `serial.value`, `serial.line`, `midi.cc.1.1`, `midi.note.1.60`, `midi.bend.1`, `midi.message`, `audio.rms`, `video.time`, `video.frame`, and `vision.pose.16.x`. Pose, Hand, and Face also publish `vision.<mode>.landmarks`.
 
-Object scripts can read the latest value with `player.streams.get(topic)`, publish with `player.streams.publish(topic, value)`, or subscribe with `player.streams.subscribe(topic, handler)`. The subscription returns an unsubscribe function for the script’s `stop` hook. Mark synthetic samples with a `demo.*` topic or use them as a route’s preview fallback.
+Object scripts can read the latest value with `player.streams.get(topic)`, publish with `player.streams.publish(topic, value)`, read or update script parameters with `player.streams.getParam(object, scriptIndex, param)` / `setParam(...)`, emit/listen to named events (`emit` / `on`), or subscribe with `player.streams.subscribe(topic, handler)`. The subscription returns an unsubscribe function for the script’s `stop` hook. Mark synthetic samples with a `demo.*` topic or use them as a route’s preview fallback.
 
 Import a `.vrm` through **Assets** to attach the pose driver. The driver reads VRM 0.x or 1.0 humanoid bone references and drives arm and leg directions. The demo uses an editable rig built into the scene. Full VRM expressions, spring bones, and advanced retargeting are outside this driver.
 

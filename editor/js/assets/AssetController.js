@@ -8,6 +8,7 @@ import { mathDefinition, mathScript } from './MathObjects.js';
 import { modelScript } from './ModelBehavior.js';
 import { mediaPlane, mediaScript, movingTextureScript, webcamPlane } from './MediaObjects.js';
 import { landmarkScript, landmarkTextureScript } from './LandmarkObjects.js';
+import { splatScript, splatFileType } from './SplatObjects.js';
 import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js';
 import { ASSET_MIME } from './AssetLibrary.js';
 import { loadAssetTexture } from './AssetTexture.js';
@@ -142,12 +143,11 @@ export class AssetController {
 			const sound = new THREE.Group(); sound.userData.assetObject = { type: 'audio', path: entry.path };
 			return this.commit( sound, entry, mediaScript( entry.path, 'audio' ), position, canCommit );
 		} else if ( record.kind === 'splat' ) {
-			const { SPZLoader } = await import( 'three/addons/loaders/SPZLoader.js' );
-			const geometry = await new SPZLoader().parse( await entry.file.arrayBuffer() );
-			const cloud = new THREE.Points( geometry, new THREE.PointsMaterial( { size: 0.025, vertexColors: true, transparent: true } ) );
-			cloud.userData.assetObject = { type: 'splat-points' };
-			const script = { name: 'Point cloud display', assetBehavior: 'points', enabled: true, source: '// @param pointSize = 0.025 (0.001..1)\n// @param opacity = 1 (0..1)\nfunction init(){this.material.size=params.pointSize;this.material.opacity=params.opacity;this.material.transparent=true;this.material.needsUpdate=true;}\n' };
-			return this.commit( cloud, entry, script, position, canCommit );
+			const group = new THREE.Group();
+			group.userData.assetObject = { type: 'gaussian-splat', path: entry.path, url: entry.record.url };
+			const source = entry.path ? 'assets/' + entry.path : entry.record.url;
+			const fileType = splatFileType( entry.file?.name || entry.path || entry.record.url );
+			return this.commit( group, entry, splatScript( source, fileType ), position, canCommit );
 		} else if ( record.kind === 'landmark' ) {
 			const root = new THREE.Group();
 			root.userData.assetObject = { type: 'landmark' };

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
-import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber } from './libs/ui.js';
+import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
+import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';
 
 function SidebarScene( editor ) {
 
@@ -69,7 +70,7 @@ function SidebarScene( editor ) {
 			const opener = document.createElement( 'span' );
 			opener.classList.add( 'opener' );
 
-			if ( object.children.length > 0 ) {
+			if ( object.children.some( child => ! child.userData?.runtimeOnly ) ) {
 
 				opener.classList.add( state ? 'open' : 'closed' );
 
@@ -471,6 +472,50 @@ function SidebarScene( editor ) {
 	const fogDensity = new UINumber( 0.05 ).setWidth( '40px' ).setRange( 0, 0.1 ).setStep( 0.001 ).setPrecision( 3 ).onChange( onFogSettingsChanged );
 	fogPropertiesRow.add( fogDensity );
 
+	// post-processing: bloom & focus (depth of field)
+
+	function updatePostProcessing() {
+
+		const next = {
+			...DEFAULT_POSTPROCESSING,
+			...( editor.scene.userData.postprocessing || {} ),
+			bloom: bloomEnabled.getValue(),
+			bloomStrength: bloomStrength.getValue(),
+			bloomRadius: bloomRadius.getValue(),
+			bloomThreshold: bloomThreshold.getValue(),
+			dof: dofEnabled.getValue(),
+			focus: dofFocus.getValue(),
+			aperture: dofAperture.getValue(),
+			maxblur: dofMaxBlur.getValue()
+		};
+		const command = new SetValueCommand( editor, editor.scene, 'userData', { ...editor.scene.userData, postprocessing: next } );
+		command.updatable = false;
+		editor.execute( command );
+
+	}
+
+	const bloomRow = new UIRow();
+	bloomRow.add( new UIText( 'Bloom' ).setClass( 'Label' ) );
+	const bloomEnabled = new UICheckbox( false ).onChange( updatePostProcessing );
+	bloomRow.add( bloomEnabled );
+	const bloomStrength = new UINumber( DEFAULT_POSTPROCESSING.bloomStrength ).setWidth( '40px' ).setRange( 0, 5 ).setStep( 0.05 ).onChange( updatePostProcessing );
+	const bloomRadius = new UINumber( DEFAULT_POSTPROCESSING.bloomRadius ).setWidth( '40px' ).setRange( 0, 2 ).setStep( 0.05 ).onChange( updatePostProcessing );
+	const bloomThreshold = new UINumber( DEFAULT_POSTPROCESSING.bloomThreshold ).setWidth( '40px' ).setRange( 0, 2 ).setStep( 0.05 ).onChange( updatePostProcessing );
+	bloomStrength.dom.title = 'Bloom strength'; bloomRadius.dom.title = 'Bloom radius'; bloomThreshold.dom.title = 'Bloom threshold';
+	bloomRow.add( bloomStrength, bloomRadius, bloomThreshold );
+	container.add( bloomRow );
+
+	const dofRow = new UIRow();
+	dofRow.add( new UIText( 'Focus' ).setClass( 'Label' ) );
+	const dofEnabled = new UICheckbox( false ).onChange( updatePostProcessing );
+	dofRow.add( dofEnabled );
+	const dofFocus = new UINumber( DEFAULT_POSTPROCESSING.focus ).setWidth( '40px' ).setRange( 0.1, 1000 ).setStep( 0.1 ).onChange( updatePostProcessing );
+	const dofAperture = new UINumber( DEFAULT_POSTPROCESSING.aperture ).setWidth( '48px' ).setRange( 0, 0.05 ).setStep( 0.0005 ).setPrecision( 4 ).onChange( updatePostProcessing );
+	const dofMaxBlur = new UINumber( DEFAULT_POSTPROCESSING.maxblur ).setWidth( '44px' ).setRange( 0, 0.05 ).setStep( 0.001 ).setPrecision( 3 ).onChange( updatePostProcessing );
+	dofFocus.dom.title = 'Focus distance'; dofAperture.dom.title = 'Aperture'; dofMaxBlur.dom.title = 'Max blur';
+	dofRow.add( dofFocus, dofAperture, dofMaxBlur );
+	container.add( dofRow );
+
 	//
 
 	function refreshUI() {
@@ -488,6 +533,7 @@ function SidebarScene( editor ) {
 			for ( let i = 0, l = objects.length; i < l; i ++ ) {
 
 				const object = objects[ i ];
+				if ( object.userData?.runtimeOnly ) continue;
 
 				if ( nodeStates.has( object ) === false ) {
 
@@ -594,6 +640,22 @@ function SidebarScene( editor ) {
 		refreshBackgroundUI();
 		refreshEnvironmentUI();
 		refreshFogUI();
+
+		const pp = { ...DEFAULT_POSTPROCESSING, ...( scene.userData.postprocessing || {} ) };
+		bloomEnabled.setValue( Boolean( pp.bloom ) );
+		bloomStrength.setValue( pp.bloomStrength );
+		bloomRadius.setValue( pp.bloomRadius );
+		bloomThreshold.setValue( pp.bloomThreshold );
+		bloomStrength.setDisplay( pp.bloom ? '' : 'none' );
+		bloomRadius.setDisplay( pp.bloom ? '' : 'none' );
+		bloomThreshold.setDisplay( pp.bloom ? '' : 'none' );
+		dofEnabled.setValue( Boolean( pp.dof ) );
+		dofFocus.setValue( pp.focus );
+		dofAperture.setValue( pp.aperture );
+		dofMaxBlur.setValue( pp.maxblur );
+		dofFocus.setDisplay( pp.dof ? '' : 'none' );
+		dofAperture.setDisplay( pp.dof ? '' : 'none' );
+		dofMaxBlur.setDisplay( pp.dof ? '' : 'none' );
 
 	}
 

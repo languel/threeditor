@@ -15,7 +15,8 @@ const exampleCatalog = [
 		{ title: 'Laser harp', file: 'examples/streams/laser-harp.app.json' },
 		{ title: 'Body drum', file: 'examples/streams/body-drum.app.json' },
 		{ title: 'Humanoid pose driver', file: 'examples/streams/humanoid-pose.app.json' },
-		{ title: 'One-line portrait', file: 'examples/streams/one-line.app.json' }
+		{ title: 'One-line portrait', file: 'examples/streams/one-line.app.json' },
+		{ title: 'Serpentine particles', file: 'examples/streams/serpentine-particles.app.json' }
 	] },
 	{ title: 'lessons', children: [
 		{ title: '00 · A spinning cube', file: 'examples/lessons/00-cube.app.json' },
@@ -23,6 +24,7 @@ const exampleCatalog = [
 		{ title: '02 · Recorded body landmarks', file: 'examples/lessons/02-body.app.json' },
 		{ title: '03 · Triadic costumes', file: 'examples/lessons/03-triadic.app.json' },
 		{ title: '04 · Paint marks in space', file: 'examples/lessons/04-paint.app.json' },
+		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }
 ];

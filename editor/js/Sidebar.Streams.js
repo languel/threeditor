@@ -1,12 +1,14 @@
 import { drawStreamPreview } from './streams/LandmarkPreview.js';
-import { isStillInput } from './assets/AssetController.js';
-import { openAssetBrowser } from './AssetBrowser.js';
+import { isInputAsset, isMovingAsset, isStillInput } from './assets/AssetController.js';
+import { fileKind } from './assets/AssetLibrary.js';
+import { openAssetBrowser, textureEntries } from './AssetBrowser.js';
+import { scriptParams } from './ScriptParams.js';
 import { AnimationClip, QuaternionKeyframeTrack } from 'three';
 import { UIPanel } from './libs/ui.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { SerialDevice, midiTopics } from './streams/DeviceStreams.js';
 import { MediaStreams } from './streams/MediaStreams.js';
-import { objectChannels } from './streams/StreamRouter.js';
+import { objectChannels } from './streams/StreamRouter.js?v=drivers';
 
 function node( type, text, parent ) {
 
@@ -192,22 +194,155 @@ function SidebarStreams( editor ) {
 	mediaRack.className = 'stream-media-rack';
 	mediaRack.setAttribute( 'aria-hidden', 'true' );
 	const inputs = new Map();
+	const available = new Map();
 	let previewAvailable = true;
 	const sourceSelect = select( mediaPanel, 'Assigned input', [] );
 	let primary = '';
-	function refreshInputs() {
+	const sourceRank = entry => entry.kind === 'webcam' ? 0 : entry.kind === 'microphone' ? 1 : isMovingAsset( entry ) ? 2 : entry.kind === 'audio' ? 3 : 4;
 
-		const old = sourceSelect.value;
-		for ( const control of [ sourceSelect, visionInput ] ) {
+	function rebuildSelects() {
 
-			const previous = control.value;
-			const options = [ ...inputs ].filter( ( [ , item ] ) => control === sourceSelect || ! item.options.audioOnly );
-			control.replaceChildren( ...options.map( ( [ id, item ] ) => new Option( item.title, id ) ) );
-			if ( options.some( ( [ id ] ) => id === previous ) ) control.value = previous;
+		const oldSource = sourceSelect.value;
+		const oldVision = visionInput.value;
+		const entries = [ ...available.values() ].sort( ( a, b ) =>
+			( inputs.has( a.id ) ? 0 : 1 ) - ( inputs.has( b.id ) ? 0 : 1 ) ||
+			sourceRank( a ) - sourceRank( b ) ||
+			a.title.localeCompare( b.title )
+		);
+
+		const populate = ( control, list, previous ) => {
+
+			control.replaceChildren(
+				new Option( 'Choose input…', '' ),
+				...list.map( item => new Option( inputs.has( item.id ) ? item.title + ' (active)' : item.title, item.id ) )
+			);
+			if ( previous && list.some( item => item.id === previous ) ) control.value = previous;
+
+		};
+
+		populate( sourceSelect, entries, inputs.has( oldSource ) ? oldSource : '' );
+		const visual = entries.filter( item => ! item.audioOnly );
+		const fallbackVision = inputs.has( oldVision ) ? oldVision : ( oldVision && visual.some( i => i.id === oldVision ) ? oldVision : ( [ ...inputs ].find( ( [ , item ] ) => ! item.options.audioOnly )?.[ 0 ] || '' ) );
+		populate( visionInput, visual, fallbackVision );
+		choosePreview();
+
+	}
+
+	async function refreshAvailableSources() {
+
+		const next = new Map();
+		const add = entry => {
+
+			if ( ! entry?.id || ! entry.title || next.has( entry.id ) ) return;
+			const audioOnly = entry.kind === 'microphone' || entry.kind === 'audio';
+			next.set( entry.id, { ...entry, audioOnly } );
+
+		};
+
+		for ( const [ id, item ] of inputs ) {
+
+			add( { id, title: item.title, kind: item.options.camera ? 'webcam' : item.options.microphone ? 'microphone' : item.options.audioOnly ? 'audio' : item.options.still ? 'texture' : 'video', options: item.options } );
 
 		}
-		if ( inputs.has( old ) ) sourceSelect.value = old;
-		choosePreview();
+
+		if ( editor.assetBrowser?.library ) {
+
+			try {
+
+				for ( const record of await editor.assetBrowser.library.all() ) {
+
+					if ( isInputAsset( record ) ) add( { id: record.id, title: record.title, kind: record.kind, deviceId: record.deviceId, file: record.file } );
+
+				}
+
+			} catch { /* storage unavailable */ }
+
+		}
+
+		for ( const [ path, entry ] of editor.sourceFiles || [] ) {
+
+			const record = { ...entry.asset, id: 'project:' + path, title: editor.scene.userData.assetLabels?.files?.[ path ] || entry.file.name, kind: entry.asset?.kind || fileKind( entry.file ), file: entry.file };
+			if ( isInputAsset( record ) ) add( record );
+
+		}
+
+		textureEntries( editor ).forEach( ( entry, i ) => {
+
+			add( { id: 'scene-texture:' + i, title: editor.scene.userData.assetLabels?.files?.[ entry.texture.uuid ] || entry.name, kind: 'texture', texture: entry.texture } );
+
+		} );
+
+		if ( navigator.mediaDevices?.enumerateDevices ) {
+
+			try {
+
+				const devices = await navigator.mediaDevices.enumerateDevices();
+				const knownVideoIds = new Set( [ ...next.values() ].filter( e => e.kind === 'webcam' && e.deviceId ).map( e => e.deviceId ) );
+				const knownAudioIds = new Set( [ ...next.values() ].filter( e => e.kind === 'microphone' && e.deviceId ).map( e => e.deviceId ) );
+				const hasAnyWebcam = [ ...next.values() ].some( e => e.kind === 'webcam' );
+				const hasAnyMic = [ ...next.values() ].some( e => e.kind === 'microphone' );
+
+				for ( const device of devices ) {
+
+					if ( device.kind === 'videoinput' && device.deviceId && ! knownVideoIds.has( device.deviceId ) ) {
+
+						add( { id: 'device:webcam:' + device.deviceId, title: device.label || 'Webcam', kind: 'webcam', deviceId: device.deviceId } );
+						knownVideoIds.add( device.deviceId );
+
+					} else if ( device.kind === 'audioinput' && device.deviceId && ! knownAudioIds.has( device.deviceId ) ) {
+
+						add( { id: 'device:microphone:' + device.deviceId, title: device.label || 'Microphone', kind: 'microphone', deviceId: device.deviceId } );
+						knownAudioIds.add( device.deviceId );
+
+					}
+
+				}
+				if ( ! hasAnyWebcam && devices.some( d => d.kind === 'videoinput' ) ) add( { id: 'device:webcam:default', title: 'Default webcam', kind: 'webcam' } );
+				if ( ! hasAnyMic && devices.some( d => d.kind === 'audioinput' ) ) add( { id: 'device:microphone:default', title: 'Default microphone', kind: 'microphone' } );
+
+			} catch { /* mediaDevices unavailable */ }
+
+		}
+
+		available.clear();
+		for ( const [ id, entry ] of next ) available.set( id, entry );
+		rebuildSelects();
+
+	}
+
+	function refreshInputs() {
+
+		for ( const [ id, item ] of inputs ) {
+
+			if ( ! available.has( id ) ) available.set( id, { id, title: item.title, kind: item.options.camera ? 'webcam' : item.options.microphone ? 'microphone' : item.options.audioOnly ? 'audio' : item.options.still ? 'texture' : 'video', audioOnly: !! item.options.audioOnly } );
+
+		}
+		rebuildSelects();
+
+	}
+
+	let activatingTracking = false;
+	async function activateSource( id ) {
+
+		if ( ! id ) return null;
+		if ( inputs.has( id ) ) return inputs.get( id );
+		const entry = available.get( id );
+		if ( ! entry ) return null;
+		if ( editor.assetBrowser && ! id.startsWith( 'device:' ) && editor.assetBrowser.records.has( id ) ) {
+
+			const materialized = await editor.assetBrowser.materialize( id );
+			await editor.assignMediaAsset( materialized );
+
+		} else {
+
+			await editor.assignMediaAsset( {
+				record: { id: entry.id, title: entry.title, kind: entry.kind, deviceId: entry.deviceId },
+				file: entry.file,
+				texture: entry.texture
+			} );
+
+		}
+		return inputs.get( id ) || null;
 
 	}
 	function choosePreview() {
@@ -239,12 +374,25 @@ function SidebarStreams( editor ) {
 		pauseInput.textContent = item?.media.paused ? 'Resume input' : 'Pause input';
 
 	}
-	sourceSelect.onchange = choosePreview;
+	sourceSelect.onchange = async () => {
+
+		const id = sourceSelect.value;
+		if ( id && ! inputs.has( id ) ) {
+
+			try { await activateSource( id ); }
+			catch ( error ) { mediaStatus.textContent = error.message; sourceSelect.value = primary || ''; return; }
+
+		}
+		choosePreview();
+		showSettings();
+
+	};
 	async function startMedia( options, id = crypto.randomUUID(), title = 'Input' ) {
 
 		if ( inputs.has( id ) ) {
 
 			sourceSelect.value = id;
+			if ( ! options.audioOnly && ! visionInput.value ) visionInput.value = id;
 			choosePreview();
 			return id;
 
@@ -261,6 +409,7 @@ function SidebarStreams( editor ) {
 		inputs.set( id, item );
 		refreshInputs();
 		sourceSelect.value = id;
+		if ( ! options.audioOnly && ! visionInput.value ) visionInput.value = id;
 		choosePreview();
 		showSettings();
 		try { await media.start( video, options ); }
@@ -268,8 +417,9 @@ function SidebarStreams( editor ) {
 		item.busy = false;
 		refreshInputs();
 		sourceSelect.value = id;
+		if ( ! options.audioOnly && ! visionInput.value ) visionInput.value = id;
 		choosePreview();
-		if ( visionEnabled.checked && ! tracking ) await updateTracking();
+		if ( visionEnabled.checked && ! tracking && ! activatingTracking ) await updateTracking();
 		return id;
 
 	}
@@ -347,6 +497,8 @@ function SidebarStreams( editor ) {
 		item.media.stop();
 		item.video.remove();
 		inputs.delete( id );
+		sourceSelect.value = '';
+		if ( visionInput.value === id ) visionInput.value = '';
 		refreshInputs();
 		mediaStatus.textContent = 'Input unassigned';
 
@@ -357,6 +509,8 @@ function SidebarStreams( editor ) {
 		if ( tracking ) { visionEnabled.checked = false; await updateTracking(); }
 		for ( const item of inputs.values() ) { item.media.stop(); item.video.remove(); }
 		inputs.clear();
+		sourceSelect.value = '';
+		visionInput.value = '';
 		refreshInputs();
 		mediaStatus.textContent = 'No asset assigned';
 		choosePreview();
@@ -385,6 +539,31 @@ function SidebarStreams( editor ) {
 		const version = ++ trackingVersion;
 		if ( tracking ) await tracking.track( '' );
 		if ( version !== trackingVersion ) return;
+		if ( visionEnabled.checked ) {
+
+			if ( ! visionInput.value ) {
+
+				const activeVisual = [ ...inputs ].find( ( [ , item ] ) => ! item.options.audioOnly )?.[ 0 ];
+				if ( activeVisual ) visionInput.value = activeVisual;
+				else if ( visionInput.options.length > 1 ) visionInput.value = visionInput.options[ 1 ].value;
+
+			}
+			if ( visionInput.value && ! inputs.has( visionInput.value ) ) {
+
+				visionStatus.textContent = 'Starting input…';
+				activatingTracking = true;
+				try { await activateSource( visionInput.value ); }
+				catch ( error ) {
+
+					if ( version === trackingVersion ) { visionEnabled.checked = false; visionStatus.textContent = error.message; }
+					return;
+
+				} finally { activatingTracking = false; }
+				if ( version !== trackingVersion ) return;
+
+			}
+
+		}
 		tracking = visionEnabled.checked ? inputs.get( visionInput.value )?.media : null;
 		if ( ! tracking ) { visionStatus.textContent = visionEnabled.checked ? 'Choose an input stream' : 'Stopped'; return; }
 		visionStatus.textContent = 'Loading tracker…';
@@ -404,7 +583,28 @@ function SidebarStreams( editor ) {
 		}
 
 	}
-	visionEnabled.onchange = visionInput.onchange = mode.onchange = updateTracking;
+	visionInput.onchange = async () => {
+
+		const id = visionInput.value;
+		if ( id && ! inputs.has( id ) ) {
+
+			visionStatus.textContent = 'Starting input…';
+			activatingTracking = true;
+			try { await activateSource( id ); }
+			catch ( error ) { visionStatus.textContent = error.message; visionInput.value = ''; return; }
+			finally { activatingTracking = false; }
+
+		}
+		await updateTracking();
+
+	};
+	visionEnabled.onchange = mode.onchange = updateTracking;
+	const reloadSources = () => { void refreshAvailableSources(); };
+	editor.assetBrowser?.library?.onChange( reloadSources );
+	for ( const sig of [ 'assetsChanged', 'projectLoaded', 'editorCleared', 'sceneGraphChanged' ] ) editor.signals[ sig ].add( reloadSources );
+	mediaPanel.addEventListener( 'toggle', () => { if ( mediaPanel.open ) reloadSources(); } );
+	vision.addEventListener( 'toggle', () => { if ( vision.open ) reloadSources(); } );
+	reloadSources();
 	let capture;
 	button( vision, 'Record motion', () => {
 
@@ -494,9 +694,23 @@ function SidebarStreams( editor ) {
 	topic.setAttribute( 'list', suggestions.id );
 	topic.onfocus = () => suggestions.replaceChildren( ...bus.topics().map( name => new Option( name ) ) );
 	const fallback = input( routes, 'Preview fallback', '' );
-	const kind = select( routes, 'Destination', [ [ 'object', 'Scene object' ], [ 'serial', 'Serial line' ], [ 'topic', 'Mapped topic' ], [ 'midi.cc', 'MIDI CC' ], [ 'midi.note', 'MIDI note' ] ] );
+	const kind = select( routes, 'Destination', [
+		[ 'object', 'Scene object' ], [ 'param', 'Script parameter' ], [ 'morph', 'Morph target' ],
+		[ 'scene', 'Scene property' ], [ 'serial', 'Serial line' ], [ 'topic', 'Mapped topic' ],
+		[ 'midi.cc', 'MIDI CC' ], [ 'midi.note', 'MIDI note' ]
+	] );
 	const object = select( routes, 'Object', [] );
 	const property = select( routes, 'Property', Object.keys( objectChannels ).map( name => [ name, name ] ) );
+	const routeScript = select( routes, 'Script', [] );
+	const routeParam = select( routes, 'Parameter', [] );
+	const routeMorph = select( routes, 'Morph', [] );
+	const sceneProperty = select( routes, 'Scene prop', [
+		[ 'environmentIntensity', 'environmentIntensity' ], [ 'fog.density', 'fog.density' ],
+		[ 'fog.near', 'fog.near' ], [ 'fog.far', 'fog.far' ], [ 'background.hue', 'background.hue' ],
+		[ 'postprocessing.bloomStrength', 'postprocessing.bloomStrength' ],
+		[ 'postprocessing.focus', 'postprocessing.focus' ],
+		[ 'postprocessing.aperture', 'postprocessing.aperture' ]
+	] );
 	const key = input( routes, 'Serial key', '' );
 	const mapped = input( routes, 'Mapped topic', 'map.' );
 	const channel = input( routes, 'MIDI channel', '1', 'number' );
@@ -505,28 +719,135 @@ function SidebarStreams( editor ) {
 	ranges.className = 'stream-ranges';
 	const bounds = [ [ 'In min', 0 ], [ 'In max', 1 ], [ 'Out min', 0 ], [ 'Out max', 1 ] ].map( ( [ label, value ] ) => input( ranges, label, value, 'number' ) );
 	for ( const field of bounds ) field.step = 'any';
+	const curve = select( routes, 'Curve', [
+		[ 'linear', 'Linear' ], [ 'smoothstep', 'Smoothstep' ], [ 'easeIn', 'Ease in' ],
+		[ 'easeOut', 'Ease out' ], [ 'abs', 'Abs' ], [ 'step', 'Step (>= 0.5)' ]
+	] );
+	const smooth = input( routes, 'Smooth', '0', 'number' );
+	smooth.min = 0; smooth.max = 0.98; smooth.step = 0.05;
 	const clamp = input( routes, 'Clamp', '', 'checkbox' );
 	clamp.checked = true;
 	let editing = - 1;
 	const getRoutes = () => editor.scene.userData.streamRoutes || [];
+
+	function populateObjectChoices( control ) {
+
+		const previous = control.value;
+		control.replaceChildren( new Option( 'Choose object', '' ) );
+		editor.scene.traverse( item => { if ( item !== editor.scene ) control.add( new Option( item.name || item.type, item.uuid ) ); } );
+		control.value = previous;
+
+	}
+	function populateScriptsFor( uuid, scriptSel, paramSel ) {
+
+		const prevScript = scriptSel.value, prevParam = paramSel.value;
+		const scripts = editor.scripts[ uuid ] || [];
+		scriptSel.replaceChildren( ...scripts.map( ( s, i ) => new Option( s.name || 'Script ' + ( i + 1 ), String( i ) ) ) );
+		if ( scripts[ Number( prevScript ) ] ) scriptSel.value = prevScript;
+		const chosen = scripts[ Number( scriptSel.value || 0 ) ];
+		const fields = chosen ? scriptParams( chosen.source ) : [];
+		paramSel.replaceChildren( ...fields.map( f => new Option( f.label || f.name, f.name ) ) );
+		if ( fields.some( f => f.name === prevParam ) ) paramSel.value = prevParam;
+
+	}
+	function populateMorphsFor( uuid, morphSel ) {
+
+		const prev = morphSel.value;
+		const item = uuid ? editor.scene.getObjectByProperty( 'uuid', uuid ) : null;
+		const dict = item?.morphTargetDictionary;
+		const names = dict ? Object.keys( dict ) : Array.from( { length: item?.morphTargetInfluences?.length || 0 }, ( _, i ) => String( i ) );
+		morphSel.replaceChildren( ...names.map( name => new Option( name, name ) ) );
+		if ( names.includes( prev ) ) morphSel.value = prev;
+
+	}
+
 	function visibility() {
 
-		for ( const control of [ object, property ] ) control.parentElement.hidden = kind.value !== 'object';
+		object.parentElement.hidden = ! [ 'object', 'param', 'morph' ].includes( kind.value );
+		property.parentElement.hidden = kind.value !== 'object';
+		routeScript.parentElement.hidden = routeParam.parentElement.hidden = kind.value !== 'param';
+		routeMorph.parentElement.hidden = kind.value !== 'morph';
+		sceneProperty.parentElement.hidden = kind.value !== 'scene';
 		key.parentElement.hidden = kind.value !== 'serial';
 		mapped.parentElement.hidden = kind.value !== 'topic';
 		for ( const control of [ channel, number ] ) control.parentElement.hidden = ! kind.value.startsWith( 'midi.' );
+		if ( kind.value === 'param' ) populateScriptsFor( object.value, routeScript, routeParam );
+		if ( kind.value === 'morph' ) populateMorphsFor( object.value, routeMorph );
 
 	}
+	object.onchange = () => { populateScriptsFor( object.value, routeScript, routeParam ); populateMorphsFor( object.value, routeMorph ); };
+	routeScript.onchange = () => populateScriptsFor( object.value, routeScript, routeParam );
+
+	const eventsPanel = section( panel.dom, 'Events', false );
+	const eventStatus = node( 'output', '', eventsPanel );
+	const eventList = node( 'div', '', eventsPanel );
+	const eventSource = input( eventsPanel, 'Source / event', '' );
+	eventSource.setAttribute( 'list', suggestions.id );
+	eventSource.onfocus = () => suggestions.replaceChildren( ...bus.topics().map( name => new Option( name ) ) );
+	const eventFallback = input( eventsPanel, 'Preview fallback', '' );
+	const eventTrigger = select( eventsPanel, 'Trigger', [
+		[ 'rising', 'Crosses above' ], [ 'falling', 'Crosses below' ], [ 'enter', 'Enters range' ],
+		[ 'exit', 'Exits range' ], [ 'match', 'Matches text' ], [ 'change', 'On change' ], [ 'event', 'Named event' ]
+	] );
+	const eventThreshold = input( eventsPanel, 'Threshold', '0.5', 'number' ); eventThreshold.step = 'any';
+	const eventHigh = input( eventsPanel, 'Range max', '1', 'number' ); eventHigh.step = 'any';
+	const eventMatch = input( eventsPanel, 'Match text', '' );
+	const eventCooldown = input( eventsPanel, 'Cooldown (ms)', '0', 'number' ); eventCooldown.min = 0; eventCooldown.step = 50;
+	const eventAction = select( eventsPanel, 'Action', [
+		[ 'emit', 'Emit named event' ], [ 'toggleVisible', 'Toggle visibility' ],
+		[ 'setProperty', 'Set object property' ], [ 'addProperty', 'Add to object property' ],
+		[ 'setParam', 'Set script parameter' ], [ 'topic', 'Publish map.* topic' ],
+		[ 'serial', 'Serial line' ], [ 'midi.cc', 'MIDI CC' ], [ 'midi.note', 'MIDI note' ]
+	] );
+	const eventName = input( eventsPanel, 'Event name', '' );
+	const eventObject = select( eventsPanel, 'Object', [] );
+	const eventProperty = select( eventsPanel, 'Property', Object.keys( objectChannels ).map( name => [ name, name ] ) );
+	const eventScript = select( eventsPanel, 'Script', [] );
+	const eventParam = select( eventsPanel, 'Parameter', [] );
+	const eventToggle = input( eventsPanel, 'Toggle boolean', '', 'checkbox' );
+	const eventValue = input( eventsPanel, 'Value', '1' );
+	const eventKey = input( eventsPanel, 'Serial key', '' );
+	const eventTopic = input( eventsPanel, 'Mapped topic', 'map.' );
+	const eventChannel = input( eventsPanel, 'MIDI channel', '1', 'number' );
+	const eventNumber = input( eventsPanel, 'CC / note', '1', 'number' );
+	let editingEvent = - 1;
+	const getEvents = () => editor.scene.userData.streamEvents || [];
+
+	function eventVisibility() {
+
+		const trig = eventTrigger.value, act = eventAction.value;
+		eventFallback.parentElement.hidden = trig === 'event';
+		eventThreshold.parentElement.hidden = ! [ 'rising', 'falling', 'enter', 'exit' ].includes( trig );
+		eventHigh.parentElement.hidden = ! [ 'enter', 'exit' ].includes( trig );
+		eventMatch.parentElement.hidden = trig !== 'match';
+		eventName.parentElement.hidden = act !== 'emit';
+		eventObject.parentElement.hidden = ! [ 'toggleVisible', 'setProperty', 'addProperty', 'setParam' ].includes( act );
+		eventProperty.parentElement.hidden = ! [ 'setProperty', 'addProperty' ].includes( act );
+		eventScript.parentElement.hidden = eventParam.parentElement.hidden = eventToggle.parentElement.hidden = act !== 'setParam';
+		eventKey.parentElement.hidden = act !== 'serial';
+		eventTopic.parentElement.hidden = act !== 'topic';
+		eventChannel.parentElement.hidden = eventNumber.parentElement.hidden = ! act.startsWith( 'midi.' );
+		eventValue.parentElement.hidden = act === 'toggleVisible' || ( act === 'setParam' && eventToggle.checked );
+		if ( act === 'setParam' ) populateScriptsFor( eventObject.value, eventScript, eventParam );
+
+	}
+	eventTrigger.onchange = eventAction.onchange = eventToggle.onchange = eventVisibility;
+	eventObject.onchange = () => populateScriptsFor( eventObject.value, eventScript, eventParam );
+	eventScript.onchange = () => populateScriptsFor( eventObject.value, eventScript, eventParam );
+
 	function refresh() {
 
-		const previous = object.value;
-		object.replaceChildren( new Option( 'Choose object', '' ) );
-		editor.scene.traverse( item => { if ( item !== editor.scene ) object.add( new Option( item.name || item.type, item.uuid ) ); } );
-		object.value = previous;
+		populateObjectChoices( object );
+		populateObjectChoices( eventObject );
+		populateScriptsFor( object.value, routeScript, routeParam );
+		populateMorphsFor( object.value, routeMorph );
+		populateScriptsFor( eventObject.value, eventScript, eventParam );
+
 		list.replaceChildren();
 		getRoutes().forEach( ( route, index ) => {
 
-			const label = route.source + ' → ' + ( route.target.property || route.target.kind );
+			const targetLabel = route.target.param || route.target.morph || route.target.property || route.target.topic || route.target.kind;
+			const label = route.source + ' → ' + targetLabel;
 			button( list, label, () => {
 
 				editing = index;
@@ -534,17 +855,62 @@ function SidebarStreams( editor ) {
 				fallback.value = route.fallback || '';
 				kind.value = route.target.kind;
 				object.value = route.target.uuid || '';
+				populateScriptsFor( object.value, routeScript, routeParam );
+				populateMorphsFor( object.value, routeMorph );
 				property.value = route.target.property || 'position.x';
+				routeScript.value = String( route.target.scriptIndex ?? 0 );
+				populateScriptsFor( object.value, routeScript, routeParam );
+				routeParam.value = route.target.param || '';
+				routeMorph.value = route.target.morph || '';
+				sceneProperty.value = route.target.property || 'environmentIntensity';
 				key.value = route.target.key || '';
 				mapped.value = route.target.topic || 'map.';
 				channel.value = route.target.channel || 1;
 				number.value = route.target.controller ?? route.target.note ?? 1;
 				[ ...( route.input || [ 0, 1 ] ), ...( route.output || [ 0, 1 ] ) ].forEach( ( value, i ) => { bounds[ i ].value = value; } );
+				curve.value = route.curve || 'linear';
+				smooth.value = route.smooth || 0;
 				clamp.checked = route.clamp !== false;
 				visibility();
-				status.textContent = 'Editing route ' + ( index + 1 );
+				status.textContent = 'Editing driver ' + ( index + 1 );
 
 			}, status );
+
+		} );
+
+		eventList.replaceChildren();
+		getEvents().forEach( ( rule, index ) => {
+
+			const actionLabel = rule.action?.name || rule.action?.param || rule.action?.property || rule.action?.topic || rule.action?.kind;
+			button( eventList, `${ rule.source } [${ rule.trigger }] → ${ actionLabel }`, () => {
+
+				editingEvent = index;
+				eventSource.value = rule.source || '';
+				eventFallback.value = rule.fallback || '';
+				eventTrigger.value = rule.trigger || 'rising';
+				eventThreshold.value = rule.threshold ?? 0.5;
+				eventHigh.value = rule.high ?? 1;
+				eventMatch.value = rule.match ?? '';
+				eventCooldown.value = rule.cooldown ?? 0;
+				const act = rule.action || { kind: 'emit' };
+				eventAction.value = act.kind || 'emit';
+				eventName.value = act.name || '';
+				eventObject.value = act.uuid || '';
+				populateScriptsFor( eventObject.value, eventScript, eventParam );
+				eventProperty.value = act.property || 'position.x';
+				eventScript.value = String( act.scriptIndex ?? 0 );
+				populateScriptsFor( eventObject.value, eventScript, eventParam );
+				eventParam.value = act.param || '';
+				eventToggle.checked = !! act.toggle;
+				eventValue.value = act.value ?? '1';
+				eventKey.value = act.key || '';
+				eventTopic.value = act.topic || 'map.';
+				eventChannel.value = act.channel || 1;
+				eventNumber.value = act.controller ?? act.note ?? 1;
+				eventVisibility();
+				eventStatus.textContent = 'Editing event ' + ( index + 1 );
+
+			}, eventStatus );
 
 		} );
 
@@ -558,8 +924,76 @@ function SidebarStreams( editor ) {
 		refresh();
 
 	}
+	function saveEvents( next ) {
+
+		const command = new SetValueCommand( editor, editor.scene, 'userData', { ...editor.scene.userData, streamEvents: next } );
+		command.updatable = false;
+		editingEvent = - 1;
+		editor.execute( command );
+		refresh();
+
+	}
+	function parseActionValue( raw ) {
+
+		if ( raw === 'true' ) return true;
+		if ( raw === 'false' ) return false;
+		const num = Number( raw );
+		return raw.trim() !== '' && Number.isFinite( num ) ? num : raw;
+
+	}
+	function buildEventAction() {
+
+		const action = { kind: eventAction.value };
+		if ( action.kind === 'emit' ) {
+
+			if ( ! eventName.value.trim() ) throw new Error( 'Enter an event name.' );
+			action.name = eventName.value.trim();
+			if ( eventValue.value.trim() ) action.value = parseActionValue( eventValue.value );
+
+		} else if ( action.kind === 'toggleVisible' ) {
+
+			if ( ! eventObject.value ) throw new Error( 'Choose an object.' );
+			action.uuid = eventObject.value;
+
+		} else if ( action.kind === 'setProperty' || action.kind === 'addProperty' ) {
+
+			if ( ! eventObject.value ) throw new Error( 'Choose an object.' );
+			const val = Number( eventValue.value );
+			if ( ! Number.isFinite( val ) ) throw new Error( 'Enter a numeric value.' );
+			Object.assign( action, { uuid: eventObject.value, property: eventProperty.value, value: val } );
+
+		} else if ( action.kind === 'setParam' ) {
+
+			if ( ! eventObject.value || ! eventParam.value ) throw new Error( 'Choose an object and script parameter.' );
+			Object.assign( action, { uuid: eventObject.value, scriptIndex: Number( eventScript.value || 0 ), param: eventParam.value, toggle: eventToggle.checked } );
+			if ( ! action.toggle ) action.value = parseActionValue( eventValue.value );
+
+		} else if ( action.kind === 'topic' ) {
+
+			if ( ! /^map\.[\w.-]+$/.test( eventTopic.value ) ) throw new Error( 'Use a map.name topic.' );
+			action.topic = eventTopic.value;
+			action.value = parseActionValue( eventValue.value );
+
+		} else if ( action.kind === 'serial' ) {
+
+			action.key = eventKey.value.trim();
+			action.value = parseActionValue( eventValue.value );
+
+		} else if ( action.kind.startsWith( 'midi.' ) ) {
+
+			action.channel = Number( eventChannel.value );
+			const id = Number( eventNumber.value );
+			if ( ! Number.isInteger( action.channel ) || action.channel < 1 || action.channel > 16 || ! Number.isInteger( id ) || id < 0 || id > 127 ) throw new Error( 'Use channel 1–16 and a CC or note from 0–127.' );
+			action[ action.kind === 'midi.cc' ? 'controller' : 'note' ] = id;
+			action.value = Number( eventValue.value || 127 );
+
+		}
+		return action;
+
+	}
+
 	kind.onchange = visibility;
-	button( routes, 'New', () => { editing = - 1; topic.value = fallback.value = ''; status.textContent = 'New route'; }, status );
+	button( routes, 'New', () => { editing = - 1; topic.value = fallback.value = ''; status.textContent = 'New driver'; }, status );
 	button( routes, 'Save route', () => {
 
 		const [ a, b, c, d ] = bounds.map( field => field.valueAsNumber );
@@ -569,6 +1003,20 @@ function SidebarStreams( editor ) {
 
 			if ( ! object.value ) throw new Error( 'Choose an object.' );
 			Object.assign( target, { uuid: object.value, property: property.value } );
+
+		} else if ( target.kind === 'param' ) {
+
+			if ( ! object.value || ! routeParam.value ) throw new Error( 'Choose an object and script parameter.' );
+			Object.assign( target, { uuid: object.value, scriptIndex: Number( routeScript.value || 0 ), param: routeParam.value } );
+
+		} else if ( target.kind === 'morph' ) {
+
+			if ( ! object.value || ! routeMorph.value ) throw new Error( 'Choose an object and morph target.' );
+			Object.assign( target, { uuid: object.value, morph: routeMorph.value } );
+
+		} else if ( target.kind === 'scene' ) {
+
+			target.property = sceneProperty.value;
 
 		} else if ( target.kind === 'serial' ) target.key = key.value.trim();
 		else if ( target.kind === 'topic' ) {
@@ -586,7 +1034,7 @@ function SidebarStreams( editor ) {
 			target[ target.kind === 'midi.cc' ? 'controller' : 'note' ] = id;
 
 		}
-		const route = { source: topic.value.trim(), fallback: fallback.value.trim(), input: [ a, b ], output: [ c, d ], clamp: clamp.checked, target };
+		const route = { source: topic.value.trim(), fallback: fallback.value.trim(), input: [ a, b ], output: [ c, d ], curve: curve.value, smooth: Number( smooth.value ) || 0, clamp: clamp.checked, target };
 		const next = [ ...getRoutes() ];
 		next[ editing === - 1 ? next.length : editing ] = route;
 		save( next );
@@ -599,8 +1047,55 @@ function SidebarStreams( editor ) {
 		status.textContent = '';
 
 	}, status );
+
+	button( eventsPanel, 'New', () => { editingEvent = - 1; eventSource.value = eventFallback.value = eventName.value = ''; eventStatus.textContent = 'New event rule'; }, eventStatus );
+	button( eventsPanel, 'Save event', () => {
+
+		if ( ! eventSource.value.trim() ) throw new Error( 'Enter a source topic or event name.' );
+		const rule = {
+			source: eventSource.value.trim(),
+			fallback: eventFallback.value.trim(),
+			trigger: eventTrigger.value,
+			threshold: Number( eventThreshold.value ),
+			high: Number( eventHigh.value ),
+			match: eventMatch.value,
+			cooldown: Math.max( 0, Number( eventCooldown.value ) || 0 ),
+			action: buildEventAction()
+		};
+		const next = [ ...getEvents() ];
+		next[ editingEvent === - 1 ? next.length : editingEvent ] = rule;
+		saveEvents( next );
+		eventStatus.textContent = 'Saved';
+
+	}, eventStatus );
+	button( eventsPanel, 'Delete event', () => {
+
+		if ( editingEvent !== - 1 ) saveEvents( getEvents().filter( ( _, index ) => index !== editingEvent ) );
+		eventStatus.textContent = '';
+
+	}, eventStatus );
+	button( eventsPanel, 'Test fire', () => {
+
+		const action = buildEventAction();
+		if ( action.kind === 'emit' ) bus.emit( action.name, { value: action.value ?? 1 }, true );
+		else {
+
+			const testName = 'test.' + Date.now();
+			const temp = [ ...getEvents(), { source: testName, trigger: 'event', action } ];
+			const prev = editor.scene.userData.streamEvents;
+			editor.scene.userData.streamEvents = temp;
+			bus.emit( testName, { value: action.value ?? 1 }, true );
+			bus.tick( editor.scene );
+			editor.scene.userData.streamEvents = prev;
+			editor.signals.sceneGraphChanged.dispatch();
+
+		}
+		eventStatus.textContent = 'Fired';
+
+	}, eventStatus );
+
 	editor.signals.sceneGraphChanged.add( refresh );
-	const reset = () => { editing = -1; capture = undefined; hardware.checked = false; releaseNotes(); bus.clear( 'demo.' ); bus.clear( 'map.' ); refresh(); };
+	const reset = () => { editing = editingEvent = - 1; capture = undefined; hardware.checked = false; releaseNotes(); bus.clear( 'demo.' ); bus.clear( 'map.' ); refresh(); };
 	editor.signals.projectLoaded.add( reset );
 	editor.signals.stopPlayer.add( releaseNotes );
 	editor.signals.editorCleared.add( reset );
@@ -616,6 +1111,7 @@ function SidebarStreams( editor ) {
 	} );
 	bus.addEventListener( 'outputerror', event => { status.textContent = event.detail.message; } );
 	visibility();
+	eventVisibility();
 	refresh();
 	return panel;
 

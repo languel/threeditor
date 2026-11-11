@@ -3,8 +3,7 @@ import * as THREE from 'three';
 import { scriptSourceForExecution, serializeScript } from '../ScriptParams.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 
-export function evaluateAssetScript( object, script, player, scene, camera, source = script.source ) {
-	const { parameters = {} } = serializeScript( script );
+export function evaluateAssetScript( object, script, player, scene, camera, source = script.source, parameters = serializeScript( script ).parameters || {} ) {
 	const run = new Function( 'THREE', 'params', 'player', 'scene', 'camera', 'init', 'update', 'stop', 'setParameters', scriptSourceForExecution( script, source ) + '\nreturn {init:typeof init==="function"?init:null, update:typeof update==="function"?update:null, stop:typeof stop==="function"?stop:null, setParameters:typeof setParameters==="function"?setParameters:null};' );
 	return run.call( object, THREE, parameters, player, scene, camera );
 }
@@ -13,6 +12,24 @@ export function evaluateAssetScript( object, script, player, scene, camera, sour
 export class AssetRuntime {
 	constructor( editor ) {
 		this.editor = editor; this.active = new Map(); this.changingHUD = false; this.suspended = false;
+		if ( editor.streams ) {
+			editor.streams.getParam = ( uuid, scriptIndex, param ) => {
+				const script = editor.scripts[ uuid ]?.[ scriptIndex ];
+				if ( ! script ) return undefined;
+				const runtime = this.active.get( script );
+				return runtime?.parameters ? runtime.parameters[ param ] : serializeScript( script ).parameters?.[ param ];
+			};
+			editor.streams.setParam = ( uuid, scriptIndex, param, value ) => {
+				const script = editor.scripts[ uuid ]?.[ scriptIndex ];
+				if ( ! script ) return false;
+				script.paramValues = { ...( script.paramValues || {} ), [ param ]: value };
+				const runtime = this.active.get( script );
+				if ( ! runtime ) return false;
+				if ( runtime.parameters ) runtime.parameters[ param ] = value;
+				if ( runtime.setParameters ) runtime.setParameters.call( runtime.object, { ...( runtime.parameters || serializeScript( script ).parameters || {} ) } );
+				return true;
+			};
+		}
 		const rebuild = () => this.refresh();
 		for ( const name of [ 'objectAdded', 'objectRemoved', 'sceneGraphChanged', 'projectLoaded', 'editorCleared', 'scriptAdded', 'scriptRemoved' ] ) editor.signals[ name ].add( rebuild );
 		editor.signals.objectChanged.add( ( object, attribute ) => {
@@ -54,13 +71,14 @@ export class AssetRuntime {
 					if ( ! source.includes( literal ) ) continue;
 					const url = URL.createObjectURL( file ); urls.push( url ); source = source.replaceAll( literal, JSON.stringify( url ) );
 				}
-				const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, assetParameterChanged: ( target, key, value ) => {
+				const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, requestRender: () => editor.signals.objectChanged.dispatch( object ), assetParameterChanged: ( target, key, value ) => {
 					this.changingHUD = true;
 					try { editor.execute( new SetScriptValueCommand( editor, target, script, 'paramValues', { ...script.paramValues, [ key ]: value } ) ); } finally { this.changingHUD = false; }
 				} };
 				try {
-					const runtime = evaluateAssetScript( object, script, player, editor.scene, editor.viewportCamera, source );
-					runtime.init?.call( object ); this.active.set( script, { ...runtime, object, script, urls } );
+					const parameters = serializeScript( script ).parameters || {};
+					const runtime = evaluateAssetScript( object, script, player, editor.scene, editor.viewportCamera, source, parameters );
+					runtime.init?.call( object ); this.active.set( script, { ...runtime, object, script, urls, parameters } );
 					editor.signals.objectChanged.dispatch( object );
 				} catch ( error ) { for ( const url of urls ) URL.revokeObjectURL( url ); editor.assetBrowser?.status?.( 'Asset script: ' + error.message, true ); console.error( error ); }
 			}

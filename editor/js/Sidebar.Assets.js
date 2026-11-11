@@ -1,6 +1,6 @@
 // AMS-inspired asset browsing: folders, facets, metadata, references and local copies.
 // Catalog search/URL resolution is shared with the adapted AMS Mediatheque module.
-import { AssetPreview } from './assets/AssetPreview.js';
+import { AssetPreview, drawTransformedFrame } from './assets/AssetPreview.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
@@ -32,15 +32,34 @@ export function SidebarAssets( editor ) {
 	const controller = new AssetController( editor, library ); editor.assetBrowser = controller;
 	const preview = new AssetPreview( editor, library );
 	const previewCache = new Map();
+	const placeholderThumbs = new Set();
 	const thumbnailWorker = new AssetPreview( editor, library ), queuedThumbnails = new Set();
 	let thumbnailJobs = Promise.resolve();
+	function setCardThumb( id, url ) {
+		const card = [ ...grid.children ].find( node => node.dataset.assetId === id );
+		if ( ! card ) return;
+		const thumb = card.querySelector( '.asset-thumb' );
+		thumb.replaceChildren();
+		const image = el( 'img' ); image.src = url; image.alt = ''; thumb.append( image );
+	}
 	function queueThumbnail( record ) {
-		if ( queuedThumbnails.has( record.id ) || previewCache.has( record.id ) ) return;
+		if ( queuedThumbnails.has( record.id ) || ( previewCache.has( record.id ) && ! placeholderThumbs.has( record.id ) ) ) return;
 		queuedThumbnails.add( record.id );
 		const epoch = controller.epoch;
 		thumbnailJobs = thumbnailJobs.then( async () => {
-			try { if ( record.projectPath && epoch !== controller.epoch ) return; const url = await thumbnailWorker.thumbnail( record ); if ( ! url || record.projectPath && epoch !== controller.epoch ) return; previewCache.set( record.id, url );
-				const card = [ ...grid.children ].find( node => node.dataset.assetId === record.id ); if ( card ) { const thumb = card.querySelector( '.asset-thumb' ); thumb.replaceChildren(); const image = el( 'img' ); image.src = url; image.alt = ''; thumb.append( image ); }
+			try {
+				if ( record.projectPath && epoch !== controller.epoch ) return;
+				let url;
+				if ( record.kind === 'webcam' ) {
+					url = await thumbnailWorker.webcamSnapshot( record );
+					if ( url ) placeholderThumbs.delete( record.id );
+					else { url = thumbnailWorker.placeholder( 'webcam' ); placeholderThumbs.add( record.id ); }
+				} else {
+					url = await thumbnailWorker.thumbnail( record );
+				}
+				if ( ! url || record.projectPath && epoch !== controller.epoch ) return;
+				previewCache.set( record.id, url );
+				setCardThumb( record.id, url );
 			} catch { /* unsupported/invalid files retain an explicit type icon */ }
 		} );
 	}
@@ -104,7 +123,7 @@ export function SidebarAssets( editor ) {
 		dialog.append( el( 'h2', 'Add ' + title.toLowerCase() ) );
 		const chosen = await new Promise( resolve => {
 			const finish = device => { dialog.close(); dialog.remove(); resolve( device ); };
-			button( 'Default ' + title.toLowerCase(), () => finish( { label: title } ), dialog );
+			button( 'Default ' + title.toLowerCase(), () => finish( devices[ 0 ] || { label: title } ), dialog );
 			for ( const [ index, device ] of devices.entries() ) button( device.label || title + ' ' + ( index + 1 ), () => finish( device ), dialog );
 			button( 'Cancel', () => finish(), dialog );
 			dialog.addEventListener( 'cancel', event => { event.preventDefault(); finish(); } );
@@ -112,25 +131,32 @@ export function SidebarAssets( editor ) {
 			dialog.showModal();
 		} );
 		if ( ! chosen ) return;
-		const existing = ( await library.all() ).find( r => r.kind === kind && ( r.deviceId || '' ) === ( chosen.deviceId || '' ) && r.title === ( chosen.label || title ) );
-		if ( existing ) { source = 'mine'; folder = ''; selection.clear(); selection.add( existing.id ); await refresh(); return; }
-		const record = { id: kind + ':' + crypto.randomUUID(), kind, title: chosen.label || title, deviceId: chosen.deviceId, folder: '', tags: [] };
+		const activeIds = new Set( devices.map( d => d.deviceId ) );
+		const targetTitle = chosen.label || title;
+		const existing = ( await library.all() ).find( r => r.kind === kind && (
+			chosen.deviceId
+				? ( r.deviceId === chosen.deviceId || ( r.title === targetTitle && ( ! r.deviceId || ! activeIds.has( r.deviceId ) ) ) )
+				: ( ! r.deviceId && r.title === targetTitle )
+		) );
+		if ( existing ) {
+			if ( chosen.deviceId && existing.deviceId !== chosen.deviceId ) await library.update( existing.id, { deviceId: chosen.deviceId } );
+			source = 'mine'; folder = ''; selection.clear(); selection.add( existing.id ); await refresh(); return;
+		}
+		const record = { id: kind + ':' + crypto.randomUUID(), kind, title: targetTitle, deviceId: chosen.deviceId, folder: '', tags: [] };
 		await library.put( record );
 		source = 'mine'; folder = ''; selection.clear(); selection.add( record.id ); await refresh();
 
 	}
 	button( 'Add webcam…', () => controller.run( () => addDevice( 'webcam' ) ), actions );
 	button( 'Add microphone…', () => controller.run( () => addDevice( 'microphone' ) ), actions );
-	button( 'New landmark asset', () => controller.run( async () => {
-		const id = crypto.randomUUID();
-		await library.put( { id, kind: 'landmark', title: 'Landmark visualization', file: null, path: '', folder, tags: [], rating: 0, created: Date.now() } );
-		source = 'mine'; folder = ''; selection.clear(); selection.add( id ); await refresh();
-	} ), actions );
-	button( 'New landmark texture', () => controller.run( async () => {
-		const id = crypto.randomUUID();
-		await library.put( { id, kind: 'landmark-texture', title: 'Landmark texture', file: null, path: '', folder, tags: [], rating: 0, created: Date.now() } );
-		source = 'mine'; folder = ''; selection.clear(); selection.add( id ); await refresh();
-	} ), actions );
+	async function addTemplateAsset( kind, defaultTitle ) {
+		const existing = ( await library.all() ).find( r => r.kind === kind && r.title === defaultTitle && ( r.folder || '' ) === folder && ! r.tags?.length && ! r.rating );
+		const id = existing ? existing.id : crypto.randomUUID();
+		if ( ! existing ) await library.put( { id, kind, title: defaultTitle, file: null, path: '', folder, tags: [], rating: 0, created: Date.now() } );
+		source = 'mine'; selection.clear(); selection.add( id ); await refresh();
+	}
+	button( 'New landmark asset', () => controller.run( () => addTemplateAsset( 'landmark', 'Landmark visualization' ) ), actions );
+	button( 'New landmark texture', () => controller.run( () => addTemplateAsset( 'landmark-texture', 'Landmark texture' ) ), actions );
 	button( 'Link URL…', () => controller.run( async () => {
 		const address = prompt( 'Asset URL (CORS-enabled HTTP or HTTPS)' ); if ( ! address ) return;
 		const url = new URL( address ); if ( ! [ 'http:', 'https:' ].includes( url.protocol ) ) throw new Error( 'Use an HTTP(S) asset URL.' );
@@ -286,9 +312,33 @@ export function SidebarAssets( editor ) {
 	function projectRecords() {
 		return [ ...editor.sourceFiles || [] ].map( ( [ path, entry ] ) => ( { ...entry.asset, id: 'project:' + path, projectPath: path, title: editor.scene.userData.assetLabels?.files?.[ path ] || entry.file.name, kind: entry.asset?.kind || fileKind( entry.file ), folder: path.split( '/' ).slice( 0, -1 ).join( '/' ), file: entry.file, tags: [] } ) ).concat( textureEntries( editor ).map( ( entry, i ) => ( { ...entry, id: 'scene-texture:' + i, title: editor.scene.userData.assetLabels?.files?.[ entry.texture.uuid ] || entry.name, kind: 'texture', folder: '', tags: [] } ) ) );
 	}
+	let cleaned = false;
 	async function refresh() {
 		const current = ++ generation;
 		try {
+			if ( ! cleaned ) {
+				cleaned = true;
+				let activeDeviceIds = null;
+				try {
+					if ( navigator.mediaDevices?.enumerateDevices ) {
+						const devices = await navigator.mediaDevices.enumerateDevices();
+						const ids = devices.filter( d => d.deviceId ).map( d => d.deviceId );
+						if ( ids.length ) activeDeviceIds = ids;
+					}
+				} catch { /* ignore */ }
+				try {
+					await library.cleanup( {
+						activeDeviceIds,
+						onMerge( keeper, duplicate ) {
+							try {
+								const kKey = 'threeditor/inputSettings/' + keeper.id, dKey = 'threeditor/inputSettings/' + duplicate.id;
+								if ( ! localStorage.getItem( kKey ) && localStorage.getItem( dKey ) ) localStorage.setItem( kKey, localStorage.getItem( dKey ) );
+								localStorage.removeItem( dKey );
+							} catch { /* ignore */ }
+						}
+					} );
+				} catch { /* storage unavailable */ }
+			}
 			try { local = await library.all(); } catch ( error ) { local = []; controller.status( 'Local asset storage unavailable: ' + error.message, true ); }
 			if ( current !== generation ) return;
 			const catalogRecords = () => catalog.map( r => ( { ...r, ...local.find( item => item.id === 'mediatheque:' + r.id ), id: 'mediatheque:' + r.id, catalogId: r.id, url: r.kind === 'animation' && r.abs.video ? r.abs.video : r.abs.url, preview: r.abs.thumb, page: r.abs.page, credit: creditLine( r ), kind: r.kind === 'image' ? 'texture' : r.kind } ) );
@@ -412,7 +462,7 @@ export function SidebarAssets( editor ) {
 		if ( record.credit ) detail.append( el( 'p', record.credit, 'asset-credit' ) );
 		if ( record.rights?.license ) detail.append( el( 'p', record.rights.license ) );
 		const row = el( 'div', undefined, 'asset-actions' ); detail.insertBefore( row, detail.children[ 1 ] || null );
-		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add point cloud', landmark: 'Add landmark visualization', 'landmark-texture': 'Add landmark texture' };
+		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add Gaussian splat', landmark: 'Add landmark visualization', 'landmark-texture': 'Add landmark texture' };
 		if ( ! [ 'texture', 'input' ].includes( controller.picker?.kind ) && ( labels[ record.kind ] || controller.picker ) ) button( controller.picker ? 'Choose' : labels[ record.kind ], () => use( record ), row );
 		if ( isMapAsset( record ) && ! controller.picker && editor.selected?.material ) button( 'Apply to selection…', () => controller.run( () => controller.applyToObject( record.id, editor.selected ) ), row );
 		if ( ! controller.picker && isInputAsset( record ) ) button( 'Use as input stream', () => controller.run( async () => {
@@ -437,29 +487,29 @@ export function SidebarAssets( editor ) {
 					own = stream; ownVideo = el( 'video' ); ownVideo.muted = true; ownVideo.playsInline = true; ownVideo.srcObject = stream; await ownVideo.play();
 				} catch ( error ) { note.textContent = 'Camera preview unavailable: ' + error.message; }
 			};
+			let thumbDirty = false, ownFrames = 0;
 			const draw = () => {
 				if ( ! canvas.isConnected ) { stopOwn(); return; }
 				const assigned = editor.getMediaFrame?.( record.id );
 				if ( ! assigned && ! own && ! startOwn.started ) { startOwn.started = true; startOwn(); }
 				if ( assigned && own ) stopOwn();
-				const frame = assigned || ownVideo, w = frame?.videoWidth || frame?.width, h = frame?.videoHeight || frame?.height;
-				note.hidden = !! w; canvas.hidden = ! w;
-				if ( w && h && ( frame.readyState === undefined || frame.readyState >= 2 ) ) {
-					const t = current, quarter = t.rotate === 90 || t.rotate === 270;
-					// Raw camera frames get the same flip/rotate/crop as an assigned input.
-					const raw = frame === ownVideo, sx = raw ? t.left * w : 0, sy = raw ? t.top * h : 0, cw = raw ? Math.max( 1, w - sx - t.right * w ) : w, ch = raw ? Math.max( 1, h - sy - t.bottom * h ) : h;
-					const ow = 320, oh = Math.round( ow * ( quarter && raw ? cw / ch : ch / cw ) );
-					if ( canvas.width !== ow || canvas.height !== oh ) { canvas.width = ow; canvas.height = oh; }
-					const ctx = canvas.getContext( '2d' );
-					if ( ctx && raw ) { const dw = quarter ? oh : ow, dh = quarter ? ow : oh; ctx.save(); ctx.translate( ow / 2, oh / 2 ); ctx.rotate( t.rotate * Math.PI / 180 ); ctx.scale( t.flipX ? - 1 : 1, t.flipY ? - 1 : 1 ); ctx.drawImage( frame, sx, sy, cw, ch, - dw / 2, - dh / 2, dw, dh ); ctx.restore(); }
-					else ctx?.drawImage( frame, 0, 0, ow, oh );
+				const frame = assigned || ownVideo, raw = frame === ownVideo;
+				const drew = frame && drawTransformedFrame( canvas, frame, raw ? current : null, 320 );
+				note.hidden = !! drew; canvas.hidden = ! drew;
+				if ( raw && drew ) ownFrames ++;
+				if ( drew && ( ! raw || ownFrames > 15 ) && ( thumbDirty || placeholderThumbs.has( record.id ) || ! previewCache.has( record.id ) ) ) {
+					thumbDirty = false;
+					try {
+						const snap = canvas.toDataURL( 'image/webp' );
+						previewCache.set( record.id, snap ); placeholderThumbs.delete( record.id ); setCardThumb( record.id, snap );
+					} catch { /* ignore */ }
 				}
 				requestAnimationFrame( draw );
 			};
 			draw();
 			// Input settings: shared with Streams → Audio and video → Input settings (same saved values).
 			const box = el( 'details', undefined, 'asset-input-settings' ); box.open = true; box.append( el( 'summary', 'Input settings' ) );
-			const push = patch => { Object.assign( current, patch ); editor.setMediaInputSettings?.( record.id, { ...current } ); };
+			const push = patch => { Object.assign( current, patch ); thumbDirty = true; editor.setMediaInputSettings?.( record.id, { ...current } ); };
 			const row = ( label, control ) => { const l = el( 'label', label ); l.append( control ); box.append( l ); return control; };
 			const check = ( label, key ) => { const c = el( 'input' ); c.type = 'checkbox'; c.checked = current[ key ]; c.addEventListener( 'change', () => push( { [ key ]: c.checked } ) ); return row( label, c ); };
 			check( 'Flip horizontal', 'flipX' ); check( 'Flip vertical', 'flipY' );

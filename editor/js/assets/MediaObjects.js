@@ -143,18 +143,68 @@ export async function mediaPlane( editor, entry ) {
 export function movingTextureScript( entry, binding, slot, map ) {
 
 	const webcam = entry.record.kind === 'webcam';
-	const movie = webcam ? '' : mediaScript( entry.path, 'video', false, false ).source;
+	const topic = 'input.' + entry.record.id + '.video.frame';
+	const deviceId = entry.record.deviceId || '';
+	const header = webcam ? `// Editable webcam texture.
+// @param playing = true
+// @label playing = "Playing"
+// @param flipX = false
+// @label flipX = "Flip horizontal"
+// @param flipY = false
+// @label flipY = "Flip vertical"
+let current, localStream, localVideo, active = false, starting = false;
+function stopLocal() {
+ starting = false;
+ localStream?.getTracks().forEach(t => t.stop());
+ localStream = null;
+ if (localVideo) { localVideo.srcObject = null; localVideo = null; }
+}
+function startLocal() {
+ if (localStream || starting || !active || !current?.playing || !navigator.mediaDevices?.getUserMedia) return;
+ starting = true;
+ const constraint = ${ JSON.stringify( deviceId ) } ? { deviceId: { ideal: ${ JSON.stringify( deviceId ) } } } : true;
+ navigator.mediaDevices.getUserMedia({ video: constraint }).then(stream => {
+  if (!active || !current?.playing) { stream.getTracks().forEach(t => t.stop()); return; }
+  localStream = stream;
+  localVideo = document.createElement('video');
+  localVideo.muted = true;
+  localVideo.playsInline = true;
+  localVideo.srcObject = stream;
+  localVideo.play().catch(() => {});
+ }).catch(() => {}).finally(() => { starting = false; });
+}
+function setParameters(next) {
+ current = next;
+ if (!next.playing) stopLocal();
+ else if (active && !player.streams?.get(${ JSON.stringify( topic ) })) startLocal();
+}
+function init() {
+ active = true;
+ current = params;
+ if (params.playing && !player.streams?.get(${ JSON.stringify( topic ) })) startLocal();
+}
+function stop() {
+ active = false;
+ stopLocal();
+}
+` : mediaScript( entry.path, 'video', false, false ).source;
 	return {
 		name: ( webcam ? 'Webcam' : 'Movie' ) + ' · ' + map,
 		assetBehavior: 'media', enabled: true,
-		source: movie + `
+		source: header + `
 let surfaceCanvas, lastFrame = -1${ webcam ? '' : ', wasBound = true' };
 function update() {
  const material = Array.isArray(this.material) ? this.material[${ slot }] : this.material;
  const texture = material?.[${ JSON.stringify( map ) }];
- const video = ${ webcam ? `player.streams?.get(${ JSON.stringify( 'input.' + entry.record.id + '.video.frame' ) })` : 'media' };
  const bound = texture?.userData.mediaBinding === ${ JSON.stringify( binding ) };
- ${ webcam ? '' : `if (bound !== wasBound) {
+ ${ webcam ? `if (!bound) { stopLocal(); return; }
+ const opts = current || params;
+ if (!opts.playing) return;
+ const streamFrame = player.streams?.get(${ JSON.stringify( topic ) });
+ if (streamFrame && localStream) stopLocal();
+ if (!streamFrame && !localStream && !starting) startLocal();
+ const video = streamFrame || localVideo;` : `const video = media;
+ if (bound !== wasBound) {
   wasBound = bound;
   if (!bound) media.pause();
   else if (current.playing) media.play().catch(() => {});
@@ -171,10 +221,18 @@ function update() {
   texture.image = surfaceCanvas;
   lastFrame = -1;
  }
- if (video.currentTime !== undefined) { if (lastFrame === video.currentTime) return; lastFrame = video.currentTime; }
+ const stamp = video.currentTime !== undefined ? video.currentTime${ webcam ? " + ':' + opts.flipX + ':' + opts.flipY" : '' } : null;
+ if (stamp !== null && lastFrame === stamp) return;
+ if (stamp !== null) lastFrame = stamp;
  if (surfaceCanvas.height !== Math.max(1, Math.round(surfaceCanvas.width * vh / vw))) surfaceCanvas.height = Math.max(1, Math.round(surfaceCanvas.width * vh / vw));
  const ctx = surfaceCanvas.getContext('2d');
- if (ctx) ctx.drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
+ if (ctx) {
+  ${ webcam ? `ctx.save();
+  ctx.translate(opts.flipX ? surfaceCanvas.width : 0, opts.flipY ? surfaceCanvas.height : 0);
+  ctx.scale(opts.flipX ? -1 : 1, opts.flipY ? -1 : 1);
+  ctx.drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
+  ctx.restore();` : `ctx.drawImage(video, 0, 0, surfaceCanvas.width, surfaceCanvas.height);` }
+ }
  texture.needsUpdate = true;
 }
 `

@@ -7,7 +7,8 @@ const addons = 'lib/addons/';
 const modules = {
 	three: 'lib/three.module.js',
 	'three/webgpu': 'lib/three.webgpu.js',
-	'three/tsl': 'lib/three.tsl.js'
+	'three/tsl': 'lib/three.tsl.js',
+	'gaussian-splat-lite': 'js/libs/gaussian-splat-lite.module.js'
 };
 const instructions = 'Extract this archive and serve the folder over HTTP.\n\nRun python3 -m http.server 8000 here and open http://localhost:8000.\n';
 const escapeHTML = ( text ) => text.replaceAll( '&', '&amp;' ).replaceAll( '<', '&lt;' ).replaceAll( '>', '&gt;' );
@@ -140,6 +141,7 @@ function packageFiles( assets, webgpu = false ) {
 		if ( checked.has( path ) ) return path;
 		checked.add( path );
 		const repoPath = path.startsWith( addons ) ? 'examples/jsm/' + path.slice( addons.length ) :
+			path === 'js/libs/gaussian-splat-lite.module.js' ? 'editor/js/libs/gaussian-splat-lite.module.js' :
 			Object.values( modules ).includes( path ) || path === 'lib/three.core.js' ? 'build/' + path.slice( 4 ) : null;
 		const blob = repoPath ? await copy( path, repoPath ) : assets.get( path );
 		if ( ! blob ) throw new Error( `Missing module "${ path }" (imported by ${ from }). Import it with your project files.` );
@@ -361,6 +363,8 @@ async function collectPlayableProject( editor ) {
 	await project.moduleFile( 'three/addons/geometries/TextGeometry.js', 'index.html' );
 	await project.moduleFile( 'three/addons/controls/CameraController.js', 'js/app.js' );
 	await project.copy( 'js/app.js', 'editor/js/libs/app.js' );
+	await project.copy( 'PostProcessing.js', 'editor/js/PostProcessing.js' );
+	await project.copy( 'assets/SplatHost.js', 'editor/js/assets/SplatHost.js' );
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
 	await project.copy( 'ScriptParams.js', 'editor/js/ScriptParams.js' );

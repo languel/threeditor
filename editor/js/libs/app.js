@@ -1,4 +1,6 @@
 import { StreamRouter } from '../streams/StreamRouter.js';
+import { SplatHost } from '../assets/SplatHost.js';
+import { PostProcessingHost } from '../PostProcessing.js';
 /* global THREE, __THREEEDITOR_RENDERER__ */
 import { createCameraController } from 'three/addons/controls/CameraController.js';
 import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
@@ -67,6 +69,8 @@ const APP = {
 		let camera, scene;
 
 		let events = {};
+		const splatHost = new SplatHost();
+		const postHost = new PostProcessingHost();
 		const scriptParameters = new Map();
 		let playing = false;
 
@@ -133,6 +137,15 @@ const APP = {
 			} : null;
 
 			scriptParameters.clear();
+			const scriptParamObjects = new Map();
+			streams.getParam = ( uuid, scriptIndex, param ) => scriptParamObjects.get( uuid + ':' + scriptIndex )?.[ param ];
+			streams.setParam = ( uuid, scriptIndex, param, value ) => {
+				const key = uuid + ':' + scriptIndex;
+				const obj = scriptParamObjects.get( key ), fn = scriptParameters.get( key );
+				if ( ! obj || ! fn ) return false;
+				fn( { ...obj, [ param ]: value } );
+				return true;
+			};
 			events = {
 				init: [],
 				start: [],
@@ -196,12 +209,15 @@ const APP = {
 					const params = script.parameters && { ...script.parameters };
 					const args = params ? [ ...scriptArgs, ...( isP5 ? [ createP5Sketch ] : [] ), params ] : [ ...scriptArgs, ...( isP5 ? [ createP5Sketch ] : [] ) ];
 					const { events: functions, setParameters } = new Function( signature, body ).call( object, ...args );
-					if ( params ) scriptParameters.set( uuid + ':' + i, next => {
+					if ( params ) {
+						scriptParamObjects.set( uuid + ':' + i, params );
+						scriptParameters.set( uuid + ':' + i, next => {
 
-						if ( setParameters ) setParameters.call( object, next );
-						Object.assign( params, next );
+							if ( setParameters ) setParameters.call( object, next );
+							Object.assign( params, next );
 
-					} );
+						} );
+					}
 
 					for ( const name in functions ) {
 
@@ -352,7 +368,7 @@ const APP = {
 
 			streams.tick( scene );
 			controller?.update( ( time - prevTime ) / 1000 );
-			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
+			postHost.render( renderer, scene, camera, this.width, this.height, () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) ) );
 
 			prevTime = time;
 
@@ -398,12 +414,14 @@ const APP = {
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 			streams.tick( scene );
 
-			withEnabledObjects( scene, () => renderer.render( scene, camera ) );
+			postHost.render( renderer, scene, camera, this.width, this.height, () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) ) );
 
 		};
 
 		this.dispose = function () {
 
+			postHost.dispose();
+			splatHost.dispose();
 			controller?.dispose();
 			controller = undefined;
 			if ( renderer ) {
@@ -413,6 +431,7 @@ const APP = {
 			}
 
 			scriptParameters.clear();
+			streams.getParam = streams.setParam = null;
 			camera = undefined;
 			scene = undefined;
 
@@ -422,24 +441,32 @@ const APP = {
 
 		function onKeyDown( event ) {
 
+			streams.publish( 'input.key.' + event.code, 1 );
+			streams.emit( 'keydown', { key: event.key, code: event.code } );
 			dispatch( events.keydown, event );
 
 		}
 
 		function onKeyUp( event ) {
 
+			streams.publish( 'input.key.' + event.code, 0 );
+			streams.emit( 'keyup', { key: event.key, code: event.code } );
 			dispatch( events.keyup, event );
 
 		}
 
 		function onPointerDown( event ) {
 
+			streams.publish( 'input.pointer', 1 );
+			streams.emit( 'pointerdown', { button: event.button } );
 			dispatch( events.pointerdown, event );
 
 		}
 
 		function onPointerUp( event ) {
 
+			streams.publish( 'input.pointer', 0 );
+			streams.emit( 'pointerup', { button: event.button } );
 			dispatch( events.pointerup, event );
 
 		}

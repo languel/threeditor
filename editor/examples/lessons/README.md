@@ -12,6 +12,7 @@ The Scene's user data records each lesson's source and purpose.
 | 02 | Recorded body landmarks | `02-body.js` / `lib/body.js`: 33 joints and connecting bones animated from the supplied McCracken discus recording. |
 | 03 | Triadic costumes | `07-triadic.js` / `lib/costume.js`: the actual Disc and cone, Parasol, and Ball pyramid parts, fitted with the source Body measurements and baked to native animation clips. |
 | 04 | Paint marks in space | `09-ghost.js` / `lib/paint.js`: the actual Painter samples recorded hands, head and feet into editable colored line strokes. A script progressively reveals them. |
+| — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): central circular *Danse serpentine* (1897) video inside a spinning 24-jewel orrery bezel disk, 3D curl-noise round particles, 4 rotating orrery rings with orb lights, dynamic floor sweep lights, bloom/focus post-processing, stream drivers, and burst events. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
 The source repository is [languel/threejslessons](https://github.com/languel/threejslessons).
@@ -25,6 +26,6 @@ The original tracking pages' webcam/model loading, UI tabs, depth estimation,
 and audio instruments are not included. These five scenes focus on authoring
 their objects, materials and recorded motion in the editor. Triadic parts are
 baked into standard transform tracks; Paint uses editable polylines rather
-than the source page's screen-facing brush ribbons. Fox is deliberately last
+than the source page's screen-facing brush ribbons. `Serpentine particles` demonstrates combining custom particle/shader scripts, stage lighting, post-processing, and the Streams driver/event system; it sits right before Fox. Fox is deliberately last
 in `ExampleCatalog.js`, with its original GLB retained as a project asset when
 opened from the library.

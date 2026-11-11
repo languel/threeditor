@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { resolve, search, facet, assetURL } from '../editor/js/assets/Mediatheque.js';
 import { gltfDocument, gltfResourceURIs } from '../editor/js/assets/GLTFAssets.js';
 import { fileKind, folderPath } from '../editor/js/assets/AssetLibrary.js';
+import { isGaussianSplatFile, splatFileType, splatScript } from '../editor/js/assets/SplatObjects.js';
 
 test( 'Catalog URLs honor a CORS host override, preserve originals, and reject executable URLs', () => {
 	const result = resolve( 'https://media.example/archive/', { id: 'fox', kind: 'model', media: 'items/fox/media.glb', thumb: 'items/fox/thumb.webp', original: 'items/fox/original.glb' } );
@@ -19,7 +20,8 @@ test( 'Catalog searches combine model kinds, exact tags, collections and all que
 	assert.deepEqual( facet( records, 'tags' ), [ [ 'animal', 2 ], [ 'animated', 1 ] ] );
 } );
 test( 'Imports retain model, texture and companion formats with safe folder paths', () => {
-	for ( const name of [ 'fox.glb', 'scene.gltf', 'mesh.obj', 'model.fbx' ] ) assert.equal( fileKind( { name, type: '' } ), 'model' );
+	for ( const name of [ 'fox.glb', 'scene.gltf', 'mesh.obj', 'model.fbx', 'mesh.ply' ] ) assert.equal( fileKind( { name, type: '' } ), 'model' );
+	for ( const name of [ 'scene.spz', 'scene.sog', 'scene.rad' ] ) assert.equal( fileKind( { name, type: '' } ), 'splat' );
 	for ( const name of [ 'color.png', 'light.exr', 'sky.hdr', 'normal.ktx2' ] ) assert.equal( fileKind( { name, type: '' } ), 'texture' );
 	assert.equal( fileKind( { name: 'geometry.bin', type: '' } ), 'file' );
 	assert.equal( folderPath( ' Models\\Animals / Fox ' ), 'Models/Animals/Fox' );
@@ -35,4 +37,18 @@ test( 'GLB and JSON glTF expose external resources, deduplicating embedded data'
 		assert.deepEqual( gltfResourceURIs( await gltfDocument( file ) ), [ 'geometry.bin', 'color.png' ] );
 	}
 	await assert.rejects( () => gltfDocument( new File( [ 'broken' ], 'model.glb' ) ) );
+} );
+
+test( 'Gaussian splat detector distinguishes 3DGS PLY from ordinary mesh PLY and produces splat script', async () => {
+
+	const gsPly = new File( [ 'ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\nproperty float f_dc_0\nproperty float opacity\nend_header\n' ], 'scan.ply' );
+	const meshPly = new File( [ 'ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nend_header\n' ], 'mesh.ply' );
+	assert.equal( await isGaussianSplatFile( gsPly ), true );
+	assert.equal( await isGaussianSplatFile( meshPly ), false );
+	assert.equal( await isGaussianSplatFile( new File( [ '' ], 'room.sog' ) ), true );
+	assert.equal( splatFileType( 'assets/room.rad' ), 'rad' );
+	const script = splatScript( 'assets/scan.spz', 'spz' );
+	assert.equal( script.assetBehavior, 'splat' );
+	assert.ok( script.source.includes( 'gaussian-splat-lite' ) );
+
 } );
