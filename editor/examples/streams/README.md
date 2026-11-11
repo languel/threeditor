@@ -12,7 +12,7 @@ Open **File → Examples → streams**. Every scene has a preview input and runs
 | Body drum | Enable instrument sound and start MediaPipe Pose. Move either wrist into a pad. |
 | Humanoid pose driver | Use MediaPipe Pose to move the avatar. Select its root, choose **Record motion**, then **Save motion clip**. Disable the live pose script to preview the baked clip in the timeline. |
 | One-line portrait | Use MediaPipe Face with a webcam or video to draw a continuous line from the face landmarks. |
-| Serpentine particles | Plays Lumiere *Danse serpentine* (1897) inside a spinning light-encrusted bezel disk, driving 3D curl-noise round particles, a 4-ring orrery with orb lights, floor sweep lights, bloom, focus, and burst events. |
+| Serpentine particles | Plays Lumiere *Danse serpentine* (1897) or live webcam inside a spinning 24-jewel bezel disk with pattern-fading lights (`wave`/`alternate`/`chase`/`breathe`/`oppose`), framing 3D curl-noise particles that lift off the floor around the screen, 4 orrery rings, floor sweep lights, bloom, focus, and burst events. |
 
 The pinboard and reach lessons adapt the interaction from threejslessons using luminance and pose, respectively. The source lessons also use depth estimation. The earlier recorded body, Triadic, and paint adaptations are under **lessons**, where Fox is last.
 

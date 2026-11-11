@@ -14,7 +14,7 @@ function lesson( title, instructions, source ) {
 	camera.lookAt( 0, 0, 0 );
 	const scripts = {};
 	const add = ( object, name ) => { object.name = name; scene.add( object ); return object; };
-	const attach = ( object, name, source ) => { scripts[ object.uuid ] = [ { name, source, enabled: true, assetBehavior: 'stream' } ]; };
+	const attach = ( object, name, source, extra ) => { scripts[ object.uuid ] = [ { name, source, enabled: true, assetBehavior: 'stream', ...extra } ]; };
 	const route = ( source, fallback, object, property, input, output ) => {
 
 		( scene.userData.streamRoutes ||= [] ).push( { source, fallback, input, output, target: { kind: 'object', uuid: object.uuid, property } } );
@@ -473,17 +473,17 @@ function makeRoundMaterial( size = 1.0, focus = 5.7 ) {
 
 }
 
-const COUNT = 3200;
+const COUNT = 4800;
 const pPos = new Float32Array( COUNT * 3 );
 const pCol = new Float32Array( COUNT * 3 );
 const pSize = new Float32Array( COUNT );
 const pAlpha = new Float32Array( COUNT );
 for ( let i = 0; i < COUNT; i ++ ) {
 
-	const a = i * 0.13, r = 0.25 + ( i / COUNT ) * 1.35;
-	pPos[ i * 3 ] = Math.cos( a ) * r * 1.15;
-	pPos[ i * 3 + 1 ] = Math.sin( a * 2 ) * 0.78;
-	pPos[ i * 3 + 2 ] = Math.sin( a * 1.7 + i * 0.03 ) * 1.05;
+	const a = i * 0.13 + ( i % 11 ) * 0.09, r = 0.88 + ( ( i * 37 ) % 1000 ) / 1000 * 1.95;
+	pPos[ i * 3 ] = Math.cos( a ) * r;
+	pPos[ i * 3 + 1 ] = - 1.33 + ( ( i * 19 ) % 100 ) / 100 * 0.42;
+	pPos[ i * 3 + 2 ] = Math.sin( a ) * r * 0.85;
 	pCol[ i * 3 ] = 0.96;
 	pCol[ i * 3 + 1 ] = 0.45 + 0.35 * Math.sin( i * 0.05 );
 	pCol[ i * 3 + 2 ] = 0.78;
@@ -496,7 +496,7 @@ pGeo.setAttribute( 'position', new THREE.BufferAttribute( pPos, 3 ) );
 pGeo.setAttribute( 'color', new THREE.BufferAttribute( pCol, 3 ) );
 pGeo.setAttribute( 'aSize', new THREE.BufferAttribute( pSize, 1 ) );
 pGeo.setAttribute( 'aAlpha', new THREE.BufferAttribute( pAlpha, 1 ) );
-const particles = serpentine.add( new THREE.Points( pGeo, makeRoundMaterial( .09, 5.7 ) ), 'Serpentine particles' );
+const particles = serpentine.add( new THREE.Points( pGeo, makeRoundMaterial( .19, 5.7 ) ), 'Serpentine particles' );
 particles.frustumCulled = false;
 
 const DUST = 420;
@@ -525,21 +525,95 @@ serpentine.attach( particles, 'Serpentine particle driver', `
 // Motion energy & color from Danse serpentine drive round glowing particles, multi-light stage, haze, bloom, focus, and burst events.
 // @param playing = true
 // @label playing = "Playing"
+// @param videoSource = "video"
+// @options videoSource = ["video", "webcam"]
+// @label videoSource = "Video source"
+// @param ringPattern = "wave"
+// @options ringPattern = ["wave", "alternate", "chase", "breathe", "oppose"]
+// @label ringPattern = "Ring pattern"
+// @param ringFadeSpeed = 0.65 (0..4)
+// @label ringFadeSpeed = "Ring fade speed"
+// @slider ringFadeSpeed
+// @param ringSpinSpeed = 0.45 (0..3)
+// @label ringSpinSpeed = "Ring spin"
+// @slider ringSpinSpeed
+// @param ringBrightness = 2.4 (0.2..5)
+// @label ringBrightness = "Ring brightness"
+// @slider ringBrightness
 // @param swirl = 1.4 (0..4)
 // @label swirl = "Swirl"
 // @slider swirl
 // @param turbulence = 0.8 (0..3)
 // @label turbulence = "Turbulence"
 // @slider turbulence
-// @param particleSize = 0.095 (0.02..0.3)
+// @param particleAmount = 0.7 (0..1)
+// @label particleAmount = "Particle amount"
+// @slider particleAmount
+// @param particleScale = 1.0 (0.25..2.5)
+// @label particleScale = "Particle scale"
+// @slider particleScale
+// @param particleSize = 0.19 (0.02..0.5)
 // @label particleSize = "Particle size"
 // @slider particleSize
+// @param lightSpeed = 0.45 (0..3)
+// @label lightSpeed = "Light speed"
+// @slider lightSpeed
+// @param lightMovement = 1.0 (0..3)
+// @label lightMovement = "Light movement"
+// @slider lightMovement
 // @param burstForce = 1.35 (0..3)
 // @label burstForce = "Burst force"
 // @slider burstForce
 const VIDEO_URL = 'https://languel.github.io/mediatheque/items/danse-serpentine-lumiere-1897/clips/01.webm';
 const GW = 24, GH = 18;
-let video, aCanvas, aCtx, sCanvas, sCtx, sTex, prevLuma, vel, life, spots = [], unsub, burstPulse = 0, smoothEnergy = 0.08, ringBoost = 0, noiseTime = 0, lastT = 0;
+let video, camVideo, camStream, camReq = 0, curSourceMode = 'video', aCanvas, aCtx, sCanvas, sCtx, sTex, prevLuma, vel, life, spots = [], bezelJewels = [], unsub, burstPulse = 0, smoothEnergy = 0.08, ringBoost = 0, noiseTime = 0, lightPhase = 0, floorSpin = 0, ringPhase = 0, runTime = 0, lastT = 0;
+
+function stopWebcam() {
+ camReq++;
+ if (camStream) { camStream.getTracks().forEach(tr => tr.stop()); camStream = null; }
+ if (camVideo) { camVideo.pause(); camVideo.srcObject = null; camVideo = null; }
+}
+
+function syncVideoSource(mode, isPlaying) {
+ const nextMode = mode === 'webcam' ? 'webcam' : 'video';
+ if (nextMode === 'webcam') {
+  if (video && !video.paused) video.pause();
+  if (!camStream && !camVideo && navigator.mediaDevices?.getUserMedia) {
+   const reqId = ++camReq;
+   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }).then(stream => {
+    if (reqId !== camReq || curSourceMode !== 'webcam') { stream.getTracks().forEach(tr => tr.stop()); return; }
+    camStream = stream;
+    camVideo = document.createElement('video');
+    camVideo.muted = true; camVideo.playsInline = true; camVideo.srcObject = stream;
+    if (isPlaying) camVideo.play().catch(() => {});
+   }).catch(() => {});
+  } else if (camVideo) {
+   if (isPlaying && camVideo.paused) camVideo.play().catch(() => {}); else if (!isPlaying && !camVideo.paused) camVideo.pause();
+  }
+ } else {
+  stopWebcam();
+  if (video) {
+   if (isPlaying && video.paused) video.play().catch(() => {}); else if (!isPlaying && !video.paused) video.pause();
+  }
+ }
+ curSourceMode = nextMode;
+}
+
+function applyParticleSettings(obj, p) {
+ if (obj.material.uniforms?.uSize) obj.material.uniforms.uSize.value = p.particleSize;
+ const sc = Math.max(0.05, Number(p.particleScale) || 1);
+ obj.scale.setScalar(sc);
+ const amt = Math.max(0, Math.min(1, Number(p.particleAmount ?? 1)));
+ const maxN = obj.geometry.attributes.position.count;
+ const activeN = Math.round(maxN * amt);
+ obj.geometry.setDrawRange(0, activeN);
+ const dustMesh = scene.getObjectByName('Stage dust');
+ if (dustMesh) {
+  dustMesh.scale.setScalar(sc);
+  dustMesh.geometry.setDrawRange(0, Math.round(dustMesh.geometry.attributes.position.count * amt));
+ }
+ return activeN;
+}
 
 function makeHazeTexture() {
  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
@@ -558,7 +632,7 @@ function init() {
  const n = this.geometry.attributes.position.count;
  vel = new Float32Array(n * 3);
  life = new Float32Array(n);
- for (let i = 0; i < n; i++) life[i] = Math.random();
+ for (let i = 0; i < n; i++) life[i] = 0.25 + Math.random() * 1.45;
  aCanvas = document.createElement('canvas'); aCanvas.width = GW; aCanvas.height = GH;
  aCtx = aCanvas.getContext('2d', { willReadFrequently: true });
  prevLuma = new Float32Array(GW * GH);
@@ -566,7 +640,6 @@ function init() {
  video = document.createElement('video');
  video.crossOrigin = 'anonymous'; video.muted = true; video.loop = true; video.playsInline = true;
  video.src = VIDEO_URL;
- video.play().catch(() => {});
 
  const scr = scene.getObjectByName('Serpentine screen');
  if (scr) {
@@ -575,6 +648,18 @@ function init() {
   sTex = new THREE.CanvasTexture(sCanvas); sTex.colorSpace = THREE.SRGBColorSpace;
   scr.material.map?.dispose(); scr.material.map = sTex; scr.material.needsUpdate = true;
  }
+
+ const disk = scene.getObjectByName('Orrery bezel disk');
+ bezelJewels = [];
+ if (disk) {
+  for (const child of disk.children) {
+   if (!child.name?.startsWith('Bezel jewel ') || !child.material) continue;
+   const c = child.material.color;
+   bezelJewels.push({ mesh: child, r: c.r, g: c.g, b: c.b, intensity: child.material.emissiveIntensity });
+  }
+ }
+
+ syncVideoSource(params.videoSource, params.playing);
 
  const haze = scene.getObjectByName('Volumetric haze');
  if (haze) {
@@ -593,25 +678,31 @@ function init() {
    vel[i + 2] += (pos[i + 2] / len) * burstPulse * 0.55;
   }
  });
+ applyParticleSettings(this, params);
 }
 
 function setParameters(next) {
- if (video) { if (next.playing && video.paused) video.play().catch(() => {}); else if (!next.playing && !video.paused) video.pause(); }
- if (this.material.uniforms?.uSize) this.material.uniforms.uSize.value = next.particleSize;
+ syncVideoSource(next.videoSource, next.playing);
+ applyParticleSettings(this, next);
 }
 
 function update(event) {
  const dt = Math.min((event.time - (lastT || event.time)) / 1000 || 0.016, 0.05);
  lastT = event.time;
  if (!params.playing) return;
- if (this.material.uniforms?.uSize) this.material.uniforms.uSize.value = params.particleSize;
+ runTime += dt;
+ const activeN = applyParticleSettings(this, params);
+ if (params.videoSource !== curSourceMode) syncVideoSource(params.videoSource, params.playing);
  const focusDist = scene.userData.postprocessing?.focus ?? 5.7;
  if (this.material.uniforms?.uFocus) this.material.uniforms.uFocus.value = focusDist;
  burstPulse *= Math.max(0, 1 - dt * 2.8);
 
  const bus = player.streams;
  const ext = bus.get('video.frame');
- const src = ext || (video && video.readyState >= 2 && video.videoWidth ? video : null);
+ const hasCam = curSourceMode === 'webcam' && camVideo && camVideo.readyState >= 2 && camVideo.videoWidth;
+ const hasClip = video && video.readyState >= 2 && video.videoWidth;
+ const src = hasCam ? camVideo : (ext || (curSourceMode === 'video' && hasClip ? video : null));
+ const mirrorSrc = hasCam;
  const t = event.time / 1000;
  ringBoost *= Math.max(0, 1 - dt * 1.6);
 
@@ -636,10 +727,16 @@ function update(event) {
   if (sCtx && sTex) {
    const vw = src.videoWidth || src.width || 256, vh = src.videoHeight || src.height || 256;
    const side = Math.min(vw, vh), sx = (vw - side) * 0.5, sy = (vh - side) * 0.5;
+   sCtx.save();
+   if (mirrorSrc) { sCtx.translate(sCanvas.width, 0); sCtx.scale(-1, 1); }
    sCtx.drawImage(src, sx, sy, side, side, 0, 0, sCanvas.width, sCanvas.height);
+   sCtx.restore();
    sTex.needsUpdate = true;
   }
+  aCtx.save();
+  if (mirrorSrc) { aCtx.translate(GW, 0); aCtx.scale(-1, 1); }
   aCtx.drawImage(src, 0, 0, GW, GH);
+  aCtx.restore();
   const data = aCtx.getImageData(0, 0, GW, GH).data;
   let energySum = 0, weightSum = 0, cx = 0, cy = 0, rSum = 0, gSum = 0, bSum = 0;
   spots.length = 0;
@@ -679,45 +776,77 @@ function update(event) {
   bus.publish('demo.serpentine.hue', (t * 0.12) % 1);
  }
 
+ const lSpeed = Math.max(0, Number(params.lightSpeed) || 0);
+ const lMove = Math.max(0, Number(params.lightMovement) || 0);
+ lightPhase += dt * (0.45 + smoothEnergy * 1.2) * lSpeed;
+ floorSpin += dt * (0.38 + smoothEnergy * 1.1) * lSpeed;
+
  const haloGroup = scene.getObjectByName('Stage halo');
  if (haloGroup) {
-  const motion = smoothEnergy * 4.2 + ringBoost * 0.55;
+  const motion = (smoothEnergy * 4.2 + ringBoost * 0.55) * lMove;
   haloGroup.children.forEach((ring, i) => {
    const dir = i % 2 === 0 ? 1 : -1;
-   const speed = (0.18 + i * 0.11) * (0.35 + motion);
+   const speed = (0.18 + i * 0.11) * (0.35 + motion) * lSpeed;
    ring.rotation.z += dir * speed * dt;
-   ring.rotation.x += Math.sin(t * (0.4 + i * 0.13)) * speed * 0.28 * dt;
-   ring.rotation.y += Math.cos(t * (0.35 + i * 0.11)) * speed * 0.24 * dt;
+   ring.rotation.x += Math.sin(lightPhase * (0.65 + i * 0.22)) * speed * 0.28 * lMove * dt;
+   ring.rotation.y += Math.cos(lightPhase * (0.58 + i * 0.18)) * speed * 0.24 * lMove * dt;
   });
  }
  const disk = scene.getObjectByName('Orrery bezel disk');
  if (disk) {
-  disk.rotation.z += dt * (0.09 + smoothEnergy * 0.45);
+  const rSpin = Math.max(0, Number(params.ringSpinSpeed) || 0);
+  const rFade = Math.max(0, Number(params.ringFadeSpeed) || 0);
+  const rBright = Math.max(0, Number(params.ringBrightness) || 0);
+  disk.rotation.z += dt * (0.14 + smoothEnergy * 0.5) * rSpin;
+  ringPhase += dt * rFade * (0.85 + smoothEnergy * 2.1);
+  const pat = params.ringPattern || 'wave';
+  const bCount = bezelJewels.length || 24;
+  let pulseSum = 0;
+  for (let i = 0; i < bezelJewels.length; i++) {
+   const j = bezelJewels[i];
+   const th = (i / bCount) * 6.283185;
+   let level = 0.5;
+   if (pat === 'alternate') level = 0.5 + 0.5 * Math.sin(ringPhase * 2.0 + (i % 2) * Math.PI);
+   else if (pat === 'chase') level = Math.pow(0.5 + 0.5 * Math.cos(th * 2 - ringPhase * 1.9), 2.8);
+   else if (pat === 'breathe') level = 0.5 + 0.5 * Math.sin(ringPhase * 1.35 - (i % 3) * 0.65);
+   else if (pat === 'oppose') level = 0.5 + 0.25 * Math.cos(th * 2 - ringPhase * 1.5) + 0.25 * Math.cos(th * 4 + ringPhase * 1.2);
+   else level = Math.pow(0.5 + 0.5 * Math.cos(th * 3 - ringPhase * 1.45), 1.4);
+   pulseSum += level;
+   const lift = 1 + smoothEnergy * 1.45;
+   j.mesh.material.emissiveIntensity = rBright * (0.02 + 0.98 * level) * lift;
+   const cScale = 0.14 + 0.86 * level;
+   j.mesh.material.color.setRGB(j.r * cScale, j.g * cScale, j.b * cScale);
+   j.mesh.scale.setScalar(0.72 + 0.38 * level);
+  }
+  const avgPulse = bCount ? pulseSum / bCount : 0.5;
+  const innerRim = disk.getObjectByName('Bezel inner rim');
+  if (innerRim) innerRim.material.emissiveIntensity = (0.55 + 0.7 * avgPulse + smoothEnergy * 1.2) * (rBright / 2.4);
+  const outerRim = disk.getObjectByName('Bezel outer rim');
+  if (outerRim) outerRim.material.emissiveIntensity = (0.45 + 0.6 * (1 - avgPulse) + smoothEnergy * 1.1) * (rBright / 2.4);
  }
  const floorLights = scene.getObjectByName('Floor sweep lights');
  if (floorLights) {
-  const spin = t * (0.38 + smoothEnergy * 1.1);
   floorLights.children.forEach((fl, i) => {
-   const ang = spin + i * 2.0944;
-   const rad = 1.9 + 0.55 * Math.sin(t * 0.7 + i * 1.7);
+   const ang = floorSpin + i * 2.0944;
+   const rad = 1.9 + 0.55 * lMove * Math.sin(lightPhase * 0.85 + i * 1.7);
    fl.position.x = Math.cos(ang) * rad;
    fl.position.z = Math.sin(ang) * rad;
-   fl.intensity = 4.2 + smoothEnergy * 24 + Math.sin(t * 2.5 + i * 2.1) * 1.6;
+   fl.intensity = 4.2 + smoothEnergy * 24 + Math.sin(lightPhase * 2.6 + i * 2.1) * 1.6 * lMove;
   });
  }
  const beacons = scene.getObjectByName('Floor beacons');
  if (beacons) {
   beacons.children.forEach((node, i) => {
-   node.material.emissiveIntensity = 1.1 + smoothEnergy * 5.0 + 0.65 * Math.sin(t * 3.0 + i * 0.52);
+   node.material.emissiveIntensity = 1.1 + smoothEnergy * 5.0 + 0.65 * lMove * Math.sin(lightPhase * 3.1 + i * 0.52);
   });
  }
  const rim = scene.getObjectByName('Rim light');
  if (rim) {
   // Smooth organic vibration of the rose rim light coupled to motion energy.
-  const amp = 0.08 + smoothEnergy * 0.9;
-  rim.position.x = Math.sin(t * 3.1) * amp * 0.55;
-  rim.position.y = 0.6 + Math.cos(t * 2.4) * amp * 0.35;
-  rim.intensity = 4.5 + smoothEnergy * 34 + Math.sin(t * 5.2) * (0.6 + smoothEnergy * 4.5);
+  const amp = (0.08 + smoothEnergy * 0.9) * lMove;
+  rim.position.x = Math.sin(lightPhase * 2.2) * amp * 0.55;
+  rim.position.y = 0.6 + Math.cos(lightPhase * 1.7) * amp * 0.35;
+  rim.intensity = 4.5 + smoothEnergy * 34 + Math.sin(lightPhase * 3.2) * (0.6 + smoothEnergy * 4.5) * lMove;
  }
 
  const posAttr = this.geometry.attributes.position;
@@ -730,33 +859,43 @@ function update(event) {
  noiseTime += dt * (0.45 + smoothEnergy * 5.0 + burstPulse * 1.2);
  const nt = noiseTime;
  const curlAmp = turb * agitation * 1.35;
+ const groundLift = Math.min(1, runTime / 2.4);
+ const ringCy = 0.28;
 
- for (let i = 0, n = posAttr.count; i < n; i++) {
+ for (let i = 0; i < activeN; i++) {
   const k = i * 3;
-  life[i] -= dt * (0.36 + turb * 0.18);
+  life[i] -= dt * (0.32 + turb * 0.16);
   if (life[i] <= 0) {
-   life[i] = 0.7 + Math.random() * 0.9;
+   life[i] = 0.85 + Math.random() * 1.15;
    const theta = Math.random() * 6.283;
+   const isSpill = Math.random() < 0.12;
+   const spawnR = isSpill ? 0.62 + Math.random() * 0.58 : 1.26 + Math.random() * 0.96;
+   let ang = t * 1.3 + theta;
    if (spots.length) {
     const s = spots[Math.floor(Math.random() * spots.length)];
-    pos[k] = s[0] + (Math.random() - 0.5) * 0.24;
-    pos[k + 1] = s[1] + (Math.random() - 0.5) * 0.24;
-    pos[k + 2] = Math.sin(theta) * (0.25 + Math.random() * 0.85);
+    ang = Math.atan2(s[1], s[0]) + (Math.random() - 0.5) * 0.68;
     col[k] = Math.min(1, s[2] * 1.35 + 0.18);
     col[k + 1] = Math.min(1, s[3] * 1.2 + 0.1);
     col[k + 2] = Math.min(1, s[4] * 1.35 + 0.22);
    } else {
-    const a = t * 2.1 + Math.random() * 6.283;
-    const r = 0.5 + Math.random() * 0.9;
-    pos[k] = Math.sin(a) * r * 1.25;
-    pos[k + 1] = Math.sin(a * 2 + 0.4) * r * 0.68;
-    pos[k + 2] = Math.cos(a * 1.5 + theta) * r * 0.85;
     col[k] = 0.96; col[k + 1] = 0.42 + Math.random() * 0.45; col[k + 2] = 0.72 + Math.random() * 0.25;
    }
-   vel[k] = (Math.random() - 0.5) * 0.6;
-   vel[k + 1] = 0.15 + Math.random() * 0.42;
-   vel[k + 2] = (Math.random() - 0.5) * 1.1;
-   alpha[i] = 0.85;
+   if (groundLift < 0.35 && Math.random() > groundLift * 2.5) {
+    const gr = 1.05 + Math.random() * 1.55;
+    pos[k] = Math.cos(ang) * gr;
+    pos[k + 1] = -1.32 + Math.random() * 0.28;
+    pos[k + 2] = Math.sin(theta) * gr * 0.7;
+   } else {
+    pos[k] = Math.cos(ang) * spawnR;
+    pos[k + 1] = ringCy + Math.sin(ang) * spawnR * (isSpill ? 0.9 : 0.88);
+    pos[k + 2] = Math.sin(theta) * (isSpill ? 0.35 : 0.68) - 0.08;
+   }
+   const tx = -Math.sin(ang), ty = Math.cos(ang);
+   const tangSpeed = (0.35 + Math.random() * 0.45) * (0.4 + swirl * 0.3);
+   vel[k] = tx * tangSpeed + (Math.random() - 0.5) * 0.25;
+   vel[k + 1] = ty * tangSpeed + (runTime < 2.2 ? 0.32 : (Math.random() - 0.5) * 0.25);
+   vel[k + 2] = (Math.random() - 0.5) * 0.55;
+   alpha[i] = 0.88;
   } else {
    const x = pos[k], y = pos[k + 1], z = pos[k + 2];
    // Exact analytical 3D curl(P) = (dPz/dy - dPy/dz, dPx/dz - dPz/dx, dPy/dx - dPx/dy).
@@ -771,11 +910,21 @@ function update(event) {
    const cy = dPx_dz - dPz_dx;
    const cz = dPy_dx - dPx_dy;
 
-   // Combine 3D curl advection with vertical vortex swirl around Y and gentle buoyancy.
-   vel[k] += (cx * curlAmp - z * swirl * 0.7 - x * 0.25) * dt;
-   vel[k + 1] += (cy * curlAmp + 0.14 - y * 0.18) * dt;
-   vel[k + 2] += (cz * curlAmp + x * swirl * 0.7 - z * 0.25) * dt;
-   const damp = Math.max(0, 1 - dt * 1.45);
+   // Swirl particles primarily in a 3D halo framing the circular screen around (0, 0.28), keeping the center clear except occasional spill.
+   const dx = x, dy = y - ringCy;
+   const rXY = Math.hypot(dx, dy) || 0.001;
+   const nx = dx / rXY, ny = dy / rXY;
+   const targetR = 1.56 + 0.28 * Math.sin(i * 0.37 + nt * 0.55);
+   const ringPull = (targetR - rXY) * (0.9 + 0.5 * groundLift);
+   const screenRepel = (rXY < 1.12 && z > -0.28 && (i % 8 !== 0)) ? (1.12 - rXY) * 4.2 : 0;
+   const radialF = ringPull + screenRepel;
+   const swirlXY = swirl * 0.72 * (0.45 + 0.55 * groundLift);
+   const liftDraft = (runTime < 3.0) ? (ringCy - y) * 0.45 * groundLift : 0;
+
+   vel[k] += (cx * curlAmp * 0.85 - ny * swirlXY + nx * radialF) * dt;
+   vel[k + 1] += (cy * curlAmp * 0.85 + nx * swirlXY + ny * radialF + liftDraft) * dt;
+   vel[k + 2] += (cz * curlAmp * 0.85 - z * 0.55 - z * swirl * 0.15) * dt;
+   const damp = Math.max(0, 1 - dt * 1.55);
    vel[k] *= damp; vel[k + 1] *= damp; vel[k + 2] *= damp;
    pos[k] += vel[k] * dt; pos[k + 1] += vel[k + 1] * dt; pos[k + 2] += vel[k + 2] * dt;
    alpha[i] = Math.min(1, life[i] * 1.1);
@@ -786,13 +935,19 @@ function update(event) {
 
 function stop() {
  unsub?.();
+ stopWebcam();
+ for (const j of bezelJewels) {
+  j.mesh.material.emissiveIntensity = j.intensity;
+  j.mesh.material.color.setRGB(j.r, j.g, j.b);
+  j.mesh.scale.setScalar(1);
+ }
  if (video) { video.pause(); video.removeAttribute('src'); video.load(); video = null; }
 }
-` );
+`, { favoriteParams: [ 'videoSource', 'ringPattern', 'ringFadeSpeed', 'ringSpinSpeed', 'ringBrightness', 'lightSpeed', 'lightMovement', 'particleAmount', 'particleScale', 'particleSize', 'swirl', 'turbulence' ] } );
 
 serpentine.scene.userData.streamRoutes = [
 	{ source: 'serpentine.energy', fallback: 'demo.serpentine.energy', input: [ 0, .3 ], output: [ .35, 2.6 ], curve: 'smoothstep', smooth: .75, target: { kind: 'param', uuid: particles.uuid, scriptIndex: 0, param: 'turbulence' } },
-	{ source: 'serpentine.cx', fallback: 'demo.serpentine.cx', input: [ 0, 1 ], output: [ - 2.6, 2.6 ], smooth: .82, target: { kind: 'object', uuid: keySpot.uuid, property: 'position.x' } },
+	{ source: 'serpentine.cx', fallback: 'demo.serpentine.cx', input: [ 0, 1 ], output: [ - 2.6, 2.6 ], smooth: .88, target: { kind: 'object', uuid: keySpot.uuid, property: 'position.x' } },
 	{ source: 'serpentine.hue', fallback: 'demo.serpentine.hue', input: [ 0, 1 ], output: [ 0, 1 ], smooth: .9, target: { kind: 'object', uuid: rimLight.uuid, property: 'color.hue' } },
 	{ source: 'serpentine.energy', fallback: 'demo.serpentine.energy', input: [ 0, .3 ], output: [ 2.5, 9 ], smooth: .85, target: { kind: 'object', uuid: underLight.uuid, property: 'intensity' } },
 	{ source: 'serpentine.energy', fallback: 'demo.serpentine.energy', input: [ 0, .3 ], output: [ .94, 1.18 ], curve: 'smoothstep', smooth: .88, target: { kind: 'object', uuid: halo.uuid, property: 'scale' } },
