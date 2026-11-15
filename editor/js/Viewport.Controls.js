@@ -74,7 +74,7 @@ function ViewportControls( editor ) {
 	} );
 	const parameters = new ViewportParameters( editor );
 	editor.viewportParameters = parameters;
-	const names = new UIButton( 'Object names' );
+	const names = new UIButton( 'Object names' ).addClass( 'viewport-names-button' );
 	names.dom.setAttribute( 'aria-pressed', String( editor.config.getKey( 'settings/showObjectNames' ) ) );
 	names.onClick( () => {
 

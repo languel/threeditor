@@ -2201,7 +2201,7 @@ input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outl
 }
 
 .viewport-split-button { margin-right: 8px; }
-.viewport-split-button[aria-pressed="true"] { background: color-mix(in srgb, var(--theme-accent) 22%, var(--theme-surface)); }
+.viewport-controls button[aria-pressed="true"] { background: color-mix(in srgb, var(--theme-accent) 22%, var(--theme-surface)); }
 
 .viewport-split-divider {
 	position: absolute;
@@ -2240,7 +2240,7 @@ input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outl
 	pointer-events: none;
 }
 .viewport-tool-panel select, .viewport-tool-panel input, .viewport-tool-panel button { pointer-events: auto; }
-.viewport-tool-panel select, .viewport-tool-panel button, .viewport-split-button {
+.viewport-tool-panel select, .viewport-tool-panel button, .viewport-split-button, .viewport-names-button {
 	color: var(--theme-text);
 	background-color: var(--theme-background);
 }

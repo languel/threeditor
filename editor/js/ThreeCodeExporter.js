@@ -8,7 +8,10 @@ import { drawProjectorOutput, renderFittedView } from './modeling/ProjectorOutpu
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
-const RESERVED = new Set( [ 'scene', 'camera', 'renderer', 'controls', 'THREE', 'mixers', 'gltfLoader', 'objLoader', 'last', 'pmrem', 'dt', 't' ] );
+const RESERVED = new Set( [
+	'scene', 'camera', 'renderer', 'controls', 'THREE', 'mixers', 'gltfLoader', 'objLoader', 'last', 'pmrem', 'dt', 't',
+	'outputCanvas', 'outputContext', 'fitView', 'projectorOptics', 'syncProjectorView', 'drawProjectorOutput', 'renderFittedView'
+] );
 const MODEL_RE = /\.(glb|gltf|obj|vrm)$/i;
 
 const n = ( v ) => {

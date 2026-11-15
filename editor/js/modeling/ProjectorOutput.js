@@ -52,6 +52,8 @@ export function renderFittedView( THREE, renderer, scene, camera, width, height,
 
 }
 
+const windowSources = new WeakMap();
+
 export function openProjectorOutput( projector ) {
 
 	const output = window.open( '', 'projector-output-' + projector.uuid, 'popup,width=960,height=540' );
@@ -62,18 +64,19 @@ export function openProjectorOutput( projector ) {
 
 	}
 	const { document } = output;
-	if ( document.querySelector( 'canvas' ) ) {
+	if ( windowSources.get( output ) === projector && document.querySelector( 'canvas' ) ) {
 
 		output.focus();
 		return;
 
 	}
+	windowSources.set( output, projector );
 	document.title = projector.name || 'Projector output';
 	document.body.style.cssText = 'margin:0;background:#000;overflow:hidden';
 	const canvas = document.createElement( 'canvas' );
 	canvas.style.cssText = 'display:block;width:100vw;height:100vh';
 	canvas.title = 'Double-click for fullscreen';
-	document.body.appendChild( canvas );
+	document.body.replaceChildren( canvas );
 	const context = canvas.getContext( '2d', { alpha: false } );
 	canvas.addEventListener( 'dblclick', () => {
 
@@ -84,7 +87,7 @@ export function openProjectorOutput( projector ) {
 
 	function frame() {
 
-		if ( output.closed ) return;
+		if ( output.closed || ! canvas.isConnected ) return;
 		const width = Math.round( output.innerWidth * output.devicePixelRatio );
 		const height = Math.round( output.innerHeight * output.devicePixelRatio );
 		if ( canvas.width !== width ) canvas.width = width;
