@@ -54,6 +54,8 @@ function Editor( portable = false ) {
 		assetsChanged: new Signal(),
 
 		transformModeChanged: new Signal(),
+		transformGizmoSizeChanged: new Signal(),
+		viewportLabelsChanged: new Signal(),
 		snapChanged: new Signal(),
 		spaceChanged: new Signal(),
 		rendererCreated: new Signal(),

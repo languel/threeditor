@@ -74,15 +74,14 @@ function SidebarScene( editor ) {
 			if ( object.children.some( child => ! child.userData?.runtimeOnly ) ) {
 
 				opener.classList.add( state ? 'open' : 'closed' );
+				opener.addEventListener( 'click', function () {
+
+					nodeStates.set( object, ! state );
+					refreshUI();
+
+				} );
 
 			}
-
-			opener.addEventListener( 'click', function () {
-
-				nodeStates.set( object, nodeStates.get( object ) === false ); // toggle
-				refreshUI();
-
-			} );
 
 			option.insertBefore( opener, option.firstChild );
 

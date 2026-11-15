@@ -1801,7 +1801,7 @@ body[data-ui-style="compact"] .settings-section > summary { padding: 7px 8px; }
 body[data-ui-style="clean"] .settings-section > summary { padding: 9px 12px; }
 
 /* Menubar + tabs: same type, less air */
-body[data-ui-style="compact"] { --menubar-height: 32px; }
+body[data-ui-style="compact"]:not(.menubar-auto-hide) { --menubar-height: 32px; }
 body[data-ui-style="compact"] #menubar .menu .title { padding: 8px; line-height: 16px; }
 body[data-ui-style="compact"] #menubar .menu .options .option,
 body[data-ui-style="compact"] #menubar .menu .options .inactive { line-height: 22px; }
@@ -2065,7 +2065,7 @@ body.glyph-menus[data-ui-style="compact"] #menubar .menu > .title[data-glyph] { 
 summary { list-style: none !important; }
 summary::-webkit-details-marker, summary::marker { display: none !important; content: '' !important; }
 summary::before,
-#outliner .opener::after, .Outliner .opener::after,
+#outliner .opener:is(.open, .closed)::after, .Outliner .opener:is(.open, .closed)::after,
 .chevron-button::before {
 	content: '' !important;
 	display: inline-block !important;
@@ -2258,7 +2258,9 @@ input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outl
 .viewport-tool-panel output:empty, .viewport-tool-options:empty { display: none; }
 .viewport-tool-panel output { flex-basis: 100%; color: var(--theme-text); font-size: 12px; }
 
-.viewport-tool-overlay {
+.viewport-controls { z-index: 4; }
+
+.viewport-labels, .viewport-tool-overlay {
 	position: absolute;
 	inset: 0;
 	width: 100%;

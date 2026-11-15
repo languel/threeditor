@@ -7,6 +7,7 @@ import { UIPanel } from './libs/ui.js';
 
 import { EditorControls } from './EditorControls.js?v=camera-playback';
 
+import { ViewportLabels } from './Viewport.Labels.js';
 import { ViewportControls } from './Viewport.Controls.js';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
@@ -62,6 +63,8 @@ function Viewport( editor ) {
 
 	let renderer = null;
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
+	const labels = new ViewportLabels( editor, container.dom );
+	signals.viewportLabelsChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	const splatHost = new SplatHost();
@@ -136,6 +139,13 @@ function Viewport( editor ) {
 	let objectStatesOnDown = [];
 
 	const transformControls = new TransformControls( camera );
+	transformControls.setSize( editor.config.getKey( 'settings/transformGizmoSize' ) );
+	signals.transformGizmoSizeChanged.add( () => {
+
+		transformControls.setSize( editor.config.getKey( 'settings/transformGizmoSize' ) );
+		render();
+
+	} );
 	let translationSnap = null;
 	let snapHeld = false, groundHeld = false;
 	// Ctrl snaps to the grid; Ctrl+Shift drops the lowest point onto the ground plane (y = 0) instead.
@@ -1245,6 +1255,7 @@ function Viewport( editor ) {
 
 		}
 
+		labels.draw( frames, width, height );
 		endTime = performance.now();
 		editor.signals.sceneRendered.dispatch( endTime - startTime );
 

@@ -1,4 +1,4 @@
-import { UIDiv, UIPanel, UIRow, UISelect, UIText } from './libs/ui.js';
+import { UIDiv, UIPanel, UIRow, UISelect, UINumber, UIText } from './libs/ui.js';
 import { presets, resolveTheme, uiStyles, resolveUIStyle, uiFonts, resolveUIFont } from './Theme.js';
 import { UIBoolean } from './libs/ui.three.js';
 
@@ -80,6 +80,19 @@ function SidebarSettings( editor ) {
 	} );
 	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ).setGlyphKey( 'mouse' ), mouseNavigation );
 	general.add( mouseNavigationRow );
+
+	const gizmoSizeRow = new UIRow();
+	const gizmoSize = new UINumber( config.getKey( 'settings/transformGizmoSize' ) * 100 )
+		.setRange( 25, 200 ).setStep( 5 ).setPrecision( 0 ).setUnit( '%' ).setWidth( '65px' );
+	gizmoSize.dom.setAttribute( 'aria-label', 'Transform gizmo size' );
+	gizmoSize.onChange( () => {
+
+		config.setKey( 'settings/transformGizmoSize', gizmoSize.getValue() / 100 );
+		signals.transformGizmoSizeChanged.dispatch();
+
+	} );
+	gizmoSizeRow.add( new UIText( 'Transform gizmo size' ).setClass( 'Label' ), gizmoSize );
+	general.add( gizmoSizeRow );
 
 	const uiStyleRow = new UIRow();
 	const uiStyle = new UISelect().setOptions( uiStyles );

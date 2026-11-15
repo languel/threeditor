@@ -47,6 +47,8 @@ Use **Edit attached behavior** or the object's **Script** tab to change the scri
 
 Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`. The builder and its vendored source modules/recording are in `tools/`; provenance and the adaptation scope are documented in [the lesson notes](editor/examples/lessons/README.md).
 
+**Object names** overlays named scene objects in each viewport pane, including in split view. **Settings → General → Transform gizmo size** changes the size of the move, rotate, and scale handles across projects. It defaults to 75%. **Auto-hide top menu** lets the viewport fill the space up to the top edge, where you can reveal the menu.
+
 ## Projection mapping
 
 1. Add a **Projector** from **Add → Light**. Move and rotate the rig to aim it along local **−Z**. The wireframe shows the rectangular projection.

@@ -30,6 +30,8 @@ function Config( persist = true ) {
 		'settings/keymapPreset': 'blender',
 		'settings/keymapOverrides': {},
 		'settings/mouseNavigation': 'basic',
+		'settings/showObjectNames': false,
+		'settings/transformGizmoSize': 0.75,
 		'settings/emulateThreeButtonMouse': true,
 		'settings/autoHideMenubar': false,
 		'settings/theme': 'system',
