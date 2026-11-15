@@ -41,6 +41,53 @@ export function splatBytesToPLY( buffer ) {
 
 }
 
+const splatDisplayParams = `// @label maxSh = "SH degree (view-dependent color)"
+// @param pointCloud = false
+// @label pointCloud = "Points only"
+// @param pointSize = 2 (1..12)
+// @label pointSize = "Point size (px)"`;
+
+const splatDisplay = `function updateDisplay() {
+ if ( ! splat?.isInitialized ) return;
+ if ( current.pointCloud && ! points ) {
+  const positions = new Float32Array( splat.numSplats * 3 );
+  const colors = new Float32Array( positions.length );
+  splat.forEachSplat( ( i, center, scales, rotation, opacity, color ) => {
+   center.toArray( positions, i * 3 );
+   colors[ i * 3 ] = THREE.MathUtils.clamp( color.r, 0, 1 );
+   colors[ i * 3 + 1 ] = THREE.MathUtils.clamp( color.g, 0, 1 );
+   colors[ i * 3 + 2 ] = THREE.MathUtils.clamp( color.b, 0, 1 );
+  } );
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+  geometry.setAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
+  points = new THREE.Points( geometry, new THREE.PointsMaterial( { vertexColors: true, sizeAttenuation: false } ) );
+  points.name = 'SplatPoints';
+  points.userData.runtimeOnly = true;
+  points.userData.object = this;
+  this.add( points );
+ }
+ splat.visible = ! current.pointCloud;
+ splat.opacity = current.opacity;
+ splat.recolor.set( current.color );
+ splat.setDisplayShDegree( Math.round( current.maxSh ) );
+ this.userData.hasSplat = splat.visible;
+ if ( points ) {
+  points.visible = current.pointCloud && current.opacity > 0;
+  points.material.size = current.pointSize;
+  points.material.color.set( current.color );
+  points.material.opacity = current.opacity;
+  points.material.transparent = current.opacity < 1;
+  points.material.depthWrite = current.opacity === 1;
+ }
+ player.requestRender?.();
+}
+
+function setParameters( next ) {
+ current = next;
+ updateDisplay.call( this );
+}`;
+
 export function splatScript( source, fileType = splatFileType( source ) ) {
 
 	return {
@@ -54,8 +101,8 @@ export function splatScript( source, fileType = splatFileType( source ) ) {
 // @param color = "#ffffff"
 // @label color = "Tint"
 // @param maxSh = 3 (0..4)
-// @label maxSh = "SH degree"
-let splat, active = false, request, current = params;
+${ splatDisplayParams }
+let splat, points, active = false, request, current = params;
 
 function cleanupRuntimeChildren() {
  for ( const child of [ ...this.children ] ) {
@@ -83,7 +130,7 @@ function init() {
 		: `const file = new File( [ await response.blob() ], 'scan.${ fileType }' );
   const input = { file, fileType: ${ JSON.stringify( fileType ) } };` }
   if ( ! active ) return;
-  const mesh = new SplatMesh( { ...input, maxSh: Math.round( params.maxSh ) } );
+  const mesh = new SplatMesh( { ...input, maxSh: 4 } );
   mesh.name = 'SplatMesh';
   mesh.opacity = current.opacity;
   mesh.recolor.set( current.color );
@@ -93,6 +140,7 @@ function init() {
   this.add( mesh );
   await mesh.initialized;
   if ( ! active ) return;
+  updateDisplay.call( this );
   const box = mesh.getBoundingBox( true, new THREE.Box3() );
   if ( ! box.isEmpty() ) {
    const size = box.getSize( new THREE.Vector3() ), center = box.getCenter( new THREE.Vector3() );
@@ -110,29 +158,48 @@ function init() {
  } ).catch( error => {
   if ( ! active ) return;
   cleanupRuntimeChildren.call( this );
-  splat = null;
+  splat = points = null;
   delete this.userData.hasSplat;
   player.reportAssetError?.( 'Gaussian Splat: ' + error.message );
   console.error( 'Gaussian Splat:', error );
  } );
 }
 
-function setParameters( next ) {
- current = next;
- if ( ! splat ) return;
- splat.opacity = next.opacity;
- splat.recolor.set( next.color );
- player.requestRender?.();
-}
+${ splatDisplay }
 
 function stop() {
  active = false;
  request?.abort();
- splat = null;
+ splat = points = null;
  delete this.userData.hasSplat;
  cleanupRuntimeChildren.call( this );
 }
 `
 	};
+
+}
+
+
+// Upgrade the original generated behavior in saved projects and examples.
+// Keep the original fetch and decoding code so embedded and remote assets retain their source.
+export function upgradeSplatScript( script ) {
+
+	if ( script?.assetBehavior !== 'splat' || typeof script.source !== 'string' ) return;
+	const replacements = [
+		[ '// @label maxSh = "SH degree"', splatDisplayParams ],
+		[ 'let splat, active = false, request, current = params;', 'let splat, points, active = false, request, current = params;' ],
+		[ 'maxSh: Math.round( params.maxSh )', 'maxSh: 4' ],
+		[ '  const box = mesh.getBoundingBox', '  updateDisplay.call( this );\n  const box = mesh.getBoundingBox' ],
+		[ 'splat = null;', 'splat = points = null;' ],
+		[ `function setParameters( next ) {
+ current = next;
+ if ( ! splat ) return;
+ splat.opacity = next.opacity;
+ splat.recolor.set( next.color );
+ player.requestRender?.();
+}`, splatDisplay ]
+	];
+	if ( ! replacements.every( ( [ previous ] ) => script.source.includes( previous ) ) ) return;
+	for ( const [ previous, next ] of replacements ) script.source = script.source.replaceAll( previous, () => next );
 
 }

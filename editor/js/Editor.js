@@ -5,6 +5,7 @@ import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelp
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
+import { upgradeSplatScript } from './assets/SplatObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
@@ -861,6 +862,7 @@ Editor.prototype = {
 				upgradeModelScript( script, object );
 				upgradeMediaScript( script, asset );
 				upgradeProjectorScript( script );
+				upgradeSplatScript( script );
 				if ( asset?.type === 'math' ) upgradeMathScript( script, asset.definition );
 
 			}

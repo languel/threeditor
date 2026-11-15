@@ -3818,6 +3818,17 @@ class SplatMesh extends THREE.Object3D {
   get maxSh() {
     return this._maxSh;
   }
+  /** Limit the rendered SH degree without decoding the source again. */
+  setDisplayShDegree(degree) {
+    if (!Number.isInteger(degree) || degree < 0 || degree > 4)
+      throw new Error("SH display degree must be an integer between 0 and 4");
+    if (this._displayShDegree === degree) return;
+    this._displayShDegree = degree;
+    this.updateVersion({ sort: false });
+  }
+  get displayShDegree() {
+    return Math.min(this._displayShDegree ?? this.maxSh, this.splats?.getNumSh() ?? 0);
+  }
   get isInitialized() {
     var _a2;
     return ((_a2 = this.splats) == null ? void 0 : _a2.isInitialized) ?? false;
@@ -7073,7 +7084,7 @@ const _SplatAccumulator = class _SplatAccumulator {
     }
     source.setTextureUniforms(uniforms);
     uniforms.stochasticSeedBase.value = Math.imul(mesh.id + 1, 2654435769) >>> 0;
-    uniforms.numSh.value = Math.min(mesh.maxSh, source.getNumSh());
+    uniforms.numSh.value = mesh.displayShDegree;
     uniforms.objectReflected.value = decomposeSplatTransform(
       matrixWorld,
       this.transformScale,
@@ -7286,8 +7297,8 @@ function collectShownMeshes(node, nodes) {
   }
 }
 function hasViewDependentColor(mapping) {
-  for (const { node, source } of mapping) {
-    if (node.maxSh > 0 && ((source == null ? void 0 : source.getNumSh()) ?? 0) > 0) return true;
+  for (const { node } of mapping) {
+    if (node.displayShDegree > 0) return true;
   }
   return false;
 }
