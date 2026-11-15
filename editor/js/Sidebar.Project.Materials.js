@@ -39,9 +39,7 @@ function SidebarProjectMaterials( editor ) {
 
 				if ( material !== undefined ) {
 
-					editor.removeMaterial( oldMaterial );
 					editor.execute( new SetMaterialCommand( editor, selectedObject, material ) );
-					editor.addMaterial( material );
 
 				}
 

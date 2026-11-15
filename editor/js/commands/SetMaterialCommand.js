@@ -18,9 +18,9 @@ class SetMaterialCommand extends Command {
 		this.name = editor.strings.getKey( 'command/SetMaterial' );
 
 		this.object = object;
-		this.materialSlot = materialSlot;
+		this.materialSlot = Math.max( 0, materialSlot );
 
-		this.oldMaterial = ( object !== null ) ? editor.getObjectMaterial( object, materialSlot ) : null;
+		this.oldMaterial = ( object !== null ) ? editor.getObjectMaterial( object, this.materialSlot ) : null;
 		this.newMaterial = newMaterial;
 
 	}
@@ -58,13 +58,15 @@ class SetMaterialCommand extends Command {
 
 		super.fromJSON( json );
 
+		const editor = this.editor;
 		this.object = this.editor.objectByUuid( json.objectUuid );
 		this.oldMaterial = parseMaterial( json.oldMaterial );
 		this.newMaterial = parseMaterial( json.newMaterial );
-		this.materialSlot = json.materialSlot;
+		this.materialSlot = Math.max( 0, json.materialSlot );
 
 		function parseMaterial( json ) {
 
+			if ( editor.materials[ json.uuid ] ) return editor.materials[ json.uuid ];
 			const loader = new ObjectLoader();
 			const images = loader.parseImages( json.images );
 			const textures = loader.parseTextures( json.textures, images );

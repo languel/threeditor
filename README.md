@@ -53,6 +53,17 @@ Select a Gaussian scan and open **Script → Gaussian Splat** to turn on **Point
 
 The outliner uses distinct icons for cameras, projectors, lights, models, groups, meshes, curves, shapes, points, and scans. Click the `<>` icon next to a scripted object to open its code.
 
+## Stock material looks
+
+Select a mesh and choose **Material → Stock look**. For a mesh with multiple materials, select the slot first. Each look is an editable shader material with undo and redo.
+
+- **Line drawing** uses an ink contour and a paper-colored fill.
+- **Blueprint** adds a grid and bright contours over a blue surface.
+- **Sketch** crosshatches shaded areas.
+- **Neon** adds a bright rim. Enable **Bloom** to spread the glow.
+
+Use the WebGL renderer for these looks. The shader source is available under **Material → Program** and saves with the scene.
+
 ## Projection mapping
 
 1. Add a **Projector** from **Add → Light**. Move and rotate the rig to aim it along local **−Z**. The wireframe shows the rectangular projection.

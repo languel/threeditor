@@ -584,6 +584,10 @@ Editor.prototype = {
 
 	setObjectMaterial: function ( object, slot, newMaterial ) {
 
+		const oldMaterial = this.getObjectMaterial( object, slot );
+		if ( oldMaterial === newMaterial ) return;
+		if ( oldMaterial ) this.removeMaterial( oldMaterial );
+
 		if ( Array.isArray( object.material ) && slot !== undefined ) {
 
 			object.material[ slot ] = newMaterial;
@@ -593,6 +597,8 @@ Editor.prototype = {
 			object.material = newMaterial;
 
 		}
+
+		if ( newMaterial ) this.addMaterial( newMaterial );
 
 	},
 

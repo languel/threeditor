@@ -16,7 +16,7 @@ function SidebarMaterialProgram( editor, property ) {
 	programInfo.setMarginRight( '4px' );
 	programInfo.onClick( function () {
 
-		signals.editScript.dispatch( object, 'programInfo' );
+		signals.editScript.dispatch( object, 'programInfo', materialSlot );
 
 	} );
 	container.add( programInfo );
@@ -25,7 +25,7 @@ function SidebarMaterialProgram( editor, property ) {
 	programVertex.setMarginRight( '4px' );
 	programVertex.onClick( function () {
 
-		signals.editScript.dispatch( object, 'vertexShader' );
+		signals.editScript.dispatch( object, 'vertexShader', materialSlot );
 
 	} );
 	container.add( programVertex );
@@ -34,7 +34,7 @@ function SidebarMaterialProgram( editor, property ) {
 	programFragment.setMarginRight( '4px' );
 	programFragment.onClick( function () {
 
-		signals.editScript.dispatch( object, 'fragmentShader' );
+		signals.editScript.dispatch( object, 'fragmentShader', materialSlot );
 
 	} );
 	container.add( programFragment );

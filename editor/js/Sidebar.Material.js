@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { UIButton, UIInput, UIPanel, UIRow, UISelect, UIText, UITextArea } from './libs/ui.js';
 
+import { createStockMaterialLook, stockMaterialLooks } from './StockMaterialLooks.js';
 import { SetMaterialCommand } from './commands/SetMaterialCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 
@@ -47,6 +48,20 @@ function SidebarMaterial( editor ) {
 	materialClassRow.add( materialClass );
 
 	container.add( materialClassRow );
+
+	const stockLookRow = new UIRow();
+	const stockLook = new UISelect().setWidth( '150px' ).setOptions( { '': 'Choose a look…', ...stockMaterialLooks } );
+	stockLook.dom.setAttribute( 'aria-label', 'Stock look' );
+	stockLook.onChange( () => {
+
+		const previous = editor.getObjectMaterial( currentObject, currentMaterialSlot );
+		const material = createStockMaterialLook( stockLook.getValue(), previous );
+		if ( material ) editor.execute( new SetMaterialCommand( editor, currentObject, material, currentMaterialSlot ), 'Apply look: ' + material.name );
+		else refreshUI();
+
+	} );
+	stockLookRow.add( new UIText( 'Stock look' ).setClass( 'Label' ), stockLook );
+	container.add( stockLookRow );
 
 	// uuid
 
@@ -515,20 +530,7 @@ function SidebarMaterial( editor ) {
 
 				}
 
-				if ( Array.isArray( currentMaterial ) ) {
-
-					// don't remove the entire multi-material. just the material of the selected slot
-
-					editor.removeMaterial( currentMaterial[ currentMaterialSlot ] );
-
-				} else {
-
-					editor.removeMaterial( currentMaterial );
-
-				}
-
 				editor.execute( new SetMaterialCommand( editor, currentObject, material, currentMaterialSlot ), strings.getKey( 'command/SetMaterial' ) + ': ' + materialClass.getValue() );
-				editor.addMaterial( material );
 				// TODO Copy other references in the scene graph
 				// keeping name and UUID then.
 				// Also there should be means to create a unique
@@ -586,7 +588,7 @@ function SidebarMaterial( editor ) {
 
 			const slotOptions = {};
 
-			currentMaterialSlot = Math.max( 0, Math.min( material.length, currentMaterialSlot ) );
+			currentMaterialSlot = Math.max( 0, Math.min( material.length - 1, currentMaterialSlot ) );
 
 			for ( let i = 0; i < material.length; i ++ ) {
 
@@ -631,6 +633,11 @@ function SidebarMaterial( editor ) {
 		}
 
 		materialClass.setValue( material.type );
+		const webGPU = editor.config.getKey( 'project/renderer/type' ) === 'WebGPURenderer';
+		stockLookRow.setDisplay( currentObject.isMesh ? '' : 'none' );
+		stockLook.setDisabled( webGPU );
+		stockLook.dom.title = webGPU ? 'Stock looks require the WebGL renderer' : 'Replace this material slot with a stock shader';
+		stockLook.setValue( Object.hasOwn( stockMaterialLooks, material.userData.stockLook ) ? material.userData.stockLook : '' );
 
 		setRowVisibility();
 
@@ -669,6 +676,7 @@ function SidebarMaterial( editor ) {
 
 		if ( hasMaterial ) {
 
+			if ( currentObject !== object ) currentMaterialSlot = 0;
 			currentObject = object;
 			refreshUI();
 			container.setDisplay( '' );
@@ -683,6 +691,7 @@ function SidebarMaterial( editor ) {
 	} );
 
 	signals.materialChanged.add( refreshUI );
+	signals.rendererCreated.add( refreshUI );
 
 	return container;
 

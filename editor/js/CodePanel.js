@@ -76,7 +76,7 @@ function CodePanel( editor ) {
 	const store = new Map(); // path -> Blob, survives regeneration so reloaded textures keep their bytes
 	let timer = 0;
 	let applyTimer = 0;
-	let target = { kind: 'scene' }; // or { kind: 'script', object, script } / { kind: 'glsl', object, key } / { kind: 'json', object }
+	let target = { kind: 'scene' }; // or { kind: 'script', object, script } / { kind: 'glsl', object, key, slot, material: m } / { kind: 'json', object }
 	let sceneText = '';
 	let ranges = {};
 	let focusMark = null;
@@ -271,7 +271,7 @@ function CodePanel( editor ) {
 
 		} else {
 
-			const m = target.object.material;
+			const m = target.material;
 			const what = { vertexShader: 'script/title/vertexShader', fragmentShader: 'script/title/fragmentShader', programInfo: 'script/title/programInfo' }[ target.key ];
 			label.textContent = ( m && m.name || target.object.name || 'Material' ) + ' / ' + strings.getKey( what );
 
@@ -348,19 +348,19 @@ function CodePanel( editor ) {
 
 	}
 
-	function showShader( object, key ) {
+	function showShader( object, key, slot = 0 ) {
 
-		const m = object.material;
-		if ( ! m ) return;
+		const m = editor.getObjectMaterial( object, slot );
+		if ( ! m?.isShaderMaterial ) return;
 
 		if ( key === 'programInfo' ) {
 
 			const json = { defines: m.defines, uniforms: m.uniforms, attributes: m.attributes };
-			showSource( { kind: 'json', object, key }, 'json', JSON.stringify( json, null, '\t' ), 'Program info: changes are saved as you type.' );
+			showSource( { kind: 'json', object, key, slot, material: m }, 'json', JSON.stringify( json, null, '\t' ), 'Program info: changes are saved as you type.' );
 
 		} else {
 
-			showSource( { kind: 'glsl', object, key }, 'glsl', m[ key ] || '', 'Shader: changes are compiled as you type.' );
+			showSource( { kind: 'glsl', object, key, slot, material: m }, 'glsl', m[ key ] || '', 'Shader: changes are compiled as you type.' );
 
 		}
 
@@ -442,10 +442,11 @@ function CodePanel( editor ) {
 
 			} else if ( target.kind === 'glsl' ) {
 
-				const { object, key } = target;
-				object.material[ key ] = string;
-				object.material.needsUpdate = true;
-				signals.materialChanged.dispatch( object, 0 );
+				const { object, key, slot, material } = target;
+				if ( editor.getObjectMaterial( object, slot ) !== material ) return false;
+				material[ key ] = string;
+				material.needsUpdate = true;
+				signals.materialChanged.dispatch( object, slot );
 
 				valid = true;
 				const parseMessage = /^(?:ERROR|WARNING): \d+:(\d+): (.*)/g;
@@ -453,7 +454,7 @@ function CodePanel( editor ) {
 				for ( const program of viewportRenderer ? viewportRenderer.info.programs : [] ) {
 
 					const diagnostics = program.diagnostics;
-					if ( diagnostics === undefined || diagnostics.material !== object.material ) continue;
+					if ( diagnostics === undefined || diagnostics.material !== material ) continue;
 					if ( ! diagnostics.runnable ) valid = false;
 
 					const info = diagnostics[ key ];
@@ -498,12 +499,14 @@ function CodePanel( editor ) {
 
 		} else if ( kind === 'json' ) {
 
+			const { material, slot } = target;
+			if ( editor.getObjectMaterial( object, slot ) !== material ) return;
 			const json = JSON.parse( value );
 			for ( const key of [ 'defines', 'uniforms', 'attributes' ] ) {
 
-				if ( JSON.stringify( object.material[ key ] ) !== JSON.stringify( json[ key ] ) ) {
+				if ( JSON.stringify( material[ key ] ) !== JSON.stringify( json[ key ] ) ) {
 
-					const cmd = new SetMaterialValueCommand( editor, object, key, json[ key ] );
+					const cmd = new SetMaterialValueCommand( editor, object, key, json[ key ], slot );
 					cmd.updatable = false;
 					editor.execute( cmd );
 
@@ -873,7 +876,7 @@ function CodePanel( editor ) {
 
 	} );
 
-	signals.editScript.add( ( object, script ) => {
+	signals.editScript.add( ( object, script, materialSlot ) => {
 
 		dock.toggle( true );
 
@@ -884,7 +887,7 @@ function CodePanel( editor ) {
 
 		} else {
 
-			showShader( object, script );
+			showShader( object, script, materialSlot );
 
 		}
 
