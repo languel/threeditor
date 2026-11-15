@@ -4,6 +4,9 @@ import { UIPanel, UIRow, UIButton, UIInteger, UISelect, UIText } from './libs/ui
 
 import { withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
+import { fitView } from './modeling/LightView.js';
+import { drawProjectorOutput, renderFittedView } from './modeling/ProjectorOutput.js';
+import { resolvePlaybackAssets } from './assets/AssetRuntime.js';
 import { APP } from './libs/app.js';
 import { setupRenderEnvironment, setupPathTracingEnvironment } from './RenderEnvironment.js';
 
@@ -71,6 +74,28 @@ function MenubarRender( editor ) {
 	}
 
 	return container;
+
+}
+
+function openImageOutput( width, height ) {
+
+	const left = ( screen.width - width ) / 2;
+	const top = ( screen.height - height ) / 2;
+	const output = window.open( '', '_blank', `location=no,left=${left},top=${top},width=${width},height=${height}` );
+	if ( ! output ) {
+
+		alert( 'Allow pop-up windows to display the render.' );
+		return null;
+
+	}
+	const meta = document.createElement( 'meta' );
+	meta.name = 'viewport';
+	meta.content = 'width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0';
+	output.document.head.appendChild( meta );
+	output.document.body.style.background = '#000';
+	output.document.body.style.margin = '0px';
+	output.document.body.style.overflow = 'hidden';
+	return output;
 
 }
 
@@ -163,6 +188,26 @@ class RenderImageDialog {
 		renderButton.setWidth( '80px' );
 		renderButton.onClick( async () => {
 
+			const outputWidth = imageWidth.getValue(), outputHeight = imageHeight.getValue();
+			const width = outputWidth / window.devicePixelRatio, height = outputHeight / window.devicePixelRatio;
+			const optical = editor.mainCameraOutput;
+			if ( optical === 'texture' ) {
+
+				const output = openImageOutput( width, height );
+				if ( ! output ) return;
+				const canvas = output.document.createElement( 'canvas' );
+				canvas.width = outputWidth;
+				canvas.height = outputHeight;
+				canvas.style.width = width + 'px';
+				canvas.style.height = height + 'px';
+				drawProjectorOutput( canvas.getContext( '2d', { alpha: false } ), editor.mainCameraSource );
+				output.document.body.appendChild( canvas );
+				this.close();
+				return;
+
+			}
+
+			const opticalCamera = optical ? editor.mainCamera : null;
 			if ( shadingTypeSelect.getValue() === 'realistic' ) {
 
 				const unsupported = [];
@@ -209,20 +254,20 @@ class RenderImageDialog {
 
 			const scene = await loader.parseAsync( json.scene );
 			const sceneCamera = scene.getObjectByProperty( 'uuid', json.mainCamera || json.viewportCamera || json.camera.object.uuid );
-			const camera = sceneCamera?.isCamera ? sceneCamera : await loader.parseAsync( json.camera );
+			const camera = opticalCamera?.clone() || ( sceneCamera?.isCamera ? sceneCamera : await loader.parseAsync( json.camera ) );
 
-			const aspect = imageWidth.getValue() / imageHeight.getValue();
+			const aspect = outputWidth / outputHeight;
 
-			if ( camera.isPerspectiveCamera ) {
+			if ( ! opticalCamera ) {
 
-				camera.aspect = aspect;
+				if ( camera.isPerspectiveCamera ) camera.aspect = aspect;
+				else {
 
-			} else {
+					const frustumHeight = camera.top - camera.bottom;
+					camera.left = - frustumHeight * aspect / 2;
+					camera.right = frustumHeight * aspect / 2;
 
-				const frustumHeight = camera.top - camera.bottom;
-
-				camera.left = - frustumHeight * aspect / 2;
-				camera.right = frustumHeight * aspect / 2;
+				}
 
 			}
 
@@ -256,7 +301,10 @@ class RenderImageDialog {
 				renderer = new THREE.WebGLRenderer( { antialias: true, reversedDepthBuffer: true } );
 
 			}
-			renderer.setSize( imageWidth.getValue(), imageHeight.getValue() );
+			const renderRect = opticalCamera && shadingTypeSelect.getValue() === 'realistic' ?
+				fitView( { x: 0, y: 0, width: outputWidth, height: outputHeight }, camera.aspect ) :
+				{ x: 0, y: 0, width: outputWidth, height: outputHeight };
+			renderer.setSize( renderRect.width, renderRect.height );
 			renderer.setClearColor( editor.viewportColor );
 
 			if ( project.shadows !== undefined ) renderer.shadowMap.enabled = project.shadows;
@@ -278,34 +326,18 @@ class RenderImageDialog {
 
 			// popup
 
-			const width = imageWidth.getValue() / window.devicePixelRatio;
-			const height = imageHeight.getValue() / window.devicePixelRatio;
-
-			const left = ( screen.width - width ) / 2;
-			const top = ( screen.height - height ) / 2;
-
-			const output = window.open( '', '_blank', `location=no,left=${left},top=${top},width=${width},height=${height}` );
+			const output = openImageOutput( width, height );
 			if ( ! output ) {
 
 				environmentTarget?.dispose();
 				renderer.dispose();
-				alert( 'Allow pop-up windows to display the render.' );
 				return;
 
 			}
 
-			const meta = document.createElement( 'meta' );
-			meta.name = 'viewport';
-			meta.content = 'width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0';
-			output.document.head.appendChild( meta );
-
-			output.document.body.style.background = '#000';
-			output.document.body.style.margin = '0px';
-			output.document.body.style.overflow = 'hidden';
-
 			const canvas = renderer.domElement;
-			canvas.style.width = width + 'px';
-			canvas.style.height = height + 'px';
+			const ratio = window.devicePixelRatio;
+			canvas.style.cssText = `position:absolute;left:${renderRect.x / ratio}px;top:${renderRect.y / ratio}px;width:${renderRect.width / ratio}px;height:${renderRect.height / ratio}px`;
 			output.document.body.appendChild( canvas );
 
 			//
@@ -318,7 +350,9 @@ class RenderImageDialog {
 				case 'wireframe':
 
 					scene.overrideMaterial = shadingTypeSelect.getValue() === 'normals' ? new THREE.MeshNormalMaterial() : shadingTypeSelect.getValue() === 'wireframe' ? new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } ) : null;
-					withEnabledObjects( scene, () => renderer.render( scene, camera ) );
+					const draw = () => withEnabledObjects( scene, () => renderer.render( scene, camera ) );
+					if ( opticalCamera ) renderFittedView( THREE, renderer, scene, camera, outputWidth, outputHeight, draw );
+					else draw();
 					scene.overrideMaterial?.dispose();
 					environmentTarget?.dispose();
 					renderer.dispose();
@@ -502,8 +536,21 @@ class RenderVideoDialog {
 
 			const player = new APP.Player();
 			const project = editor.toJSON();
-			await player.load( project );
-			const environmentTarget = await setupRenderEnvironment( player.getScene(), player.getRenderer(), project.environmentType );
+			const disposeMediaURLs = resolvePlaybackAssets( project, editor.sourceFiles );
+			let environmentTarget;
+			try {
+
+				await player.load( project );
+				environmentTarget = await setupRenderEnvironment( player.getScene(), player.getRenderer(), project.environmentType );
+
+			} catch ( error ) {
+
+				disposeMediaURLs();
+				player.dispose();
+				alert( 'Could not start video render: ' + error.message );
+				return;
+
+			}
 			player.setPixelRatio( 1 );
 			player.setSize( videoWidth.getValue(), videoHeight.getValue() );
 			player.setClearColor( editor.viewportColor );
@@ -521,6 +568,15 @@ class RenderVideoDialog {
 			const top = ( screen.height - height ) / 2;
 
 			const output = window.open( '', '_blank', `location=no,left=${left},top=${top},width=${width},height=${height}` );
+			if ( ! output ) {
+
+				environmentTarget?.dispose();
+				disposeMediaURLs();
+				player.dispose();
+				alert( 'Allow pop-up windows to display the render.' );
+				return;
+
+			}
 
 			const meta = document.createElement( 'meta' );
 			meta.name = 'viewport';
@@ -649,6 +705,7 @@ class RenderVideoDialog {
 			}
 
 			environmentTarget?.dispose();
+			disposeMediaURLs();
 			player.dispose();
 
 			this.close();

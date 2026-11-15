@@ -93,6 +93,7 @@ function projectorRuntime( THREE, root, player ) {
 
 		}
 		applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );
+		root.projectorOutput = { canvas, x, y, width: w, height: h };
 		texture.needsUpdate = true;
 
 	}
@@ -150,6 +151,7 @@ function projectorRuntime( THREE, root, player ) {
 			texture.dispose();
 			light.dispose();
 			delete root.projectorFrame;
+			delete root.projectorOutput;
 
 		}
 	};
@@ -220,11 +222,23 @@ function stop() { projector?.dispose(); }
 // parameters and the rest of the attached script.
 export function upgradeProjectorScript( script ) {
 
-	if ( script.assetBehavior !== 'projector' || script.source.includes( 'function applyProjectionMask(' ) ) return;
+	if ( script.assetBehavior !== 'projector' || typeof script.source !== 'string' ) return;
 	const runtime = 'function projectorRuntime( THREE, root, player )';
 	const upload = '\n\t\ttexture.needsUpdate = true;';
 	if ( ! script.source.includes( runtime ) || ! script.source.includes( upload ) ) return;
-	script.source = script.source.replace( runtime, applyProjectionMask.toString() + '\n' + runtime )
-		.replace( upload, '\n\t\tapplyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );' + upload );
+	if ( ! script.source.includes( 'function applyProjectionMask(' ) ) {
+
+		script.source = script.source.replace( runtime, applyProjectionMask.toString() + '\n' + runtime )
+			.replace( upload, '\n\t\tapplyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );' + upload );
+
+	}
+	const dispose = 'delete root.projectorFrame;';
+	if ( ! script.source.includes( 'root.projectorOutput =' ) && script.source.includes( dispose ) ) {
+
+		script.source = script.source
+			.replace( upload, '\n\t\troot.projectorOutput = { canvas, x, y, width: w, height: h };' + upload )
+			.replace( dispose, dispose + '\n\t\t\tdelete root.projectorOutput;' );
+
+	}
 
 }

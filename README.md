@@ -57,6 +57,10 @@ Select a Gaussian scan and open **Script → Gaussian Splat** to turn on **Point
 2. Under **Object → Projection**, use **Choose media…** to select an image or video. You can also drag media from **Assets** onto the projector’s outliner row. A new projector starts with a calibration grid.
 3. In the projector’s **Script** parameters, set throw ratio (distance divided by image width), aspect ratio, intensity, range, falloff and shadows. Aspect ratio `0` follows the source. Enable **Calibration grid** to check alignment with media already assigned.
 
+Select a projector and click **Object → Set as main camera** to use it for Play, presentation, and exports. **Projector output → Rendered lens view** renders the scene from the projector’s position and optics. **Masked texture** sends the fitted source image, video, or animation with its mask applied. Both modes preserve the lens aspect ratio.
+
+Use **Open texture output** on any projector to send its masked texture to a separate live window while you edit. Move the window to the physical projector’s display and double-click the image for fullscreen. The same masked texture continues to light the virtual scene.
+
 Use a lit mesh material such as MeshStandardMaterial for the projection surface. With renderer shadows enabled, turn on **Cast shadow** for blockers and **Receive shadow** for projection surfaces. The projector illuminates lit meshes. Point clouds and Gaussian splats can serve as spatial references.
 
 Named browser saves and playable exports retain projector settings and source media. **Editable HTML** also retains source files for continued editing.

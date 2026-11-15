@@ -2,6 +2,9 @@
 // Turns the editor scene into readable, commented JavaScript in the style of the lessons.
 import { scriptSourceForExecution, serializeScript } from './ScriptParams.js';
 import { hasRestriction } from './ObjectRestrictions.js';
+import { isProjector, projectorOptics } from './assets/Projector.js';
+import { fitView, syncProjectorView } from './modeling/LightView.js';
+import { drawProjectorOutput, renderFittedView } from './modeling/ProjectorOutput.js';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 const TONE = { 1: 'LinearToneMapping', 2: 'ReinhardToneMapping', 3: 'CineonToneMapping', 4: 'ACESFilmicToneMapping', 6: 'AgXToneMapping', 7: 'NeutralToneMapping' };
@@ -50,6 +53,9 @@ function generateThreeCode( editor ) {
 		for ( const point of object.userData.measurement?.points || [] ) if ( point.target ) rulerTargets.add( point.target );
 	} );
 	const camera = editor.mainCamera || editor.viewportCamera || editor.camera;
+	const mainProjector = isProjector( editor.mainCameraSource ) ? editor.mainCameraSource : null;
+	const textureOutput = mainProjector && editor.mainCameraOutput === 'texture';
+	let mainProjectorVariable;
 	const controllerSettings = cameraControllerSettings( editor, camera );
 	const controllerMode = controllerSettings.mode;
 	const useController = controllerMode && controllerMode !== 'none';
@@ -413,6 +419,7 @@ function generateThreeCode( editor ) {
 
 		if ( o.name ) out( `${ name }.name = ${ q( o.name ) };` );
 		transform( name, o );
+		if ( o === mainProjector ) mainProjectorVariable = name;
 		if ( o.userData.measurement ) out( `${ name }.userData.measurement = ${ q( o.userData.measurement ) };` );
 		if ( o.userData.surfaceMark ) out( `${ name }.userData.surfaceMark = true;` );
 		if ( o.userData.projectionMask ) out( `${ name }.userData.projectionMask = ${ q( o.userData.projectionMask ) };` );
@@ -534,7 +541,7 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 
 	} else {
 
-		head.push( `const camera = new THREE.PerspectiveCamera(${ camera.fov }, innerWidth / innerHeight, ${ camera.near }, ${ camera.far });` );
+		head.push( `const camera = new THREE.PerspectiveCamera(${ camera.fov }, ${ mainProjector ? camera.aspect : 'innerWidth / innerHeight' }, ${ camera.near }, ${ camera.far });` );
 
 	}
 	head.push( `camera.position.set(${ vec( position.x, position.y, position.z ) });` );
@@ -553,7 +560,19 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 	head.push( 'renderer.setPixelRatio(devicePixelRatio);' );
 	if ( TONE[ tm ] ) head.push( `renderer.toneMapping = THREE.${ TONE[ tm ] };` );
 	if ( config.getKey( 'project/renderer/shadows' ) ) head.push( 'renderer.shadowMap.enabled = true;' );
-	head.push( 'document.body.append(renderer.domElement);   // domElement is the <canvas>' );
+	if ( textureOutput ) {
+
+		head.push( 'const outputCanvas = document.createElement("canvas");' );
+		head.push( 'const outputContext = outputCanvas.getContext("2d", {alpha:false});' );
+		head.push( 'outputCanvas.style.cssText = "display:block;width:100vw;height:100vh";' );
+		head.push( 'outputCanvas.width = renderer.domElement.width; outputCanvas.height = renderer.domElement.height;' );
+		head.push( 'document.body.append(outputCanvas);' );
+
+	} else {
+
+		head.push( 'document.body.append(renderer.domElement);   // domElement is the <canvas>' );
+
+	}
 	head.push( '// @/key' );
 	head.push( '' );
 	if ( imports.has( 'GLTFLoader' ) ) {
@@ -571,7 +590,13 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 	head.push( '// @key Scene contents | Objects, lights and their hierarchy (add() puts a child inside a parent).' );
 
 	const tail = [ '// @/key' ];
-	if ( assetBehaviors.some( ( { script } ) => script.assetBehavior === 'splat' ) ) {
+	if ( mainProjectorVariable ) {
+
+		tail.push( fitView.toString(), projectorOptics.toString(), syncProjectorView.toString() );
+		tail.push( textureOutput ? drawProjectorOutput.toString() : renderFittedView.toString() );
+
+	}
+	if ( ! textureOutput && assetBehaviors.some( ( { script } ) => script.assetBehavior === 'splat' ) ) {
 		tail.push( "const { GaussianSplatRenderer } = await import('gaussian-splat-lite');" );
 		tail.push( 'scene.add(new GaussianSplatRenderer({ renderer }));' );
 	}
@@ -617,13 +642,14 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 		tail.push( `  camera.left = ${ orthoCenter } - halfWidth;` );
 		tail.push( `  camera.right = ${ orthoCenter } + halfWidth;` );
 
-	} else {
+	} else if ( ! mainProjector ) {
 
 		tail.push( '  camera.aspect = innerWidth / innerHeight;' );
 
 	}
 	tail.push( '  camera.updateProjectionMatrix();' );
 	tail.push( '  renderer.setSize(innerWidth, innerHeight);' );
+	if ( textureOutput ) tail.push( '  outputCanvas.width = renderer.domElement.width; outputCanvas.height = renderer.domElement.height;' );
 	tail.push( '});' );
 	tail.push( '' );
 	tail.push( '// @key The loop | Called every frame with the time in milliseconds.' );
@@ -639,7 +665,10 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 	if ( assetBehaviors.length ) tail.push( '  for (const update of assetUpdates) update({time:t,delta:dt*1000});' );
 	tail.push( '  last = t;' );
 	if ( useController ) tail.push( '  controls.update(dt);' );
-	tail.push( '  renderer.render(scene, camera);' );
+	if ( mainProjectorVariable ) tail.push( `  syncProjectorView(THREE, ${ mainProjectorVariable }, camera);` );
+	if ( textureOutput && mainProjectorVariable ) tail.push( `  drawProjectorOutput(outputContext, ${ mainProjectorVariable });` );
+	else if ( mainProjectorVariable ) tail.push( '  renderFittedView(THREE, renderer, scene, camera, innerWidth, innerHeight, () => renderer.render(scene, camera));' );
+	else tail.push( '  renderer.render(scene, camera);' );
 	tail.push( '});' );
 	tail.push( '// @/key' );
 

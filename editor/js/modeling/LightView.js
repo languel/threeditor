@@ -16,25 +16,33 @@ export function fitView( rect, aspect ) {
 
 }
 
+export function syncProjectorView( THREE, object, camera ) {
+
+	const frame = object.projectorFrame || { ...projectorOptics( 1.2, 16 / 9 ), range: 20 };
+	object.getWorldPosition( camera.position );
+	camera.fov = THREE.MathUtils.radToDeg( 2 * Math.atan( frame.height ) );
+	camera.aspect = frame.width / frame.height;
+	camera.near = .01;
+	camera.far = Math.max( camera.near + .01, frame.range );
+	camera.up.setFromMatrixColumn( object.matrixWorld, 1 ).normalize();
+	const target = new THREE.Vector3().setFromMatrixColumn( object.matrixWorld, 2 ).normalize().negate().add( camera.position );
+	camera.lookAt( target );
+	camera.updateProjectionMatrix();
+	camera.updateMatrixWorld( true );
+	return camera;
+
+}
+
 export function lightViewCamera( THREE, object, camera ) {
 
 	const ortho = object.isDirectionalLight === true;
 	if ( ! camera || ortho !== ( camera.isOrthographicCamera === true ) ) camera = ortho ? new THREE.OrthographicCamera() : new THREE.PerspectiveCamera();
+	if ( isProjector( object ) ) return syncProjectorView( THREE, object, camera );
 	object.getWorldPosition( camera.position );
 	const target = new THREE.Vector3();
 	camera.up.copy( object.up );
 
-	if ( isProjector( object ) ) {
-
-		const frame = object.projectorFrame || { ...projectorOptics( 1.2, 16 / 9 ), range: 20 };
-		camera.fov = THREE.MathUtils.radToDeg( 2 * Math.atan( frame.height ) );
-		camera.aspect = frame.width / frame.height;
-		camera.near = .01;
-		camera.far = frame.range;
-		camera.up.setFromMatrixColumn( object.matrixWorld, 1 ).normalize();
-		target.setFromMatrixColumn( object.matrixWorld, 2 ).normalize().negate().add( camera.position );
-
-	} else if ( object.isSpotLight || ortho ) {
+	if ( object.isSpotLight || ortho ) {
 
 		const shadow = object.shadow;
 		const optics = shadow.camera;

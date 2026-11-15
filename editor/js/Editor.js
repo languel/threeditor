@@ -1,4 +1,4 @@
-import { hasLightView } from './modeling/LightView.js';
+import { hasLightView, lightViewCamera } from './modeling/LightView.js';
 import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
 import { isProjector, upgradeProjectorScript } from './assets/Projector.js';
 import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
@@ -687,10 +687,27 @@ Editor.prototype = {
 
 	},
 
+	get mainCameraSource() {
+
+		const uuid = this.scene.userData.mainCamera;
+		const source = this.cameras[ uuid ] || ( uuid && this.scene.getObjectByProperty( 'uuid', uuid ) );
+		return ( source?.isCamera || isProjector( source ) ) && ! hasRestriction( source, 'disabled' ) ? source : this.camera;
+
+	},
+
 	get mainCamera() {
 
-		const camera = this.cameras[ this.scene.userData.mainCamera ];
-		return camera?.isCamera && ! hasRestriction( camera, 'disabled' ) ? camera : this.camera;
+		const source = this.mainCameraSource;
+		if ( ! isProjector( source ) ) return source;
+		this.projectorMainView = lightViewCamera( THREE, source, this.projectorMainView );
+		return this.projectorMainView;
+
+	},
+
+	get mainCameraOutput() {
+
+		if ( ! isProjector( this.mainCameraSource ) ) return undefined;
+		return this.scene.userData.mainCameraOutput === 'texture' ? 'texture' : 'view';
 
 	},
 
@@ -875,8 +892,9 @@ Editor.prototype = {
 		this.setScene( scene );
 		this.activeSceneCameraUuid = json.activeSceneCamera || null;
 		if ( ! Object.hasOwn( this.scene.userData, 'mainCamera' ) ) {
-			const legacy = this.cameras[ json.mainCamera || json.viewportCamera || savedCamera.uuid ];
-			this.scene.userData.mainCamera = legacy && legacy !== this.camera ? legacy.uuid : null;
+			const uuid = json.mainCamera || json.viewportCamera || savedCamera.uuid;
+			const legacy = this.cameras[ uuid ] || ( json.mainCamera && this.scene.getObjectByProperty( 'uuid', uuid ) );
+			this.scene.userData.mainCamera = legacy && legacy !== this.camera && ( legacy.isCamera || isProjector( legacy ) ) ? legacy.uuid : null;
 		}
 		this.viewportSplit = Boolean( json.viewportSplit );
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
@@ -887,7 +905,8 @@ Editor.prototype = {
 			this.setViewportSource( viewportSource );
 
 		}
-		if ( json.mainCameraTarget ) this.controls.getCenter( this.mainCamera ).fromArray( json.mainCameraTarget );
+		if ( json.mainCameraOutput && ! Object.hasOwn( this.scene.userData, 'mainCameraOutput' ) ) this.scene.userData.mainCameraOutput = json.mainCameraOutput;
+		if ( json.mainCameraTarget && this.mainCameraSource.isCamera ) this.controls.getCenter( this.mainCameraSource ).fromArray( json.mainCameraTarget );
 		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
 		this.config.setKey( 'project/title', json.project?.title || '' );
 		this.userProjectPath = json.project?.libraryPath || '';
@@ -914,6 +933,7 @@ Editor.prototype = {
 
 		}
 
+		const mainCameraSource = this.mainCameraSource;
 		return {
 
 			metadata: {},
@@ -924,15 +944,16 @@ Editor.prototype = {
 				shadows: this.config.getKey( 'project/renderer/shadows' ),
 				shadowType: this.config.getKey( 'project/renderer/shadowType' ),
 				toneMapping: this.config.getKey( 'project/renderer/toneMapping' ),
-				cameraController: cameraControllerSettings( this, this.mainCamera ).mode || 'none',
+				cameraController: cameraControllerSettings( this, mainCameraSource ).mode || 'none',
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
 			camera: this.camera.toJSON(),
 			viewportCamera: this.viewportCamera.uuid,
 			viewportSource: this.viewportSource?.uuid,
 			viewportSplit: this.viewportSplit,
-			mainCamera: this.mainCamera.uuid,
-			mainCameraTarget: ( this.controls.getCenter?.( this.mainCamera ) || this.controls.center ).toArray(),
+			mainCamera: mainCameraSource.uuid,
+			mainCameraOutput: this.mainCameraOutput,
+			mainCameraTarget: mainCameraSource.isCamera ? ( this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,
 			activeSceneCamera: this.activeSceneCameraUuid,
 			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
 			controls: this.controls.toJSON( this.camera ),

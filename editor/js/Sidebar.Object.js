@@ -1,3 +1,4 @@
+import { openProjectorOutput } from './modeling/ProjectorOutput.js';
 import { hasLightView } from './modeling/LightView.js';
 import { canMaskLight } from './modeling/LightMask.js';
 import * as THREE from 'three';
@@ -205,17 +206,38 @@ function SidebarObject( editor ) {
 	const mainCameraButton = new UIButton( 'Set as main camera' ).onClick( () => {
 
 		const camera = editor.selected;
-		if ( ! camera?.isCamera || hasRestriction( camera, 'disabled' ) ) return;
-		const command = new SetValueCommand( editor, editor.scene, 'userData', {
-			...editor.scene.userData, mainCamera: camera === editor.camera ? null : camera.uuid
-		} );
-		command.updatable = false;
-		editor.execute( command );
-		updateCameraController( camera );
+		if ( ( ! camera?.isCamera && ! isProjector( camera ) ) || hasRestriction( camera, 'disabled' ) ) return;
+		setMainCamera( camera, 'view' );
 
 	} );
 	mainCameraRow.add( new UIText( 'Export camera' ).setClass( 'Label' ), mainCameraButton );
 	container.add( mainCameraRow );
+
+	const projectorOutputRow = new UIRow();
+	const projectorOutput = new UISelect().setOptions( { view: 'Rendered lens view', texture: 'Masked texture' } );
+	projectorOutput.dom.setAttribute( 'aria-label', 'Projector output' );
+	projectorOutput.onChange( () => setMainCamera( editor.selected, projectorOutput.getValue() ) );
+	projectorOutputRow.add( new UIText( 'Projector output' ).setClass( 'Label' ), projectorOutput );
+	container.add( projectorOutputRow );
+
+	const textureWindowButton = new UIButton( 'Open texture output' ).onClick( () => {
+
+		if ( isProjector( editor.selected ) && ! hasRestriction( editor.selected, 'disabled' ) ) openProjectorOutput( editor.selected );
+
+	} );
+	const textureWindowRow = new UIRow().add( textureWindowButton );
+	container.add( textureWindowRow );
+
+	function setMainCamera( source, output ) {
+
+		const data = { ...editor.scene.userData, mainCamera: source === editor.camera ? null : source.uuid };
+		if ( isProjector( source ) ) data.mainCameraOutput = output;
+		else delete data.mainCameraOutput;
+		const command = new SetValueCommand( editor, editor.scene, 'userData', data );
+		command.updatable = false;
+		editor.execute( command );
+
+	}
 
 	const cameraFollowRow = new UIRow();
 	const cameraFollow = new UISelect();
@@ -266,8 +288,13 @@ function SidebarObject( editor ) {
 	function updateCameraController( object ) {
 
 		const isCamera = object.isCamera && object !== editor.camera;
-		mainCameraRow.setDisplay( object.isCamera ? '' : 'none' );
-		const isMain = editor.mainCamera === object;
+		const projector = isProjector( object );
+		mainCameraRow.setDisplay( object.isCamera || projector ? '' : 'none' );
+		const isMain = editor.mainCameraSource === object;
+		projectorOutputRow.setDisplay( projector && isMain ? '' : 'none' );
+		textureWindowRow.setDisplay( projector ? '' : 'none' );
+		textureWindowButton.setDisabled( hasRestriction( object, 'disabled' ) );
+		projectorOutput.setValue( editor.mainCameraOutput || 'view' );
 		mainCameraButton.dom.textContent = isMain ? '★ Main camera' : 'Set as main camera';
 		mainCameraButton.setDisabled( isMain || hasRestriction( object, 'disabled' ) );
 		const settings = cameraControllerSettings( editor, object );
@@ -863,7 +890,7 @@ function SidebarObject( editor ) {
 
 	signals.objectChanged.add( function ( object ) {
 
-		if ( object === editor.scene && editor.selected?.isCamera ) updateCameraController( editor.selected );
+		if ( object === editor.scene && editor.selected ) updateCameraController( editor.selected );
 		let selected = editor.selected;
 		while ( selected && selected !== object ) selected = selected.parent;
 		if ( ! selected ) return;

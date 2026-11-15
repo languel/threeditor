@@ -195,7 +195,7 @@ function SidebarScene( editor ) {
 
 		}
 
-		if ( object === editor.mainCamera ) html += ' <span class="main-camera-glyph" title="Main camera for Play and export" aria-label="Main camera">★</span>';
+		if ( object === editor.mainCameraSource ) html += ' <span class="main-camera-glyph" title="Main camera for Play and export" aria-label="Main camera">★</span>';
 		html += getScript( object.uuid );
 
 		return html;

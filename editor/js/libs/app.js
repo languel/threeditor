@@ -1,3 +1,6 @@
+import { isProjector } from '../assets/Projector.js';
+import { lightViewCamera } from '../modeling/LightView.js';
+import { drawProjectorOutput, renderFittedView } from '../modeling/ProjectorOutput.js';
 import { StreamRouter } from '../streams/StreamRouter.js';
 import { SplatHost } from '../assets/SplatHost.js';
 import { PostProcessingHost } from '../PostProcessing.js';
@@ -66,7 +69,7 @@ const APP = {
 		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
-		let camera, scene;
+		let camera, scene, projector, projectorContext;
 
 		let events = {};
 		const splatHost = new SplatHost();
@@ -94,7 +97,7 @@ const APP = {
 				controller?.dispose();
 				controller = undefined;
 				renderer.dispose();
-				dom.removeChild( renderer.domElement );
+				this.canvas?.remove();
 				this.canvas = null;
 
 			}
@@ -121,14 +124,18 @@ const APP = {
 			if ( project.toneMapping !== undefined ) renderer.toneMapping = project.toneMapping;
 			if ( project.toneMappingExposure !== undefined ) renderer.toneMappingExposure = project.toneMappingExposure;
 
-			dom.appendChild( renderer.domElement );
-			this.canvas = renderer.domElement;
-
 			this.setScene( loader.parse( json.scene ) );
-			const sceneCamera = scene.getObjectByProperty( 'uuid', json.mainCamera || json.viewportCamera || json.camera.object.uuid );
-			this.setCamera( sceneCamera?.isCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : loader.parse( json.camera ) );
+			const mainUuid = json.mainCamera || scene.userData.mainCamera;
+			const sceneCamera = scene.getObjectByProperty( 'uuid', mainUuid || json.viewportCamera || json.camera.object.uuid );
+			const mainSource = sceneCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : null;
+			projector = mainUuid && isProjector( mainSource ) ? mainSource : null;
+			const textureOutput = projector && ( json.mainCameraOutput || scene.userData.mainCameraOutput ) === 'texture';
+			this.canvas = textureOutput ? document.createElement( 'canvas' ) : renderer.domElement;
+			projectorContext = textureOutput ? this.canvas.getContext( '2d', { alpha: false } ) : null;
+			dom.appendChild( this.canvas );
+			this.setCamera( projector ? lightViewCamera( THREE, projector ) : mainSource?.isCamera ? mainSource : loader.parse( json.camera ) );
 			const hasControllerScript = json.scripts?.[ camera.uuid ]?.some( script => script.cameraController === true );
-			const mode = hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
+			const mode = projector || hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
 			cameraTarget = json.mainCameraTarget || json.viewportTarget || json.controls?.center;
 			controllerOptions = mode && mode !== 'none' ? {
 				mode,
@@ -267,7 +274,7 @@ const APP = {
 		this.setCamera = function ( value ) {
 
 			camera = value;
-			setCameraAspect( camera, this.width / this.height );
+			if ( ! projector ) setCameraAspect( camera, this.width / this.height );
 
 		};
 
@@ -306,7 +313,7 @@ const APP = {
 			this.width = width;
 			this.height = height;
 
-			if ( camera ) {
+			if ( camera && ! projector ) {
 
 				setCameraAspect( camera, this.width / this.height );
 
@@ -315,6 +322,14 @@ const APP = {
 			if ( renderer ) {
 
 				renderer.setSize( width, height );
+				if ( projectorContext ) {
+
+					this.canvas.width = renderer.domElement.width;
+					this.canvas.height = renderer.domElement.height;
+					this.canvas.style.width = width + 'px';
+					this.canvas.style.height = height + 'px';
+
+				}
 				controller?.resize();
 
 			}
@@ -368,9 +383,32 @@ const APP = {
 
 			streams.tick( scene );
 			controller?.update( ( time - prevTime ) / 1000 );
-			postHost.render( renderer, scene, camera, this.width, this.height, () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) ) );
+			renderFrame();
 
 			prevTime = time;
+
+		};
+
+		const renderFrame = () => {
+
+			if ( ! this.width || ! this.height ) return;
+			if ( projectorContext ) {
+
+				drawProjectorOutput( projectorContext, projector );
+				return;
+
+			}
+			const draw = () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) );
+			if ( projector ) {
+
+				lightViewCamera( THREE, projector, camera );
+				renderFittedView( THREE, renderer, scene, camera, this.width, this.height, draw );
+
+			} else {
+
+				postHost.render( renderer, scene, camera, this.width, this.height, draw );
+
+			}
 
 		};
 
@@ -414,7 +452,7 @@ const APP = {
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 			streams.tick( scene );
 
-			postHost.render( renderer, scene, camera, this.width, this.height, () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) ) );
+			renderFrame();
 
 		};
 
@@ -434,6 +472,7 @@ const APP = {
 			streams.getParam = streams.setParam = null;
 			camera = undefined;
 			scene = undefined;
+			projector = projectorContext = null;
 
 		};
 
