@@ -51,7 +51,8 @@ function study( title, instructions, asset, cameraPosition, target ) {
 		return object;
 
 	};
-	scene.add( new THREE.HemisphereLight( 0xdde9ff, 0x424052, .38 ) );
+	const ambient = add( new THREE.HemisphereLight( 0xdde9ff, 0x424052, .38 ), 'Ambient fill' );
+	ambient.userData.threeditor = { locked: true };
 	const floor = add( new THREE.Mesh( new THREE.PlaneGeometry( 20, 14 ), new THREE.MeshStandardMaterial( { color: 0x232b38, roughness: .86 } ) ), 'Studio floor', [ 0, -.06, 2 ] );
 	floor.rotation.x = - Math.PI / 2;
 	floor.receiveShadow = true;

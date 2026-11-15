@@ -52,7 +52,10 @@ function setup( title, scan, options ) {
 	scene.name = title;
 	scene.background = new THREE.Color( survey ? 0x10151d : 0x090c15 );
 	scene.userData.lesson = { title, instructions: options.instructions, source: scan.meta.page, credit: scan.meta.credit };
-	scene.add( new THREE.HemisphereLight( 0xdce8ff, 0x686379, survey ? .54 : .57 ) );
+	const ambient = new THREE.HemisphereLight( 0xdce8ff, 0x686379, survey ? .54 : .57 );
+	ambient.name = 'Ambient fill';
+	ambient.userData.threeditor = { locked: true };
+	scene.add( ambient );
 	const camera = new THREE.PerspectiveCamera( fov, 1, .025, 80 );
 	camera.name = 'Director';
 	camera.position.fromArray( position );
@@ -74,6 +77,11 @@ function setup( title, scan, options ) {
 	capture.visible = captureVisible;
 	capture.userData.assetObject = { type: 'gaussian-splat', path: scan.path };
 	capture.userData.asset = scan.meta;
+	for ( const object of [ reference, guides, capture ] ) {
+
+		if ( object ) object.userData.threeditor = { locked: true, unselectable: true };
+
+	}
 	scripts[ capture.uuid ] = [ { ...splatScript( 'assets/' + scan.path, 'spz' ), paramValues: { opacity: survey ? .88 : .75 } } ];
 
 	function look( object, aim ) {
@@ -326,7 +334,7 @@ function stop() {
 
 const survey = setup( 'DDA Gallery · Scan and proxy', dda, {
 	position: [ 1.45, 1.61, 3.95 ], target: [ .95, 1.52, -2.65 ], survey: true, fov: 64,
-	instructions: 'Toggle the capture and reference outlines to inspect window placement. Edit the floor and walls or measure the pedestal against the scan.'
+	instructions: 'Toggle the capture and reference outlines to inspect window placement. Inspect the floor and walls or measure the pedestal against the scan.'
 } );
 ddaRoom( survey );
 await survey.save( 'dda-survey' );

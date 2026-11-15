@@ -7,6 +7,30 @@ import { isProjector } from './assets/Projector.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
 import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';
 
+const outlinerGlyphs = {
+	Scene: 'M2 12l4-7 3 4 2-3 3 6zM10.5 3.5h.01',
+	Camera: 'M2 5h8v7H2zM10 7l4-2v7l-4-2',
+	Light: 'M6 13h4M7 15h2M5.5 10c0-2-2-2-2-4.5a4.5 4.5 0 019 0c0 2.5-2 2.5-2 4.5z',
+	Projector: 'M2 5h9v6H2zM11 6l3-2v8l-3-2M4 8h2',
+	Group: 'M2 5V3h5l2 2h5v8H2z',
+	Object3D: 'M8 1v14M1 8h14M8 5l3 3-3 3-3-3z',
+	Mesh: 'M8 1.5l6 3.4v6.2L8 14.5l-6-3.4V4.9zM2 5l6 3.5L14 5M8 8.5v6',
+	Model: 'M2 5l6-3 6 3-6 3zM2 5v6l6 3 6-3V5M8 8v6',
+	Line: 'M2 12c4 0 3-8 8-8h4M1 11h2v2H1zM13 3h2v2h-2z',
+	Shape: 'M2 12l2-8 6-2 4 6-4 5z',
+	Points: 'M3 4h.01M8 2h.01M13 5h.01M7 7h.01M3 11h.01M12 11h.01M7 14h.01',
+	Scan: 'M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3M5 6h.01M10 5h.01M8 8h.01M5 11h.01M11 10h.01',
+	Geometry: 'M8 2l6 11H2zM8 2v11',
+	Material: 'M8 2a6 6 0 100 12 6 6 0 000-12zM8 2a8 8 0 010 12',
+	Script: 'M6 4L2 8l4 4M10 4l4 4-4 4'
+};
+
+function glyph( type ) {
+
+	return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ outlinerGlyphs[ type ] }"/></svg>`;
+
+}
+
 function SidebarScene( editor ) {
 
 	const signals = editor.signals;
@@ -170,12 +194,19 @@ function SidebarScene( editor ) {
 
 	function getObjectType( object ) {
 
+		const assetType = object.userData.assetObject?.type;
+		const kind = object.geometry?.userData.modeling?.kind;
+		if ( isProjector( object ) ) return 'Projector';
+		if ( assetType === 'gaussian-splat' ) return 'Scan';
+		if ( assetType === 'model' ) return 'Model';
 		if ( object.isScene ) return 'Scene';
 		if ( object.isCamera ) return 'Camera';
 		if ( object.isLight ) return 'Light';
+		if ( kind === 'shape' ) return 'Shape';
 		if ( object.isMesh ) return 'Mesh';
 		if ( object.isLine ) return 'Line';
 		if ( object.isPoints ) return 'Points';
+		if ( object.isGroup ) return 'Group';
 
 		return 'Object3D';
 
@@ -183,15 +214,17 @@ function SidebarScene( editor ) {
 
 	function buildHTML( object ) {
 
-		let html = `<span class="type ${ getObjectType( object ) }"></span> ${ escapeHTML( object.name ) }`;
+		const type = getObjectType( object );
+		let html = `<span class="type ${ type }" title="${ type === 'Line' ? 'Line or curve' : type }">${ glyph( type ) }</span> ${ escapeHTML( object.name ) }`;
 
 		if ( object.isMesh ) {
 
 			const geometry = object.geometry;
 			const material = object.material;
 
-			html += ` <span class="type Geometry"></span> ${ escapeHTML( geometry.name ) }`;
-			html += ` <span class="type Material"></span> ${ escapeHTML( getMaterialName( material ) ) }`;
+			const materialName = getMaterialName( material );
+			if ( geometry.name ) html += ` <span class="type Geometry" title="Geometry">${ glyph( 'Geometry' ) }</span> ${ escapeHTML( geometry.name ) }`;
+			if ( materialName ) html += ` <span class="type Material" title="Material">${ glyph( 'Material' ) }</span> ${ escapeHTML( materialName ) }`;
 
 		}
 
@@ -208,7 +241,7 @@ function SidebarScene( editor ) {
 
 		if ( editor.scripts[ uuid ].length === 0 ) return '';
 
-		return ' <button type="button" class="type Script" aria-label="Open script" title="Open script"></button>';
+		return ` <button type="button" class="type Script" aria-label="Open script" title="Open script">${ glyph( 'Script' ) }</button>`;
 
 	}
 

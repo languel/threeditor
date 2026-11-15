@@ -210,10 +210,6 @@ hr {
 	text-align: center;
 }
 
-#outliner .type:after {
-	content: '●';
-}
-
 /* */
 
 #outliner .Scene {
@@ -224,20 +220,24 @@ hr {
 	color: #dd8888;
 }
 
+#outliner .Projector,
 #outliner .Light {
 	color: #dddd88;
 }
 
 /* */
 
+#outliner .Group,
 #outliner .Object3D {
 	color: #aaaaee;
 }
 
+#outliner .Model,
 #outliner .Mesh {
 	color: #8888ee;
 }
 
+#outliner .Shape,
 #outliner .Line {
 	color: #88ee88;
 }
@@ -246,6 +246,7 @@ hr {
 	color: #88ee88;
 }
 
+#outliner .Scan,
 #outliner .Points {
 	color: #ee8888;
 }
@@ -261,10 +262,6 @@ hr {
 }
 
 /* */
-
-#outliner .Script:after {
-	content: '◎'
-}
 
 #outliner button.Script { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
 

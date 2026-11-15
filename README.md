@@ -51,6 +51,8 @@ Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`.
 
 Select a Gaussian scan and open **Script → Gaussian Splat** to turn on **Points only** or adjust point size in pixels. This shows one colored point at each Gaussian center. In the Gaussian view, **SH degree** sets how much view-dependent color to use from the file. Degree 0 uses the base color from every angle. Higher degrees can preserve effects such as changes in reflections as you move around, up to the degree stored in the scan.
 
+The outliner uses distinct icons for cameras, projectors, lights, models, groups, meshes, curves, shapes, points, and scans. Click the `<>` icon next to a scripted object to open its code.
+
 ## Projection mapping
 
 1. Add a **Projector** from **Add → Light**. Move and rotate the rig to aim it along local **−Z**. The wireframe shows the rectangular projection.

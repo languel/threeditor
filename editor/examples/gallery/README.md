@@ -8,6 +8,8 @@ Open **File → Examples → Captured spaces**. All three examples include the o
 | **DDA Gallery · Pedestal and wall mapping** | Select **Pedestal particles** and click **Look through** in Object, then turn on **Split view**. Adjust its projected mask and particle count or speed. The east wall carries two separate masked projections, and the animated **Orbit knot** SDF floats above the pedestal. Turn on the capture in the outliner to compare physical placement against it. |
 | **Spatial Computing Room · Alignment** | Look through **Back wall projector** to align the calibration grid against the simplified walls and capture. Switch to **Measure** to calibrate the scene from a known physical measurement. |
 
+The room reference, outlines, and scans are locked and excluded from viewport selection. Use their outliner controls to show, hide, or unlock them. The ambient fill light is also locked.
+
 The proxy geometry was fitted from the visible scan surfaces and splat positions. It provides approximate scene dimensions for alignment. Verify measurements on site before using the model for physical installation. The animated SDF uses the WebGL renderer.
 
 ## Sources
