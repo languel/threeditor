@@ -85,9 +85,37 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 test( 'Editable HTML resources follow nested examples and include lesson source assets', async () => {
 	const resources = exampleResources();
-	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 24 );
+	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 27 );
 	assert.ok( resources.includes( '../demos/fox-follow/assets/fox.glb' ) );
 	assert.ok( resources.includes( 'examples/threejs/arkanoid.app.json' ) );
 	for ( const path of resources ) assert.ok( ( await readFile( new URL( '../editor/' + path, import.meta.url ) ) ).length > 0 );
 	assert.deepEqual( exampleResources( [ { children: [ { children: [ { file: 'deep/scene.json', assets: [ { file: 'deep/model.glb' } ] } ] } ] } ] ), [ 'deep/scene.json', 'deep/model.glb' ] );
+} );
+
+test( 'Captured-space examples retain both source scans and the gallery’s independent mapping rigs', async () => {
+
+	const entries = exampleCatalog.find( entry => entry.title === 'Captured spaces' ).children;
+	assert.equal( entries.length, 3 );
+	assert.equal( entries[ 0 ].assets[ 0 ].path, entries[ 1 ].assets[ 0 ].path );
+	for ( const [ entry, count ] of [ [ entries[ 0 ], 230992 ], [ entries[ 2 ], 309343 ] ] ) {
+
+		const scan = entry.assets[ 0 ];
+		const data = await readFile( new URL( '../editor/' + scan.file, import.meta.url ) );
+		assert.equal( data.toString( 'ascii', 0, 4 ), 'NGSP' );
+		assert.equal( data.readUInt32LE( 8 ), count );
+		assert.equal( scan.meta.rights.license, 'CC0-1.0' );
+
+	}
+	const json = JSON.parse( await readFile( new URL( '../editor/' + entries[ 1 ].file, import.meta.url ) ) );
+	const scene = await new THREE.ObjectLoader().parseAsync( json.scene );
+	const pedestal = scene.getObjectByName( 'Pedestal' );
+	assert.ok( pedestal.getObjectByName( 'Pedestal body' ).receiveShadow );
+	assert.ok( pedestal.getObjectByName( 'Animated SDF · Orbit knot' ) );
+	assert.ok( scene.getObjectByName( 'Bench' ) );
+	const projectors = scene.children.filter( child => child.userData.assetObject?.type === 'projector' );
+	assert.equal( projectors.length, 3 );
+	assert.ok( projectors.every( rig => rig.userData.projectionMask.points.length >= 3 ) );
+	const particles = scene.getObjectByName( 'Pedestal particles' );
+	assert.match( json.scripts[ particles.uuid ][ 0 ].source, /projector\.attach\( feed\.canvas \)/ );
+
 } );

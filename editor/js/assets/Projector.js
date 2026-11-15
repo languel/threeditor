@@ -49,8 +49,9 @@ function projectorRuntime( THREE, root, player ) {
 	function draw() {
 
 		const video = media?.tagName === 'VIDEO';
-		const mediaWidth = video ? media.videoWidth : media?.naturalWidth;
-		const mediaHeight = video ? media.videoHeight : media?.naturalHeight;
+		const canvasSource = media?.tagName === 'CANVAS';
+		const mediaWidth = video ? media.videoWidth : canvasSource ? media.width : media?.naturalWidth;
+		const mediaHeight = video ? media.videoHeight : canvasSource ? media.height : media?.naturalHeight;
 		const sourceAspect = mediaWidth && mediaHeight ? mediaWidth / mediaHeight : 16 / 9;
 		const aspect = settings.aspect || sourceAspect;
 		if ( root.projectorFrame?.aspect !== aspect || root.projectorFrame.throwRatio !== settings.throwRatio || root.projectorFrame.range !== light.distance ) {
@@ -129,7 +130,9 @@ function projectorRuntime( THREE, root, player ) {
 		configure,
 		update() {
 
-			if ( ! settings.grid && media?.readyState >= 2 && media.currentTime !== lastTime ) {
+			if ( ! settings.grid && media?.tagName === 'CANVAS' ) {
+				draw();
+			} else if ( ! settings.grid && media?.readyState >= 2 && media.currentTime !== lastTime ) {
 				lastTime = media.currentTime;
 				draw();
 			}
@@ -153,7 +156,7 @@ function projectorRuntime( THREE, root, player ) {
 
 }
 
-export function projectorScript( path, video = false ) {
+export function projectorScript( path, video = false, canvasSource = null ) {
 
 	const source = path && JSON.stringify( 'assets/' + path );
 	return {
@@ -173,16 +176,20 @@ export function projectorScript( path, video = false ) {
 // @label decay = "Distance falloff"
 // @param shadows = true
 // @label shadows = "Cast shadows"
-// @param grid = ${ ! path }
+// @param grid = ${ ! path && ! canvasSource }
 // @label grid = "Calibration grid"
 ${ video ? '// @param playing = true\n// @label playing = "Play video"' : '' }
+${ canvasSource?.parameters || '' }
 ${ projectorOptics.toString() }
 ${ applyProjectionMask.toString() }
 ${ projectorRuntime.toString() }
-let projector;
+let projector${ canvasSource ? ', feed, current' : '' };
 function init() {
  projector = projectorRuntime( THREE, this, player );
- ${ ! source ? '' : video ? `const media = document.createElement( 'video' );
+ ${ canvasSource ? `feed = (${ canvasSource.create.toString() })( params );
+ current = params;
+ feed.update( 0, current );
+ projector.attach( feed.canvas );` : ! source ? '' : video ? `const media = document.createElement( 'video' );
  media.muted = true;
  media.playsInline = true;
  media.loop = true;
@@ -194,10 +201,15 @@ function init() {
  projector.configure( params );
 }
 function setParameters( next ) {
+ ${ canvasSource ? 'current = next;' : '' }
  projector.configure( next );
  player.requestRender?.();
 }
-${ video ? 'function update() { projector.update(); }' : '' }
+${ canvasSource ? `function update( event ) {
+ if ( current.grid ) return;
+ feed.update( event.time / 1000, current );
+ projector.update();
+}` : video ? 'function update() { projector.update(); }' : '' }
 function stop() { projector?.dispose(); }
 `
 	};

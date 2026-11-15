@@ -65,6 +65,7 @@ function Viewport( editor ) {
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	const splatHost = new SplatHost();
+	let secondarySplats = null;
 	const postHost = new PostProcessingHost();
 	let splatRenderQueued = false;
 	const queueSplatRender = () => {
@@ -1166,13 +1167,21 @@ function Viewport( editor ) {
 		if ( ! width || ! height ) return;
 		const frames = layout.update( width, height );
 		const tiled = frames.length > 1 || !! layout.optical;
+		// Each eye needs its own asynchronous Gaussian depth order.
+		if ( frames.length > 1 ) secondarySplats ||= new SplatHost();
+		else if ( secondarySplats ) {
+
+			secondarySplats.dispose();
+			secondarySplats = null;
+
+		}
 		const nav = layout.navigation;
 		const navRect = nav?.rect;
 		transformControls.camera = nav?.camera || editor.camera;
 		transformControls.viewport = tiled && navRect ?
 			new THREE.Vector4( navRect.x, height - navRect.y - navRect.height, navRect.width, navRect.height ) : null;
 
-		const draw = view => splatHost.render(
+		const draw = ( view, host = splatHost ) => host.render(
 			renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, view ) ), queueSplatRender
 		);
 		const drawGuides = view => {
@@ -1214,12 +1223,12 @@ function Viewport( editor ) {
 			renderer.setScissorTest( true );
 			try {
 
-				for ( const { rect, camera: view } of frames ) {
+				for ( const { rect, camera: view, key } of frames ) {
 
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );
 					renderer.setScissor( rect.x, y, rect.width, rect.height );
-					draw( view );
+					draw( view, key === 'source' && secondarySplats ? secondarySplats : splatHost );
 					drawGuides( view );
 
 				}

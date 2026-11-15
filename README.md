@@ -86,6 +86,8 @@ Open **Add → Mesh** and choose **Editable path**, **Editable shape**, or **Edi
 
 Open **File → Examples → Projection mapping** for **Yosemite relief**, **Canyon aperture**, and **Gallop triptych**. Each scene includes its source media and credit. [Example notes](editor/examples/projection/README.md)
 
+Open **File → Examples → Captured spaces** for the DDA gallery survey, the gallery’s pedestal and wall mapping demo, and a Spatial Computing Room alignment study. The scenes bundle the original Mediatheque splats alongside editable reference geometry. [Captured-space examples](editor/examples/gallery/README.md)
+
 ## Workspace
 
 - The four icons beside the gear toggle the **Code panel**, **sidebar**, **timeline**, and **transform toolbar**. Double-click a resize bar to collapse its panel. Hover at the corresponding edge for a temporary reveal.
