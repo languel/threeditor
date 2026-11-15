@@ -37,7 +37,8 @@ Drag into the viewport to place an asset, or use its **Add** action to place it 
 - **GLB/glTF:** the original hierarchy, rig, clips, and companion files, with viewer cameras and lights removed. The attached **Model viewer** script exposes two animation clips, blend, speed, time, loop, play, and wireframe controls. The selected model has controls in the editor viewport; they also appear in Play and exports.
 - **Images, movies, and webcams:** double-click to assign the default color map to the selected material, or add a plane if no material is selected. Use **Apply to selection…** or drop onto a viewport object or outliner row to choose the map. An empty viewport drop adds a plane. **Add webcam…** and **Add microphone…** create reusable input assets. **Use as input stream** assigns an asset as a named stream.
 - **SDF and parametric JSON:** editable code objects built from the mathematical definition, without the archive's viewer scene. Raymarched SDFs use the WebGL renderer.
-- **Audio and SPZ:** audio playback objects and editable point clouds, respectively. The SPZ view represents points and colors rather than Gaussian rendering.
+- **Audio:** playback objects with editable controls.
+- **Scans:** Gaussian PLY, SPZ, SOG, RAD and raw SPLAT use the Gaussian renderer. PCD, XYZ and vertex-only PLY become point clouds with editable point size and color. PLY with faces opens as a mesh. Import through **File → Import**, drop files into the editor, or place them from **Assets**.
 
 Use **Edit attached behavior** or the object's **Script** tab to change the script or its parameters. Placement and parameter edits support undo/redo.
 
@@ -45,6 +46,27 @@ Use **Edit attached behavior** or the object's **Script** tab to change the scri
 
 
 Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`. The builder and its vendored source modules/recording are in `tools/`; provenance and the adaptation scope are documented in [the lesson notes](editor/examples/lessons/README.md).
+
+## Projection mapping
+
+1. Add a **Projector** from **Add → Light**. Move and rotate the rig to aim it along local **−Z**. The wireframe shows the rectangular projection.
+2. Under **Object → Projection**, use **Choose media…** to select an image or video. You can also drag media from **Assets** onto the projector’s outliner row. A new projector starts with a calibration grid.
+3. In the projector’s **Script** parameters, set throw ratio (distance divided by image width), aspect ratio, intensity, range, falloff and shadows. Aspect ratio `0` follows the source. Enable **Calibration grid** to check alignment with media already assigned.
+
+Use a lit mesh material such as MeshStandardMaterial for the projection surface. With renderer shadows enabled, turn on **Cast shadow** for blockers and **Receive shadow** for projection surfaces. The projector illuminates lit meshes. Point clouds and Gaussian splats can serve as spatial references.
+
+Named browser saves and playable exports retain projector settings and source media. **Editable HTML** also retains source files for continued editing.
+
+## Paths, shapes, and meshes
+
+Open **Add → Mesh** and choose **Editable path**, **Editable shape**, or **Editable mesh**. Replace the starting points with **Clear points** and **Add points**, or edit them in place. Drag handles in the viewport, Shift-click to select several, or enter exact coordinates in **Modeling**. Press **Esc** or **Done** to return to object editing. Point and topology edits support undo and redo.
+
+- **Paths** can use straight segments or smooth curves, with open or closed ends. Uncheck **Constrain to local XY** for a spatial curve. Close a planar path to turn it into a filled shape.
+- **Shapes** can stay flat or use **Extrusion depth** to become solid projection surfaces.
+- **Editable meshes** keep their polygon faces. Select vertices in boundary order to fill a face, select two neighboring vertices to split an edge, or select all vertices of a face to extrude or delete it. New mesh and spatial path points can snap to visible mesh surfaces. **Modeling** also supports moving existing vertices on ordinary static meshes with up to 20,000 buffer vertices.
+- **Projector masks** use one editable outline in the projector’s **Modeling** tab. Click in the projector frame to draw it, or copy a closed path or shape. Choose **Light inside** for an aperture or **Block inside** for a cutout, then click **Apply mask**. The mask applies to the calibration grid, stills, and video.
+
+Open **File → Examples → Projection mapping** for **Yosemite relief**, **Canyon aperture**, and **Gallop triptych**. Each scene includes its source media and credit. [Example notes](editor/examples/projection/README.md)
 
 ## Workspace
 

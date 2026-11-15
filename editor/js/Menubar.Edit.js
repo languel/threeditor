@@ -3,12 +3,13 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 
 import { UIPanel, UIRow, UIHorizontalRule, UIText } from './libs/ui.js';
 
+import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { formatCombo } from './Keymap.js';
-import { hasRestriction } from './ObjectRestrictions.js';
+import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
 
 function MenubarEdit( editor ) {
 
@@ -116,9 +117,21 @@ function MenubarEdit( editor ) {
 
 		if ( object === null || object.parent === null ) return; // avoid cloning the camera or scene
 
-		object = clone( object );
+		const commands = withoutRuntimeChildren( object, () => {
 
-		editor.execute( new AddObjectCommand( editor, object ) );
+			const copy = clone( object );
+			const commands = [ new AddObjectCommand( editor, copy ) ];
+			const copyScanAndProjectorScripts = ( source, target ) => {
+				for ( const script of editor.scripts[ source.uuid ] || [] ) {
+					if ( [ 'splat', 'projector' ].includes( script.assetBehavior ) ) commands.push( new AddScriptCommand( editor, target, structuredClone( script ) ) );
+				}
+				source.children.forEach( ( child, index ) => copyScanAndProjectorScripts( child, target.children[ index ] ) );
+			};
+			copyScanAndProjectorScripts( object, copy );
+			return commands;
+
+		} );
+		editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( editor, commands ) );
 
 	} );
 	options.add( option );

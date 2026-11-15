@@ -217,6 +217,11 @@ function packageFiles( assets, webgpu = false ) {
 
 					input = node.arguments[ 0 ];
 
+				} else if ( node.type === 'NewExpression' && name === 'SplatMesh' && node.arguments[ 0 ]?.type === 'ObjectExpression' ) {
+
+					// Older saved splat behaviors pass the source URL directly to the constructor.
+					input = node.arguments[ 0 ].properties.find( entry => entry.key?.name === 'url' || entry.key?.value === 'url' )?.value;
+
 				} else if ( node.type === 'NewExpression' && name === 'URL' && isModuleURL( node.arguments[ 1 ] ) ) {
 
 					input = node.arguments[ 0 ];
@@ -363,7 +368,9 @@ async function collectPlayableProject( editor ) {
 	await project.moduleFile( 'three/addons/geometries/TextGeometry.js', 'index.html' );
 	await project.moduleFile( 'three/addons/controls/CameraController.js', 'js/app.js' );
 	await project.copy( 'js/app.js', 'editor/js/libs/app.js' );
-	await project.copy( 'PostProcessing.js', 'editor/js/PostProcessing.js' );
+	const postProcessing = await project.copy( 'PostProcessing.js', 'editor/js/PostProcessing.js' );
+	await project.inspect( await postProcessing.text(), 'PostProcessing.js', { runtime: false } );
+	await project.copy( 'P5Sketch.js', 'editor/js/P5Sketch.js' );
 	await project.copy( 'assets/SplatHost.js', 'editor/js/assets/SplatHost.js' );
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );

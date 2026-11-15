@@ -94,12 +94,16 @@ function generateThreeCode( editor ) {
 		}
 
 		// Anything else: inline the raw buffers so the scene still reproduces.
-		const arr = ( attr ) => '[' + Array.from( attr.array, n ).join( ', ' ) + ']';
+		const arr = ( attr ) => '[' + Array.from( { length: attr.count * attr.itemSize }, ( _, index ) =>
+			n( attr.getComponent( Math.floor( index / attr.itemSize ), index % attr.itemSize ) ) ).join( ', ' ) + ']';
 		let s = '(() => {\n    const g = new THREE.BufferGeometry();\n';
 		s += `    g.setAttribute('position', new THREE.Float32BufferAttribute(${ arr( g.attributes.position ) }, 3));\n`;
 		if ( g.attributes.normal ) s += `    g.setAttribute('normal', new THREE.Float32BufferAttribute(${ arr( g.attributes.normal ) }, 3));\n`;
 		if ( g.attributes.uv ) s += `    g.setAttribute('uv', new THREE.Float32BufferAttribute(${ arr( g.attributes.uv ) }, 2));\n`;
+		if ( g.attributes.color ) s += `    g.setAttribute('color', new THREE.Float32BufferAttribute(${ arr( g.attributes.color ) }, ${ g.attributes.color.itemSize }));\n`;
 		if ( g.index ) s += `    g.setIndex([${ Array.from( g.index.array ).join( ', ' ) }]);\n`;
+		if ( g.userData.modeling ) s += `    g.userData.modeling = ${ q( g.userData.modeling ) };\n`;
+		for ( const group of g.groups ) s += `    g.addGroup(${ group.start }, ${ group.count }, ${ group.materialIndex });\n`;
 		return s + '    return g;\n  })()';
 
 	}
@@ -297,6 +301,7 @@ function generateThreeCode( editor ) {
 				const guardedReference = childReference.replaceAll( '.children[', '?.children[' );
 				if ( followTargets.has( child.uuid ) || routedObjects.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
 				if ( child.userData.threeditor?.disabled === true ) out( `if (${ guardedReference }) ${ childReference }.visible = false;` );
+				if ( child.geometry?.userData.modeling?.kind === 'vertices' ) out( `if (${ guardedReference }?.geometry) ${ childReference }.geometry = ${ geometry( child.geometry ) };` );
 				emitModelChildOverrides( child, childReference );
 
 			} );
@@ -337,7 +342,7 @@ function generateThreeCode( editor ) {
 
 	function emitObjectInner( o, parent ) {
 
-		if ( o.isHelper ) return;
+		if ( o.isHelper || o.userData.runtimeOnly ) return;
 		if ( MODEL_RE.test( o.userData?.sourceFile || o.name ) && o.children.length > 0 ) return emitModel( o, parent );
 
 		let name;
@@ -345,8 +350,8 @@ function generateThreeCode( editor ) {
 
 			name = ident( o, o.isMesh ? 'mesh' : 'obj' );
 			const C = o.isMesh ? 'Mesh' : o.isPoints ? 'Points' : o.isLineSegments ? 'LineSegments' : 'Line';
-			const m = Array.isArray( o.material ) ? o.material[ 0 ] : o.material;
-			out( `const ${ name } = new THREE.${ C }(\n  ${ geometry( o.geometry ) },\n  ${ material( m ) }\n);` );
+			const m = Array.isArray( o.material ) ? '[ ' + o.material.map( material ).join( ', ' ) + ' ]' : material( o.material );
+			out( `const ${ name } = new THREE.${ C }(\n  ${ geometry( o.geometry ) },\n  ${ m }\n);` );
 
 		} else if ( o.isLight ) {
 
@@ -394,6 +399,7 @@ function generateThreeCode( editor ) {
 
 		if ( o.name ) out( `${ name }.name = ${ q( o.name ) };` );
 		transform( name, o );
+		if ( o.userData.projectionMask ) out( `${ name }.userData.projectionMask = ${ q( o.userData.projectionMask ) };` );
 		if ( o.isLight && o.castShadow && o.shadow ) {
 
 			const s = o.shadow;
@@ -546,10 +552,13 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 	if ( imports.size > 0 || needsMixers || usesTextures ) head.push( '' );
 	head.push( '// @key Scene contents | Objects, lights and their hierarchy (add() puts a child inside a parent).' );
 
-	const tail = [];
+	const tail = [ '// @/key' ];
+	if ( assetBehaviors.some( ( { script } ) => script.assetBehavior === 'splat' ) ) {
+		tail.push( "const { GaussianSplatRenderer } = await import('gaussian-splat-lite');" );
+		tail.push( 'scene.add(new GaussianSplatRenderer({ renderer }));' );
+	}
 	if ( assetBehaviors.length ) head.push( 'const assetUpdates = [];' );
 
-	tail.push( '// @/key' );
 	for ( const { object, script } of assetBehaviors ) {
 		tail.push( `{ // Attached editable asset behavior: ${ script.name }` );
 		tail.push( `const behavior = (function(THREE,params,player){\n${ script.source }\nreturn {init:typeof init==='function'?init:null,update:typeof update==='function'?update:null,stop:typeof stop==='function'?stop:null};}).call(${ object },THREE,${ q( script.parameters || {} ) },{dom:document.body});` );

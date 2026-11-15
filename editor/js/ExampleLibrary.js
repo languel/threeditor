@@ -78,7 +78,7 @@ function createExampleLibrary( editor ) {
 					if ( ! response.ok ) throw new Error( 'Could not load ' + asset.path );
 					const blob = await response.blob();
 					const file = new File( [ blob ], asset.path.split( '/' ).at( - 1 ), { type: blob.type || 'application/octet-stream' } );
-					return [ asset.path, { file, batch: ( entry.assets || [] ).map( asset => asset.path ) } ];
+					return [ asset.path, { file, batch: ( entry.assets || [] ).map( asset => asset.path ), asset: asset.meta } ];
 
 				} ) );
 				record = { project, sourceFiles, shading: 'preview' };

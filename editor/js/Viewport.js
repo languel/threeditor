@@ -24,6 +24,7 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
+import { ModelViewport } from './modeling/ModelViewport.js';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -58,6 +59,7 @@ function Viewport( editor ) {
 	//
 
 	let renderer = null;
+	editor.modeling = new ModelViewport( editor, container.dom, render );
 	const splatHost = new SplatHost();
 	const postHost = new PostProcessingHost();
 	let splatRenderQueued = false;
@@ -532,7 +534,7 @@ function Viewport( editor ) {
 
 			if ( controls.navigationMode() !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
 			transformControls.enabled = false;
-			const restore = () => { transformControls.enabled = true; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
+			const restore = () => { transformControls.enabled = ! editor.modeling.object; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
 			window.addEventListener( 'pointerup', restore, { once: true } );
 			window.addEventListener( 'pointercancel', restore, { once: true } );
 
@@ -1156,10 +1158,17 @@ function Viewport( editor ) {
 
 	let startTime = 0;
 	let endTime = 0;
+	let editingPoints = false;
 
 	function render() {
 
 		if ( renderer === null ) return;
+		if ( editingPoints !== Boolean( editor.modeling.object ) ) {
+
+			editingPoints = Boolean( editor.modeling.object );
+			transformControls.enabled = ! editingPoints;
+
+		}
 
 		startTime = performance.now();
 
@@ -1184,7 +1193,15 @@ function Viewport( editor ) {
 
 			renderer.autoClear = false;
 			if ( grid.visible === true ) renderer.render( grid, camera );
-			if ( sceneHelpers.visible === true ) renderer.render( sceneHelpers, camera );
+			if ( sceneHelpers.visible === true ) {
+
+				const gizmo = transformControls.getHelper();
+				const visible = gizmo.visible;
+				if ( editor.modeling.object ) gizmo.visible = false;
+				renderer.render( sceneHelpers, camera );
+				gizmo.visible = visible;
+
+			}
 			if ( renderer.xr.isPresenting !== true ) viewHelper.render( renderer );
 			renderer.autoClear = true;
 

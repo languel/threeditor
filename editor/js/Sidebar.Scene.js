@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
+import { isProjector } from './assets/Projector.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
 import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';
 
@@ -26,7 +27,7 @@ function SidebarScene( editor ) {
 		option.innerHTML = buildHTML( object );
 		addRestrictions( option, object );
 		option.value = object.id;
-		if ( object.material ) {
+		if ( object.material || isProjector( object ) ) {
 
 			option.addEventListener( 'dragover', event => {
 

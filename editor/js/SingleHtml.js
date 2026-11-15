@@ -55,7 +55,10 @@ __publishManager.setURLModifier((url) => {
 	const result = await esbuild.build( {
 		stdin: { contents: assetSetup + inlineAssets( code, 'main.js' ), resolveDir: '/', sourcefile: 'main.js', loader: 'js' },
 		bundle: true, minify: true, format: 'esm', write: false, legalComments: 'inline',
-		define: app ? { __THREEEDITOR_RENDERER__: JSON.stringify( app.project.renderer ) } : {},
+		define: {
+			__THREEEDITOR_HAS_SPLATS__: JSON.stringify( Object.hasOwn( project.imports, 'gaussian-splat-lite' ) ),
+			...( app ? { __THREEEDITOR_RENDERER__: JSON.stringify( app.project.renderer ) } : {} )
+		},
 		plugins: [ {
 			name: 'published-files',
 			setup( build ) {

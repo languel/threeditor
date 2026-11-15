@@ -1,3 +1,5 @@
+import { projectionExamples } from '../examples/projection/catalog.js';
+
 // Ordered folders and lessons. Paths resolve relative to editor/ on every host.
 const exampleCatalog = [
 	{ title: 'threejs', children: [
@@ -18,6 +20,7 @@ const exampleCatalog = [
 		{ title: 'One-line portrait', file: 'examples/streams/one-line.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/streams/serpentine-particles.app.json' }
 	] },
+	{ title: 'Projection mapping', children: projectionExamples },
 	{ title: 'lessons', children: [
 		{ title: '00 · A spinning cube', file: 'examples/lessons/00-cube.app.json' },
 		{ title: '01 · Anatomy of a scene', file: 'examples/lessons/01-anatomy.app.json' },

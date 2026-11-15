@@ -9,6 +9,15 @@ threeditor started as the `editor-experiment/` folder in `languel/threejslessons
 - Smoke-test the deployed editor, including the `/threeditor/` base path, at [GitHub Pages](https://languel.github.io/threeditor/editor/).
 - The editor still registers the upstream cleanup service worker. It unregisters itself and clears old caches. Hard-reload if an older session is serving stale modules.
 
+## Projection mapping and modeling
+
+- **Scans** use `assets/ScanFiles.js` to distinguish Gaussian PLY, vertex-only PLY, and PLY with faces. File Import and Assets share the same loader. The Gaussian runtime also loads SPZ, SOG, RAD and raw SPLAT. PCD and XYZ become editable Three.js point objects. Named saves and playable exports retain the source files used by attached behaviors.
+- **Projectors** use the editable behavior in `assets/Projector.js`. It builds a textured spotlight from a calibration grid, still, or video. The rig aims along local −Z. A projector mask stores one outline in image coordinates and clips the light on lit meshes. Gaussian splats and point clouds serve as spatial references.
+- **Modeling** stores control points and polygon boundaries in `geometry.userData.modeling`. `modeling/ModelGeometry.js` derives line samples and render triangles. `ModelViewport.js` keeps viewport handles transient and commits geometry changes through undoable editor commands. Ordinary static meshes support vertex moves up to 20,000 buffer vertices. Authored polygon meshes expose face fill, split, and extrusion.
+- **Examples** live in `editor/examples/projection/`. The three public-domain Mediatheque assets ship with the scenes. `tools/build-projection-examples.mjs` rebuilds them from a sibling Mediatheque checkout and preserves source credits in the project Assets panel.
+
+Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open **File → Examples → Projection mapping**. Move a ridge vertex in **Yosemite relief** and undo it, apply an inverted mask in **Canyon aperture**, then enter Play in **Gallop triptych** and confirm that the video advances across the three panels. The [example notes](editor/examples/projection/README.md) describe the scenes and their sources.
+
 ## Implementation map
 
 | Area | Entry points and behavior |

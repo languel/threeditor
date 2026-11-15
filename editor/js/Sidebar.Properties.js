@@ -3,6 +3,9 @@ import { UITabbedPanel } from './libs/ui.js';
 import { SidebarObject } from './Sidebar.Object.js';
 import { SidebarGeometry } from './Sidebar.Geometry.js';
 import { SidebarMaterial } from './Sidebar.Material.js';
+import { SidebarModeling } from './Sidebar.Modeling.js';
+import { editableMesh } from './modeling/ModelViewport.js';
+import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js';
 
 function SidebarProperties( editor ) {
@@ -16,6 +19,8 @@ function SidebarProperties( editor ) {
 	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ) );
 	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ) );
 	container.addTab( 'scriptTab', strings.getKey( 'sidebar/properties/script' ), new SidebarScript( editor ) );
+	container.addTab( 'modelingTab', 'Modeling', new SidebarModeling( editor ) );
+	editor.modeling.reveal = () => container.select( 'modelingTab' );
 	container.select( 'objectTab' );
 
 	for ( const tab of container.tabs ) tab.dom.addEventListener( 'dragenter', event => {
@@ -34,6 +39,7 @@ function SidebarProperties( editor ) {
 
 	const geometryTab = getTabByTabId( container.tabs, 'geometryTab' );
 	const materialTab = getTabByTabId( container.tabs, 'materialTab' );
+	const modelingTab = getTabByTabId( container.tabs, 'modelingTab' );
 	const scriptTab = getTabByTabId( container.tabs, 'scriptTab' );
 
 	function toggleTabs( object ) {
@@ -48,6 +54,8 @@ function SidebarProperties( editor ) {
 
 		scriptTab.setHidden( object === editor.camera );
 
+		modelingTab.setHidden( ! object.geometry?.userData.modeling && ! editableMesh( object ) && ! isProjector( object ) );
+
 		// set active tab
 
 		if ( container.selected === 'geometryTab' ) {
@@ -57,6 +65,10 @@ function SidebarProperties( editor ) {
 		} else if ( container.selected === 'materialTab' ) {
 
 			container.select( materialTab.isHidden() ? 'objectTab' : 'materialTab' );
+
+		} else if ( container.selected === 'modelingTab' ) {
+
+			container.select( modelingTab.isHidden() ? 'objectTab' : 'modelingTab' );
 
 		} else if ( container.selected === 'scriptTab' ) {
 

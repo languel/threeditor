@@ -1,10 +1,12 @@
 // Persistent asset records and folders, following the AMS assetStore model.
 import { isTextureAsset, isImportAsset } from '../ProjectAssets.js';
+import { scanFileKind, scanKind } from './ScanFiles.js';
 import { encodeFile, decodeFile } from './StoredFile.js';
 
 export const ASSET_MIME = 'application/x-threeditor-asset';
 export function fileKind( file ) {
-	if ( /\.(spz|sog|rad)$/i.test( file.name ) ) return 'splat';
+	const scan = scanKind( file.name );
+	if ( scan ) return scan;
 	if ( isTextureAsset( file ) ) return 'texture';
 	if ( isImportAsset( file ) ) return 'model';
 	if ( file.type.startsWith( 'video/' ) || /\.(mp4|webm|mov)$/i.test( file.name ) ) return 'video';
@@ -82,7 +84,7 @@ export class AssetLibrary {
 			if ( /\.json$/i.test( file.name ) ) {
 				try { const { mathDefinition } = await import( './MathObjects.js' ); mathDefinition( JSON.parse( await file.text() ) ); kind = 'sdf'; } catch { /* ordinary JSON keeps its existing importer */ }
 			} else if ( /\.ply$/i.test( file.name ) ) {
-				try { const { isGaussianSplatFile } = await import( './SplatObjects.js' ); if ( await isGaussianSplatFile( file ) ) kind = 'splat'; } catch { /* non-splat PLY keeps model importer */ }
+				kind = await scanFileKind( file ) || kind;
 			}
 			records.push( await this.put( { id: crypto.randomUUID(), title: file.name, kind, file, path, batch, folder, tags: [], rating: 0, created: Date.now() } ) );
 		}

@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { resolve, search, facet, assetURL } from '../editor/js/assets/Mediatheque.js';
 import { gltfDocument, gltfResourceURIs } from '../editor/js/assets/GLTFAssets.js';
 import { fileKind, folderPath } from '../editor/js/assets/AssetLibrary.js';
-import { isGaussianSplatFile, splatFileType, splatScript } from '../editor/js/assets/SplatObjects.js';
+import { isGaussianSplatFile, splatBytesToPLY, splatFileType, splatScript } from '../editor/js/assets/SplatObjects.js';
+import { scanFileKind } from '../editor/js/assets/ScanFiles.js';
 
 test( 'Catalog URLs honor a CORS host override, preserve originals, and reject executable URLs', () => {
 	const result = resolve( 'https://media.example/archive/', { id: 'fox', kind: 'model', media: 'items/fox/media.glb', thumb: 'items/fox/thumb.webp', original: 'items/fox/original.glb' } );
@@ -41,14 +42,39 @@ test( 'GLB and JSON glTF expose external resources, deduplicating embedded data'
 
 test( 'Gaussian splat detector distinguishes 3DGS PLY from ordinary mesh PLY and produces splat script', async () => {
 
-	const gsPly = new File( [ 'ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\nproperty float f_dc_0\nproperty float opacity\nend_header\n' ], 'scan.ply' );
-	const meshPly = new File( [ 'ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nend_header\n' ], 'mesh.ply' );
+	const gsPly = new File( [ 'ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\nproperty float f_dc_0\nproperty float opacity\nproperty float scale_0\nproperty float rot_0\nend_header\n' ], 'scan.ply' );
+	const geometryHeader = 'ply\nformat ascii 1.0\ncomment property float f_dc_0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n';
+	const pointsPly = new File( [ geometryHeader + 'end_header\n' ], 'points.ply' );
+	const meshPly = new File( [ geometryHeader + 'element face 1\nproperty list uchar int vertex_indices\nend_header\n' ], 'mesh.ply' );
+	const packedPly = new File( [ 'ply\nformat binary_little_endian 1.0\nelement chunk 1\nelement vertex 1\nproperty uint packed_position\nproperty uint packed_rotation\nproperty uint packed_scale\nproperty uint packed_color\nend_header\n' ], 'packed.ply' );
 	assert.equal( await isGaussianSplatFile( gsPly ), true );
 	assert.equal( await isGaussianSplatFile( meshPly ), false );
+	assert.equal( await scanFileKind( meshPly ), 'model' );
+	assert.equal( await scanFileKind( pointsPly ), 'point-cloud' );
+	assert.equal( await scanFileKind( packedPly ), 'splat' );
+	assert.equal( await scanFileKind( new File( [], 'cloud.XYZ' ) ), 'point-cloud' );
 	assert.equal( await isGaussianSplatFile( new File( [ '' ], 'room.sog' ) ), true );
 	assert.equal( splatFileType( 'assets/room.rad' ), 'rad' );
 	const script = splatScript( 'assets/scan.spz', 'spz' );
 	assert.equal( script.assetBehavior, 'splat' );
 	assert.ok( script.source.includes( 'gaussian-splat-lite' ) );
+
+} );
+
+test( 'Raw splat records convert to Gaussian PLY for the existing decoder', () => {
+
+	const record = new ArrayBuffer( 32 );
+	const input = new DataView( record );
+	input.setFloat32( 0, 2, true );
+	input.setFloat32( 12, 0.5, true );
+	new Uint8Array( record ).set( [ 255, 0, 127, 128, 255, 128, 128, 128 ], 24 );
+	const ply = splatBytesToPLY( record );
+	const marker = 'end_header\n';
+	const offset = new TextDecoder().decode( ply ).indexOf( marker ) + marker.length;
+	const vertex = new DataView( ply, offset );
+	assert.equal( vertex.getFloat32( 0, true ), 2 );
+	assert.ok( Math.abs( Math.exp( vertex.getFloat32( 12, true ) ) - 0.5 ) < 1e-6 );
+	assert.equal( vertex.getFloat32( 48, true ), 0 );
+	assert.throws( () => splatBytesToPLY( new ArrayBuffer( 31 ) ), /record length/ );
 
 } );

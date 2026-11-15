@@ -9,6 +9,10 @@ import { SetSceneCommand } from './commands/SetSceneCommand.js';
 import { LoaderUtils } from './LoaderUtils.js';
 import { isTextureAsset, storeSourceFiles } from './ProjectAssets.js';
 
+import { scanFileKind, loadScanGeometry } from './assets/ScanFiles.js';
+import { splatScript, splatFileType } from './assets/SplatObjects.js';
+import { AddScriptCommand } from './commands/AddScriptCommand.js';
+import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { GLTFImportDialog } from './GLTFImportDialog.js';
 
 import { unzipSync, strFromU8 } from 'three/addons/libs/fflate.module.js';
@@ -37,7 +41,7 @@ function Loader( editor ) {
 			.filter( key => editor.sourceFiles.has( key ) )
 			.map( key => [ key, editor.sourceFiles.get( key ).file ] ) );
 		filesMap[ path ] = entry.file;
-		scope.loadFiles( [ entry.file ], filesMap, new Map( [ [ entry.file, path ] ] ), options );
+		return scope.loadFiles( [ entry.file ], filesMap, new Map( [ [ entry.file, path ] ] ), options );
 
 	};
 
@@ -207,11 +211,8 @@ function Loader( editor ) {
 
 			manager.addHandler( /\.tga$/i, new TGALoader() );
 
-			for ( let i = 0; i < files.length; i ++ ) {
-
-				scope.loadFile( files[ i ], manager, sourcePaths.get( files[ i ] ), options );
-
-			}
+			const pending = Array.from( files, file => scope.loadFile( file, manager, sourcePaths.get( file ), options ) );
+			return Promise.all( pending );
 
 		}
 
@@ -219,17 +220,53 @@ function Loader( editor ) {
 
 	this.loadFile = function ( file, manager, sourcePath, options = {} ) {
 
-		function addObject( object ) {
+		function addObject( object, script ) {
 			object.userData.sourceFile = file.name;
 			object.userData.sourceAssetPath = sourcePath;
 			if ( options.canCommit && ! options.canCommit() ) return;
 			if ( options.position ) object.position.add( options.position );
 			if ( options.metadata ) object.userData.asset = options.metadata;
-			editor.execute( new AddObjectCommand( editor, object ) );
+			const add = new AddObjectCommand( editor, object );
+			editor.execute( script ? new MultiCmdsCommand( editor, [ add, new AddScriptCommand( editor, object, script ) ] ) : add );
+			return object;
 		}
 
 		const filename = file.name;
 		const extension = filename.split( '.' ).pop().toLowerCase();
+
+		if ( /^(ply|pcd|xyz|spz|sog|rad|splat)$/.test( extension ) ) {
+
+			return ( async () => {
+
+				const workspace = editor.sourceFiles;
+				const kind = await scanFileKind( file );
+				const script = kind === 'splat' ? splatScript( 'assets/' + sourcePath, splatFileType( filename ) ) : null;
+				const scan = script ? new THREE.Group() : await loadScanGeometry( file, kind );
+				if ( script ) scan.userData.assetObject = { type: 'gaussian-splat', path: sourcePath };
+				if ( editor.sourceFiles !== workspace || options.canCommit && ! options.canCommit() ) {
+
+					scan.geometry?.dispose();
+					scan.material?.dispose();
+					return;
+
+				}
+				const entry = workspace.get( sourcePath );
+				if ( entry && kind ) entry.asset = { ...entry.asset, kind };
+				scan.name = options.metadata?.title || filename;
+				const added = addObject( scan, script );
+				if ( entry && kind ) editor.signals.assetsChanged.dispatch();
+				return added;
+
+			} )().catch( error => {
+
+				if ( options.canCommit ) throw error;
+				console.error( 'Scan import:', error );
+				editor.assetBrowser?.status?.( 'Scan import: ' + error.message, true );
+				editor.assetBrowser?.reveal?.();
+
+			} );
+
+		}
 
 		const reader = new FileReader();
 		reader.addEventListener( 'progress', function ( event ) {
@@ -664,67 +701,6 @@ function Loader( editor ) {
 
 			}
 
-			case 'pcd':
-
-			{
-
-				reader.addEventListener( 'load', async function ( event ) {
-
-					const contents = event.target.result;
-
-					const { PCDLoader } = await import( 'three/addons/loaders/PCDLoader.js' );
-
-					const points = new PCDLoader().parse( contents );
-					points.name = filename;
-
-					addObject( points );
-
-				}, false );
-				reader.readAsArrayBuffer( file );
-
-				break;
-
-			}
-
-			case 'ply':
-
-			{
-
-				reader.addEventListener( 'load', async function ( event ) {
-
-					const contents = event.target.result;
-
-					const { PLYLoader } = await import( 'three/addons/loaders/PLYLoader.js' );
-
-					const geometry = new PLYLoader().parse( contents );
-					let object;
-
-					if ( geometry.index !== null ) {
-
-						const material = new THREE.MeshStandardMaterial();
-
-						object = new THREE.Mesh( geometry, material );
-						object.name = filename;
-
-					} else {
-
-						const material = new THREE.PointsMaterial( { size: 0.01 } );
-						material.vertexColors = geometry.hasAttribute( 'color' );
-
-						object = new THREE.Points( geometry, material );
-						object.name = filename;
-
-					}
-
-					addObject( object );
-
-				}, false );
-				reader.readAsArrayBuffer( file );
-
-				break;
-
-			}
-
 			case 'stl':
 
 			{
@@ -905,33 +881,6 @@ function Loader( editor ) {
 					const result = new VRMLLoader().parse( contents );
 
 					addObject( result );
-
-				}, false );
-				reader.readAsText( file );
-
-				break;
-
-			}
-
-			case 'xyz':
-
-			{
-
-				reader.addEventListener( 'load', async function ( event ) {
-
-					const contents = event.target.result;
-
-					const { XYZLoader } = await import( 'three/addons/loaders/XYZLoader.js' );
-
-					const geometry = new XYZLoader().parse( contents );
-
-					const material = new THREE.PointsMaterial();
-					material.vertexColors = geometry.hasAttribute( 'color' );
-
-					const points = new THREE.Points( geometry, material );
-					points.name = filename;
-
-					addObject( points );
 
 				}, false );
 				reader.readAsText( file );

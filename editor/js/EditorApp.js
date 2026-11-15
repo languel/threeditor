@@ -99,6 +99,7 @@ async function startEditor( portable = null ) {
 	document.body.appendChild( animationResizer.dom );
 
 	const sidebarDock = new PanelDock( editor, sidebar.dom, resizer.dom, 'right' );
+	editor.modeling.show = () => { sidebar.select( 'scene' ); sidebarDock.toggle( true ); editor.modeling.reveal(); };
 	editor.assetBrowser.reveal = () => { sidebar.select( 'assets' ); sidebarDock.toggle( true ); };
 	editor.assetBrowser.bindViewport( viewport.dom );
 	const timelineDock = new PanelDock( editor, animation.dom, animationResizer.dom, 'bottom' );

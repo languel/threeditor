@@ -5,7 +5,8 @@ import { SetValueCommand } from './commands/SetValueCommand.js';
 import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
 import { AssetLibrary, ASSET_MIME, fileKind, folderPath } from './assets/AssetLibrary.js';
-import { AssetController, isInputAsset, isMapAsset, isMovingAsset } from './assets/AssetController.js';
+import { isProjector } from './assets/Projector.js';
+import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia } from './assets/AssetController.js';
 import { loadCatalog, mediathequeBase, search, facet, creditLine, state } from './assets/Mediatheque.js';
 import { textureEntries } from './AssetBrowser.js';
 
@@ -97,14 +98,14 @@ export function SidebarAssets( editor ) {
 	button( 'Cancel', controller.cancelPicker, picker );
 	controller.open = options => {
 		controller.picker = options; picker.hidden = false;
-		pickerLabel.textContent = options.kind === 'texture' ? 'Choose a texture' : options.kind === 'input' ? 'Choose a media input asset' : 'Choose an asset to import';
-		if ( options.kind === 'input' ) { kind.value = 'all'; query.value = ''; }
+		pickerLabel.textContent = options.kind === 'texture' ? 'Choose a texture' : options.kind === 'input' ? 'Choose a media input asset' : options.kind === 'projector' ? 'Choose projector media' : 'Choose an asset to import';
+		if ( [ 'input', 'projector' ].includes( options.kind ) ) { kind.value = 'all'; query.value = ''; }
 		controller.reveal?.(); refresh(); query.focus();
 	};
 	const tools = el( 'div', undefined, 'asset-tools' ); panel.dom.append( tools );
 	const query = el( 'input' ); query.type = 'search'; query.placeholder = 'Search assets or #tag…'; query.setAttribute( 'aria-label', 'Search assets' ); tools.append( query );
 	query.addEventListener( 'input', draw );
-	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'inputs', 'Input streams' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
+	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'inputs', 'Input streams' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'point-cloud', 'Point clouds' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
 	const actions = el( 'div', undefined, 'asset-actions' ); panel.dom.append( actions );
 	const input = el( 'input' ); input.type = 'file'; input.multiple = true; input.hidden = true;
 	const directory = el( 'input' ); directory.type = 'file'; directory.multiple = true; directory.webkitdirectory = true; directory.hidden = true;
@@ -166,7 +167,15 @@ export function SidebarAssets( editor ) {
 	} ), actions );
 	for ( const node of [ input, directory ] ) node.addEventListener( 'change', () => controller.run( async () => {
 		if ( ! node.files.length ) return;
-		await library.importFiles( node.files, source === 'mine' ? folder : '' ); node.value = ''; source = 'mine'; await refresh();
+		const files = Array.from( node.files );
+		node.value = '';
+		const activePicker = controller.picker;
+		if ( activePicker?.onUpload ) {
+			await activePicker.onUpload( files );
+			if ( activePicker === controller.picker ) controller.cancelPicker();
+			return;
+		}
+		await library.importFiles( files, source === 'mine' ? folder : '' ); source = 'mine'; await refresh();
 	} ) );
 	const archiveTools = el( 'details', undefined, 'asset-catalog-settings' ); archiveTools.append( el( 'summary', 'Catalog connection' ) );
 	const base = el( 'input' ); base.type = 'url'; base.value = mediathequeBase(); base.setAttribute( 'aria-label', 'Mediatheque catalog base URL' ); archiveTools.append( base );
@@ -397,7 +406,8 @@ export function SidebarAssets( editor ) {
 			if ( source !== 'catalog' && query.value && folder && r.folder !== folder && ! r.folder?.startsWith( folder + '/' ) ) return false;
 			if ( controller.picker?.kind === 'texture' && r.kind !== 'texture' && ! ( controller.picker.moving && isMovingAsset( r ) ) ) return false;
 			if ( controller.picker?.kind === 'input' && ! isInputAsset( r ) ) return false;
-			if ( controller.picker?.kind === 'import' && r.kind !== 'model' ) return false;
+			if ( controller.picker?.kind === 'projector' && ! isProjectorMedia( r ) ) return false;
+			if ( controller.picker?.kind === 'import' && ! [ 'model', 'point-cloud', 'splat' ].includes( r.kind ) ) return false;
 			return true;
 		} ).sort( ( a, b ) => ( merged || kind.value === 'inputs' ? inputRank( a ) - inputRank( b ) : 0 ) || a.title.localeCompare( b.title ) );
 		if ( ! visible.length ) grid.append( el( 'p', source === 'catalog' && state.status === 'loading' ? 'Loading catalog…' : 'No matching assets. Upload files, add a URL, or browse Mediatheque.' ) );
@@ -411,7 +421,7 @@ export function SidebarAssets( editor ) {
 			if ( ! controller.picker ) renameAssetLabel( title, card, record );
 			let pickedFromSlot = false;
 			const choose = event => {
-				if ( [ 'texture', 'input' ].includes( controller.picker?.kind ) ) {
+				if ( [ 'texture', 'input', 'projector' ].includes( controller.picker?.kind ) ) {
 					pickedFromSlot = true;
 					if ( event.detail <= 1 ) use( record );
 					return;
@@ -462,8 +472,9 @@ export function SidebarAssets( editor ) {
 		if ( record.credit ) detail.append( el( 'p', record.credit, 'asset-credit' ) );
 		if ( record.rights?.license ) detail.append( el( 'p', record.rights.license ) );
 		const row = el( 'div', undefined, 'asset-actions' ); detail.insertBefore( row, detail.children[ 1 ] || null );
-		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add Gaussian splat', landmark: 'Add landmark visualization', 'landmark-texture': 'Add landmark texture' };
-		if ( ! [ 'texture', 'input' ].includes( controller.picker?.kind ) && ( labels[ record.kind ] || controller.picker ) ) button( controller.picker ? 'Choose' : labels[ record.kind ], () => use( record ), row );
+		const labels = { model: 'Add model', texture: 'Add image plane', image: 'Add image plane', animation: 'Add animated plane', video: 'Add video plane', webcam: 'Add webcam plane', sdf: 'Add code object', audio: 'Add audio object', splat: 'Add Gaussian splat', 'point-cloud': 'Add point cloud', landmark: 'Add landmark visualization', 'landmark-texture': 'Add landmark texture' };
+		if ( ! [ 'texture', 'input', 'projector' ].includes( controller.picker?.kind ) && ( labels[ record.kind ] || controller.picker ) ) button( controller.picker ? 'Choose' : labels[ record.kind ], () => use( record ), row );
+		if ( ! controller.picker && isProjector( editor.selected ) && isProjectorMedia( record ) ) button( 'Set projector media', () => controller.run( () => controller.applyToObject( record.id, editor.selected ) ), row );
 		if ( isMapAsset( record ) && ! controller.picker && editor.selected?.material ) button( 'Apply to selection…', () => controller.run( () => controller.applyToObject( record.id, editor.selected ) ), row );
 		if ( ! controller.picker && isInputAsset( record ) ) button( 'Use as input stream', () => controller.run( async () => {
 			const entry = await controller.materialize( record.id );

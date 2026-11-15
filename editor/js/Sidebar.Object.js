@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';
 import { UIBoolean } from './libs/ui.three.js';
+import { isProjector } from './assets/Projector.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 
 import { SetUuidCommand } from './commands/SetUuidCommand.js';
@@ -80,6 +81,18 @@ function SidebarObject( editor ) {
 	objectTypeRow.add( objectType );
 
 	container.add( objectTypeRow );
+
+	const projectorMedia = new UIRow().setDisplay( 'none' );
+	projectorMedia.add( new UIText( 'Projection' ).setClass( 'Label' ) );
+	projectorMedia.add( new UIButton( 'Choose media…' ).onClick( () => {
+
+		const object = editor.selected;
+		const browser = editor.assetBrowser;
+		const epoch = browser.epoch;
+		browser.open( { kind: 'projector', onPick: entry => browser.setProjectorMedia( entry, object, epoch ) } );
+
+	} ) );
+	container.add( projectorMedia );
 
 	// uuid
 
@@ -870,7 +883,7 @@ function SidebarObject( editor ) {
 
 		}
 
-		objectType.setValue( object.type );
+		objectType.setValue( isProjector( object ) ? 'Projector' : object.type );
 
 		objectUUID.setValue( object.uuid );
 		objectName.setValue( object.name );

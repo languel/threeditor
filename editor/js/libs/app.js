@@ -352,7 +352,7 @@ const APP = {
 
 		let time, startTime, prevTime;
 
-		function animate() {
+		const animate = () => {
 
 			time = performance.now();
 
@@ -372,7 +372,7 @@ const APP = {
 
 			prevTime = time;
 
-		}
+		};
 
 		this.play = function () {
 

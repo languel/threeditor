@@ -3,9 +3,32 @@ import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { mathDefinition, mathScript, parametricGeometry } from '../editor/js/assets/MathObjects.js';
 import { modelScript } from '../editor/js/assets/ModelBehavior.js';
+import { projectorOptics, projectorScript } from '../editor/js/assets/Projector.js';
 import { serializeScript, scriptParams, scriptSourceForExecution } from '../editor/js/ScriptParams.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
-import { hasRestriction, isVisible, withEnabledObjects } from '../editor/js/ObjectRestrictions.js';
+import { hasRestriction, isVisible, withEnabledObjects, withoutRuntimeChildren } from '../editor/js/ObjectRestrictions.js';
+
+test('Projector throw ratio defines the optical frame and runtime lights stay out of saved scenes', () => {
+ const frame = projectorOptics(2, 16 / 9);
+ const distance = 8;
+ assert.equal(2 * frame.width * distance, 4);
+ assert.equal(frame.width / frame.height, 16 / 9);
+ assert.ok(frame.radius > Math.hypot(frame.width, frame.height));
+ const scene = new THREE.Scene(), projector = new THREE.Group(), light = new THREE.SpotLight();
+ light.userData.runtimeOnly = true;
+ projector.name = 'Projector';
+ projector.userData.assetObject = {type:'projector'};
+ scene.add(projector);
+ projector.add(light);
+ const json = withoutRuntimeChildren(scene, () => scene.toJSON());
+ assert.equal(json.object.children[0].children, undefined);
+ assert.equal(projector.children[0], light);
+ const script = projectorScript('test.webm', true);
+ assert.equal(serializeScript(script).parameters.playing, true);
+ const exported = generateThreeCode({scene,camera:new THREE.PerspectiveCamera(),scripts:{[projector.uuid]:[script]},config:{getKey(){}}});
+ assert.match(exported.code, /media\.src = "assets\/test\.webm"/);
+ assert.equal((exported.code.match(/new THREE\.SpotLight\(/g) || []).length, 1);
+});
 
 test('Disabled groups hide their descendants without changing saved visibility', () => {
  const scene = new THREE.Scene(), group = new THREE.Group();

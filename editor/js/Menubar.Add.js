@@ -2,6 +2,9 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow } from './libs/ui.js';
 
+import { modelData, modelObject } from './modeling/ModelGeometry.js';
+import { projectorScript } from './assets/Projector.js';
+import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 
@@ -62,6 +65,21 @@ function MenubarAdd( editor ) {
 
 	const meshSubmenu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
 	meshSubmenuTitle.add( meshSubmenu );
+
+	for ( const [ kind, label ] of [ [ 'path', 'Editable path' ], [ 'shape', 'Editable shape' ], [ 'mesh', 'Editable mesh' ] ] ) {
+
+		option = new UIRow().setClass( 'option' ).setTextContent( label );
+		option.onClick( () => {
+
+			const object = modelObject( THREE, modelData( kind ), label );
+			editor.execute( new AddObjectCommand( editor, object ) );
+			editor.modeling.show?.();
+			editor.modeling.start( object );
+
+		} );
+		meshSubmenu.add( option );
+
+	}
 
 	// Mesh / Box
 
@@ -492,6 +510,26 @@ function MenubarAdd( editor ) {
 			new AddObjectCommand( editor, light.target ),
 			new AddObjectCommand( editor, light )
 		] ) );
+
+	} );
+	lightSubmenu.add( option );
+
+	// Light / Projector
+
+	option = new UIRow().setClass( 'option' ).setTextContent( 'Projector' );
+	option.onClick( function () {
+
+		const rig = new THREE.Group();
+		rig.name = 'Projector';
+		rig.userData.assetObject = { type: 'projector' };
+		rig.position.set( 0, 2, 4 );
+		rig.rotation.x = - Math.atan2( 2, 4 );
+		const command = new MultiCmdsCommand( editor, [
+			new AddObjectCommand( editor, rig ),
+			new AddScriptCommand( editor, rig, projectorScript() )
+		] );
+		command.name = 'Add Projector';
+		editor.execute( command );
 
 	} );
 	lightSubmenu.add( option );

@@ -7,7 +7,8 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mathScript } from './MathObjects.js';
 import { evaluateAssetScript } from './AssetRuntime.js';
 import { loadAssetTexture } from './AssetTexture.js';
-import { splatFileType } from './SplatObjects.js';
+import { scanFileKind, loadScanGeometry } from './ScanFiles.js';
+import { splatFileType, splatBytesToPLY } from './SplatObjects.js';
 
 const CANONICAL_POSE = [
 	[ 0.50, 0.21 ], // 0 nose
@@ -305,7 +306,13 @@ export class AssetPreview {
 				}
 				return;
 			}
-		if ( ! [ 'model', 'sdf', 'splat', 'texture' ].includes( record.kind ) ) { message.textContent = 'No visual preview for this file type.'; return; }
+		if ( record.kind === 'model' && /\.ply(?:[?#]|$)/i.test( record.file?.name || url ) ) {
+			const file = record.file || await this.editor.assetBrowser.fetchFile( url );
+			const kind = await scanFileKind( file );
+			record = { ...record, file, kind: ! kind || kind === 'model' ? 'scan-mesh' : kind };
+			if ( dead || revision !== this.revision ) return;
+		}
+		if ( ! [ 'model', 'scan-mesh', 'point-cloud', 'sdf', 'splat', 'texture' ].includes( record.kind ) ) { message.textContent = 'No visual preview for this file type.'; return; }
 			const renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
 			renderer.setPixelRatio( Math.min( devicePixelRatio, 2 ) ); renderer.setSize( Math.max( host.clientWidth, 260 ), 210 );
 			disposers.push( () => { renderer.setAnimationLoop( null ); renderer.dispose(); renderer.forceContextLoss(); } );
@@ -331,6 +338,9 @@ export class AssetPreview {
 				} else if ( /\.gl(tf|b)(?:[?#]|$)/i.test( url ) ) { const result = await loader.loadAsync( url ); object = result.scene; clips = result.animations; }
 				else { message.textContent = 'Interactive previews currently support GLB and glTF models.'; return; }
 				const remove = []; object.traverse( child => { if ( child.isCamera || child.isLight ) remove.push( child ); } ); remove.forEach( node => node.removeFromParent() );
+			} else if ( record.kind === 'point-cloud' || record.kind === 'scan-mesh' ) {
+				const file = record.file || await this.editor.assetBrowser.fetchFile( url );
+				object = await loadScanGeometry( file, record.kind === 'scan-mesh' ? 'model' : record.kind );
 			} else if ( record.kind === 'sdf' ) {
 				const response = record.file || await fetch( url ).then( r => { if ( ! r.ok ) throw new Error( 'SDF request failed.' ); return r; } );
 				const definition = JSON.parse( await response.text() );
@@ -338,10 +348,17 @@ export class AssetPreview {
 				const runtime = evaluateAssetScript( object, mathScript( definition ), {}, scene, camera ); runtime.init.call( object );
 			} else if ( record.kind === 'splat' ) {
 				const { SplatMesh, GaussianSplatRenderer } = await import( 'gaussian-splat-lite' );
+				const fileType = splatFileType( record.file?.name || url );
+				const file = record.file || await this.editor.assetBrowser.fetchFile( url );
+				const input = fileType === 'splat' ?
+					{ fileBytes: splatBytesToPLY( await file.arrayBuffer() ), fileType: 'ply' } :
+					{ file, fileType };
+				if ( dead || revision !== this.revision ) return;
 				splatRenderer = new GaussianSplatRenderer( { renderer } );
+				disposers.push( () => splatRenderer.dispose() );
 				scene.add( splatRenderer );
-				object = new SplatMesh( record.file ? { file: record.file, fileType: splatFileType( record.file.name ) } : { url, fileType: splatFileType( url ) } );
-				disposers.push( () => { splatRenderer.dispose(); object.dispose(); } );
+				object = new SplatMesh( input );
+				disposers.push( () => object.dispose() );
 				await object.initialized;
 			} else {
 				const texture = record.texture || await loadAssetTexture( this.editor, record.file || await this.editor.assetBrowser.fetchFile( url ), record.projectPath || '__preview__' );

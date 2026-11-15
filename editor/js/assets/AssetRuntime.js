@@ -34,7 +34,13 @@ export class AssetRuntime {
 		for ( const name of [ 'objectAdded', 'objectRemoved', 'sceneGraphChanged', 'projectLoaded', 'editorCleared', 'scriptAdded', 'scriptRemoved' ] ) editor.signals[ name ].add( rebuild );
 		editor.signals.objectChanged.add( ( object, attribute ) => {
 
-			if ( attribute === 'userData' ) this.refresh();
+			if ( attribute !== 'userData' ) return;
+			this.refresh();
+			for ( const runtime of this.active.values() ) {
+
+				if ( runtime.object === object && runtime.script.assetBehavior === 'projector' ) runtime.setParameters?.call( object, serializeScript( runtime.script ).parameters || {} );
+
+			}
 
 		} );
 		editor.signals.scriptChanged.add( ( script, attribute ) => {
@@ -71,7 +77,7 @@ export class AssetRuntime {
 					if ( ! source.includes( literal ) ) continue;
 					const url = URL.createObjectURL( file ); urls.push( url ); source = source.replaceAll( literal, JSON.stringify( url ) );
 				}
-				const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, requestRender: () => editor.signals.objectChanged.dispatch( object ), assetParameterChanged: ( target, key, value ) => {
+				const player = { streams: editor.streams, dom: document.querySelector( '#viewport' ) || document.body, reportAssetError: message => editor.assetBrowser?.status?.( message, true ), requestRender: () => editor.signals.objectChanged.dispatch( object ), assetParameterChanged: ( target, key, value ) => {
 					this.changingHUD = true;
 					try { editor.execute( new SetScriptValueCommand( editor, target, script, 'paramValues', { ...script.paramValues, [ key ]: value } ) ); } finally { this.changingHUD = false; }
 				} };
@@ -102,10 +108,10 @@ export class AssetRuntime {
 	dispose() { for ( const script of this.active.keys() ) this.stop( script ); }
 }
 
-export function mediaPlaybackJSON( json, sourceFiles ) {
+export function resolvePlaybackAssets( json, sourceFiles ) {
 	const urls = [];
 	for ( const scripts of Object.values( json.scripts || {} ) ) for ( const script of scripts ) {
-		if ( script.assetBehavior !== 'media' ) continue;
+		if ( ! script.assetBehavior ) continue;
 		for ( const [ path, { file } ] of sourceFiles || [] ) {
 			const literal = JSON.stringify( 'assets/' + path );
 			if ( ! script.source.includes( literal ) ) continue;

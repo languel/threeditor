@@ -1,6 +1,7 @@
 import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
+import { isProjector, createProjectorHelper, upgradeProjectorScript } from './assets/Projector.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
-import { hasRestriction } from './ObjectRestrictions.js';
+import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
@@ -201,6 +202,7 @@ Editor.prototype = {
 
 		object.traverse( function ( child ) {
 
+			if ( child.userData.runtimeOnly ) return;
 			if ( child.geometry !== undefined ) scope.addGeometry( child.geometry );
 			if ( child.material !== undefined ) scope.addMaterial( child.material );
 
@@ -240,6 +242,7 @@ Editor.prototype = {
 
 		object.traverse( function ( child ) {
 
+			if ( child.userData.runtimeOnly ) return;
 			scope.removeCamera( child );
 			scope.removeHelper( child );
 
@@ -421,6 +424,10 @@ Editor.prototype = {
 
 					helper = new THREE.CameraHelper( object );
 
+				} else if ( isProjector( object ) ) {
+
+					helper = createProjectorHelper( THREE, object );
+
 				} else if ( object.isPointLight ) {
 
 					helper = new THREE.PointLightHelper( object, 1 );
@@ -485,6 +492,7 @@ Editor.prototype = {
 					const picker = new THREE.Mesh( geometry, material );
 					picker.name = 'picker';
 					picker.userData.object = object;
+					if ( isProjector( object ) ) picker.scale.setScalar( 0.1 );
 					helper.add( picker );
 
 				}
@@ -822,6 +830,7 @@ Editor.prototype = {
 
 				upgradeModelScript( script, object );
 				upgradeMediaScript( script, asset );
+				upgradeProjectorScript( script );
 				if ( asset?.type === 'math' ) upgradeMathScript( script, asset.definition );
 
 			}
@@ -885,7 +894,7 @@ Editor.prototype = {
 			activeSceneCamera: this.activeSceneCameraUuid,
 			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
 			controls: this.controls.toJSON( this.camera ),
-			scene: this.scene.toJSON(),
+			scene: withoutRuntimeChildren( scene, () => scene.toJSON() ),
 			scripts: Object.fromEntries( Object.entries( scripts ).map( ( [ uuid, list ] ) => [ uuid, list.map( serializeScript ) ] ) ),
 			history: this.history.toJSON(),
 			backgroundType: this.backgroundType,

@@ -1,7 +1,7 @@
 import { UIPanel } from './libs/ui.js';
 import * as THREE from 'three';
 import { APP } from './libs/app.js';
-import { mediaPlaybackJSON } from './assets/AssetRuntime.js';
+import { resolvePlaybackAssets } from './assets/AssetRuntime.js';
 import { serializeScript } from './ScriptParams.js';
 import { setupRenderEnvironment } from './RenderEnvironment.js';
 
@@ -83,7 +83,7 @@ function Player( editor ) {
 		try {
 
 			const json = editor.toJSON();
-			disposeMediaURLs(); disposeMediaURLs = mediaPlaybackJSON( json, editor.sourceFiles );
+			disposeMediaURLs(); disposeMediaURLs = resolvePlaybackAssets( json, editor.sourceFiles );
 			await player.load( json );
 			if ( container.dom.style.display === 'none' ) return;
 

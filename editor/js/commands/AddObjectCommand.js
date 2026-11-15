@@ -1,3 +1,4 @@
+import { withoutRuntimeChildren } from '../ObjectRestrictions.js';
 import { Command } from '../Command.js';
 import { ObjectLoader } from 'three';
 
@@ -42,7 +43,7 @@ class AddObjectCommand extends Command {
 
 		const output = super.toJSON( this );
 
-		output.object = this.object.toJSON();
+		output.object = withoutRuntimeChildren( this.object, () => this.object.toJSON() );
 
 		return output;
 

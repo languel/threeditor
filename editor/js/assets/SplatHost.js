@@ -35,7 +35,7 @@ export class SplatHost {
 
 		}
 		if ( this.splatRenderer ) return this.splatRenderer;
-		if ( ! this.loading && renderer ) {
+		if ( ! this.loading && renderer && ( typeof __THREEEDITOR_HAS_SPLATS__ === 'undefined' || __THREEEDITOR_HAS_SPLATS__ ) ) {
 
 			this.loading = import( 'gaussian-splat-lite' )
 				.then( ( { GaussianSplatRenderer } ) => {

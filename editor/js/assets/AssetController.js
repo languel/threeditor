@@ -3,12 +3,13 @@ import * as THREE from 'three';
 import { storeSourceFiles, isImageAsset, isImportAsset, isTextureAsset } from '../ProjectAssets.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { AddScriptCommand } from '../commands/AddScriptCommand.js';
+import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
+import { isProjector, projectorScript } from './Projector.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { mathDefinition, mathScript } from './MathObjects.js';
 import { modelScript } from './ModelBehavior.js';
 import { mediaPlane, mediaScript, movingTextureScript, webcamPlane } from './MediaObjects.js';
 import { landmarkScript, landmarkTextureScript } from './LandmarkObjects.js';
-import { splatScript, splatFileType } from './SplatObjects.js';
 import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js';
 import { ASSET_MIME } from './AssetLibrary.js';
 import { loadAssetTexture } from './AssetTexture.js';
@@ -20,6 +21,8 @@ import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 export const isMovingAsset = record => [ 'video', 'webcam' ].includes( record.kind ) || ( record.kind === 'animation' && !! ( record.abs?.video || /\.(mp4|webm|mov)(?:$|[?#])/i.test( record.url || record.file?.name || '' ) ) );
 export const isMapAsset = record => isMovingAsset( record ) || [ 'image', 'texture', 'animation' ].includes( record.kind );
 export const isStillInput = record => [ 'image', 'texture' ].includes( record.kind ) && ( ! record.file || isImageAsset( record.file ) );
+export const isProjectorMedia = record => record.kind !== 'webcam' && isMovingAsset( record ) ||
+	( [ 'image', 'texture', 'animation' ].includes( record.kind ) && ! record.texture && ( ! record.file || isImageAsset( record.file ) ) );
 export const isInputAsset = record => isMovingAsset( record ) || isStillInput( record ) || [ 'audio', 'microphone' ].includes( record.kind );
 
 export class AssetController {
@@ -52,7 +55,7 @@ export class AssetController {
 	async filesFor( record ) {
 		const { editor } = this;
 		const projectEntry = record.projectPath && editor.sourceFiles.get( record.projectPath );
-		const file = projectEntry?.file || record.file || await this.fetchFile( record.url );
+		const file = projectEntry?.file || record.file || await this.fetchFile( record.kind === 'animation' && record.abs?.video || record.url );
 		const fileMap = Object.create( null );
 		if ( projectEntry ) {
 			for ( const path of projectEntry.batch || [ record.projectPath ] ) {
@@ -105,12 +108,30 @@ export class AssetController {
 		const record = await this.record( id );
 		if ( ! isMapAsset( record ) ) throw new Error( 'Choose an image or texture to assign a map.' );
 		if ( epoch !== this.epoch || this.editor.scene.getObjectByProperty( 'uuid', object?.uuid ) !== object ) throw new Error( 'The texture target is no longer in the scene.' );
+		if ( isProjector( object ) ) return this.setProjectorMedia( await this.materialize( id ), object, epoch );
 		const choice = await chooseTextureMap( object, materialSlot );
 		if ( ! choice ) return;
 		if ( choice.plane ) return this.use( id, { position, mode: 'plane' } );
 		if ( epoch !== this.epoch || this.editor.scene.getObjectByProperty( 'uuid', object.uuid ) !== object ) throw new Error( 'The texture target is no longer in the scene.' );
 		return this.use( id, { ...choice, object, mode: 'texture' } );
 	}
+	setProjectorMedia( entry, object, epoch = this.epoch ) {
+
+		if ( epoch !== this.epoch || this.editor.scene.getObjectByProperty( 'uuid', object.uuid ) !== object || hasRestriction( object, 'locked' ) ) {
+			throw new Error( 'The projector changed while loading media. Choose it again.' );
+		}
+		if ( ! entry.path || ! entry.file || ! isProjectorMedia( entry.record ) ) throw new Error( 'Choose an image or video file for the projector.' );
+		const script = this.editor.scripts[ object.uuid ]?.find( script => script.assetBehavior === 'projector' );
+		if ( ! script ) throw new Error( 'The projector behavior is missing.' );
+		const source = projectorScript( entry.path, isMovingAsset( entry.record ) ).source;
+		const commands = [ new SetScriptValueCommand( this.editor, object, script, 'source', source ) ];
+		if ( script.paramValues?.grid === true ) commands.push( new SetScriptValueCommand( this.editor, object, script, 'paramValues', { ...script.paramValues, grid: false } ) );
+		const command = new MultiCmdsCommand( this.editor, commands );
+		command.name = 'Set projector media';
+		this.editor.execute( command );
+
+	}
+
 	async use( id, { position, object, materialSlot = 0, material: expectedMaterial, map = 'map', mode = 'auto' } = {} ) {
 		const epoch = this.epoch, picker = mode === 'texture' ? null : this.picker;
 		object ||= this.editor.selected;
@@ -122,8 +143,9 @@ export class AssetController {
 		if ( mode !== 'texture' && picker !== this.picker ) throw new Error( 'The texture selection changed. Choose the asset again.' );
 		if ( picker ) {
 			if ( picker.kind === 'texture' && ! entry.texture && ! ( picker.moving && isMovingAsset( record ) ) && ( ! entry.file || ! isTextureAsset( entry.file ) ) ) throw new Error( 'Choose a supported texture.' );
+			if ( picker.kind === 'projector' && ! isProjectorMedia( record ) ) throw new Error( 'Choose an image or video file for the projector.' );
 			if ( picker.kind === 'input' && ! isInputAsset( record ) ) throw new Error( 'Choose a media input asset.' );
-			if ( picker.kind === 'import' && ( ! entry.file || ! isImportAsset( entry.file ) ) ) throw new Error( 'Choose a supported model.' );
+			if ( picker.kind === 'import' && ( ! entry.file || ! isImportAsset( entry.file ) ) ) throw new Error( 'Choose a supported scene file.' );
 			await picker.onPick( entry );
 			if ( picker === this.picker ) this.cancelPicker();
 			return;
@@ -142,12 +164,6 @@ export class AssetController {
 		} else if ( record.kind === 'audio' ) {
 			const sound = new THREE.Group(); sound.userData.assetObject = { type: 'audio', path: entry.path };
 			return this.commit( sound, entry, mediaScript( entry.path, 'audio' ), position, canCommit );
-		} else if ( record.kind === 'splat' ) {
-			const group = new THREE.Group();
-			group.userData.assetObject = { type: 'gaussian-splat', path: entry.path, url: entry.record.url };
-			const source = entry.path ? 'assets/' + entry.path : entry.record.url;
-			const fileType = splatFileType( entry.file?.name || entry.path || entry.record.url );
-			return this.commit( group, entry, splatScript( source, fileType ), position, canCommit );
 		} else if ( record.kind === 'landmark' ) {
 			const root = new THREE.Group();
 			root.userData.assetObject = { type: 'landmark' };
@@ -180,7 +196,7 @@ export class AssetController {
 			const model = await this.editor.loader.importGLTFAsset( entry.path, { metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit, commit: false, stripPresentation: true } );
 			return this.commit( model, entry, model.userData.vrmBones ? poseScript() : modelScript( model ), position, canCommit );
 		} else if ( isImportAsset( entry.file ) ) {
-			this.editor.loader.loadAsset( entry.path, { position, metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit } );
+			return this.editor.loader.loadAsset( entry.path, { position, metadata: this.editor.sourceFiles.get( entry.path ).asset, canCommit } );
 		} else {
 			throw new Error( 'This asset can be linked or downloaded, but its format cannot be placed in a Three.js scene.' );
 		}

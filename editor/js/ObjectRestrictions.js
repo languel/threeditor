@@ -30,4 +30,32 @@ function withEnabledObjects( scene, render ) {
 
 }
 
-export { hasRestriction, isVisible, withEnabledObjects };
+function withoutRuntimeChildren( root, callback ) {
+
+	const children = new Map();
+	function visit( object ) {
+
+		const persistent = object.children.filter( child => ! child.userData.runtimeOnly );
+		if ( persistent.length !== object.children.length ) {
+
+			children.set( object, object.children );
+			object.children = persistent;
+
+		}
+		for ( const child of persistent ) visit( child );
+
+	}
+	visit( root );
+	try {
+
+		return callback();
+
+	} finally {
+
+		for ( const [ object, original ] of children ) object.children = original;
+
+	}
+
+}
+
+export { hasRestriction, isVisible, withEnabledObjects, withoutRuntimeChildren };
