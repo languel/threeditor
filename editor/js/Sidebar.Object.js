@@ -1,3 +1,5 @@
+import { hasLightView } from './modeling/LightView.js';
+import { canMaskLight } from './modeling/LightMask.js';
 import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';
@@ -81,6 +83,18 @@ function SidebarObject( editor ) {
 	objectTypeRow.add( objectType );
 
 	container.add( objectTypeRow );
+
+	const lightView = new UIRow().setDisplay( 'none' );
+	lightView.add( new UIText( 'View' ).setClass( 'Label' ) );
+	lightView.add( new UIButton( 'Look through' ).onClick( () => editor.setViewportSource( editor.selected ) ) );
+	const maskInView = new UIButton( 'Edit mask in view' ).onClick( () => {
+
+		editor.setViewportSource( editor.selected );
+		editor.viewTools.setMode( 'mask' );
+
+	} );
+	lightView.add( maskInView );
+	container.add( lightView );
 
 	const projectorMedia = new UIRow().setDisplay( 'none' );
 	projectorMedia.add( new UIText( 'Projection' ).setClass( 'Label' ) );

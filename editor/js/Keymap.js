@@ -1,3 +1,4 @@
+import { hasLightView } from './modeling/LightView.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
@@ -97,13 +98,17 @@ class Keymap {
    case 'perspective':e.setCameraType('perspective');break;case 'orthographic':e.setCameraType('orthographic');break;
    case 'projection':e.setCameraType(e.camera.isPerspectiveCamera?'orthographic':'perspective');break;
    case 'viewFront':case 'viewBack':case 'viewRight':case 'viewLeft':case 'viewTop':case 'viewBottom':{
-    e.setViewportCamera(e.camera.uuid);const cam=e.camera,center=e.controls.center;const distance=Math.max(0.1,cam.position.distanceTo(center));
+    if(!e.viewportSplit)e.setViewportCamera(e.camera.uuid);const cam=e.camera,center=e.controls.getCenter(cam);const distance=Math.max(0.1,cam.position.distanceTo(center));
     const dirs={viewFront:[0,0,1],viewBack:[0,0,-1],viewRight:[1,0,0],viewLeft:[-1,0,0],viewTop:[0,1,0],viewBottom:[0,-1,0]};
     cam.up.set(0,Math.abs(dirs[id][1])?0:1,Math.abs(dirs[id][1])?-1:0);cam.position.copy(center).add(new THREE.Vector3(...dirs[id]).multiplyScalar(distance));cam.lookAt(center);cam.updateMatrixWorld(true);s.cameraChanged.dispatch(cam);break;
    }
    case 'viewCamera':{
-    const camera = e.viewportCamera === e.camera ? e.activeSceneCamera : e.camera;
-    if ( camera ) e.setViewportCamera( camera.uuid );
+    if ( e.viewportSource ) e.setViewportCamera( e.camera.uuid );
+    else if ( e.viewportCamera === e.camera && hasLightView( e.selected ) ) e.setViewportSource( e.selected );
+    else {
+     const camera = e.viewportCamera === e.camera ? e.activeSceneCamera : e.camera;
+     if ( camera ) e.setViewportCamera( camera.uuid );
+    }
     break;
    }
    case 'alignActiveCamera':{
@@ -127,7 +132,8 @@ class Keymap {
     break;
    }
    case 'flipView':{
-    const offset = e.viewportCamera.getWorldPosition( new THREE.Vector3() ).sub( e.controls.center );
+    const view = e.viewLayout?.navigation?.camera || e.viewportCamera;
+    const offset = view.getWorldPosition( new THREE.Vector3() ).sub( e.controls.center );
     const phi = new THREE.Spherical().setFromVector3( offset ).phi;
     const speed = e.controls.rotationSpeed;
     e.controls.rotate( new THREE.Vector3( Math.PI / speed, ( Math.PI - 2 * phi ) / speed, 0 ) );

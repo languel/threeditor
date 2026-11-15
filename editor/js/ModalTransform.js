@@ -10,7 +10,7 @@ function ModalTransform( editor ) {
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
  function label(){notice.textContent=`${mode==='translate'?'Grab':mode==='rotate'?'Rotate':'Scale'}${axis?' · '+(plane?'plane excluding ':'')+axis.toUpperCase()+(local?' local':' global'):''}${numeric?' · '+numeric:''} · X/Y/Z axis · Shift+axis plane · type value · Enter accept · Esc cancel`;}
  function start(next){
-  if(mode||editor.flyControls?.active)return;
+  if(mode||editor.flyControls?.active||editor.modeling?.object||editor.viewTools?.mode||!editor.renderer)return;
   const selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
   const objects=selection.filter(o=>!selection.some(parent=>parent!==o&&isAncestor(parent,o)));
   if(!objects.length)return;
@@ -18,14 +18,15 @@ function ModalTransform( editor ) {
  }
  function isAncestor(a,o){for(let p=o.parent;p;p=p.parent)if(p===a)return true;return false;}
  function update(){
-  const cam=editor.viewportCamera;cam.updateWorldMatrix(true,false);const q=cam.getWorldQuaternion(new THREE.Quaternion());
+  const layout=editor.viewLayout, frame=layout.navigation||layout.frames[0];if(!frame)return;
+  const cam=frame.camera;cam.updateWorldMatrix(true,false);const q=cam.getWorldQuaternion(new THREE.Quaternion());
   const viewRight=new THREE.Vector3(1,0,0).applyQuaternion(q),viewUp=new THREE.Vector3(0,1,0).applyQuaternion(q);
   const axes={x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)};
   for(const state of states){const o=state.o;
    if(mode==='translate'){
     const distance=Math.max(0.1,cam.getWorldPosition(new THREE.Vector3()).distanceTo(o.getWorldPosition(new THREE.Vector3())));const factor=distance*0.002;
     let dir=axis?axes[axis].clone():null;if(dir&&local)dir.applyQuaternion(o.getWorldQuaternion(new THREE.Quaternion()));
-    const canvas=document.querySelector('#viewport canvas');const rect=canvas.getBoundingClientRect();
+    const rect=layout.clientRect(frame);
     const raycaster=new THREE.Raycaster();const pivot=o.parent?o.parent.localToWorld(state.position.clone()):state.position.clone();
     const normal=dir&&plane?dir.clone():cam.getWorldDirection(new THREE.Vector3());
     const movementPlane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,pivot);

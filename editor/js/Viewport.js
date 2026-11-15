@@ -24,6 +24,8 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
+import { ViewportTools } from './modeling/ViewportTools.js';
+import { ViewLayout } from './modeling/ViewLayout.js';
 import { ModelViewport } from './modeling/ModelViewport.js';
 import { PostProcessingHost } from './PostProcessing.js';
 
@@ -59,7 +61,9 @@ function Viewport( editor ) {
 	//
 
 	let renderer = null;
+	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
+	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	const splatHost = new SplatHost();
 	const postHost = new PostProcessingHost();
 	let splatRenderQueued = false;
@@ -70,7 +74,7 @@ function Viewport( editor ) {
 		requestAnimationFrame( () => {
 
 			splatRenderQueued = false;
-			if ( editor.viewportShading !== 'realistic' ) render();
+			if ( editor.viewportShading !== 'realistic' || editor.viewportSplit || editor.viewportSource ) render();
 
 		} );
 
@@ -184,7 +188,7 @@ function Viewport( editor ) {
 	}, true );
 	transformControls.addEventListener( 'axis-changed', function () {
 
-		if ( editor.viewportShading !== 'realistic' ) render();
+		if ( editor.viewportShading !== 'realistic' || editor.viewportSplit || editor.viewportSource ) render();
 
 	} );
 	transformControls.addEventListener( 'objectChange', function () {
@@ -271,7 +275,9 @@ function Viewport( editor ) {
 
 			const camera = editor.cameras[ uuid ];
 
-			const aspect = container.dom.offsetWidth / container.dom.offsetHeight;
+			const width = container.dom.offsetWidth;
+			const split = editor.viewportSplit && ( editor.viewportSource || editor.viewportCamera !== editor.camera );
+			const aspect = ( split ? Math.floor( width / 2 ) : width ) / Math.max( 1, container.dom.offsetHeight );
 
 			if ( camera.isPerspectiveCamera ) {
 
@@ -299,88 +305,66 @@ function Viewport( editor ) {
 	const onUpPosition = new THREE.Vector2();
 	const onDoubleClickPosition = new THREE.Vector2();
 
-	function getMousePosition( dom, x, y ) {
+	let downView;
 
-		const rect = dom.getBoundingClientRect();
+	function pointerPosition( view, x, y ) {
+
+		const rect = layout.clientRect( view );
 		return [ ( x - rect.left ) / rect.width, ( y - rect.top ) / rect.height ];
 
 	}
 
-	function handleClick( event ) {
+	function handleClick( view, x, y, shift ) {
 
-		if ( onDownPosition.distanceTo( onUpPosition ) === 0 ) {
-
-			const intersects = selector.getPointerIntersects( onUpPosition, editor.viewportCamera );
-			signals.intersectionsDetected.dispatch( intersects, event.shiftKey );
-
-			render();
-
-		}
+		if ( ! downView || view?.key !== downView.key ) return;
+		onUpPosition.fromArray( pointerPosition( view, x, y ) );
+		if ( onDownPosition.distanceTo( onUpPosition ) !== 0 ) return;
+		const intersects = selector.getPointerIntersects( onUpPosition, view.camera );
+		signals.intersectionsDetected.dispatch( intersects, shift );
+		render();
 
 	}
 
 	function onMouseDown( event ) {
 
-		// event.preventDefault();
-
-		if ( event.button !== 0 || event.target !== renderer.domElement || ( controls.navigationMode() === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
-
-		const array = getMousePosition( container.dom, event.clientX, event.clientY );
-		onDownPosition.fromArray( array );
-
-		document.addEventListener( 'mouseup', onMouseUp );
+		if ( event.button !== 0 || event.target !== renderer?.domElement || ( controls.navigationMode() === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
+		downView = layout.at( event.clientX, event.clientY );
+		if ( ! downView ) return;
+		onDownPosition.fromArray( pointerPosition( downView, event.clientX, event.clientY ) );
+		document.addEventListener( 'mouseup', onMouseUp, { once: true } );
 
 	}
 
 	function onMouseUp( event ) {
 
-		const array = getMousePosition( container.dom, event.clientX, event.clientY );
-		onUpPosition.fromArray( array );
-
-		handleClick( event );
-
-		document.removeEventListener( 'mouseup', onMouseUp );
+		handleClick( layout.at( event.clientX, event.clientY ), event.clientX, event.clientY, event.shiftKey );
 
 	}
 
 	function onTouchStart( event ) {
 
 		const touch = event.changedTouches[ 0 ];
-
-		const array = getMousePosition( container.dom, touch.clientX, touch.clientY );
-		onDownPosition.fromArray( array );
-
-		document.addEventListener( 'touchend', onTouchEnd );
+		downView = layout.at( touch.clientX, touch.clientY );
+		if ( ! downView ) return;
+		onDownPosition.fromArray( pointerPosition( downView, touch.clientX, touch.clientY ) );
+		document.addEventListener( 'touchend', onTouchEnd, { once: true } );
 
 	}
 
 	function onTouchEnd( event ) {
 
 		const touch = event.changedTouches[ 0 ];
-
-		const array = getMousePosition( container.dom, touch.clientX, touch.clientY );
-		onUpPosition.fromArray( array );
-
-		handleClick( event );
-
-		document.removeEventListener( 'touchend', onTouchEnd );
+		handleClick( layout.at( touch.clientX, touch.clientY ), touch.clientX, touch.clientY, event.shiftKey );
 
 	}
 
 	function onDoubleClick( event ) {
 
-		const array = getMousePosition( container.dom, event.clientX, event.clientY );
-		onDoubleClickPosition.fromArray( array );
-
-		const intersects = selector.getPointerIntersects( onDoubleClickPosition, editor.viewportCamera );
-
-		if ( intersects.length > 0 ) {
-
-			const intersect = intersects[ 0 ];
-
-			signals.objectFocused.dispatch( intersect.object );
-
-		}
+		const view = layout.at( event.clientX, event.clientY );
+		if ( ! view || view !== layout.navigation ) return;
+		onDoubleClickPosition.fromArray( pointerPosition( view, event.clientX, event.clientY ) );
+		const intersects = selector.getPointerIntersects( onDoubleClickPosition, view.camera );
+		if ( intersects.length ) signals.objectFocused.dispatch( intersects[ 0 ].object );
 
 	}
 
@@ -393,16 +377,21 @@ function Viewport( editor ) {
 
 	const controls = new EditorControls( camera );
 	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'basic';
-	controls.canNavigate = () => ! hasRestriction( editor.viewportCamera, 'locked' );
+	controls.canNavigate = () => !! layout.navigation && ! hasRestriction( layout.navigation.camera, 'locked' );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
 
-		const active = editor.viewportCamera;
+		const active = layout.navigation?.camera || editor.camera;
 		if ( active !== editor.camera ) signals.objectChanged.dispatch( active );
 		signals.cameraChanged.dispatch( active );
 		signals.refreshSidebarObject3D.dispatch( active );
 
 	} );
+	for ( const type of [ 'pointerdown', 'wheel' ] ) container.dom.addEventListener( type, event => {
+
+		if ( event.target === renderer?.domElement && layout.at( event.clientX, event.clientY ) !== layout.navigation ) event.stopImmediatePropagation();
+
+	}, true );
 	viewHelper.center = controls.center;
 
 	editor.controls = controls;
@@ -534,7 +523,7 @@ function Viewport( editor ) {
 
 			if ( controls.navigationMode() !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
 			transformControls.enabled = false;
-			const restore = () => { transformControls.enabled = ! editor.modeling.object; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
+			const restore = () => { transformControls.enabled = ! editor.modeling.object && ! editor.viewTools.mode; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
 			window.addEventListener( 'pointerup', restore, { once: true } );
 			window.addEventListener( 'pointercancel', restore, { once: true } );
 
@@ -911,7 +900,7 @@ function Viewport( editor ) {
 
 		}
 
-		controls.setCamera( viewportCamera );
+		controls.setCamera( editor.viewportSplit ? editor.camera : viewportCamera );
 		controls.enabled = ! editor.modalTransform?.active && ! editor.flyControls?.active;
 
 		initPT();
@@ -926,7 +915,7 @@ function Viewport( editor ) {
 		switch ( viewportShading ) {
 
 			case 'realistic':
-				if ( pathtracer ) pathtracer.init( scene, editor.viewportCamera );
+				if ( pathtracer && ! editor.viewportSplit && ! editor.viewportSource ) pathtracer.init( scene, editor.viewportCamera );
 				break;
 
 			case 'solid':
@@ -1032,7 +1021,7 @@ function Viewport( editor ) {
 
 			camera = editor.camera;
 
-			controls.setCamera( editor.viewportCamera );
+			controls.setCamera( editor.viewportSplit ? editor.camera : editor.viewportCamera );
 			transformControls.camera = camera;
 			viewHelper.camera = camera;
 			viewHelper.center = controls.getCenter( camera );
@@ -1105,7 +1094,7 @@ function Viewport( editor ) {
 
 	function initPT() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' ) {
+		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.init( scene, editor.viewportCamera );
 
@@ -1115,7 +1104,7 @@ function Viewport( editor ) {
 
 	function updatePTBackground() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' ) {
+		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.setBackground( scene.background, scene.backgroundBlurriness );
 
@@ -1125,7 +1114,7 @@ function Viewport( editor ) {
 
 	function updatePTEnvironment() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' ) {
+		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.setEnvironment( scene.environment );
 
@@ -1135,7 +1124,7 @@ function Viewport( editor ) {
 
 	function updatePTMaterials() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' ) {
+		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.updateMaterials();
 
@@ -1145,7 +1134,7 @@ function Viewport( editor ) {
 
 	function updatePT() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' ) {
+		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.update();
 			editor.signals.pathTracerUpdated.dispatch( pathtracer.getSamples() );
@@ -1163,47 +1152,87 @@ function Viewport( editor ) {
 	function render() {
 
 		if ( renderer === null ) return;
-		if ( editingPoints !== Boolean( editor.modeling.object ) ) {
+		const editing = Boolean( editor.modeling.object || editor.viewTools.mode );
+		if ( editingPoints !== editing ) {
 
-			editingPoints = Boolean( editor.modeling.object );
+			editingPoints = editing;
 			transformControls.enabled = ! editingPoints;
 
 		}
 
 		startTime = performance.now();
 
-		renderer.setViewport( 0, 0, container.dom.offsetWidth, container.dom.offsetHeight );
-		postHost.render(
-			renderer,
-			scene,
-			editor.viewportCamera,
-			container.dom.offsetWidth,
-			container.dom.offsetHeight,
-			() => splatHost.render(
-				renderer,
-				scene,
-				() => withEnabledObjects( scene, () => renderer.render( scene, editor.viewportCamera ) ),
-				queueSplatRender
-			),
-			queueSplatRender
+		const width = container.dom.offsetWidth, height = container.dom.offsetHeight;
+		if ( ! width || ! height ) return;
+		const frames = layout.update( width, height );
+		const tiled = frames.length > 1 || !! layout.optical;
+		const nav = layout.navigation;
+		const navRect = nav?.rect;
+		transformControls.camera = nav?.camera || editor.camera;
+		transformControls.viewport = tiled && navRect ?
+			new THREE.Vector4( navRect.x, height - navRect.y - navRect.height, navRect.width, navRect.height ) : null;
+
+		const draw = view => splatHost.render(
+			renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, view ) ), queueSplatRender
 		);
+		const drawGuides = view => {
 
-		// 'preview' shows the scene exactly as the exported code renders it: no grid, helpers or gizmos
-		if ( camera === editor.viewportCamera && editor.viewportShading !== 'preview' ) {
-
+			if ( view !== camera || editor.viewportShading === 'preview' ) return;
 			renderer.autoClear = false;
-			if ( grid.visible === true ) renderer.render( grid, camera );
-			if ( sceneHelpers.visible === true ) {
+			if ( grid.visible ) renderer.render( grid, view );
+			if ( sceneHelpers.visible ) {
 
 				const gizmo = transformControls.getHelper();
 				const visible = gizmo.visible;
-				if ( editor.modeling.object ) gizmo.visible = false;
-				renderer.render( sceneHelpers, camera );
+				if ( editor.modeling.object || editor.viewTools?.mode ) gizmo.visible = false;
+				renderer.render( sceneHelpers, view );
 				gizmo.visible = visible;
 
 			}
-			if ( renderer.xr.isPresenting !== true ) viewHelper.render( renderer );
+
+		};
+		renderer.setViewport( 0, 0, width, height );
+		if ( ! tiled ) {
+
+			const view = frames[ 0 ].camera;
+			postHost.render( renderer, scene, view, width, height, () => draw( view ), queueSplatRender );
+			drawGuides( view );
+			if ( view === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting ) viewHelper.render( renderer );
 			renderer.autoClear = true;
+
+		} else {
+
+			// A single clear supplies both panes, including on WebGPU where clears
+			// use the whole render attachment. The render passes load that result.
+			const background = scene.background;
+			const clearColor = renderer.getClearColor( new THREE.Color() );
+			const clearAlpha = renderer.getClearAlpha();
+			if ( background?.isColor ) renderer.setClearColor( background, 1 );
+			renderer.clear();
+			if ( background?.isColor ) scene.background = null;
+			renderer.autoClear = false;
+			renderer.setScissorTest( true );
+			try {
+
+				for ( const { rect, camera: view } of frames ) {
+
+					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
+					renderer.setViewport( rect.x, y, rect.width, rect.height );
+					renderer.setScissor( rect.x, y, rect.width, rect.height );
+					draw( view );
+					drawGuides( view );
+
+				}
+
+			} finally {
+
+				scene.background = background;
+				renderer.setClearColor( clearColor, clearAlpha );
+				renderer.setScissorTest( false );
+				renderer.setViewport( 0, 0, width, height );
+				renderer.autoClear = true;
+
+			}
 
 		}
 

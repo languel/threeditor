@@ -43,9 +43,11 @@ function generateThreeCode( editor ) {
 
 	const scene = editor.scene;
 	const routedObjects = new Set( ( scene.userData.streamRoutes || [] ).filter( route => route?.target?.kind === 'object' ).map( route => route.target.uuid ) );
+	const rulerTargets = new Set();
 	scene.traverse( object => {
 		if ( editor.scripts?.[ object.uuid ]?.some( script => script.assetBehavior === 'stream' ) ) routedObjects.add( object.uuid );
 		for ( const uuid of Object.values( object.userData.vrmBones || {} ) ) routedObjects.add( uuid );
+		for ( const point of object.userData.measurement?.points || [] ) if ( point.target ) rulerTargets.add( point.target );
 	} );
 	const camera = editor.mainCamera || editor.viewportCamera || editor.camera;
 	const controllerSettings = cameraControllerSettings( editor, camera );
@@ -196,6 +198,12 @@ function generateThreeCode( editor ) {
 		if ( m.isMeshPhongMaterial ) add( 'shininess', n( m.shininess ) );
 		if ( m.flatShading ) add( 'flatShading', 'true' );
 		if ( m.wireframe ) add( 'wireframe', 'true' );
+		if ( m.depthWrite === false ) add( 'depthWrite', 'false' );
+		if ( m.polygonOffset ) {
+			add( 'polygonOffset', 'true' );
+			add( 'polygonOffsetFactor', n( m.polygonOffsetFactor ) );
+			add( 'polygonOffsetUnits', n( m.polygonOffsetUnits ) );
+		}
 		if ( m.transparent || m.opacity < 1 ) {
 
 			add( 'transparent', 'true' );
@@ -213,7 +221,7 @@ function generateThreeCode( editor ) {
 
 	function transform( name, o ) {
 
-		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) || routedObjects.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
+		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) || routedObjects.has( o.uuid ) || rulerTargets.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
 		if ( o.userData.asset ) out( `${ name }.userData.asset = ${ q( o.userData.asset ) };` );
 		if ( o.userData.assetObject ) out( `${ name }.userData.assetObject = ${ q( o.userData.assetObject ) };` );
 		if ( o.userData.vrmBones ) out( `${ name }.userData.vrmBones = ${ q( o.userData.vrmBones ) };` );
@@ -299,7 +307,13 @@ function generateThreeCode( editor ) {
 
 				const childReference = `${ reference }.children[${ index }]`;
 				const guardedReference = childReference.replaceAll( '.children[', '?.children[' );
-				if ( followTargets.has( child.uuid ) || routedObjects.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
+				if ( child.userData.surfaceMark ) {
+
+					emitObject( child, reference );
+					return;
+
+				}
+				if ( followTargets.has( child.uuid ) || routedObjects.has( child.uuid ) || rulerTargets.has( child.uuid ) ) out( `if (${ guardedReference }) ${ childReference }.uuid = ${ q( child.uuid ) };` );
 				if ( child.userData.threeditor?.disabled === true ) out( `if (${ guardedReference }) ${ childReference }.visible = false;` );
 				if ( child.geometry?.userData.modeling?.kind === 'vertices' ) out( `if (${ guardedReference }?.geometry) ${ childReference }.geometry = ${ geometry( child.geometry ) };` );
 				emitModelChildOverrides( child, childReference );
@@ -399,6 +413,8 @@ function generateThreeCode( editor ) {
 
 		if ( o.name ) out( `${ name }.name = ${ q( o.name ) };` );
 		transform( name, o );
+		if ( o.userData.measurement ) out( `${ name }.userData.measurement = ${ q( o.userData.measurement ) };` );
+		if ( o.userData.surfaceMark ) out( `${ name }.userData.surfaceMark = true;` );
 		if ( o.userData.projectionMask ) out( `${ name }.userData.projectionMask = ${ q( o.userData.projectionMask ) };` );
 		if ( o.isLight && o.castShadow && o.shadow ) {
 
@@ -425,6 +441,8 @@ function generateThreeCode( editor ) {
 	// Build the body first so we know which imports are needed.
 
 if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;' );
+
+	if ( Number.isFinite( scene.userData.metersPerUnit ) ) out( `scene.userData.metersPerUnit = ${ scene.userData.metersPerUnit };` );
 
 	if ( scene.background ) {
 

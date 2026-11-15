@@ -38,7 +38,7 @@ export class AssetRuntime {
 			this.refresh();
 			for ( const runtime of this.active.values() ) {
 
-				if ( runtime.object === object && runtime.script.assetBehavior === 'projector' ) runtime.setParameters?.call( object, serializeScript( runtime.script ).parameters || {} );
+				if ( runtime.object === object && [ 'projector', 'light-mask' ].includes( runtime.script.assetBehavior ) ) runtime.setParameters?.call( object, serializeScript( runtime.script ).parameters || {} );
 
 			}
 

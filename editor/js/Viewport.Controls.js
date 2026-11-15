@@ -1,5 +1,6 @@
 import { hasRestriction } from './ObjectRestrictions.js';
-import { UIPanel, UISelect } from './libs/ui.js';
+import { hasLightView } from './modeling/LightView.js';
+import { UIPanel, UISelect, UIButton } from './libs/ui.js';
 import { ViewportParameters } from './Viewport.Parameters.js';
 
 function ViewportControls( editor ) {
@@ -15,28 +16,45 @@ function ViewportControls( editor ) {
 	// camera
 
 	const cameraSelect = new UISelect();
+	cameraSelect.dom.setAttribute( 'aria-label', 'Viewport view' );
 	cameraSelect.setMarginRight( '10px' );
 	cameraSelect.onChange( function () {
 
-		editor.setViewportCamera( this.getValue() );
+		const value = this.getValue();
+		if ( value.startsWith( 'light:' ) ) editor.setViewportSource( editor.objectByUuid( value.slice( 6 ) ) );
+		else editor.setViewportCamera( value );
 
 	} );
 	container.add( cameraSelect );
 
+	const split = new UIButton( 'Split view' ).onClick( () => {
+
+		if ( ! editor.viewportSplit && ! editor.viewportSource && editor.viewportCamera === editor.camera ) {
+
+			if ( hasLightView( editor.selected ) ) editor.setViewportSource( editor.selected );
+			else if ( editor.activeSceneCamera ) editor.setViewportCamera( editor.activeSceneCamera.uuid );
+			else return;
+
+		}
+		editor.setViewportSplit( ! editor.viewportSplit );
+
+	} );
+	split.dom.classList.add( 'viewport-split-button' );
+	container.add( split );
 	signals.cameraAdded.add( update );
 	signals.cameraRemoved.add( update );
-	signals.viewportCameraChanged.add( () => cameraSelect.setValue( editor.viewportCamera.uuid ) );
+	signals.sceneGraphChanged.add( update );
+	signals.viewportCameraChanged.add( updateCameraList );
 	signals.objectChanged.add( function ( object, attribute ) {
 
 		if ( attribute === 'userData' ) {
 
-			updateCameraList();
-			if ( hasRestriction( editor.viewportCamera, 'disabled' ) ) editor.setViewportCamera( editor.camera.uuid );
+			update();
 			return;
 
 		}
 
-		if ( object.isCamera ) {
+		if ( object.isCamera || hasLightView( object ) ) {
 
 			updateCameraList();
 
@@ -61,6 +79,7 @@ function ViewportControls( editor ) {
 
 	signals.editorCleared.add( function () {
 
+		editor.viewportSplit = false;
 		editor.setViewportCamera( editor.camera.uuid );
 
 		shadingSelect.setValue( 'solid' );
@@ -83,26 +102,28 @@ function ViewportControls( editor ) {
 		for ( const key in cameras ) {
 
 			const camera = cameras[ key ];
-			if ( ! hasRestriction( camera, 'disabled' ) ) options[ camera.uuid ] = camera.name;
+			if ( ! hasRestriction( camera, 'disabled' ) ) options[ camera.uuid ] = camera === editor.camera ? 'Director' : camera.name;
 
 		}
 
+		editor.scene.traverse( object => {
+
+			if ( hasLightView( object ) && ! object.userData.runtimeOnly && ! hasRestriction( object, 'disabled' ) ) {
+				options[ 'light:' + object.uuid ] = ( object.name || object.type ) + ' view';
+			}
+
+		} );
 		cameraSelect.setOptions( options );
-
-		const selectedCamera = ( editor.viewportCamera.uuid in options )
-			? editor.viewportCamera
-			: editor.camera;
-
-		cameraSelect.setValue( selectedCamera.uuid );
-
-		return selectedCamera;
+		const value = editor.viewportSource ? 'light:' + editor.viewportSource.uuid : editor.viewportCamera.uuid;
+		cameraSelect.setValue( value in options ? value : editor.camera.uuid );
+		split.dom.setAttribute( 'aria-pressed', String( editor.viewportSplit ) );
+		return value in options;
 
 	}
 
 	function update() {
 
-		const selectedCamera = updateCameraList();
-		editor.setViewportCamera( selectedCamera.uuid );
+		if ( ! updateCameraList() ) editor.setViewportCamera( editor.camera.uuid );
 
 	}
 

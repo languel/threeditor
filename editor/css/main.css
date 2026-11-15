@@ -2199,3 +2199,70 @@ input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outl
 	cursor: crosshair;
 	touch-action: none;
 }
+
+.viewport-split-button { margin-right: 8px; }
+.viewport-split-button[aria-pressed="true"] { background: color-mix(in srgb, var(--theme-accent) 22%, var(--theme-surface)); }
+
+.viewport-split-divider {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	z-index: 2;
+	background: color-mix(in srgb, var(--theme-text) 30%, transparent);
+	pointer-events: none;
+}
+
+.viewport-pane-name {
+	position: absolute;
+	left: 12px;
+	bottom: 44px;
+	z-index: 2;
+	color: #fff;
+	text-shadow: 0 1px 4px #000;
+	font-size: 12px;
+	pointer-events: none;
+}
+
+.viewport-tool-panel {
+	position: absolute;
+	z-index: 4;
+	top: 10px;
+	left: 10px;
+	max-width: min(440px, 48%);
+	padding: 4px;
+	border-radius: 6px;
+	background: var(--theme-background);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	align-items: center;
+	pointer-events: none;
+}
+.viewport-tool-panel select, .viewport-tool-panel input, .viewport-tool-panel button { pointer-events: auto; }
+.viewport-tool-panel select, .viewport-tool-panel button, .viewport-split-button {
+	color: var(--theme-text);
+	background-color: var(--theme-background);
+}
+.viewport-tool-options { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.viewport-tool-options label {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 2px 4px;
+	background: var(--theme-background);
+	font-size: 12px;
+}
+.viewport-tool-options input[type=number] { width: 52px; }
+.viewport-tool-options input[type=color] { width: 32px; }
+.viewport-tool-panel output:empty, .viewport-tool-options:empty { display: none; }
+.viewport-tool-panel output { flex-basis: 100%; color: var(--theme-text); font-size: 12px; }
+
+.viewport-tool-overlay {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 3;
+	pointer-events: none;
+}

@@ -1,3 +1,4 @@
+import { meshHit, rayToView } from '../modeling/SurfacePicking.js';
 import { poseScript } from '../streams/PoseDriver.js';
 import * as THREE from 'three';
 import { storeSourceFiles, isImageAsset, isImportAsset, isTextureAsset } from '../ProjectAssets.js';
@@ -16,7 +17,7 @@ import { loadAssetTexture } from './AssetTexture.js';
 import { SetMaterialMapCommand } from '../commands/SetMaterialMapCommand.js';
 import { gltfDocument, gltfResourceURIs } from './GLTFAssets.js';
 import { chooseTextureMap } from './TextureMapPicker.js';
-import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
+import { hasRestriction } from '../ObjectRestrictions.js';
 
 export const isMovingAsset = record => [ 'video', 'webcam' ].includes( record.kind ) || ( record.kind === 'animation' && !! ( record.abs?.video || /\.(mp4|webm|mov)(?:$|[?#])/i.test( record.url || record.file?.name || '' ) ) );
 export const isMapAsset = record => isMovingAsset( record ) || [ 'image', 'texture', 'animation' ].includes( record.kind );
@@ -243,12 +244,12 @@ export class AssetController {
 			const id = event.dataTransfer.getData( ASSET_MIME );
 			if ( ! id ) return;
 			event.preventDefault(); event.stopPropagation();
-			const rect = viewport.getBoundingClientRect();
-			const point = new THREE.Vector2( ( event.clientX - rect.left ) / rect.width * 2 - 1, 1 - ( event.clientY - rect.top ) / rect.height * 2 );
-			const ray = new THREE.Raycaster();
-			this.editor.scene.updateMatrixWorld( true );
-			ray.setFromCamera( point, this.editor.viewportCamera );
-			const hit = ray.intersectObjects( this.editor.scene.children, true ).find( h => h.object.isMesh && isVisible( h.object ) );
+			const layout = this.editor.viewLayout;
+			const view = layout?.viewport === viewport ? layout : null;
+			const frame = view ? view.at( event.clientX, event.clientY ) : { camera: this.editor.viewportCamera };
+			if ( ! frame ) return;
+			const ray = rayToView( new THREE.Raycaster(), view || { clientRect: () => viewport.getBoundingClientRect() }, frame, event.clientX, event.clientY );
+			const hit = meshHit( ray, this.editor.scene );
 			const position = hit?.point || ray.ray.intersectPlane( new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 ), new THREE.Vector3() ) || ray.ray.at( 10, new THREE.Vector3() );
 			// A drop always places/applies; it never invokes a stale slot-picker callback.
 			this.cancelPicker();

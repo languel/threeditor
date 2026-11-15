@@ -57,6 +57,24 @@ Use a lit mesh material such as MeshStandardMaterial for the projection surface.
 
 Named browser saves and playable exports retain projector settings and source media. **Editable HTML** also retains source files for continued editing.
 
+### Look through a light
+
+Select a projector or light in the viewport’s **View** selector, or select it in the outliner and click **Look through** in **Object**. Projectors and spotlights use their beam framing. Directional lights use the shadow camera’s orthographic bounds, and point, hemisphere, and area lights show a view from the light’s position.
+
+Click **Split view** to keep the **Director** camera on the left and the selected view on the right. Navigate in the left pane. The light pane follows the light’s position, aim, and optics. Choose **Solid** to see the director’s gizmos and guides while adjusting the light. Play and exports use the assigned main camera. The split and light panes use the direct renderer while you work.
+
+Choose **Edit mask in view** for a projector or spotlight. Draw over the receiver in the light pane, drag the handles, choose **Light inside** or **Block inside**, then apply. In a split view you can check the result from the director at the same time.
+
+### Measure and draw on receivers
+
+The **Viewport tool** selector works in either pane.
+
+- **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Rulers show distances, corner angles, and area when **Closed**. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
+- **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Saved paths can be edited in **Modeling**.
+- **Surface paint** makes colored marks by raycasting the brush onto a mesh. Each stroke becomes an undoable mesh child. The marks move with the receiver.
+
+Use **Enter** to apply a mask or save a ruler or path, and **Esc** to exit a viewport tool.
+
 ## Paths, shapes, and meshes
 
 Open **Add → Mesh** and choose **Editable path**, **Editable shape**, or **Editable mesh**. Replace the starting points with **Clear points** and **Add points**, or edit them in place. Drag handles in the viewport, Shift-click to select several, or enter exact coordinates in **Modeling**. Press **Esc** or **Done** to return to object editing. Point and topology edits support undo and redo.

@@ -73,3 +73,46 @@ test( 'Projector masking uses the optical rectangle and survives source export a
 	assert.equal( legacy.source, upgraded );
 
 } );
+
+test( 'A rolled, parented projector preserves the same image plane in its viewport camera', async () => {
+
+	const { fitView, lightViewCamera } = await import( '../editor/js/modeling/LightView.js' );
+	const parent = new THREE.Group(), rig = new THREE.Group();
+	parent.rotation.y = .63;
+	parent.position.set( 3, 1, - 2 );
+	parent.add( rig );
+	rig.rotation.z = .7;
+	rig.userData.assetObject = { type: 'projector' };
+	rig.projectorFrame = { width: .4, height: .25, range: 18 };
+	const camera = lightViewCamera( THREE, rig );
+	const corner = rig.localToWorld( new THREE.Vector3( .4 * 3, .25 * 3, - 3 ) ).project( camera );
+	assert.ok( Math.abs( corner.x - 1 ) < 1e-8 && Math.abs( corner.y - 1 ) < 1e-8 );
+	assert.equal( lightViewCamera( THREE, rig, camera ), camera );
+	assert.deepEqual( fitView( { x: 500, y: 0, width: 500, height: 500 }, 2 ), { x: 500, y: 125, width: 500, height: 250 } );
+
+	const spot = new THREE.SpotLight( 0xffffff, 1, 10, Math.PI / 6 );
+	spot.position.set( 0, 1, 5 );
+	spot.target.position.set( 0, 1, 0 );
+	assert.ok( Math.abs( lightViewCamera( THREE, spot ).fov - 60 ) < 1e-8 );
+	assert.ok( lightViewCamera( THREE, new THREE.DirectionalLight() ).isOrthographicCamera );
+
+} );
+
+test( 'Ruler distances follow mesh transforms and report upright area in calibrated units', async () => {
+
+	const { formatMeasurement, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } = await import( '../editor/js/modeling/Measurements.js' );
+	const scene = new THREE.Scene(), wall = new THREE.Mesh( new THREE.PlaneGeometry() );
+	scene.add( wall );
+	const corners = [ [ 0, 0, 0 ], [ 2, 0, 0 ], [ 2, 3, 0 ], [ 0, 3, 0 ] ].map( point => new THREE.Vector3( ...point ) );
+	const anchors = corners.map( point => makeMeasurePoint( point, wall ) );
+	wall.position.set( 3, 4, 5 );
+	wall.scale.setScalar( 2 );
+	const resolved = worldMeasurePoints( THREE, scene, null, anchors );
+	assert.deepEqual( resolved[ 0 ].toArray(), [ 3, 4, 5 ] );
+	assert.equal( measurementLength( resolved, true ), 20 );
+	assert.equal( measurementArea( THREE, resolved ), 24 );
+	assert.equal( formatMeasurement( 24, 'm', .5, true ), '6.00 m²' );
+	wall.removeFromParent();
+	assert.deepEqual( worldMeasurePoints( THREE, scene, null, anchors )[ 2 ].toArray(), [ 2, 3, 0 ] );
+
+} );

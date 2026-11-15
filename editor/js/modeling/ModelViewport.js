@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
+import { meshHit } from './SurfacePicking.js';
 import { modelGeometry, modelObject, outlinePoints, removePoints } from './ModelGeometry.js';
 
 export function editableMesh( object ) {
@@ -105,6 +106,7 @@ export class ModelViewport {
 
 		if ( ! object?.geometry?.userData.modeling && ! editableMesh( object ) ) return;
 		if ( ! object.geometry.userData.modeling?.points && object.geometry.attributes.position.count > 20000 ) throw new Error( 'Vertex editing supports meshes with up to 20,000 buffer vertices.' );
+		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
 		this.object = object;
 		if ( ! this.canEdit() ) { this.object = null; return; }
 		this.data = this.read( object );
@@ -187,15 +189,21 @@ export class ModelViewport {
 
 	}
 
+	get frame() {
+
+		return this.editor.viewLayout.navigation || this.editor.viewLayout.frames[ 0 ];
+
+	}
+
 	rect() {
 
-		return this.editor.renderer.domElement.getBoundingClientRect();
+		return this.editor.viewLayout.clientRect( this.frame );
 
 	}
 
 	project( point, width, height ) {
 
-		const camera = this.editor.viewportCamera;
+		const camera = this.frame.camera;
 		const projection = new THREE.Vector3( ...point ).applyMatrix4( this.object.matrixWorld );
 		const depth = projection.clone().applyMatrix4( camera.matrixWorldInverse ).z;
 		projection.project( camera );
@@ -207,10 +215,11 @@ export class ModelViewport {
 	draw() {
 
 		if ( ! this.canEdit() || ! this.editor.renderer ) return;
-		const { width, height } = this.rect();
+		const { width, height, x, y } = this.rect();
+		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		if ( ! width || ! height ) return;
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
-		const w = Math.round( width * ratio ), h = Math.round( height * ratio );
+		const w = Math.round( bounds.width * ratio ), h = Math.round( bounds.height * ratio );
 		if ( this.overlay.width !== w || this.overlay.height !== h ) {
 
 			this.overlay.width = w;
@@ -220,7 +229,12 @@ export class ModelViewport {
 		this.object.updateWorldMatrix( true, false );
 		const ctx = this.context;
 		ctx.setTransform( ratio, 0, 0, ratio, 0, 0 );
-		ctx.clearRect( 0, 0, width, height );
+		ctx.clearRect( 0, 0, bounds.width, bounds.height );
+		ctx.save();
+		ctx.translate( x, y );
+		ctx.beginPath();
+		ctx.rect( 0, 0, width, height );
+		ctx.clip();
 		const data = this.drag?.draft || this.data;
 		const handles = data.points.map( point => this.project( point, width, height ) );
 		this.handles = handles;
@@ -273,6 +287,8 @@ export class ModelViewport {
 
 		}
 
+		ctx.restore();
+
 	}
 
 	pointUnder( x, y ) {
@@ -294,12 +310,12 @@ export class ModelViewport {
 
 		const rect = this.rect();
 		const cursor = new THREE.Vector2( ( x - rect.left ) * 2 / rect.width - 1, 1 - ( y - rect.top ) * 2 / rect.height );
-		const camera = this.editor.viewportCamera;
+		const camera = this.frame.camera;
 		this.ray.setFromCamera( cursor, camera );
 		if ( snap ) {
 
-			const hit = this.ray.intersectObjects( this.editor.scene.children ).find( item => item.object !== this.object && item.object.isMesh && ! item.object.userData.runtimeOnly && isVisible( item.object ) );
-			if ( hit ) return this.object.worldToLocal( hit.point );
+			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			return hit ? this.object.worldToLocal( hit.point ) : null;
 
 		}
 		const point = this.ray.ray.intersectPlane( plane, new THREE.Vector3() );
@@ -310,6 +326,7 @@ export class ModelViewport {
 	pointerDown( event ) {
 
 		if ( ! this.canEdit() || this.drag || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
+		if ( this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
 		if ( hit < 0 && ! this.adding && ! event.shiftKey ) return;
@@ -333,7 +350,7 @@ export class ModelViewport {
 		const origin = this.object.localToWorld( new THREE.Vector3( ...( data.points[ hit ] || [ 0, 0, 0 ] ) ) );
 		const normal = hit < 0 || planar ?
 			new THREE.Vector3( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( this.object.matrixWorld ) ) :
-			this.editor.viewportCamera.getWorldDirection( new THREE.Vector3() );
+			this.frame.camera.getWorldDirection( new THREE.Vector3() );
 		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
 		const start = this.pointerPoint( event.clientX, event.clientY, plane, hit < 0 && this.snap && ! planar );
 		if ( ! start ) { this.changed(); this.draw(); return; }

@@ -1,10 +1,8 @@
 import * as THREE from 'three';
 import { UIPanel } from './libs/ui.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
-import { SetValueCommand } from './commands/SetValueCommand.js';
-import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
-import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
-import { isProjector, upgradeProjectorScript } from './assets/Projector.js';
+import { isProjector } from './assets/Projector.js';
+import { setLightMask } from './modeling/LightMask.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { addFace, extrudeFace, outlinePoints, removePoints, splitEdge } from './modeling/ModelGeometry.js';
 import { editableMesh } from './modeling/ModelViewport.js';
@@ -155,24 +153,7 @@ function SidebarProjectionMask( editor, object, host, run ) {
 
 	function commit( mask ) {
 
-		const userData = { ...object.userData };
-		if ( mask ) userData.projectionMask = mask;
-		else delete userData.projectionMask;
-		const commands = [];
-		const script = editor.scripts[ object.uuid ]?.find( item => item.assetBehavior === 'projector' );
-		if ( mask ) {
-
-			if ( ! script ) throw new Error( 'Attach the projector behavior to use a mask.' );
-			const upgraded = { ...script };
-			upgradeProjectorScript( upgraded );
-			if ( ! upgraded.source.includes( 'applyProjectionMask( ctx,' ) ) throw new Error( 'This projector behavior does not support editable masks.' );
-			if ( upgraded.source !== script.source ) commands.push( new SetScriptValueCommand( editor, object, script, 'source', upgraded.source ) );
-
-		}
-		const set = new SetValueCommand( editor, object, 'userData', userData );
-		set.updatable = false;
-		commands.push( set );
-		editor.execute( commands.length === 1 ? set : new MultiCmdsCommand( editor, commands ), mask ? 'Apply projector mask' : 'Clear projector mask' );
+		setLightMask( editor, object, mask );
 
 	}
 

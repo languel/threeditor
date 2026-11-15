@@ -12,8 +12,8 @@ function FlyControls( editor, viewport ) {
  function refresh(){camera.updateMatrixWorld(true);editor.signals.cameraChanged.dispatch(camera);editor.signals.refreshSidebarObject3D.dispatch(camera);}
  function start(){
   if(camera||editor.modalTransform?.active||document.body.classList.contains('presenting'))return;
-  const active=editor.viewportCamera;if(!active?.isCamera||hasRestriction(active,'locked'))return;
-  camera=active;canvas=viewport.querySelector('canvas');if(!canvas){camera=null;return;}
+  const active=editor.viewLayout?.navigation?.camera;if(!active?.isCamera||hasRestriction(active,'locked'))return;
+  camera=active;canvas=editor.renderer?.domElement;if(!canvas){camera=null;return;}
   camera.updateWorldMatrix(true,false);startPosition=camera.position.clone();startRotation=camera.rotation.clone();worldPosition=camera.getWorldPosition(new THREE.Vector3());
   euler.setFromQuaternion(camera.getWorldQuaternion(q),'YXZ');yaw=euler.y;pitch=euler.x;roll=euler.z;keys.clear();last=performance.now();locked=false;
   editor.controls.enabled=false;notice.hidden=false;notice.textContent='Fly camera · WASD move · Q/E up/down · Shift faster · wheel speed · Enter/click accept · Esc cancel';

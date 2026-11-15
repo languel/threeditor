@@ -1,3 +1,4 @@
+import { hasLightView } from './modeling/LightView.js';
 import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
 import { isProjector, createProjectorHelper, upgradeProjectorScript } from './assets/Projector.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
@@ -153,6 +154,8 @@ function Editor( portable = false ) {
 	this.cameras = {};
 
 	this.viewportCamera = this.camera;
+	this.viewportSource = null;
+	this.viewportSplit = false;
 	this.activeSceneCameraUuid = null;
 	this.viewportShading = 'default';
 	this.viewportColor = new THREE.Color();
@@ -650,9 +653,27 @@ Editor.prototype = {
 
 	setViewportCamera: function ( uuid ) {
 
+		this.viewportSource = null;
 		const requested = this.cameras[ uuid ];
 		this.viewportCamera = requested && ! hasRestriction( requested, 'disabled' ) ? requested : this.camera;
 		if ( this.viewportCamera !== this.camera ) this.activeSceneCameraUuid = this.viewportCamera.uuid;
+		else this.viewportSplit = false;
+		this.signals.viewportCameraChanged.dispatch();
+
+	},
+
+	setViewportSource: function ( object ) {
+
+		if ( ! hasLightView( object ) || hasRestriction( object, 'disabled' ) ) return;
+		this.viewportSource = object;
+		this.viewportCamera = this.camera;
+		this.signals.viewportCameraChanged.dispatch();
+
+	},
+
+	setViewportSplit: function ( enabled ) {
+
+		this.viewportSplit = Boolean( enabled );
 		this.signals.viewportCameraChanged.dispatch();
 
 	},
@@ -846,7 +867,15 @@ Editor.prototype = {
 			const legacy = this.cameras[ json.mainCamera || json.viewportCamera || savedCamera.uuid ];
 			this.scene.userData.mainCamera = legacy && legacy !== this.camera ? legacy.uuid : null;
 		}
+		this.viewportSplit = Boolean( json.viewportSplit );
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
+		const viewportSource = this.objectByUuid( json.viewportSource );
+		if ( hasLightView( viewportSource ) && ! hasRestriction( viewportSource, 'disabled' ) ) {
+
+			this.viewportSplit = Boolean( json.viewportSplit );
+			this.setViewportSource( viewportSource );
+
+		}
 		if ( json.mainCameraTarget ) this.controls.getCenter( this.mainCamera ).fromArray( json.mainCameraTarget );
 		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
 		this.config.setKey( 'project/title', json.project?.title || '' );
@@ -889,6 +918,8 @@ Editor.prototype = {
 			},
 			camera: this.camera.toJSON(),
 			viewportCamera: this.viewportCamera.uuid,
+			viewportSource: this.viewportSource?.uuid,
+			viewportSplit: this.viewportSplit,
 			mainCamera: this.mainCamera.uuid,
 			mainCameraTarget: ( this.controls.getCenter?.( this.mainCamera ) || this.controls.center ).toArray(),
 			activeSceneCamera: this.activeSceneCameraUuid,
