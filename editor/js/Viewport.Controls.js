@@ -74,17 +74,7 @@ function ViewportControls( editor ) {
 	} );
 	const parameters = new ViewportParameters( editor );
 	editor.viewportParameters = parameters;
-	const names = new UIButton( 'Object names' ).addClass( 'viewport-names-button' );
-	names.dom.setAttribute( 'aria-pressed', String( editor.config.getKey( 'settings/showObjectNames' ) ) );
-	names.onClick( () => {
-
-		const enabled = ! editor.config.getKey( 'settings/showObjectNames' );
-		editor.config.setKey( 'settings/showObjectNames', enabled );
-		names.dom.setAttribute( 'aria-pressed', String( enabled ) );
-		signals.viewportLabelsChanged.dispatch();
-
-	} );
-	container.add( shadingSelect, names, parameters );
+	container.add( shadingSelect, parameters );
 	signals.viewportShadingChanged.add( () => shadingSelect.setValue( editor.viewportShading ) );
 
 	signals.editorCleared.add( function () {

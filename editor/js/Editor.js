@@ -720,6 +720,13 @@ Editor.prototype = {
 
 	},
 
+	setViewportObjectNames: function ( enabled ) {
+
+		this.config.setKey( 'settings/showObjectNames', enabled );
+		this.signals.viewportLabelsChanged.dispatch();
+
+	},
+
 	setViewportShading: function ( value ) {
 
 		this.viewportShading = value;

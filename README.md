@@ -47,7 +47,7 @@ Use **Edit attached behavior** or the object's **Script** tab to change the scri
 
 Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`. The builder and its vendored source modules/recording are in `tools/`; provenance and the adaptation scope are documented in [the lesson notes](editor/examples/lessons/README.md).
 
-**Object names** overlays named scene objects in each viewport pane, including in split view. **Settings → General → Transform gizmo size** changes the size of the move, rotate, and scale handles across projects. It defaults to 75%. **Auto-hide top menu** lets the viewport fill the space up to the top edge, where you can reveal the menu.
+**Settings → General → Show object names** overlays names in each viewport pane, including in split view. Press **Shift+L** to toggle the overlay or rebind it in **Settings → Shortcuts**. **Settings → General → Transform gizmo size** changes the size of the move, rotate, and scale handles across projects. It defaults to 75%. **Auto-hide top menu** lets the viewport fill the space up to the top edge, where you can reveal the menu.
 
 Select a Gaussian scan and open **Script → Gaussian Splat** to turn on **Points only** or adjust point size in pixels. This shows one colored point at each Gaussian center. In the Gaussian view, **SH degree** sets how much view-dependent color to use from the file. Degree 0 uses the base color from every angle. Higher degrees can preserve effects such as changes in reflections as you move around, up to the degree stored in the scan.
 

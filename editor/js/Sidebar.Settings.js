@@ -68,6 +68,15 @@ function SidebarSettings( editor ) {
 
 	} );
 
+	const objectNames = new UIBoolean( config.getKey( 'settings/showObjectNames' ), 'Show object names' );
+	const objectNamesLabel = document.createElement( 'label' );
+	objectNamesLabel.className = 'settings-checkbox';
+	objectNamesLabel.style.display = 'block';
+	objectNamesLabel.appendChild( objectNames.dom );
+	general.dom.appendChild( objectNamesLabel );
+	objectNames.onChange( () => editor.setViewportObjectNames( objectNames.getValue() ) );
+	signals.viewportLabelsChanged.add( () => objectNames.setValue( config.getKey( 'settings/showObjectNames' ) ) );
+
 	const mouseNavigationRow = new UIRow();
 	const mouseNavigation = new UISelect().setOptions( { basic: 'Standard', blender: 'Blender' } );
 	mouseNavigation.dom.setAttribute( 'aria-label', 'Mouse navigation' );
