@@ -72,7 +72,7 @@ const APP = {
 		let camera, scene, projector, projectorContext;
 
 		let events = {};
-		const splatHost = new SplatHost();
+		let splatHost;
 		const postHost = new PostProcessingHost();
 		const scriptParameters = new Map();
 		let playing = false;
@@ -89,6 +89,8 @@ const APP = {
 		this.load = async function ( json ) {
 
 			const project = json.project;
+			splatHost?.dispose();
+			splatHost = new SplatHost();
 
 			// Create renderer based on project settings
 
@@ -459,7 +461,8 @@ const APP = {
 		this.dispose = function () {
 
 			postHost.dispose();
-			splatHost.dispose();
+			splatHost?.dispose();
+			splatHost = null;
 			controller?.dispose();
 			controller = undefined;
 			if ( renderer ) {

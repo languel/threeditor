@@ -41,6 +41,9 @@ export function splatBytesToPLY( buffer ) {
 
 }
 
+const splatMeshSetup = `const maxSh = SplatMesh.prototype.setDisplayShDegree ? 4 : Math.round( current.maxSh );
+  const mesh = new SplatMesh( { ...input, maxSh } );`;
+
 const splatDisplayParams = `// @label maxSh = "SH degree (view-dependent color)"
 // @param pointCloud = false
 // @label pointCloud = "Points only"
@@ -70,7 +73,7 @@ const splatDisplay = `function updateDisplay() {
  splat.visible = ! current.pointCloud;
  splat.opacity = current.opacity;
  splat.recolor.set( current.color );
- splat.setDisplayShDegree( Math.round( current.maxSh ) );
+ splat.setDisplayShDegree?.( Math.round( current.maxSh ) );
  this.userData.hasSplat = splat.visible;
  if ( points ) {
   points.visible = current.pointCloud && current.opacity > 0;
@@ -130,7 +133,7 @@ function init() {
 		: `const file = new File( [ await response.blob() ], 'scan.${ fileType }' );
   const input = { file, fileType: ${ JSON.stringify( fileType ) } };` }
   if ( ! active ) return;
-  const mesh = new SplatMesh( { ...input, maxSh: 4 } );
+  ${ splatMeshSetup }
   mesh.name = 'SplatMesh';
   mesh.opacity = current.opacity;
   mesh.recolor.set( current.color );
@@ -188,7 +191,7 @@ export function upgradeSplatScript( script ) {
 	const replacements = [
 		[ '// @label maxSh = "SH degree"', splatDisplayParams ],
 		[ 'let splat, active = false, request, current = params;', 'let splat, points, active = false, request, current = params;' ],
-		[ 'maxSh: Math.round( params.maxSh )', 'maxSh: 4' ],
+		[ 'const mesh = new SplatMesh( { ...input, maxSh: Math.round( params.maxSh ) } );', splatMeshSetup ],
 		[ '  const box = mesh.getBoundingBox', '  updateDisplay.call( this );\n  const box = mesh.getBoundingBox' ],
 		[ 'splat = null;', 'splat = points = null;' ],
 		[ `function setParameters( next ) {
@@ -199,7 +202,19 @@ export function upgradeSplatScript( script ) {
  player.requestRender?.();
 }`, splatDisplay ]
 	];
-	if ( ! replacements.every( ( [ previous ] ) => script.source.includes( previous ) ) ) return;
-	for ( const [ previous, next ] of replacements ) script.source = script.source.replaceAll( previous, () => next );
+	if ( replacements.every( ( [ previous ] ) => script.source.includes( previous ) ) ) {
+
+		for ( const [ previous, next ] of replacements ) script.source = script.source.replaceAll( previous, () => next );
+
+	}
+	// Saved copies of the first live-SH script may run against a cached renderer.
+	const uncheckedSh = 'splat.setDisplayShDegree( Math.round( current.maxSh ) );';
+	if ( script.source.includes( uncheckedSh ) ) {
+
+		script.source = script.source
+			.replace( uncheckedSh, 'splat.setDisplayShDegree?.( Math.round( current.maxSh ) );' )
+			.replace( 'const mesh = new SplatMesh( { ...input, maxSh: 4 } );', splatMeshSetup );
+
+	}
 
 }
