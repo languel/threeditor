@@ -54,6 +54,7 @@ function setup( title, scan, options ) {
 	scene.userData.lesson = { title, instructions: options.instructions, source: scan.meta.page, credit: scan.meta.credit };
 	scene.add( new THREE.HemisphereLight( 0xdce8ff, 0x686379, survey ? .54 : .57 ) );
 	const camera = new THREE.PerspectiveCamera( fov, 1, .025, 80 );
+	camera.name = 'Director';
 	camera.position.fromArray( position );
 	camera.lookAt( ...target );
 

@@ -10,6 +10,7 @@ function lesson( title, instructions, source ) {
 	scene.background = new THREE.Color( 0x20242e );
 	scene.userData.lesson = { title, instructions, source };
 	const camera = new THREE.PerspectiveCamera( 44, 1, .01, 80 );
+	camera.name = 'Director';
 	camera.position.set( 0, 1, 6 );
 	camera.lookAt( 0, 0, 0 );
 	const scripts = {};

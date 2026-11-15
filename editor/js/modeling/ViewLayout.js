@@ -45,6 +45,7 @@ export class ViewLayout {
 		if ( split ) this.frames.unshift( { key: 'director', camera: editor.camera, rect: { x: 0, y: 0, width: edge, height } } );
 		this.divider.hidden = this.directorName.hidden = this.sourceName.hidden = ! split;
 		this.divider.style.left = edge + 'px';
+		this.directorName.textContent = editor.camera.name || 'Director';
 		this.sourceName.style.left = edge + 12 + 'px';
 		this.sourceName.textContent = source?.name || camera.name || 'Camera';
 		return this.frames;

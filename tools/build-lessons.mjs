@@ -27,7 +27,7 @@ function room( title, source, description, cameraPosition = [ 3.2, 1.8, 5.5 ] ) 
 	scene.userData.lesson = { title, source: 'https://github.com/languel/threejslessons/blob/main/' + source, description,
 		instructions: 'Use the director camera to explore. Select objects to inspect geometry and materials. Open Script → Edit to change behavior or parameters. Alt/Option+P plays the lesson.' };
 	const camera = new THREE.PerspectiveCamera( 50, 1, 0.05, 100 );
-	camera.name = 'Camera';
+	camera.name = 'Director';
 	camera.position.fromArray( cameraPosition );
 	camera.lookAt( 0, 0, 0 );
 	const floor = new THREE.Mesh( new THREE.PlaneGeometry( 20, 20 ), new THREE.MeshStandardMaterial( { color: 0xd1c9b8, roughness: 1 } ) );

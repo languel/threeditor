@@ -1,6 +1,7 @@
 import { hasLightView } from './modeling/LightView.js';
 import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
-import { isProjector, createProjectorHelper, upgradeProjectorScript } from './assets/Projector.js';
+import { isProjector, upgradeProjectorScript } from './assets/Projector.js';
+import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
@@ -17,7 +18,7 @@ import { Selector } from './Selector.js';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );
-_DEFAULT_CAMERA.name = 'Camera';
+_DEFAULT_CAMERA.name = 'Director';
 _DEFAULT_CAMERA.position.set( 0, 5, 10 );
 _DEFAULT_CAMERA.lookAt( new THREE.Vector3() );
 const _ORTHOGRAPHIC_FRUSTUM_SIZE = 100;
@@ -425,7 +426,7 @@ Editor.prototype = {
 
 				if ( object.isCamera ) {
 
-					helper = new THREE.CameraHelper( object );
+					helper = createCameraHelper( THREE, object );
 
 				} else if ( isProjector( object ) ) {
 
@@ -495,7 +496,12 @@ Editor.prototype = {
 					const picker = new THREE.Mesh( geometry, material );
 					picker.name = 'picker';
 					picker.userData.object = object;
-					if ( isProjector( object ) ) picker.scale.setScalar( 0.1 );
+					if ( object.isCamera || isProjector( object ) ) {
+
+						picker.scale.setScalar( .115 );
+						picker.position.z = .13;
+
+					}
 					helper.add( picker );
 
 				}
@@ -828,6 +834,7 @@ Editor.prototype = {
 
 		// copy all properties, including uuid
 		this.camera.copy( camera );
+		if ( typeof this.camera.name !== 'string' || ! this.camera.name.trim() ) this.camera.name = _DEFAULT_CAMERA.name;
 		this.camera.uuid = incomingUuid;
 
 		delete this.cameras[ existingUuid ]; // remove old entry [existingUuid, this.camera]

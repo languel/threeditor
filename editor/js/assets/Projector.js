@@ -216,47 +216,6 @@ function stop() { projector?.dispose(); }
 
 }
 
-export function createProjectorHelper( THREE, object ) {
-
-	const camera = new THREE.PerspectiveCamera();
-	const helper = new THREE.CameraHelper( camera );
-	helper.type = 'ProjectorHelper';
-	helper.frustumCulled = false;
-
-	const update = helper.update.bind( helper );
-	const forward = new THREE.Vector3();
-	let previousFrame;
-	helper.update = function () {
-
-		const frame = object.projectorFrame;
-		this.material.visible = !! frame;
-		if ( ! frame ) return;
-		object.getWorldPosition( camera.position );
-		forward.setFromMatrixColumn( object.matrixWorld, 2 ).normalize();
-		camera.up.setFromMatrixColumn( object.matrixWorld, 1 ).normalize();
-		camera.lookAt( forward.add( camera.position ) );
-		camera.updateMatrixWorld();
-		if ( frame === previousFrame ) return;
-		previousFrame = frame;
-		camera.fov = THREE.MathUtils.radToDeg( 2 * Math.atan( frame.height ) );
-		camera.aspect = frame.width / frame.height;
-		camera.near = 0.01;
-		camera.far = frame.range;
-		camera.updateProjectionMatrix();
-		update();
-
-	};
-	const updateMatrixWorld = helper.updateMatrixWorld.bind( helper );
-	helper.updateMatrixWorld = function ( force ) {
-
-		this.update();
-		updateMatrixWorld( force );
-
-	};
-	return helper;
-
-}
-
 // Upgrade the generated projector already stored in older projects. Preserve
 // parameters and the rest of the attached script.
 export function upgradeProjectorScript( script ) {

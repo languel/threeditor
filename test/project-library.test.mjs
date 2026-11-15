@@ -51,6 +51,7 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 		const url = new URL( '../editor/' + entry.file, import.meta.url );
 		const json = JSON.parse( await readFile( url ) );
+		if ( ! entry.file.includes( 'examples/threejs/' ) ) assert.equal( json.camera.object.name, 'Director', entry.title );
 		if ( entry.file.includes( 'examples/lessons/' ) ) {
 
 			const camera = await new THREE.ObjectLoader().parseAsync( json.camera );

@@ -116,3 +116,37 @@ test( 'Ruler distances follow mesh transforms and report upright area in calibra
 	assert.deepEqual( worldMeasurePoints( THREE, scene, null, anchors )[ 2 ].toArray(), [ 2, 3, 0 ] );
 
 } );
+
+test( 'Optics helpers place the body behind the lens and the projector frustum along its beam', async () => {
+
+	const { createCameraHelper, createProjectorHelper } = await import( '../editor/js/modeling/OpticsHelpers.js' );
+	const parent = new THREE.Group(), projector = new THREE.Group();
+	parent.position.set( 4, 2, - 1 );
+	parent.rotation.set( .1, .8, -.12 );
+	parent.add( projector );
+	projector.position.set( 1, .4, - 2 );
+	projector.rotation.set( -.35, .6, .2 );
+	projector.userData.assetObject = { type: 'projector' };
+	projector.projectorFrame = { width: .4, height: .25, range: 12 };
+	const helper = createProjectorHelper( THREE, projector );
+	helper.updateMatrixWorld( true );
+
+	const origin = projector.getWorldPosition( new THREE.Vector3() );
+	const beam = projector.localToWorld( new THREE.Vector3( 0, 0, - 1 ) ).sub( origin ).normalize();
+	const frustum = helper.geometry.attributes.position;
+	const end = [ 'f1', 'f2', 'f3', 'f4' ].reduce( ( center, corner ) =>
+		center.add( new THREE.Vector3().fromBufferAttribute( frustum, helper.pointMap[ corner ][ 0 ] ) ), new THREE.Vector3()
+	).multiplyScalar( .25 ).applyMatrix4( helper.matrixWorld );
+	assert.ok( end.sub( origin ).distanceTo( beam.clone().multiplyScalar( 12 ) ) < 1e-5 );
+
+	for ( const body of [ helper.getObjectByName( 'Projector body' ), createCameraHelper( THREE, new THREE.PerspectiveCamera() ).getObjectByName( 'Camera body' ) ] ) {
+
+		assert.ok( body.isLineSegments );
+		assert.equal( body.material.color.getHex(), 0xff9d3d );
+		body.geometry.computeBoundingBox();
+		assert.equal( body.geometry.boundingBox.min.z, 0 );
+		assert.ok( body.geometry.boundingBox.max.z > .2 );
+
+	}
+
+} );

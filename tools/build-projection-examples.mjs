@@ -39,6 +39,7 @@ function study( title, instructions, asset, cameraPosition, target ) {
 	scene.background = new THREE.Color( 0x141821 );
 	scene.userData.lesson = { title, instructions, source: asset.meta.page, credit: asset.meta.credit };
 	const camera = new THREE.PerspectiveCamera( 42, 1, .01, 80 );
+	camera.name = 'Director';
 	camera.position.set( ...cameraPosition );
 	camera.lookAt( ...target );
 	const scripts = {};

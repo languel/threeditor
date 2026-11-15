@@ -102,7 +102,7 @@ function ViewportControls( editor ) {
 		for ( const key in cameras ) {
 
 			const camera = cameras[ key ];
-			if ( ! hasRestriction( camera, 'disabled' ) ) options[ camera.uuid ] = camera === editor.camera ? 'Director' : camera.name;
+			if ( ! hasRestriction( camera, 'disabled' ) ) options[ camera.uuid ] = camera.name || ( camera === editor.camera ? 'Director' : camera.type );
 
 		}
 
