@@ -2419,15 +2419,31 @@ body[data-ui-style="compact"] .viewport-tool-mask-text { display: none; }
 .scene-timeline-bar select[aria-label="Timeline parameter"] { width: clamp(110px, 20vw, 240px); }
 .scene-timeline-bar button[aria-pressed="true"] { color: var(--theme-accent); }
 .scene-timeline-lanes { flex: 1; min-height: 0; overflow: auto; --timeline-label: clamp(90px, 17vw, 200px); }
-.scene-timeline-row { display: grid; grid-template-columns: var(--timeline-label) minmax(0, 1fr); min-height: 23px; border-bottom: 1px solid var(--theme-surface); }
+.scene-timeline-row { display: grid; grid-template-columns: var(--timeline-label) minmax(0, 1fr); min-height: 23px; border-bottom: 1px solid color-mix(in srgb, var(--theme-text) 11%, transparent); }
 .scene-timeline-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 5px; opacity: .85; }
-.scene-timeline-row > div { position: relative; margin: 0 16px 0 3px; }
+.scene-timeline-row > div {
+	position: relative;
+	margin: 0 16px 0 3px;
+	background: repeating-linear-gradient(to right,
+		color-mix(in srgb, var(--theme-text) 15%, transparent) 0 1px,
+		transparent 1px var(--timeline-tick, 10%));
+}
 .scene-timeline-ruler { background: var(--theme-surface); position: sticky; top: 0; z-index: 2; }
 .scene-timeline-ruler > div { cursor: ew-resize; touch-action: none; }
 .scene-timeline-ruler > div > span:not(.scene-timeline-playhead) { position: absolute; top: 3px; pointer-events: none; font-variant-numeric: tabular-nums; }
-.scene-timeline-playhead { position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--theme-accent); pointer-events: none; }
+.scene-timeline-playhead { position: absolute; inset: 0 auto 0 0; z-index: 1; width: 2px; background: var(--theme-accent); pointer-events: none; }
 .scene-timeline-clip { position: absolute; top: 2px; bottom: 2px; min-width: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; touch-action: none; padding: 0 4px; }
-.scene-timeline-row.selected .scene-timeline-clip { border-color: var(--theme-accent); color: var(--theme-accent); }
+#animation .scene-timeline-clip {
+	--clip-color: #509bc9;
+	border: 1px solid color-mix(in srgb, var(--clip-color) 68%, transparent);
+	background: color-mix(in srgb, var(--clip-color) 24%, var(--theme-background));
+	color: var(--theme-text);
+}
+#animation .scene-timeline-clip.imported-clip { --clip-color: #a585cf; }
+#animation .scene-timeline-row.selected .scene-timeline-clip {
+	border-color: var(--clip-color);
+	background: color-mix(in srgb, var(--clip-color) 42%, var(--theme-background));
+}
 .scene-timeline-key {
 	position: absolute;
 	top: 50%;

@@ -362,6 +362,7 @@ function Animation( editor ) {
 		};
 		const ruler = row( 'Time', 'scene-timeline-ruler' );
 		const step = Math.max( 1, Math.ceil( end / 10 ) );
+		lanes.style.setProperty( '--timeline-tick', ( step / end * 100 ) + '%' );
 		for ( let i = 0; i <= end; i += step ) {
 
 			const tick = element( 'span', ruler, i + 's' );
@@ -426,6 +427,7 @@ function Animation( editor ) {
 			const lane = row( entry.name, entry.id === selection ? 'selected' : '' );
 			const clipButton = button( lane, entry.name, null );
 			clipButton.classList.add( 'scene-timeline-clip' );
+			clipButton.classList.toggle( 'imported-clip', Boolean( entry.animation ) );
 			clipButton.style.left = entry.start / end * 100 + '%';
 			clipButton.style.width = entry.duration / end * 100 + '%';
 			clipButton.onclick = () => {

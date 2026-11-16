@@ -19,7 +19,7 @@ import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=scene-timeline';
+import { Animation } from './Animation.js?v=scene-timeline-lanes';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
