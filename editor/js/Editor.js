@@ -58,6 +58,7 @@ function Editor( portable = false ) {
 		transformGizmoSizeChanged: new Signal(),
 		viewportLabelsChanged: new Signal(),
 		snapChanged: new Signal(),
+		transformSettingsChanged: new Signal(),
 		spaceChanged: new Signal(),
 		rendererCreated: new Signal(),
 		rendererReset: new Signal(),

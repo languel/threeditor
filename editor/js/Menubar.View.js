@@ -22,7 +22,7 @@ function MenubarView( editor ) {
 
 	const states = {
 
-		gridHelper: true,
+		gridHelper: editor.config.getKey( 'settings/gridVisible' ),
 		cameraHelpers: true,
 		lightHelpers: true,
 		skeletonHelpers: true
@@ -33,15 +33,21 @@ function MenubarView( editor ) {
 
 	let option = new UIRow().addClass( 'option' ).addClass( 'toggle' ).setTextContent( strings.getKey( 'menubar/view/gridHelper' ) ).onClick( function () {
 
-		states.gridHelper = ! states.gridHelper;
-
-		this.toggleClass( 'toggle-on', states.gridHelper );
-
-		signals.showHelpersChanged.dispatch( states );
+		editor.config.setKey( 'settings/gridVisible', ! states.gridHelper );
+		signals.transformSettingsChanged.dispatch( 'gridVisible' );
 
 	} ).toggleClass( 'toggle-on', states.gridHelper );
 
 	options.add( option );
+	const gridOption = option;
+	signals.transformSettingsChanged.add( key => {
+
+		if ( key !== 'gridVisible' && key !== 'gridStep' ) return;
+		states.gridHelper = editor.config.getKey( 'settings/gridVisible' );
+		gridOption.toggleClass( 'toggle-on', states.gridHelper );
+		signals.showHelpersChanged.dispatch( states );
+
+	} );
 
 	// Camera Helpers
 

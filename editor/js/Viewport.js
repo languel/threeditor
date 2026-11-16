@@ -1,3 +1,4 @@
+import { transformSnapStep } from './TransformSettings.js';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -124,6 +125,8 @@ function Viewport( editor ) {
 	grid2.material.color.setHex( GRID_COLORS_LIGHT[ 1 ] );
 	grid2.material.vertexColors = false;
 	grid.add( grid2 );
+	grid.scale.setScalar( editor.config.getKey( 'settings/gridStep' ) );
+	grid.visible = editor.config.getKey( 'settings/gridVisible' );
 
 	const viewHelper = new ViewHelper( camera, container, ( dx, dy ) => controls.rotate( new THREE.Vector3( dx, dy, 0 ) ) );
 
@@ -154,11 +157,21 @@ function Viewport( editor ) {
 
 		snapHeld = held && ! ground;
 		groundHeld = held && ground;
-		transformControls.setTranslationSnap( snapHeld ? translationSnap ?? 1 : translationSnap );
-		transformControls.setRotationSnap( snapHeld ? Math.PI / 12 : null );
-		transformControls.setScaleSnap( snapHeld ? 0.1 : null );
+		const step = transformSnapStep( editor.config, snapHeld ) ?? translationSnap;
+		transformControls.setTranslationSnap( groundHeld ? null : step );
+		transformControls.setRotationSnap( step && ! groundHeld ? Math.PI / 12 : null );
+		transformControls.setScaleSnap( step && ! groundHeld ? 0.1 : null );
 
 	}
+
+	setControlSnap( false );
+	signals.transformSettingsChanged.add( key => {
+
+		grid.scale.setScalar( editor.config.getKey( 'settings/gridStep' ) );
+		setControlSnap( false );
+		if ( key !== 'transformPivot' ) render();
+
+	} );
 
 	const groundBox = new THREE.Box3(), groundDelta = new THREE.Vector3();
 	function dropToGround() {
@@ -640,7 +653,7 @@ function Viewport( editor ) {
 
 			}
 
-			if ( isVisible( object ) && ! hasRestriction( object, 'locked' ) ) transformControls.attach( object );
+			if ( isVisible( object ) && ! hasRestriction( object, 'locked' ) ) transformControls.attach( selector.usesGroupPivot() ? selector.group : object );
 
 		}
 
@@ -670,7 +683,7 @@ function Viewport( editor ) {
 	signals.objectChanged.add( function ( object ) {
 
 		const selected = selector.selection;
-		const candidate = selected.length > 1 ? selector.group : selected[ 0 ];
+		const candidate = selector.usesGroupPivot() ? selector.group : selected[ 0 ];
 		const canTransform = selected.length > 0 && selected.every( item => item !== scene && item !== camera && isVisible( item ) && ! hasRestriction( item, 'locked' ) );
 		if ( canTransform && transformControls.object !== candidate ) transformControls.attach( candidate );
 		else if ( ! canTransform && transformControls.object ) transformControls.detach();

@@ -1,3 +1,4 @@
+import { addTransformSettings } from './TransformSettings.js';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {
@@ -68,6 +69,7 @@ function Toolbar( editor ) {
 
 	} );
 
+	addTransformSettings( editor, container.dom );
 	return container;
 
 }

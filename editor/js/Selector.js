@@ -90,7 +90,7 @@ class Selector {
 
 		signals.objectChanged.add( ( object ) => {
 
-			if ( this.selection.length < 2 ) return;
+			if ( ! this.usesGroupPivot() ) return;
 
 			if ( object === this.group ) {
 
@@ -105,6 +105,14 @@ class Selector {
 				this.updateGroup();
 
 			}
+
+		} );
+
+		signals.transformSettingsChanged.add( key => {
+
+			if ( key !== 'transformPivot' ) return;
+			this.syncPivot();
+			signals.objectSelected.dispatch( editor.selected );
 
 		} );
 
@@ -195,11 +203,9 @@ class Selector {
 		const hadGroupSelection = this.group.parent !== null;
 
 		this.selection = objects.slice();
+		this.syncPivot();
 
 		if ( objects.length > 1 ) {
-
-			editor.sceneHelpers.add( this.group );
-			this.updateGroup();
 
 			editor.selected = null;
 			editor.config.setKey( 'selected', null );
@@ -209,8 +215,6 @@ class Selector {
 		} else {
 
 			const object = ( objects.length === 1 ) ? objects[ 0 ] : null;
-
-			editor.sceneHelpers.remove( this.group );
 
 			if ( editor.selected === object && hadGroupSelection === false ) return;
 
@@ -223,13 +227,48 @@ class Selector {
 
 	}
 
+	usesGroupPivot() {
+
+		if ( ! this.selection.length ) return false;
+		if ( this.selection.length > 1 ) return true;
+		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
+		return pivot === 'bounds' || pivot === 'origin';
+
+	}
+
+	syncPivot() {
+
+		if ( this.usesGroupPivot() ) {
+
+			if ( ! this.group.parent ) this.editor.sceneHelpers.add( this.group );
+			this.updateGroup();
+
+		} else {
+
+			this.group.removeFromParent();
+
+		}
+
+	}
+
 	updateGroup() {
 
 		const group = this.group;
 
-		// use the center of the selection's AABB as pivot point
+		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
+		if ( pivot === 'origin' ) group.position.set( 0, 0, 0 );
+		else if ( pivot === 'active' ) this.selection.at( -1 ).getWorldPosition( group.position );
+		else if ( pivot === 'median' ) {
 
-		this.getSelectionBox( _box ).getCenter( group.position );
+			group.position.set( 0, 0, 0 );
+			for ( const object of this.selection ) group.position.add( object.getWorldPosition( _vector ) );
+			group.position.divideScalar( this.selection.length );
+
+		} else {
+
+			this.getSelectionBox( _box ).getCenter( group.position );
+
+		}
 		group.quaternion.identity();
 		group.scale.set( 1, 1, 1 );
 		group.updateWorldMatrix();
