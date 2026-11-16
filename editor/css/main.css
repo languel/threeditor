@@ -2467,7 +2467,8 @@ body[data-ui-style="compact"] .scene-timeline-label { display: none; }
 
 .scene-timeline-armed { display: flex; align-items: center; gap: 4px; }
 .scene-timeline-armed .Button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.timeline-key-dot {
+#sidebar .timeline-key-dot {
+	appearance: none;
 	display: inline-grid;
 	place-items: center;
 	width: 15px;
