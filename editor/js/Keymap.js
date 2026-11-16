@@ -143,7 +143,7 @@ class Keymap {
    case 'panLeft':case 'panRight':case 'panUp':case 'panDown':e.controls.pan(new THREE.Vector3(id==='panLeft'?-35:id==='panRight'?35:0,id==='panUp'?35:id==='panDown'?-35:0,0));break;
    case 'zoomIn':case 'zoomOut':e.controls.zoom(new THREE.Vector3(0,0,id==='zoomIn'?-1:1));break;
    case 'fly':e.flyControls?.start();break;
-   case 'shading':case 'shadingBack':{const modes=['solid','wireframe','normals','preview'];const n=Math.max(0,modes.indexOf(e.viewportShading));e.setViewportShading(modes[(n+(id==='shading'?1:3))%4]);break;}
+   case 'shading':case 'shadingBack':{const modes=['solid','wireframe','normals','materials','preview'];const n=Math.max(0,modes.indexOf(e.viewportShading));e.setViewportShading(modes[(n+(id==='shading'?1:3))%4]);break;}
    case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;
    case 'presentation':e.player?.present();break;
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}

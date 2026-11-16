@@ -1205,7 +1205,7 @@ function Viewport( editor ) {
 		if ( ! tiled ) {
 
 			const view = frames[ 0 ].camera;
-			draw( view, splatHost, mode === 'preview' || mode === 'realistic' );
+			draw( view, splatHost, mode === 'preview' || mode === 'materials' || mode === 'realistic' );
 			drawGuides( view );
 			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;

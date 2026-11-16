@@ -86,7 +86,7 @@ function ViewportControls( editor ) {
 
 	const shadingSelect = new UISelect();
 	shadingSelect.dom.setAttribute( 'aria-label', 'Viewport shading' );
-	shadingSelect.setOptions( { 'realistic': 'realistic', 'preview': 'preview', 'solid': 'solid', 'normals': 'normals', 'wireframe': 'wireframe' } );
+	shadingSelect.setOptions( { 'realistic': 'realistic', 'preview': 'preview', 'materials': 'materials', 'solid': 'solid', 'normals': 'normals', 'wireframe': 'wireframe' } );
 	shadingSelect.setValue( 'solid' );
 	shadingSelect.onChange( function () {
 
@@ -101,7 +101,7 @@ function ViewportControls( editor ) {
 
 		const mode = editor.viewportShading;
 		shadingSelect.setValue( mode );
-		const glyph = { realistic: 'environment', preview: 'preview', solid: 'shadingSolid', normals: 'shadingNormals', wireframe: 'shadingWire' }[ mode ];
+		const glyph = { realistic: 'environment', preview: 'preview', materials: 'color', solid: 'shadingSolid', normals: 'shadingNormals', wireframe: 'shadingWire' }[ mode ];
 		syncShadingGlyph( glyph );
 
 	}
