@@ -88,7 +88,7 @@ Select an unlocked projector or spotlight and choose **Object → Edit mask in v
 
 ### Measure and draw on receivers
 
-The **Viewport tool** selector works in either pane.
+Viewport tools work in either pane. Compact mode uses icons for Select, Mask, Measure, Surface Path, and Surface Paint. Hover an icon to see its name. Other interface styles use the **Viewport tool** dropdown.
 
 - **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Rulers show distances, corner angles, and area when **Closed**. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
 - **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Saved paths can be edited in **Modeling**.

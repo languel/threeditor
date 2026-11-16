@@ -1,3 +1,4 @@
+import { icon } from '../Glyphs.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -69,12 +70,28 @@ export class ViewportTools {
 		this.context = this.overlay.getContext( '2d' );
 		this.panel = element( 'div', viewport );
 		this.panel.className = 'viewport-tool-panel';
-		this.selector = select( this.panel, 'Viewport tool', [
-			[ '', 'Select & navigate' ], [ 'mask', 'Edit light mask' ], [ 'measure', 'Measure' ],
-			[ 'path', 'Surface path' ], [ 'paint', 'Surface paint' ]
-		] );
+		const tools = [
+			[ '', 'Select & navigate', 'toolSelect' ], [ 'mask', 'Edit light mask', 'toolMask' ],
+			[ 'measure', 'Measure', 'toolMeasure' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'toolPaint' ]
+		];
+		this.selector = select( this.panel, 'Viewport tool', tools );
+		this.selector.className = 'viewport-tool-select';
 		this.selector.onchange = () => this.setMode( this.selector.value );
 		this.editMask = button( this.panel, 'Edit mask', () => this.setMode( 'mask' ) );
+		this.editMask.className = 'viewport-tool-mask-text';
+		const strip = element( 'div', this.panel );
+		strip.className = 'viewport-tool-strip';
+		strip.setAttribute( 'role', 'group' );
+		strip.setAttribute( 'aria-label', 'Viewport tools' );
+		this.toolButtons = new Map( tools.map( ( [ mode, label, glyph ] ) => {
+
+			const control = button( strip, label, () => this.setMode( mode ) );
+			control.innerHTML = icon( glyph );
+			control.title = label;
+			control.setAttribute( 'aria-label', label );
+			return [ mode, control ];
+
+		} ) );
 		this.controls = element( 'div', this.panel );
 		this.controls.className = 'viewport-tool-options';
 		this.status = element( 'output', this.panel );
@@ -136,6 +153,8 @@ export class ViewportTools {
 		const editable = canEditLightMask( source );
 		if ( this.mode === 'mask' && ( ! editable || this.maskSource !== source ) ) this.setMode( '' );
 		this.selector.options[ 1 ].disabled = ! editable;
+		this.toolButtons.get( 'mask' ).disabled = ! editable;
+		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode === this.mode || ! mode && ! this.mode ) );
 		this.editMask.hidden = ! editable || this.mode === 'mask';
 
 	}

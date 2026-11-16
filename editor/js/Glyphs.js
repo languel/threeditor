@@ -6,6 +6,18 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	// Viewport tools and transform settings, adapted from ThreeGrease and AMS.
+	toolSelect: svg( '<path d="m4.5 4.5 6.05 15.15a.563.563 0 0 0 1.048.014l1.902-4.735a.563.563 0 0 1 .315-.315l4.735-1.902a.563.563 0 0 0-.014-1.048L4.5 4.5Z"/>' ),
+	toolMask: svg( '<path d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9Z"/>' ),
+	toolMeasure: svg( '<path d="M3.5 16.5 16.5 3.5a1.5 1.5 0 0 1 2.1 0l1.9 1.9a1.5 1.5 0 0 1 0 2.1L7.5 20.5a1.5 1.5 0 0 1-2.1 0l-1.9-1.9a1.5 1.5 0 0 1 0-2.1ZM8 12l2 2m2-6 2 2m-8 8 2 2"/>' ),
+	toolGrid: svg( '<path d="M4 4h16v16H4ZM4 12h16M12 4v16"/>' ),
+	toolSnap: svg( '<path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>' ),
+	pivotBox: svg( '<path d="M4 4h4M16 4h4M4 20h4M16 20h4M4 4v4M20 4v4M4 16v4M20 16v4M10.6 12a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0 -2.8 0"/>' ),
+	pivotMedian: svg( '<path d="M8.5 8.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M8.5 15.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M10.6 12a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0 -2.8 0"/>' ),
+	pivotActive: svg( '<path d="M4.5 12a7.5 7.5 0 1 0 15 0a7.5 7.5 0 1 0 -15 0M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M10.8 12a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0"/>' ),
+	pivotOrigin: svg( '<path d="M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M12 2v4M12 18v4M2 12h4M18 12h4"/>' ),
+	toolPath: svg( '<path d="M4 18c5 0 4-12 11-12h5"/><rect x="2" y="16" width="4" height="4"/><rect x="18" y="4" width="4" height="4"/>' ),
+	toolPaint: svg( '<path d="M14 4l6 6-7.5 7.5-6-6z"/><path d="M6.5 11.5C4 12 3 14 3 16.5 3 18 2.5 19.5 1.5 20.5c3 0 6.5-.5 8-2 1.3-1.3 1.5-3 1-4.5"/>' ),
 	// Tabs
 	scene: svg( '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>' ),
 	assets: svg( '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>' ),
