@@ -1,4 +1,5 @@
 import { Command } from '../Command.js';
+import * as Commands from './Commands.js';
 
 class MultiCmdsCommand extends Command {
 
@@ -72,7 +73,7 @@ class MultiCmdsCommand extends Command {
 		const cmds = json.cmds;
 		for ( let i = 0; i < cmds.length; i ++ ) {
 
-			const cmd = new window[ cmds[ i ].type ]();	// creates a new object of type "json.type"
+			const cmd = new Commands[ cmds[ i ].type ]( this.editor );
 			cmd.fromJSON( cmds[ i ] );
 			this.cmdArray.push( cmd );
 

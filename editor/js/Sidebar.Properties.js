@@ -50,7 +50,7 @@ function SidebarProperties( editor ) {
 
 		geometryTab.setHidden( ! object.geometry );
 
-		materialTab.setHidden( ! object.material );
+		materialTab.setHidden( ! object.material && ( ! object.isGroup || isProjector( object ) ) );
 
 		scriptTab.setHidden( object === editor.camera );
 

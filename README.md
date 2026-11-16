@@ -55,7 +55,7 @@ The outliner uses distinct icons for cameras, projectors, lights, models, groups
 
 ## Stock material looks
 
-Select a mesh and choose **Material → Stock look**. For a mesh with multiple materials, select the slot first. Each look is an editable shader material with undo and redo.
+Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. The whole group assignment is one undo step. Switch to **Preview** to see the shader, or edit it through a mesh’s **Material → Program**.
 
 - **Line drawing** uses an ink contour and a paper-colored fill.
 - **Blueprint** adds a grid and bright contours over a blue surface.

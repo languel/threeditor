@@ -734,6 +734,7 @@ function Viewport( editor ) {
 
 	signals.materialChanged.add( function () {
 
+		if ( ! signals.sceneGraphChanged.active ) return;
 		updatePTMaterials();
 		render();
 

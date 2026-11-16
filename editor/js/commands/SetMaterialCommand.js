@@ -27,7 +27,8 @@ class SetMaterialCommand extends Command {
 
 	execute() {
 
-		this.editor.setObjectMaterial( this.object, this.materialSlot, this.newMaterial );
+		const material = this.editor.materials[ this.newMaterial.uuid ] || this.newMaterial;
+		this.editor.setObjectMaterial( this.object, this.materialSlot, material );
 
 		this.editor.signals.materialChanged.dispatch( this.object, this.materialSlot );
 
@@ -35,7 +36,8 @@ class SetMaterialCommand extends Command {
 
 	undo() {
 
-		this.editor.setObjectMaterial( this.object, this.materialSlot, this.oldMaterial );
+		const material = this.editor.materials[ this.oldMaterial.uuid ] || this.oldMaterial;
+		this.editor.setObjectMaterial( this.object, this.materialSlot, material );
 
 		this.editor.signals.materialChanged.dispatch( this.object, this.materialSlot );
 

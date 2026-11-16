@@ -1,4 +1,5 @@
 import { Color, ShaderMaterial } from 'three';
+import { hasRestriction } from './ObjectRestrictions.js';
 
 const vertexShader = /* glsl */`
 #include <common>
@@ -139,4 +140,26 @@ function createStockMaterialLook( id, previous ) {
 
 }
 
-export { createStockMaterialLook, stockMaterialLooks };
+// Collect scene-owned meshes, including meshes in nested groups.
+function groupLookSlots( group ) {
+
+	const slots = [];
+	if ( hasRestriction( group, 'disabled' ) ) return slots;
+	function visit( object ) {
+
+		if ( object.userData.runtimeOnly || object.userData.threeditor?.disabled ) return;
+		if ( object.isMesh ) {
+
+			const materials = Array.isArray( object.material ) ? object.material : [ object.material ];
+			materials.forEach( ( material, slot ) => { if ( material ) slots.push( { object, material, slot } ); } );
+
+		}
+		for ( const child of object.children ) visit( child );
+
+	}
+	visit( group );
+	return slots;
+
+}
+
+export { createStockMaterialLook, groupLookSlots, stockMaterialLooks };
