@@ -150,3 +150,15 @@ test( 'Optics helpers place the body behind the lens and the projector frustum a
 	}
 
 } );
+
+test( 'Draft shapes stay open until completed and legacy shapes still fill', () => {
+
+	const legacy = modelData( 'shape' );
+	const draft = { ...legacy, closed: false };
+	assert.equal( modelGeometry( THREE, draft ).attributes.position.count, 0 );
+	const closed = { ...draft, closed: true };
+	assert.ok( modelGeometry( THREE, closed ).attributes.position.count >= 3 );
+	assert.equal( modelGeometry( THREE, legacy ).attributes.position.count, modelGeometry( THREE, closed ).attributes.position.count );
+	assert.deepEqual( closed.points, draft.points );
+
+} );

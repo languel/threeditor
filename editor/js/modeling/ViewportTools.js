@@ -7,7 +7,7 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js';
 import { rayToView, meshHit } from './SurfacePicking.js';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
-import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js';
+import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=top-toolbar';
 
 function element( tag, parent, text ) {
 
@@ -49,7 +49,7 @@ export class ViewportTools {
 		this.overlay.setAttribute( 'aria-hidden', 'true' );
 		this.overlay.hidden = true;
 		this.context = this.overlay.getContext( '2d' );
-		this.panel = element( 'div', viewport );
+		this.panel = element( 'div', viewport.querySelector( '.viewport-header' ) );
 		this.panel.className = 'viewport-tool-panel';
 		const workspace = element( 'div', this.panel );
 		workspace.className = 'viewport-workspace';
@@ -100,6 +100,17 @@ export class ViewportTools {
 		viewport.addEventListener( 'pointerdown', event => this.pointerDown( event ), true );
 		viewport.addEventListener( 'pointermove', event => this.pointerMove( event ), true );
 		for ( const type of [ 'pointerup', 'pointercancel', 'lostpointercapture' ] ) viewport.addEventListener( type, event => this.pointerEnd( event ), true );
+		viewport.addEventListener( 'dblclick', event => {
+
+			if ( this.mode !== 'path' || this.points.length < 3 || event.target !== editor.renderer?.domElement ) return;
+			const frame = layout.at( event.clientX, event.clientY );
+			if ( ! frame || frame.key !== this.pathView || this.nearestHandle( frame, event.clientX, event.clientY ) !== 0 ) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.pathClosed = true;
+			this.draw();
+
+		}, true );
 		for ( const type of [ 'mousedown', 'mouseup', 'dblclick', 'touchstart', 'touchend' ] ) viewport.addEventListener( type, event => {
 
 			if ( this.mode && event.target === editor.renderer?.domElement ) event.stopImmediatePropagation();
@@ -214,6 +225,7 @@ export class ViewportTools {
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
 		this.mode = mode;
+		this.pathClosed = false;
 		this.selector.value = mode;
 		this.points = [];
 		this.target = this.ruler = null;
@@ -392,8 +404,9 @@ export class ViewportTools {
 
 			if ( ! this.target || hasRestriction( this.target, 'locked' ) ) return;
 			const points = this.samplePath();
-			editor.execute( new AddObjectCommand( editor, surfacePath( points, this.brush.color ), this.target ) );
+			editor.execute( new AddObjectCommand( editor, surfacePath( points, this.brush.color, this.pathClosed ), this.target ) );
 			this.points = [];
+			this.pathClosed = false;
 			this.target = null;
 			this.selected = - 1;
 			this.render();
@@ -408,10 +421,11 @@ export class ViewportTools {
 		if ( ! frame ) throw new Error( 'Return to the view where you placed the path.' );
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		const points = [ this.points[ 0 ] ];
-		for ( let i = 1; i < this.points.length; i ++ ) {
+		const segments = this.pathClosed ? this.points.length + 1 : this.points.length;
+		for ( let i = 1; i < segments; i ++ ) {
 
 			const a = this.visiblePoint( frame, this.points[ i - 1 ] );
-			const b = this.visiblePoint( frame, this.points[ i ] );
+			const b = this.visiblePoint( frame, this.points[ i % this.points.length ] );
 			if ( ! a || ! b ) throw new Error( 'Frame the whole path in the viewport before saving it.' );
 			const steps = Math.ceil( Math.hypot( b[ 0 ] - a[ 0 ], b[ 1 ] - a[ 1 ] ) / 6 );
 			for ( let j = 1; j < steps; j ++ ) {
@@ -425,7 +439,7 @@ export class ViewportTools {
 				points.push( localSurfacePoint( hit, this.ray ) );
 
 			}
-			points.push( this.points[ i ] );
+			if ( i < this.points.length ) points.push( this.points[ i ] );
 
 		}
 		return points;
@@ -558,7 +572,12 @@ export class ViewportTools {
 				this.target = hit.object;
 				this.pathView = frame.key;
 				const point = localSurfacePoint( hit, this.ray );
-				if ( this.selected < 0 ) this.selected = this.points.push( point ) - 1;
+				if ( this.selected < 0 ) {
+
+					this.pathClosed = false;
+					this.selected = this.points.push( point ) - 1;
+
+				}
 
 			} else {
 
@@ -713,7 +732,7 @@ export class ViewportTools {
 
 			}
 			if ( this.mode === 'measure' ) this.drawRuler( ctx, frame, this.ruler, this.points, this.measure, true );
-			if ( this.mode === 'path' ) this.strokePixels( ctx, this.points.map( point => this.visiblePoint( frame, point ) ), false, true );
+			if ( this.mode === 'path' ) this.strokePixels( ctx, this.points.map( point => this.visiblePoint( frame, point ) ), this.pathClosed, true );
 			if ( this.mode === 'mask' && frame.source === this.maskSource ) {
 
 				ctx.strokeStyle = '#c0c9de';

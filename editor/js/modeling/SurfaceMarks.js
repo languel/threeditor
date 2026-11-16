@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modelObject } from './ModelGeometry.js';
+import { modelObject } from './ModelGeometry.js?v=top-toolbar';
 
 export function localSurfacePoint( hit, ray ) {
 
@@ -10,9 +10,9 @@ export function localSurfacePoint( hit, ray ) {
 
 }
 
-export function surfacePath( points, color ) {
+export function surfacePath( points, color, closed = false ) {
 
-	const line = modelObject( THREE, { kind: 'path', points, smooth: false, closed: false, planar: false }, 'Surface path' );
+	const line = modelObject( THREE, { kind: 'path', points, smooth: false, closed, planar: false }, 'Surface path' );
 	line.material.color.set( color );
 	line.userData.surfaceMark = true;
 	return line;

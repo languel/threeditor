@@ -31,8 +31,9 @@ const definitions = [
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
  ['toggleSnap','Toggle magnet snapping','Transform','shift+tab','shift+tab'], ['orientationPie','Open orientation menu','Transform',',',','],
+ ['placementPie','Open placement menu','Transform','alt+,','alt+,'],
  ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
- ['grid','Toggle grid','View','',''], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
+ ['grid','Toggle grid','Transform','alt+g','alt+g'], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
  ['timelineInsertKey','Insert timeline keyframe','Animation','i','i'],
  ['animationPlay','Play animation','Animation','','space'], ['animationPause','Pause animation','Animation','',''], ['animationStop','Stop animation','Animation','','']
 ];
@@ -42,6 +43,7 @@ function comboFromEvent( event ) {
  let key = event.key.toLowerCase();
  if ( event.code === 'Backquote' ) key = 'backquote';
  else if ( event.code?.startsWith( 'Numpad' ) ) key = event.code.toLowerCase();
+ else if ( event.code === 'Comma' ) key = ',';
  else if ( event.altKey && event.code?.startsWith( 'Key' ) ) key = event.code.slice( 3 ).toLowerCase();
  else if ( key === ' ' ) key = 'space';
  const mod = /Mac|iPhone|iPad/.test( navigator.platform ) ? event.metaKey : event.ctrlKey;
@@ -157,8 +159,9 @@ class Keymap {
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
-   case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
-   case 'grid':case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
+   case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
+   case 'grid':e.toggleTransformGrid?.();break;
+   case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;
    case 'animationPlay':case 'animationPause':case 'animationStop':e.animationCommands?.[id]?.();break;
   }

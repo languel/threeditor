@@ -1,4 +1,4 @@
-import { transformSnapStep } from './TransformSettings.js?v=model-transform';
+import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import * as THREE from 'three';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';

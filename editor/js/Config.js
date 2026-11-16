@@ -34,6 +34,7 @@ function Config( persist = true ) {
 		'settings/transformGizmoSize': 0.75,
 		'settings/gridVisible': true,
 		'settings/gridStep': 1,
+		'settings/modelPlacement': 'object',
 		'settings/transformSnap': null,
 		'settings/transformSnapTarget': 'grid',
 		'settings/transformOrientation': 'global',

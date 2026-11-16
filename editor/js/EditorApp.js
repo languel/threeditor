@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=timeline-autokey';
-import { Keymap } from './Keymap.js?v=edit-mode-focus';
-import { ModalTransform } from './ModalTransform.js?v=edit-mode-focus';
+import { Editor } from './Editor.js?v=top-toolbar';
+import { Keymap } from './Keymap.js?v=top-toolbar';
+import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=viewport-keyboard-focus';
-import { Toolbar } from './Toolbar.js?v=model-transform';
+import { Viewport } from './Viewport.js?v=top-toolbar';
+import { Toolbar } from './Toolbar.js?v=top-toolbar';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=edit-modes';
+import { Sidebar } from './Sidebar.js?v=top-toolbar';
 import { Menubar } from './Menubar.js?v=edit-modes';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
@@ -76,7 +76,7 @@ async function startEditor( portable = null ) {
 	document.body.appendChild( viewport.dom );
 
 	const toolbar = new Toolbar( editor );
-	document.body.appendChild( toolbar.dom );
+	editor.viewportToolbar.prepend( toolbar.dom );
 
 	const player = new Player( editor );
 	editor.player = player;

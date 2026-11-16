@@ -3,8 +3,8 @@ import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { setLightMask } from './modeling/LightMask.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
-import { outlinePoints } from './modeling/ModelGeometry.js';
-import { editableMesh } from './modeling/ModelViewport.js?v=edit-modes';
+import { isClosedOutline, outlinePoints } from './modeling/ModelGeometry.js?v=top-toolbar';
+import { editableMesh } from './modeling/ModelViewport.js?v=top-toolbar';
 import { modelButton, modelField } from './modeling/ModelControls.js';
 import { maskFromOutline } from './modeling/ProjectionMask.js';
 
@@ -72,7 +72,7 @@ function SidebarProjectionMask( editor, object, host, run ) {
 	editor.scene.traverse( source => {
 
 		const data = source.geometry?.userData.modeling;
-		if ( data?.points?.length >= 3 && ( data.kind === 'shape' || data.kind === 'path' && data.closed ) ) {
+		if ( data?.points?.length >= 3 && ( data.kind === 'shape' || data.kind === 'path' ) && isClosedOutline( data ) ) {
 
 			element( 'option', source.name, outline ).value = source.uuid;
 

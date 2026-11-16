@@ -10,9 +10,6 @@ function ViewportControls( editor ) {
 
 	const container = new UIPanel();
 	container.dom.classList.add( 'viewport-controls' );
-	container.setPosition( 'absolute' );
-	container.setRight( '10px' );
-	container.setTop( '10px' );
 
 	function glyphSelect( select, glyph ) {
 

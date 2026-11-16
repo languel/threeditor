@@ -10,7 +10,7 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=timeline-autokey';
+import { Config } from './Config.js?v=top-toolbar';
 import { Loader } from './Loader.js';
 import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';

@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=model-transform';
+import { addTransformSettings } from './TransformSettings.js?v=top-toolbar';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

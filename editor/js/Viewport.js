@@ -1,4 +1,4 @@
-import { transformSnapStep } from './TransformSettings.js?v=model-transform';
+import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -10,7 +10,7 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=camera-playback';
 
 import { ViewportLabels } from './Viewport.Labels.js';
-import { ViewportControls } from './Viewport.Controls.js?v=viewport-tools';
+import { ViewportControls } from './Viewport.Controls.js?v=top-toolbar';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
@@ -27,9 +27,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=edit-modes';
+import { ViewportTools } from './modeling/ViewportTools.js?v=top-toolbar';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=viewport-keyboard-focus';
+import { ModelViewport } from './modeling/ModelViewport.js?v=top-toolbar';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -41,7 +41,14 @@ function Viewport( editor ) {
 	container.setId( 'viewport' );
 	container.setPosition( 'absolute' );
 
-	container.add( new ViewportControls( editor ) );
+	const header = document.createElement( 'div' );
+	header.className = 'viewport-header';
+	const toolbarRow = document.createElement( 'div' );
+	toolbarRow.className = 'viewport-toolbar-row';
+	toolbarRow.append( new ViewportControls( editor ).dom );
+	header.append( toolbarRow );
+	container.dom.append( header );
+	editor.viewportToolbar = toolbarRow;
 	container.add( new ViewportInfo( editor ) );
 
 	// Shown when the GPU drops the WebGL context so the viewport

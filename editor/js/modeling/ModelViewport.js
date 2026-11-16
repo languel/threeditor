@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
+import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
+import { SetPositionCommand } from '../commands/SetPositionCommand.js';
+import { SetRotationCommand } from '../commands/SetRotationCommand.js';
+import { meshHit } from './SurfacePicking.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { addFace, extrudeFace, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from './ModelGeometry.js';
+import { addFace, extrudeFace, isClosedOutline, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from './ModelGeometry.js?v=top-toolbar';
 
 
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
@@ -53,9 +57,10 @@ export class ModelViewport {
 		viewport.addEventListener( 'pointerup', event => this.pointerEnd( event ), true );
 		viewport.addEventListener( 'pointercancel', event => this.pointerEnd( event, true ), true );
 		viewport.addEventListener( 'lostpointercapture', event => this.pointerEnd( event, true ), true );
+		viewport.addEventListener( 'dblclick', event => this.closeOnFirstPoint( event ), true );
 		for ( const type of [ 'mousedown', 'mouseup', 'dblclick', 'touchstart', 'touchend' ] ) viewport.addEventListener( type, event => {
 
-			if ( this.object && event.target === editor.renderer?.domElement ) event.stopImmediatePropagation();
+			if ( this.object && ! editor.viewTools?.mode && event.target === editor.renderer?.domElement ) event.stopImmediatePropagation();
 
 		}, true );
 
@@ -183,7 +188,7 @@ export class ModelViewport {
 		else if ( this.gesture ) this.cancelGizmo?.();
 		const data = object?.geometry?.userData.modeling;
 		const editable = object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
-			! object.userData.surfaceMark && ( data?.points || object.geometry.attributes.position.count <= 20000 );
+			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || object.geometry.attributes.position.count <= 20000 );
 		this.object = editable ? object : null;
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
@@ -214,6 +219,7 @@ export class ModelViewport {
 		if ( empty ) {
 
 			data.points = [];
+			if ( kind === 'shape' ) data.closed = false;
 			if ( data.faces ) data.faces = [];
 
 		}
@@ -244,6 +250,7 @@ export class ModelViewport {
 		add( 'Clear points', 'delete', () => this.edit( 'Clear modeling points', next => {
 
 			next.points = [];
+			if ( next.kind === 'shape' || next.kind === 'path' ) next.closed = false;
 			if ( next.faces ) next.faces = [];
 			return [];
 
@@ -263,7 +270,7 @@ export class ModelViewport {
 			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
 
 				const i = indices[ 0 ];
-				const following = data.kind === 'shape' || data.closed ? ( i + 1 ) % next.points.length : i + 1;
+				const following = isClosedOutline( data ) ? ( i + 1 ) % next.points.length : i + 1;
 				const other = next.points[ following ] || next.points[ i - 1 ];
 				const sign = next.points[ following ] ? 1 : - 1;
 				const point = next.points[ i ].map( ( value, axis ) => other ? value + sign * ( other[ axis ] - value ) * 0.5 : value + ( axis === 0 ? 0.5 : 0 ) );
@@ -681,7 +688,7 @@ export class ModelViewport {
 		} else if ( data.kind !== 'vertices' ) {
 
 			const points = outlinePoints( THREE, data );
-			stroke( points.map( point => this.project( point.toArray(), width, height ) ), data.kind === 'shape' || data.closed );
+			stroke( points.map( point => this.project( point.toArray(), width, height ) ), isClosedOutline( data ) );
 
 		}
 		if ( this.indices.length > 1 ) {
@@ -784,23 +791,113 @@ export class ModelViewport {
 		const normal = plane.normal;
 		const right = this.planar ? new THREE.Vector3( 1, 0, 0 ).transformDirection( this.object.matrixWorld ) :
 			new THREE.Vector3( Math.abs( normal.x ) < 0.95 ? 1 : 0, Math.abs( normal.x ) < 0.95 ? 0 : 1, 0 );
-		right.addScaledVector( normal, - right.dot( normal ) ).normalize();
+		right.addScaledVector( normal, - right.dot( normal ) );
+		if ( right.lengthSq() < 1e-10 ) {
+
+			right.copy( worldAxes[ Math.abs( normal.x ) < 0.95 ? 0 : 1 ] );
+			right.addScaledVector( normal, - right.dot( normal ) );
+
+		}
+		right.normalize();
 		return [ right, new THREE.Vector3().crossVectors( normal, right ).normalize() ];
+
+	}
+
+	get placement() {
+
+		return this.editor.config.getKey( 'settings/modelPlacement' ) || 'object';
 
 	}
 
 	placementPoint( event, state ) {
 
-		const origin = this.object.getWorldPosition( new THREE.Vector3() );
-		const normal = new THREE.Vector3( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( this.object.matrixWorld ) );
-		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
-		const world = this.pointerWorld( event.clientX, event.clientY, plane );
-		const axes = this.planar ? this.snapAxes( plane ) : worldAxes;
-		const snapped = this.snapPoint( world, origin, event, axes, state );
+		const object = this.object;
+		const origin = object.getWorldPosition( new THREE.Vector3() );
+		const normal = new THREE.Vector3( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( object.matrixWorld ) );
+		const fixed = this.planar && this.data.points.length > 0;
+		const placement = fixed ? 'object' : this.placement;
+		let world;
+		const plane = new THREE.Plane();
+		if ( placement === 'surface' ) {
+
+			this.pointerWorld( event.clientX, event.clientY, plane.setFromNormalAndCoplanarPoint( normal, origin ) );
+			const hit = meshHit( this.ray, this.editor.scene, object );
+			if ( ! hit ) return null;
+			normal.copy( hit.face.normal ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
+			if ( normal.dot( this.ray.ray.direction ) > 0 ) normal.negate();
+			world = hit.point;
+			origin.copy( world );
+
+		} else {
+
+			if ( placement === 'view' ) this.frame.camera.getWorldDirection( normal ).negate();
+			if ( placement === 'ground' ) {
+
+				normal.set( 0, 1, 0 );
+				origin.y = 0;
+
+			}
+			world = this.pointerWorld( event.clientX, event.clientY, plane.setFromNormalAndCoplanarPoint( normal, origin ) );
+
+		}
+		plane.setFromNormalAndCoplanarPoint( normal, origin );
+		const constrained = this.planar || placement === 'view' || placement === 'ground';
+		const snapped = this.snapPoint( world, origin, event, constrained ? this.snapAxes( plane ) : worldAxes, state );
 		if ( ! snapped ) return null;
-		const point = this.object.worldToLocal( snapped.clone() );
+		if ( placement === 'surface' && ! state.snap ) state.snap = snapped;
+		if ( this.planar && ! fixed && placement !== 'object' ) return { world: snapped, normal };
+		const point = object.worldToLocal( snapped.clone() );
 		if ( this.planar ) point.z = 0;
-		return point;
+		return { point };
+
+	}
+
+	appendPoint( placement ) {
+
+		if ( placement.point ) {
+
+			this.edit( 'Add modeling point', next => {
+
+				next.points.push( placement.point.toArray() );
+				return [ next.points.length - 1 ];
+
+			} );
+			return;
+
+		}
+		const object = this.object;
+		const position = object.parent.worldToLocal( placement.world.clone() );
+		const normal = placement.normal.applyMatrix3( new THREE.Matrix3().setFromMatrix4( object.parent.matrixWorld ).transpose() ).normalize();
+		const quaternion = new THREE.Quaternion().setFromUnitVectors( worldAxes[ 2 ], normal );
+		const rotation = new THREE.Euler().setFromQuaternion( quaternion, object.rotation.order );
+		const geometry = this.buildGeometry( { ...this.data, points: [ [ 0, 0, 0 ] ] } );
+		const update = new SetGeometryCommand( this.editor, object, geometry );
+		update.updatable = false;
+		this.indices = [ 0 ];
+		this.editor.execute( new MultiCmdsCommand( this.editor, [
+			new SetPositionCommand( this.editor, object, position ),
+			new SetRotationCommand( this.editor, object, rotation ), update
+		] ), 'Place modeling outline' );
+
+	}
+
+	closeOnFirstPoint( event ) {
+
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || this.gesture ||
+			event.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.editor.viewLayout.navigation ) return;
+		const { kind, points } = this.data;
+		if ( ! [ 'path', 'shape' ].includes( kind ) || points.length < 3 || isClosedOutline( this.data ) ) return;
+		const { left, top } = this.rect();
+		if ( this.pointUnder( event.clientX - left, event.clientY - top ) !== 0 ) return;
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		this.adding = false;
+		this.edit( kind === 'shape' ? 'Close shape' : 'Close path', next => {
+
+			next.closed = true;
+			return [ 0 ];
+
+		} );
 
 	}
 
@@ -831,13 +928,8 @@ export class ModelViewport {
 		if ( hit < 0 ) {
 
 			if ( ! this.adding ) return;
-			const point = this.placementPoint( event, {} );
-			if ( point ) this.edit( 'Add modeling point', next => {
-
-				next.points.push( point.toArray() );
-				return [ next.points.length - 1 ];
-
-			} );
+			const placement = this.placementPoint( event, {} );
+			if ( placement ) this.appendPoint( placement );
 			return;
 
 		}
@@ -862,7 +954,7 @@ export class ModelViewport {
 
 			if ( ! this.canEdit() || this.editor.viewTools?.mode || ! this.adding || this.gesture || ! this.editor.viewLayout.navigation ) return;
 			const marker = {};
-			if ( this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && modelSnapMode( this.editor.config, event.ctrlKey ) ) {
+			if ( this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ( this.placement === 'surface' || modelSnapMode( this.editor.config, event.ctrlKey ) ) ) {
 
 				this.placementPoint( event, marker );
 

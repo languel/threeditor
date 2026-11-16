@@ -6,10 +6,16 @@ export function modelData( kind ) {
 
 }
 
+export function isClosedOutline( data ) {
+
+	return data.kind === 'shape' ? data.closed !== false : data.closed === true;
+
+}
+
 export function outlinePoints( THREE, data ) {
 
 	const points = data.points.map( point => new THREE.Vector3( ...point ) );
-	const closed = data.kind === 'shape' || data.closed === true;
+	const closed = isClosedOutline( data );
 	if ( data.smooth && points.length > 2 ) {
 
 		const curve = new THREE.CatmullRomCurve3( points, closed );
@@ -166,7 +172,7 @@ export function modelGeometry( THREE, data ) {
 	} else {
 
 		const points = outlinePoints( THREE, data );
-		if ( data.kind === 'shape' && points.length >= 3 ) {
+		if ( data.kind === 'shape' && isClosedOutline( data ) && points.length >= 3 ) {
 
 			const shape = new THREE.Shape( points.map( point => new THREE.Vector2( point.x, point.y ) ) );
 			const surface = data.depth > 0 ?

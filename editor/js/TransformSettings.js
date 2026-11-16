@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js?v=model-transform';
+import { icon } from './Glyphs.js?v=top-toolbar';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 
@@ -20,6 +20,14 @@ export function addTransformSettings( editor, toolbar ) {
 	}, { passive: true } );
 
 	const configs = {
+		placement: {
+			label: 'Placement', glyph: 'placePlane',
+			choices: () => [
+				[ 'object', 'Object plane', 'placePlane' ], [ 'view', 'View plane', 'preview' ],
+				[ 'ground', 'Ground plane', 'toolGrid' ], [ 'surface', 'Mesh surface', 'snapFace' ]
+			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'modelPlacement', value ),
+				( config.getKey( 'settings/modelPlacement' ) || 'object' ) === value ] )
+		},
 		grid: {
 			label: 'Grid', glyph: 'toolGrid',
 			choices: () => [
@@ -82,41 +90,69 @@ export function addTransformSettings( editor, toolbar ) {
 	}
 	magnet.onclick = toggleSnap;
 	editor.toggleTransformSnap = toggleSnap;
+	editor.toggleTransformGrid = () => change( 'gridVisible', ! config.getKey( 'settings/gridVisible' ) );
 
 	const dialog = document.createElement( 'dialog' );
 	dialog.className = 'transform-pie';
 	document.body.appendChild( dialog );
 	const buttons = new Map();
-	let opener;
+	let opener, previousFocus;
 	let entries = [];
-	dialog.addEventListener( 'click', event => { if ( event.target === dialog ) dialog.close(); } );
-	dialog.addEventListener( 'close', () => {
 
+	function close() {
+
+		dialog.close();
 		opener?.setAttribute( 'aria-expanded', 'false' );
+		if ( dialog.contains( document.activeElement ) ) {
 
-	} );
-	dialog.addEventListener( 'keydown', event => {
-
-		const index = [ ...'1234567890' ].indexOf( event.key );
-		if ( Number.isInteger( index ) && entries[ index ] ) {
-
-			event.preventDefault();
-			entries[ index ].click();
+			if ( previousFocus?.isConnected && previousFocus !== document.body ) previousFocus.focus( { preventScroll: true } );
+			else document.activeElement.blur();
 
 		}
 
-	} );
-	signals.startPlayer.add( () => { if ( dialog.open ) dialog.close(); } );
+	}
 
-	function open( kind, position ) {
+	dialog.addEventListener( 'click', event => { if ( event.target === dialog ) close(); } );
+	dialog.addEventListener( 'cancel', event => { event.preventDefault(); close(); } );
+	dialog.addEventListener( 'keydown', event => {
+
+		if ( event.key === 'Escape' ) {
+
+			event.preventDefault();
+			close();
+			return;
+
+		}
+		const index = [ ...'1234567890' ].indexOf( event.key );
+		if ( entries[ index ] ) {
+
+			event.preventDefault();
+			entries[ index ].click();
+			return;
+
+		}
+		const directions = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+		if ( ! Object.hasOwn( directions, event.key ) ) return;
+		event.preventDefault();
+		const current = entries.indexOf( document.activeElement );
+		const direction = directions[ event.key ];
+		entries[ current < 0 ? ( direction > 0 ? 0 : entries.length - 1 ) :
+			( current + direction + entries.length ) % entries.length ]?.focus();
+
+	} );
+	signals.startPlayer.add( () => { if ( dialog.open ) close(); } );
+
+	function open( kind, dropdown = false ) {
 
 		if ( editor.modeling?.gesture || editor.modeling?.drag || editor.modalTransform?.active || editor.flyControls?.active || document.body.classList.contains( 'presenting' ) ) return;
 		if ( dialog.open ) return;
+		previousFocus = document.activeElement;
 		const definition = configs[ kind ];
 		opener = buttons.get( kind );
 		opener.setAttribute( 'aria-expanded', 'true' );
 		dialog.replaceChildren();
-		dialog.classList.toggle( 'transform-snap-pie', kind === 'snap' );
+		dialog.classList.toggle( 'transform-dropdown', dropdown );
+		dialog.classList.toggle( 'transform-snap-pie', ! dropdown && kind === 'snap' );
 		dialog.setAttribute( 'aria-label', definition.label );
 		const wheel = document.createElement( 'div' );
 		wheel.className = 'transform-pie-wheel';
@@ -124,12 +160,12 @@ export function addTransformSettings( editor, toolbar ) {
 		if ( kind === 'snap' ) {
 
 			center.type = 'button';
-			center.onclick = () => { dialog.close(); toggleSnap(); };
+			center.onclick = () => { close(); toggleSnap(); };
 
 		}
 		center.className = 'transform-pie-center';
 		center.textContent = kind === 'snap' ? ( config.getKey( 'settings/transformSnap' ) == null ? 'Snap off' : 'Snap on' ) : definition.label;
-		wheel.appendChild( center );
+		if ( ! dropdown || kind === 'snap' ) wheel.appendChild( center );
 		const choices = definition.choices();
 		entries = choices.map( ( [ label, glyph, apply, active ], index ) => {
 
@@ -141,15 +177,20 @@ export function addTransformSettings( editor, toolbar ) {
 			caption.textContent = label;
 			const hint = document.createElement( 'kbd' );
 			hint.textContent = '1234567890'[ index ];
-			button.append( caption, hint );
+			button.appendChild( caption );
+			if ( ! dropdown ) button.appendChild( hint );
 			button.setAttribute( 'aria-label', label );
 			if ( active !== undefined ) button.setAttribute( 'aria-pressed', String( active ) );
 			const angle = index / choices.length * Math.PI * 2 - Math.PI / 2;
-			button.style.left = 50 + 32 * Math.cos( angle ) + '%';
-			button.style.top = 50 + 34 * Math.sin( angle ) + '%';
+			if ( ! dropdown ) {
+
+				button.style.left = 50 + 32 * Math.cos( angle ) + '%';
+				button.style.top = 50 + 34 * Math.sin( angle ) + '%';
+
+			}
 			button.onclick = () => {
 
-				dialog.close();
+				close();
 				apply();
 
 			};
@@ -158,12 +199,26 @@ export function addTransformSettings( editor, toolbar ) {
 
 		} );
 		dialog.appendChild( wheel );
-		const rect = document.getElementById( 'viewport' ).getBoundingClientRect();
-		const [ x, y ] = position || pointer || [ rect.left + rect.width / 2, rect.top + rect.height / 2 ];
-		const clamp = ( value, size, half ) => Math.max( Math.min( half, size / 2 ), Math.min( value, size - half ) );
-		dialog.style.left = clamp( x, window.innerWidth, kind === 'snap' ? 264 : 175 ) + 'px';
-		dialog.style.top = clamp( y, window.innerHeight, kind === 'snap' ? 165 : 135 ) + 'px';
 		dialog.showModal();
+		const bounds = dialog.getBoundingClientRect();
+		if ( dropdown ) {
+
+			const anchor = opener.getBoundingClientRect();
+			dialog.style.left = Math.max( 4, Math.min( anchor.left, window.innerWidth - bounds.width - 4 ) ) + 'px';
+			dialog.style.top = ( anchor.bottom + bounds.height + 4 <= window.innerHeight ? anchor.bottom + 4 :
+				Math.max( 4, anchor.top - bounds.height - 4 ) ) + 'px';
+
+		} else {
+
+			const rect = document.getElementById( 'viewport' ).getBoundingClientRect();
+			const [ x, y ] = pointer || [ rect.left + rect.width / 2, rect.top + rect.height / 2 ];
+			const clamp = ( value, size, half ) => Math.max( Math.min( half, size / 2 ), Math.min( value, size - half ) );
+			dialog.style.left = clamp( x, window.innerWidth, bounds.width / 2 ) + 'px';
+			dialog.style.top = clamp( y, window.innerHeight, bounds.height / 2 ) + 'px';
+
+		}
+		const selected = entries.find( button => button.getAttribute( 'aria-pressed' ) === 'true' );
+		( selected || entries[ 0 ] )?.focus( { preventScroll: true } );
 
 	}
 
@@ -189,12 +244,7 @@ export function addTransformSettings( editor, toolbar ) {
 		button.setAttribute( 'aria-label', definition.label );
 		button.setAttribute( 'aria-haspopup', 'dialog' );
 		button.setAttribute( 'aria-expanded', 'false' );
-		button.onclick = () => {
-
-			const rect = button.getBoundingClientRect();
-			open( kind, [ rect.left + rect.width / 2, rect.top - 118 ] );
-
-		};
+		button.onclick = () => open( kind, true );
 		buttons.set( kind, button );
 		if ( kind === 'snap' ) toolbar.appendChild( magnet );
 		toolbar.appendChild( button );
@@ -202,6 +252,6 @@ export function addTransformSettings( editor, toolbar ) {
 	}
 	refresh();
 	signals.transformSettingsChanged.add( refresh );
-	editor.openTransformPie = open;
+	editor.openTransformPie = kind => open( kind );
 
 }
