@@ -1,3 +1,4 @@
+import { outlineActions } from './modeling/OutlineActions.js';
 import { formatCombo } from './Keymap.js';
 
 function ContextMenu( editor, viewport ) {
@@ -124,6 +125,7 @@ function ContextMenu( editor, viewport ) {
 
 		const ids = [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ];
 		const actions = [ { label: 'Add…', run: () => openAdd( position ) }, ...ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean ) ];
+		actions.unshift( ...outlineActions( editor, editor.selected ) );
 		show( 'Object', actions, position );
 
 	}

@@ -4,7 +4,7 @@ import { isProjector } from './assets/Projector.js';
 import { setLightMask } from './modeling/LightMask.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline, outlinePoints } from './modeling/ModelGeometry.js?v=top-toolbar';
-import { editableMesh } from './modeling/ModelViewport.js?v=top-toolbar';
+import { editableMesh } from './modeling/ModelViewport.js?v=outline-brushes';
 import { modelButton, modelField } from './modeling/ModelControls.js';
 import { maskFromOutline } from './modeling/ProjectionMask.js';
 

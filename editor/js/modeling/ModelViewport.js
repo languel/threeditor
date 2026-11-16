@@ -1,3 +1,4 @@
+import { sculptNeighbors, sculptPoints } from './SculptBrush.js';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
@@ -29,6 +30,8 @@ export class ModelViewport {
 		this.indices = [];
 		this.editMode = false;
 		this.extrudeDistance = 0.3;
+		this.brushRadius = 50;
+		this.brushStrength = 0.5;
 		this.proxy = new THREE.Object3D();
 		this.proxy.name = 'Modeling pivot';
 		this.ray = new THREE.Raycaster();
@@ -193,6 +196,7 @@ export class ModelViewport {
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
 		this.adding = false;
+		this.brush = '';
 		this.overlay.hidden = ! this.object;
 		this.changed();
 		this.render();
@@ -212,10 +216,11 @@ export class ModelViewport {
 
 	}
 
-	create( kind, empty = false ) {
+	create( kind, empty = false, freehand = false ) {
 
 		const labels = { path: 'Editable path', shape: 'Editable shape', mesh: 'Editable mesh' };
 		const data = modelData( kind );
+		if ( freehand ) data.planar = false;
 		if ( empty ) {
 
 			data.points = [];
@@ -226,7 +231,8 @@ export class ModelViewport {
 		const object = modelObject( THREE, data, labels[ kind ] );
 		this.editor.execute( new AddObjectCommand( this.editor, object ) );
 		this.start( object );
-		this.adding = empty;
+		this.adding = empty && ! freehand;
+		if ( freehand ) this.brush = 'freehand';
 		this.changed();
 		this.render();
 
@@ -238,9 +244,20 @@ export class ModelViewport {
 		const { data, indices } = this;
 		const actions = [];
 		const add = ( label, glyph, run, disabled = false, pressed ) => actions.push( { label, glyph, run, disabled, pressed } );
+		if ( [ 'mesh', 'vertices' ].includes( data.kind ) ) for ( const [ brush, label, glyph ] of [
+			[ 'grab', 'Sculpt grab', 'move' ], [ 'smooth', 'Sculpt smooth', 'toolPaint' ]
+		] ) add( label, glyph, () => {
+
+			this.brush = this.brush === brush ? '' : brush;
+			this.adding = false;
+			this.changed();
+			this.render();
+
+		}, ! data.points.length, this.brush === brush );
 		if ( data.kind === 'vertices' ) return actions;
 		add( this.adding ? 'Stop adding' : 'Add points', 'add', () => {
 
+			this.brush = '';
 			this.adding = ! this.adding;
 			this.changed();
 			this.render();
@@ -727,6 +744,16 @@ export class ModelViewport {
 			}
 
 		}
+		if ( ( this.brush === 'grab' || this.brush === 'smooth' ) && this.lastPointer ) {
+
+			const { left, top } = this.rect();
+			ctx.beginPath();
+			ctx.arc( this.lastPointer.clientX - left, this.lastPointer.clientY - top, this.brushRadius, 0, Math.PI * 2 );
+			ctx.strokeStyle = '#ffba62';
+			ctx.lineWidth = 1;
+			ctx.stroke();
+
+		}
 		ctx.restore();
 
 	}
@@ -906,6 +933,12 @@ export class ModelViewport {
 		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || event.button !== 0 || event.altKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
+		if ( this.brush ) {
+
+			this.beginBrush( event );
+			return;
+
+		}
 		if ( ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
@@ -947,11 +980,82 @@ export class ModelViewport {
 
 	}
 
+	beginBrush( event ) {
+
+		const { left, top } = this.rect();
+		const cursor = [ event.clientX - left, event.clientY - top ];
+		const brush = this.brush;
+		const stroke = { brush, cursor, id: event.pointerId, target: event.target };
+		if ( brush === 'freehand' ) {
+
+			const placement = this.placementPoint( event, {} );
+			if ( ! placement?.point ) return;
+			stroke.samples = [ placement.point.toArray() ];
+
+		} else {
+
+			const { width, height } = this.rect();
+			stroke.pixels = this.data.points.map( point => this.project( point, width, height ) );
+			if ( brush === 'smooth' ) stroke.neighbors = sculptNeighbors( this.data, this.object.geometry );
+			else {
+
+				this.pointerWorld( event.clientX, event.clientY, new THREE.Plane() );
+				const hit = this.ray.intersectObject( this.object, false )[ 0 ];
+				if ( ! hit ) return;
+				stroke.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+					this.frame.camera.getWorldDirection( new THREE.Vector3() ), hit.point );
+				stroke.start = hit.point;
+
+			}
+
+		}
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		this.drag = stroke;
+		event.target.setPointerCapture( event.pointerId );
+
+	}
+
+	moveBrush( event, stroke ) {
+
+		if ( this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
+		const { left, top } = this.rect();
+		const cursor = [ event.clientX - left, event.clientY - top ];
+		if ( stroke.brush === 'freehand' ) {
+
+			if ( Math.hypot( cursor[ 0 ] - stroke.cursor[ 0 ], cursor[ 1 ] - stroke.cursor[ 1 ] ) < 5 ) return;
+			const placement = this.placementPoint( event, {} );
+			if ( ! placement?.point ) return;
+			stroke.cursor = cursor;
+			stroke.samples.push( placement.point.toArray() );
+			this.preview( stroke, stroke.samples.slice() );
+
+		} else {
+
+			const grab = stroke.brush === 'grab';
+			let delta;
+			if ( grab ) {
+
+				const point = this.pointerWorld( event.clientX, event.clientY, stroke.plane );
+				if ( ! point ) return;
+				delta = this.object.worldToLocal( point ).sub( this.object.worldToLocal( stroke.start.clone() ) ).toArray();
+
+			}
+			const points = grab ? this.data.points : stroke.draft?.points || this.data.points;
+			this.preview( stroke, sculptPoints( points, stroke.pixels, grab ? stroke.cursor : cursor,
+				this.brushRadius, this.brushStrength, delta, stroke.neighbors ) );
+
+		}
+		this.render();
+
+	}
+
 	pointerMove( event ) {
 
 		const drag = this.drag;
 		if ( ! drag ) {
 
+			if ( this.brush && this.object ) this.draw();
 			if ( ! this.canEdit() || this.editor.viewTools?.mode || ! this.adding || this.gesture || ! this.editor.viewLayout.navigation ) return;
 			const marker = {};
 			if ( this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ( this.placement === 'surface' || modelSnapMode( this.editor.config, event.ctrlKey ) ) ) {
@@ -970,6 +1074,7 @@ export class ModelViewport {
 		}
 		if ( drag.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
+		if ( drag.brush ) { this.moveBrush( event, drag ); return; }
 		const point = this.pointerWorld( event.clientX, event.clientY, drag.plane );
 		if ( ! point ) return;
 		const target = point.sub( drag.start ).add( drag.origin );
@@ -1004,7 +1109,15 @@ export class ModelViewport {
 		if ( this.drag?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const drag = this.releaseDrag( true );
-		if ( ! cancel && drag.geometry && this.canEdit() && this.pointsChanged( drag ) ) this.commit( 'Move modeling points', drag.draft, this.indices, drag.geometry );
+		const changed = drag.brush ? drag.draft?.points.some( ( point, index ) =>
+			point.some( ( value, axis ) => value !== this.data.points[ index ]?.[ axis ] ) ) : drag.draft && this.pointsChanged( drag );
+		if ( ! cancel && drag.geometry && this.canEdit() && changed ) {
+
+			if ( drag.brush === 'freehand' ) this.brush = '';
+			this.commit( drag.brush === 'freehand' ? 'Draw freehand path' : drag.brush ? 'Sculpt mesh' : 'Move modeling points',
+				drag.draft, this.indices, drag.geometry );
+
+		}
 		else {
 
 			drag.geometry?.dispose();

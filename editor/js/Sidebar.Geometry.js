@@ -11,25 +11,25 @@ import { SidebarGeometryModifiers } from './Sidebar.Geometry.Modifiers.js';
 import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
 
 const geometryPanels = {
-	BoxGeometry: () => import( './Sidebar.Geometry.BoxGeometry.js' ),
+	BoxGeometry: () => import( './Sidebar.Geometry.BoxGeometry.js?v=outline-brushes' ),
 	BufferGeometry: () => import( './Sidebar.Geometry.BufferGeometry.js' ),
-	CapsuleGeometry: () => import( './Sidebar.Geometry.CapsuleGeometry.js' ),
-	CircleGeometry: () => import( './Sidebar.Geometry.CircleGeometry.js' ),
-	CylinderGeometry: () => import( './Sidebar.Geometry.CylinderGeometry.js' ),
-	DodecahedronGeometry: () => import( './Sidebar.Geometry.DodecahedronGeometry.js' ),
-	ExtrudeGeometry: () => import( './Sidebar.Geometry.ExtrudeGeometry.js' ),
-	IcosahedronGeometry: () => import( './Sidebar.Geometry.IcosahedronGeometry.js' ),
-	LatheGeometry: () => import( './Sidebar.Geometry.LatheGeometry.js' ),
-	OctahedronGeometry: () => import( './Sidebar.Geometry.OctahedronGeometry.js' ),
-	PlaneGeometry: () => import( './Sidebar.Geometry.PlaneGeometry.js' ),
-	RingGeometry: () => import( './Sidebar.Geometry.RingGeometry.js' ),
-	ShapeGeometry: () => import( './Sidebar.Geometry.ShapeGeometry.js' ),
-	SphereGeometry: () => import( './Sidebar.Geometry.SphereGeometry.js' ),
-	TetrahedronGeometry: () => import( './Sidebar.Geometry.TetrahedronGeometry.js' ),
+	CapsuleGeometry: () => import( './Sidebar.Geometry.CapsuleGeometry.js?v=outline-brushes' ),
+	CircleGeometry: () => import( './Sidebar.Geometry.CircleGeometry.js?v=outline-brushes' ),
+	CylinderGeometry: () => import( './Sidebar.Geometry.CylinderGeometry.js?v=outline-brushes' ),
+	DodecahedronGeometry: () => import( './Sidebar.Geometry.DodecahedronGeometry.js?v=outline-brushes' ),
+	ExtrudeGeometry: () => import( './Sidebar.Geometry.ExtrudeGeometry.js?v=outline-brushes' ),
+	IcosahedronGeometry: () => import( './Sidebar.Geometry.IcosahedronGeometry.js?v=outline-brushes' ),
+	LatheGeometry: () => import( './Sidebar.Geometry.LatheGeometry.js?v=outline-brushes' ),
+	OctahedronGeometry: () => import( './Sidebar.Geometry.OctahedronGeometry.js?v=outline-brushes' ),
+	PlaneGeometry: () => import( './Sidebar.Geometry.PlaneGeometry.js?v=outline-brushes' ),
+	RingGeometry: () => import( './Sidebar.Geometry.RingGeometry.js?v=outline-brushes' ),
+	ShapeGeometry: () => import( './Sidebar.Geometry.ShapeGeometry.js?v=outline-brushes' ),
+	SphereGeometry: () => import( './Sidebar.Geometry.SphereGeometry.js?v=outline-brushes' ),
+	TetrahedronGeometry: () => import( './Sidebar.Geometry.TetrahedronGeometry.js?v=outline-brushes' ),
 	TextGeometry: () => import( './Sidebar.Geometry.TextGeometry.js' ),
-	TorusGeometry: () => import( './Sidebar.Geometry.TorusGeometry.js' ),
-	TorusKnotGeometry: () => import( './Sidebar.Geometry.TorusKnotGeometry.js' ),
-	TubeGeometry: () => import( './Sidebar.Geometry.TubeGeometry.js' )
+	TorusGeometry: () => import( './Sidebar.Geometry.TorusGeometry.js?v=outline-brushes' ),
+	TorusKnotGeometry: () => import( './Sidebar.Geometry.TorusKnotGeometry.js?v=outline-brushes' ),
+	TubeGeometry: () => import( './Sidebar.Geometry.TubeGeometry.js?v=outline-brushes' )
 };
 
 function SidebarGeometry( editor ) {

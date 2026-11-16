@@ -88,6 +88,7 @@ export class ViewportTools {
 		for ( const [ kind, label, glyph ] of [
 			[ 'path', 'Draw path', 'toolPath' ], [ 'shape', 'Draw shape', 'surface' ], [ 'mesh', 'Build mesh', 'shadingWire' ]
 		] ) modelButton( this.creation, label, glyph, () => this.run( () => editor.modeling.create( kind, true ) ) );
+		modelButton( this.creation, 'Draw freehand', 'edit', () => this.run( () => editor.modeling.create( 'path', true, true ) ) );
 		this.modelOptions = element( 'div', this.panel );
 		this.modelOptions.className = 'viewport-tool-options viewport-model-options';
 		editor.modeling.onToolsChange = () => this.refreshWorkspace();
@@ -203,6 +204,14 @@ export class ViewportTools {
 
 			const control = modelButton( options, label, glyph, () => this.run( run ), disabled );
 			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
+
+		}
+		if ( model.brush === 'grab' || model.brush === 'smooth' ) {
+
+			const radius = modelField( options, 'Brush radius (px)', 'brushWidth', 'number', model.brushRadius );
+			radius.onchange = () => { model.brushRadius = THREE.MathUtils.clamp( radius.valueAsNumber || 50, 5, 250 ); radius.value = model.brushRadius; };
+			const strength = modelField( options, 'Brush strength', 'opacity', 'number', model.brushStrength );
+			strength.onchange = () => { model.brushStrength = THREE.MathUtils.clamp( strength.valueAsNumber || 0.5, 0.01, 1 ); strength.value = model.brushStrength; };
 
 		}
 		if ( model.data?.kind === 'mesh' && model.indices.length >= 3 ) {

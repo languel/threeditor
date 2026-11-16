@@ -80,7 +80,7 @@ function GeometryParametersPanel( editor, object ) {
 
 	signals.geometryChanged.add( function ( mesh ) {
 
-		if ( mesh === object ) {
+		if ( mesh === object && mesh.geometry.type === 'TorusGeometry' ) {
 
 			refreshUI();
 
