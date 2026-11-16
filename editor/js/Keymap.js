@@ -76,7 +76,7 @@ class Keymap {
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
   const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
-  if(t?.closest?.('button') && !(action.id==='workspaceMode' && t.closest('.viewport-tool-panel')) && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
+  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
   e.preventDefault();action.run();
  }
  registerMenu(menu){
@@ -98,7 +98,7 @@ class Keymap {
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
    case 'translate':case 'rotate':case 'scale': s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;
-   case 'delete':case 'deleteBack':{const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
+   case 'delete':case 'deleteBack':{if(e.modeling?.editMode)break;const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
    case 'selectAll':{const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}
    case 'selectNone':e.deselect();break;case 'focus':if(e.selected)e.focus(e.selected);break;
    case 'frameAll':e.focus(e.scene);break;
@@ -153,7 +153,7 @@ class Keymap {
    case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;
    case 'presentation':e.player?.present();break;
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
-   case 'duplicate':e.shortcutDuplicate?.();break;
+   case 'duplicate':if(!e.modeling?.editMode)e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=timeline-autokey';
-import { Keymap } from './Keymap.js?v=edit-modes';
-import { ModalTransform } from './ModalTransform.js?v=model-transform';
+import { Keymap } from './Keymap.js?v=edit-mode-focus';
+import { ModalTransform } from './ModalTransform.js?v=edit-mode-focus';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
