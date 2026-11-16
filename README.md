@@ -94,6 +94,8 @@ Select an unlocked projector or spotlight and choose **Object → Edit mask in v
 - Choose **Modeling → Edit projection warp** to adjust the 4 × 4 sampling grid. Drag a handle to choose which source pixel lands at that position in the projector frame, then click **Apply**. Use the calibration grid and look through the projector to check correction on the receiver. **Clear warp** restores the original mapping.
 - To map an image onto a mesh material, select the mesh and choose **Modeling → Edit UVs**. Choose a planar or box layout, or choose a projector to initialize the UVs from its lens. Select **Auto layout**, drag points to refine the mapping, and click **Apply**. Shift-click adds points to the selection. If the material has an image map, it appears behind the UV wireframe.
 
+Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projector already has a target assigned. To check the physical feed, make a projector the main camera and select **Masked texture** before starting Play. [Gallery walkthrough and sources](editor/examples/gallery/README.md)
+
 ### Measure and draw on receivers
 
 Use the **Object mode** and **Edit mode** buttons at the upper left of the viewport, or press **Tab**. Object mode is for selecting and moving objects. Edit mode adds **Surface path**, **Surface paint**, and geometry creation and editing. Measure and light masks are available in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
