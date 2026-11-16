@@ -35,7 +35,13 @@ export class ModelViewport {
 		viewport.append( this.overlay );
 		this.context = this.overlay.getContext( '2d' );
 
-		viewport.addEventListener( 'pointerdown', event => this.pointerDown( event ), true );
+		viewport.addEventListener( 'pointerdown', event => {
+
+			const control = document.activeElement;
+			if ( event.target === editor.renderer?.domElement && control?.closest( '.viewport-tool-panel, .modeling-panel, #animation' ) ) control.blur();
+			this.pointerDown( event );
+
+		}, true );
 		viewport.addEventListener( 'pointermove', event => this.pointerMove( event ), true );
 		viewport.addEventListener( 'pointerleave', () => {
 

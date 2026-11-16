@@ -29,7 +29,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=edit-modes';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=edit-modes';
+import { ModelViewport } from './modeling/ModelViewport.js?v=viewport-keyboard-focus';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
