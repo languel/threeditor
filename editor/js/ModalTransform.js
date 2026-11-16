@@ -1,4 +1,4 @@
-import { transformSnapStep } from './TransformSettings.js?v=viewport-tools';
+import { transformSnapStep } from './TransformSettings.js?v=model-transform';
 import * as THREE from 'three';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
@@ -11,7 +11,8 @@ function ModalTransform( editor ) {
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
  function label(){notice.textContent=`${mode==='translate'?'Grab':mode==='rotate'?'Rotate':'Scale'}${axis?' · '+(plane?'plane excluding ':'')+axis.toUpperCase()+(local?' local':' global'):''}${numeric?' · '+numeric:''} · X/Y/Z axis · Shift+axis plane · type value · Enter accept · Esc cancel`;}
  function start(next){
-  if(mode||editor.flyControls?.active||editor.modeling?.object||editor.viewTools?.mode||!editor.renderer)return;
+  if(mode||editor.flyControls?.active||editor.viewTools?.mode||!editor.renderer)return;
+  if(editor.modeling?.object){editor.modeling.startModal(next);return;}
   const selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
   const objects=selection.filter(o=>!selection.some(parent=>parent!==o&&isAncestor(parent,o)));
   if(!objects.length)return;

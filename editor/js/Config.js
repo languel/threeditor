@@ -35,6 +35,8 @@ function Config( persist = true ) {
 		'settings/gridVisible': true,
 		'settings/gridStep': 1,
 		'settings/transformSnap': null,
+		'settings/transformSnapTarget': 'grid',
+		'settings/transformOrientation': 'global',
 		'settings/transformPivot': 'auto',
 		'settings/emulateThreeButtonMouse': true,
 		'settings/autoHideMenubar': false,

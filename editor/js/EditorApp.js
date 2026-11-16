@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=look-controls';
-import { Keymap } from './Keymap.js?v=timeline-keying';
-import { ModalTransform } from './ModalTransform.js?v=viewport-tools';
+import { Editor } from './Editor.js?v=model-transform';
+import { Keymap } from './Keymap.js?v=model-transform';
+import { ModalTransform } from './ModalTransform.js?v=model-transform';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=scene-timeline';
-import { Toolbar } from './Toolbar.js?v=viewport-tools';
+import { Viewport } from './Viewport.js?v=model-transform';
+import { Toolbar } from './Toolbar.js?v=model-transform';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=material-look-layout';
+import { Sidebar } from './Sidebar.js?v=model-transform';
 import { Menubar } from './Menubar.js?v=scene-timeline';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';

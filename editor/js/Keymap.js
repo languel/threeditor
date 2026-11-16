@@ -29,6 +29,7 @@ const definitions = [
  ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
+ ['toggleSnap','Toggle magnet snapping','Transform','shift+tab','shift+tab'], ['orientationPie','Open orientation menu','Transform',',',','],
  ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
  ['grid','Toggle grid','View','',''], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
  ['timelineInsertKey','Insert timeline keyframe','Animation','i','i'],
@@ -72,8 +73,9 @@ class Keymap {
  changed(){for(const fn of this.listeners)fn();}
  onKey(e){
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
-  const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, button, .CodeMirror, [contenteditable="true"]'))return;
+  const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
   const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
+  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
   e.preventDefault();action.run();
  }
  registerMenu(menu){
@@ -152,7 +154,8 @@ class Keymap {
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
    case 'duplicate':e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
-   case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
+   case 'toggleSnap':e.toggleTransformSnap?.();break;
+   case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;
    case 'animationPlay':case 'animationPause':case 'animationStop':e.animationCommands?.[id]?.();break;

@@ -1,4 +1,4 @@
-import { transformSnapStep } from './TransformSettings.js?v=viewport-tools';
+import { transformSnapStep } from './TransformSettings.js?v=model-transform';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -29,7 +29,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=viewport-tools';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js';
+import { ModelViewport } from './modeling/ModelViewport.js?v=model-transform';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -145,6 +145,52 @@ function Viewport( editor ) {
 	let objectStatesOnDown = [];
 
 	const transformControls = new TransformControls( camera );
+	const model = editor.modeling;
+	sceneHelpers.add( model.proxy );
+
+	function syncTransformTarget() {
+
+		if ( transformControls.dragging ) return;
+		const selected = selector.selection;
+		const available = selected.length > 0 && selected.every( object => object !== scene && object !== camera &&
+			isVisible( object ) && ! hasRestriction( object, 'locked' ) );
+		const candidate = model.object ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.drag ? model.proxy : null ) :
+			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
+		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
+		else if ( ! candidate && transformControls.object ) transformControls.detach();
+		transformControls.enabled = ! editor.viewTools.mode && ( ! model.object || candidate === model.proxy && ! model.gesture?.modal );
+		transformControls.setSpace( model.object || editor.config.getKey( 'settings/transformOrientation' ) === 'local' ? 'local' : 'world' );
+		setControlSnap( false );
+
+	}
+
+	model.onSelectionChange = syncTransformTarget;
+	model.gizmoUnderPointer = event => {
+
+		if ( ! layout.navigation || transformControls.object !== model.proxy || ! transformControls.enabled ) return false;
+		const rect = model.rect();
+		transformControls.pointerHover( {
+			x: 2 * ( event.clientX - rect.left ) / rect.width - 1, y: 1 - 2 * ( event.clientY - rect.top ) / rect.height
+		} );
+		return Boolean( transformControls.axis );
+
+	};
+	let cancelModelDrag = false;
+	model.cancelGizmo = () => {
+
+		cancelModelDrag = true;
+		transformControls.pointerUp( null );
+		cancelModelDrag = false;
+
+	};
+	const cancelPointerTransform = () => {
+
+		if ( model.gesture && ! model.gesture.modal ) model.cancelGizmo();
+
+	};
+	container.dom.addEventListener( 'pointercancel', cancelPointerTransform, true );
+	container.dom.addEventListener( 'lostpointercapture', cancelPointerTransform, true );
+	transformControls.addEventListener( 'dragging-changed', event => { if ( ! event.value && model.object ) syncTransformTarget(); } );
 	transformControls.setSize( editor.config.getKey( 'settings/transformGizmoSize' ) );
 	signals.transformGizmoSizeChanged.add( () => {
 
@@ -157,10 +203,10 @@ function Viewport( editor ) {
 	// Ctrl snaps to the grid; Ctrl+Shift drops the lowest point onto the ground plane (y = 0) instead.
 	function setControlSnap( held, ground = false ) {
 
-		snapHeld = held && ! ground;
-		groundHeld = held && ground;
+		snapHeld = held && ( !! model.object || ! ground );
+		groundHeld = ! model.object && held && ground;
 		const step = transformSnapStep( editor.config, snapHeld ) ?? translationSnap;
-		transformControls.setTranslationSnap( groundHeld ? null : step );
+		transformControls.setTranslationSnap( model.object || groundHeld ? null : step );
 		transformControls.setRotationSnap( step && ! groundHeld ? Math.PI / 12 : null );
 		transformControls.setScaleSnap( step && ! groundHeld ? 0.1 : null );
 
@@ -171,7 +217,8 @@ function Viewport( editor ) {
 
 		grid.scale.setScalar( editor.config.getKey( 'settings/gridStep' ) );
 		setControlSnap( false );
-		if ( key !== 'transformPivot' ) render();
+		if ( ! transformControls.dragging ) syncTransformTarget();
+		if ( key !== 'transformPivot' || model.object ) render();
 
 	} );
 
@@ -220,14 +267,24 @@ function Viewport( editor ) {
 	} );
 	transformControls.addEventListener( 'objectChange', function () {
 
-		dropToGround();
-		signals.objectChanged.dispatch( transformControls.object );
+		if ( transformControls.object === model.proxy ) model.updateTransform( transformControls.axis );
+		else {
+
+			dropToGround();
+			signals.objectChanged.dispatch( transformControls.object );
+
+		}
 
 	} );
 	transformControls.addEventListener( 'mouseDown', function () {
 
 		const object = transformControls.object;
+		if ( object === model.proxy ) {
 
+			if ( model.beginTransform( transformControls.mode ) ) controls.enabled = false;
+			return;
+
+		}
 		const objects = ( object === selector.group ) ? selector.selection : [ object ];
 
 		objectStatesOnDown = objects.map( ( object ) => ( {
@@ -243,6 +300,13 @@ function Viewport( editor ) {
 	transformControls.addEventListener( 'mouseUp', function () {
 
 		setControlSnap( false );
+		if ( transformControls.object === model.proxy ) {
+
+			model.finishTransform( ! cancelModelDrag );
+			controls.enabled = true;
+			return;
+
+		}
 		if ( transformControls.object !== undefined ) {
 
 			const commands = [];
@@ -550,7 +614,7 @@ function Viewport( editor ) {
 
 			if ( controls.navigationMode() !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
 			transformControls.enabled = false;
-			const restore = () => { transformControls.enabled = ! editor.modeling.object && ! editor.viewTools.mode; window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
+			const restore = () => { syncTransformTarget(); window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
 			window.addEventListener( 'pointerup', restore, { once: true } );
 			window.addEventListener( 'pointercancel', restore, { once: true } );
 
@@ -628,7 +692,8 @@ function Viewport( editor ) {
 	signals.cameraChanged.add( function () {
 
 		if ( pathtracer ) pathtracer.reset();
-
+		if ( model.object && model.indices.length && ! model.gesture && ! model.drag &&
+			editor.config.getKey( 'settings/transformOrientation' ) === 'view' ) model.updateProxy();
 		render();
 
 	} );
@@ -643,7 +708,6 @@ function Viewport( editor ) {
 			selector.getSelectionBox( box );
 
 			selectionBox.visible = selector.selection.some( isVisible );
-			if ( selector.selection.every( item => isVisible( item ) && ! hasRestriction( item, 'locked' ) ) ) transformControls.attach( selector.group );
 
 		} else if ( object !== null && object !== scene && object !== camera ) {
 
@@ -655,10 +719,10 @@ function Viewport( editor ) {
 
 			}
 
-			if ( isVisible( object ) && ! hasRestriction( object, 'locked' ) ) transformControls.attach( selector.usesGroupPivot() ? selector.group : object );
 
 		}
 
+		syncTransformTarget();
 		render();
 
 	} );
@@ -685,10 +749,7 @@ function Viewport( editor ) {
 	signals.objectChanged.add( function ( object ) {
 
 		const selected = selector.selection;
-		const candidate = selector.usesGroupPivot() ? selector.group : selected[ 0 ];
-		const canTransform = selected.length > 0 && selected.every( item => item !== scene && item !== camera && isVisible( item ) && ! hasRestriction( item, 'locked' ) );
-		if ( canTransform && transformControls.object !== candidate ) transformControls.attach( candidate );
-		else if ( ! canTransform && transformControls.object ) transformControls.detach();
+		if ( ! model.object ) syncTransformTarget();
 		selectionBox.visible = selected.some( item => item !== scene && item !== camera && isVisible( item ) ) && ! selectionBox.box.isEmpty();
 		updateHelperVisibility();
 
@@ -1153,16 +1214,15 @@ function Viewport( editor ) {
 
 	let startTime = 0;
 	let endTime = 0;
-	let editingPoints = false;
+	let viewToolMode;
 
 	function render() {
 
 		if ( renderer === null ) return;
-		const editing = Boolean( editor.modeling.object || editor.viewTools.mode );
-		if ( editingPoints !== editing ) {
+		if ( viewToolMode !== editor.viewTools.mode ) {
 
-			editingPoints = editing;
-			transformControls.enabled = ! editingPoints;
+			viewToolMode = editor.viewTools.mode;
+			syncTransformTarget();
 
 		}
 
@@ -1193,35 +1253,48 @@ function Viewport( editor ) {
 
 			withEnabledObjects( scene, () => withViewportShading( scene, mode, () => {
 
-				const raster = () => renderer.render( scene, view );
+				const raster = () => model.withPreview( () => renderer.render( scene, view ) );
 				if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 				else raster();
 
 			} ) );
 
 		}, queueSplatRender );
-		const drawGuides = view => {
+		const drawGuides = frame => {
 
-			if ( view !== camera || editor.viewportShading === 'preview' ) return;
+			const view = frame.camera;
+			const gizmo = transformControls.getHelper();
+			const showModelGizmo = frame === nav && transformControls.object === model.proxy;
+			if ( view !== camera || editor.viewportShading === 'preview' ) {
+
+				if ( showModelGizmo ) {
+
+					renderer.autoClear = false;
+					renderer.render( gizmo, view );
+
+				}
+				return;
+
+			}
 			renderer.autoClear = false;
 			if ( grid.visible ) renderer.render( grid, view );
 			if ( sceneHelpers.visible ) {
 
-				const gizmo = transformControls.getHelper();
 				const visible = gizmo.visible;
-				if ( editor.modeling.object || editor.viewTools?.mode ) gizmo.visible = false;
+				if ( model.object && ! showModelGizmo || editor.viewTools.mode ) gizmo.visible = false;
 				renderer.render( sceneHelpers, view );
 				gizmo.visible = visible;
 
-			}
+			} else if ( showModelGizmo ) renderer.render( gizmo, view );
 
 		};
+
 		renderer.setViewport( 0, 0, width, height );
 		if ( ! tiled ) {
 
 			const view = frames[ 0 ].camera;
 			draw( view, splatHost, mode === 'preview' || mode === 'materials' || mode === 'realistic' );
-			drawGuides( view );
+			drawGuides( frames[ 0 ] );
 			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;
 
@@ -1239,13 +1312,15 @@ function Viewport( editor ) {
 			renderer.setScissorTest( true );
 			try {
 
-				for ( const { rect, camera: view, key } of frames ) {
+				for ( const frame of frames ) {
+
+					const { rect, camera: view, key } = frame;
 
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );
 					renderer.setScissor( rect.x, y, rect.width, rect.height );
 					draw( view, key === 'source' && secondarySplats ? secondarySplats : splatHost );
-					drawGuides( view );
+					drawGuides( frame );
 
 				}
 

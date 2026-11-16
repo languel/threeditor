@@ -5,7 +5,7 @@ import { isProjector } from './assets/Projector.js';
 import { setLightMask } from './modeling/LightMask.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { addFace, extrudeFace, outlinePoints, removePoints, splitEdge } from './modeling/ModelGeometry.js';
-import { editableMesh } from './modeling/ModelViewport.js';
+import { editableMesh } from './modeling/ModelViewport.js?v=model-transform';
 import { maskFromOutline } from './modeling/ProjectionMask.js';
 
 function element( tag, text, parent ) {
@@ -246,14 +246,13 @@ export function SidebarModeling( editor ) {
 		button( 'Done', actions, () => tools.stop() );
 		if ( data.kind !== 'vertices' ) {
 
-			const add = button( tools.adding ? 'Stop adding' : 'Add points', actions, () => { tools.adding = ! tools.adding; draw(); } );
+			const add = button( tools.adding ? 'Stop adding' : 'Add points', actions, () => { tools.adding = ! tools.adding; tools.changed(); tools.render(); } );
 			add.setAttribute( 'aria-pressed', String( tools.adding ) );
 			button( 'Remove selected', actions, () => run( () => tools.edit( 'Remove modeling points', next => { removePoints( next, indices ); return []; } ) ), ! indices.length );
 			if ( data.points.length ) button( 'Clear points', actions, () => tools.edit( 'Clear modeling points', next => { next.points = []; if ( next.faces ) next.faces = []; return []; } ) );
-			if ( data.kind !== 'shape' && ! data.planar ) field( 'Snap new points to meshes', body, 'checkbox', tools.snap, value => { tools.snap = value; } );
 
 		}
-		element( 'p', tools.adding ? 'Click the viewport to place points.' : 'Drag a point to move it. Shift-click to select multiple points.', body );
+		element( 'p', tools.adding ? 'Click the viewport to place points.' : 'Shift-click to extend the selection. Use the viewport gizmo to move, rotate, or scale points.', body );
 		element( 'p', indices.length ? indices.length + ' selected' : data.points.length + ' points', body );
 		if ( indices.length === 1 ) {
 

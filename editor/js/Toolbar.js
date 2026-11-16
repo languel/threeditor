@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=viewport-tools';
+import { addTransformSettings } from './TransformSettings.js?v=model-transform';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {
@@ -17,6 +17,7 @@ function Toolbar( editor ) {
 
 	const translate = new UIButton();
 	translate.dom.className = 'Button selected';
+	translate.dom.setAttribute( 'aria-label', translateIcon.title );
 	translate.dom.appendChild( translateIcon );
 	translate.onClick( function () {
 
@@ -30,6 +31,7 @@ function Toolbar( editor ) {
 	rotateIcon.src = editor.portable?.url( 'images/rotate.svg' ) || 'images/rotate.svg';
 
 	const rotate = new UIButton();
+	rotate.dom.setAttribute( 'aria-label', rotateIcon.title );
 	rotate.dom.appendChild( rotateIcon );
 	rotate.onClick( function () {
 
@@ -43,6 +45,7 @@ function Toolbar( editor ) {
 	scaleIcon.src = editor.portable?.url( 'images/scale.svg' ) || 'images/scale.svg';
 
 	const scale = new UIButton();
+	scale.dom.setAttribute( 'aria-label', scaleIcon.title );
 	scale.dom.appendChild( scaleIcon );
 	scale.onClick( function () {
 
