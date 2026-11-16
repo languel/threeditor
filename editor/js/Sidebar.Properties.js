@@ -4,7 +4,7 @@ import { UITabbedPanel } from './libs/ui.js';
 import { SidebarObject } from './Sidebar.Object.js?v=timeline-keying';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=top-toolbar';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=projector-mapping';
 import { editableMesh } from './modeling/ModelViewport.js?v=outline-brushes';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=dda-cinema';

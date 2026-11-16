@@ -4,6 +4,7 @@ import * as THREE from '../build/three.module.js';
 import { addFace, extrudeFace, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, maskFromOutline } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
+import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 
 test( 'Authored polygon topology persists through split, extrusion, serialization and deletion', () => {
@@ -160,5 +161,24 @@ test( 'Draft shapes stay open until completed and legacy shapes still fill', () 
 	assert.ok( modelGeometry( THREE, closed ).attributes.position.count >= 3 );
 	assert.equal( modelGeometry( THREE, legacy ).attributes.position.count, modelGeometry( THREE, closed ).attributes.position.count );
 	assert.deepEqual( closed.points, draft.points );
+
+} );
+
+
+test( 'Projector UV layout uses the lens and preserves the source mesh', () => {
+
+	const projector = new THREE.Group();
+	projector.userData.assetObject = { type: 'projector' };
+	projector.projectorFrame = { width: .5, height: .25, range: 20 };
+	const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 2, 1 ) );
+	mesh.position.z = -4;
+	const source = mesh.geometry.attributes.uv;
+	const uv = layoutUV( THREE, mesh, projector.uuid, projector ).attributes.uv;
+	assert.ok( Math.abs( uv.getX( 0 ) - .25 ) < 1e-6 );
+	assert.ok( Math.abs( uv.getY( 0 ) - .75 ) < 1e-6 );
+	assert.equal( source.getX( 0 ), 0 );
+	assert.equal( source.getY( 0 ), 1 );
+	mesh.position.z = 1;
+	assert.throws( () => layoutUV( THREE, mesh, projector.uuid, projector ), /in front/ );
 
 } );

@@ -1,6 +1,6 @@
 # Captured spaces
 
-Open **File → Examples → Captured spaces**. All three examples include the original SPZ files and run from the editor’s own host.
+Open **File → Examples → Captured spaces**. The gallery and room examples include the original SPZ files and run from the editor’s own host.
 
 | Example | What to try |
 | --- | --- |
@@ -24,7 +24,9 @@ Run `node tools/build-gallery-examples.mjs` to rebuild from the published catalo
 
 Open this scene under **File → Examples → Captured spaces**. The proxy walls and glazing use inward-facing polygons to make the room a cutaway from outside. The aligned DDA scan is bundled and starts hidden so the cutaway stays clear. Reveal the scan from the outliner.
 
-Three thickened lofts made from sampled curves receive *Danse serpentine*, *The May Irwin Kiss*, and *Fred Ott’s Sneeze*. Three separate projectors around the center orb show drifting, elliptical head and hand crops from two Edison films. The crops follow manually timed marks by default.
+Three tapered, tilted lofts made from sampled curves receive *Danse serpentine*, *The May Irwin Kiss*, and *Fred Ott’s Sneeze*. Three separate projectors around the floor-standing, tilted ovoid show drifting, elliptical head and hand crops from two Edison films. The crops follow manually timed marks by default.
+
+Each of the six projectors has a silhouette mask linked to its receiver. The scene generator samples rays across every projector frame and checks whether any opaque gallery mesh blocks a ray before it reaches the receiver. To test spill control, move a plate projector back in **Split view** with the calibration grid enabled. Open **Modeling → Edit projection warp** to adjust the outgoing image. For a material texture, select a loft, open **Modeling → Edit UVs**, and choose its plate projector as the starting layout.
 
 Select an **Orb projector** and turn on **Script → Live tracking** to run MediaPipe Face and Hand Landmarker on its playing clip. The tracker downloads its model and WASM on demand. Authored crops fill in for regions without landmarks. The Script panel reports the live head and hand counts or the fallback state. **Fragment drift** and **Fragment size** adjust the output in either mode.
 

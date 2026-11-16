@@ -128,7 +128,11 @@ test( 'DDA cinema loads inward walls, three editable lofts and three tracked orb
 	const json = JSON.parse( await readFile( new URL( '../editor/' + entry.file, import.meta.url ) ) );
 	const scene = await new THREE.ObjectLoader().parseAsync( json.scene );
 	assert.equal( json.camera.object.name, 'Director' );
-	assert.equal( scene.getObjectByName( 'Orb · Moving fragments' ).geometry.type, 'SphereGeometry' );
+	const ovoid = scene.getObjectByName( 'Orb · Moving fragments' );
+	assert.equal( ovoid.geometry.type, 'SphereGeometry' );
+	assert.ok( ovoid.scale.y > ovoid.scale.x );
+	assert.ok( Math.abs( new THREE.Box3().setFromObject( ovoid, true ).min.y ) < .005 );
+	assert.equal( scene.getObjectByName( 'Orb mount' ), undefined );
 	const walls = [ 'West wall', 'East wall', 'Entrance glazing pane 1', 'Rear glazing pane 1' ];
 	for ( const name of walls ) {
 
@@ -139,12 +143,22 @@ test( 'DDA cinema loads inward walls, three editable lofts and three tracked orb
 		assert.ok( normal.dot( new THREE.Vector3( 0, 1.5, 0 ).sub( vertex ) ) > 0 );
 
 	}
-	assert.equal( scene.children.filter( object => object.userData.loft ).length, 3 );
+	const lofts = scene.children.filter( object => object.userData.loft );
+	assert.equal( lofts.length, 3 );
+	for ( const loft of lofts ) {
+
+		assert.notEqual( ...loft.userData.loft.depth );
+		assert.ok( loft.rotation.x && loft.rotation.z );
+		const projector = scene.getObjectByName( 'Plate projector · ' + loft.name );
+		assert.equal( projector.userData.projectorTarget, loft.uuid );
+
+	}
 	const orb = scene.children.filter( object => object.name.startsWith( 'Orb projector' ) );
 	assert.equal( orb.length, 3 );
 	for ( const light of orb ) {
 
 		const { source } = json.scripts[ light.uuid ][ 0 ];
+		assert.equal( light.userData.projectorTarget, ovoid.uuid );
 		assert.match( source, /@param liveTracking = false/ );
 		assert.match( source, /detectForVideo\( video, now \)/ );
 		assert.ok( entry.assets.some( asset => source.includes( 'assets/' + asset.path ) ) );

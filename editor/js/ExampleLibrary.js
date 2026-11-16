@@ -67,7 +67,7 @@ function createExampleLibrary( editor ) {
 
 			} else {
 
-				const response = await fetch( entry.file );
+				const response = await fetch( entry.file, { cache: 'no-cache' } );
 				if ( ! response.ok ) throw new Error( 'Could not load ' + entry.title );
 				const project = await response.json();
 				project.project ||= {};

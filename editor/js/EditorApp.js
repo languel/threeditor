@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=top-toolbar';
+import { Editor } from './Editor.js?v=projector-mapping';
 import { Keymap } from './Keymap.js?v=top-toolbar';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
@@ -10,8 +10,8 @@ import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=outline-brushes';
 import { Toolbar } from './Toolbar.js?v=top-toolbar';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=dda-cinema';
-import { Menubar } from './Menubar.js?v=dda-cinema';
+import { Sidebar } from './Sidebar.js?v=projector-mapping';
+import { Menubar } from './Menubar.js?v=projector-mapping';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=outline-brushes';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';

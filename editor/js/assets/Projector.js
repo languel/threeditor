@@ -1,3 +1,4 @@
+import { drawTargetAperture, warpProjection } from '../modeling/ProjectorMapping.js';
 import { applyProjectionMask } from '../modeling/ProjectionMask.js';
 
 // The group is the editable rig. Its script owns the temporary light and media.
@@ -44,6 +45,15 @@ function projectorRuntime( THREE, root, player ) {
 	};
 
 	let settings, media;
+	let warpScratch, apertureScratch;
+	function mappingCanvas() {
+
+		const scratch = document.createElement( 'canvas' );
+		scratch.width = canvas.width;
+		scratch.height = canvas.height;
+		return scratch;
+
+	}
 	let lastTime = - 1;
 
 	function draw() {
@@ -92,8 +102,16 @@ function projectorRuntime( THREE, root, player ) {
 			ctx.fillRect( x + 7 * w / 8, y, w / 8, h / 8 );
 
 		}
+		if ( root.userData.projectorWarp ) warpProjection( ctx, warpScratch ||= mappingCanvas(), root.userData.projectorWarp, x, y, w, h );
+		if ( root.userData.projectorTarget ) {
+
+			let scene = root;
+			while ( scene.parent ) scene = scene.parent;
+			drawTargetAperture( THREE, ctx, apertureScratch ||= mappingCanvas(), root, scene.getObjectByProperty( 'uuid', root.userData.projectorTarget ), frame, x, y, w, h );
+
+		}
 		applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );
-		root.projectorOutput = { canvas, x, y, width: w, height: h, tracking: media?.dataset.tracking,
+		root.projectorOutput = { canvas, warpSource: root.userData.projectorWarp && warpScratch, x, y, width: w, height: h, tracking: media?.dataset.tracking,
 			trackingHeads: Number( media?.dataset.trackingHeads || 0 ), trackingHands: Number( media?.dataset.trackingHands || 0 ) };
 		texture.needsUpdate = true;
 
@@ -132,7 +150,7 @@ function projectorRuntime( THREE, root, player ) {
 		configure,
 		update() {
 
-			if ( ! settings.grid && media?.tagName === 'CANVAS' ) {
+			if ( root.userData.projectorTarget || ! settings.grid && media?.tagName === 'CANVAS' ) {
 				draw();
 			} else if ( ! settings.grid && media?.readyState >= 2 && media.currentTime !== lastTime ) {
 				lastTime = media.currentTime;
@@ -185,6 +203,8 @@ ${ video ? '// @param playing = true\n// @label playing = "Play video"' : '' }
 ${ canvasSource?.parameters || '' }
 ${ projectorOptics.toString() }
 ${ applyProjectionMask.toString() }
+${ drawTargetAperture.toString() }
+${ warpProjection.toString() }
 ${ projectorRuntime.toString() }
 let projector${ canvasSource ? ', feed, current' : '' };
 function init() {
@@ -209,10 +229,9 @@ function setParameters( next ) {
  player.requestRender?.();
 }
 ${ canvasSource ? `function update( event ) {
- if ( current.grid ) return;
- feed.update( event.time / 1000, current );
+ if ( ! current.grid ) feed.update( event.time / 1000, current );
  projector.update();
-}` : video ? 'function update() { projector.update(); }' : '' }
+}` : 'function update() { projector.update(); }' }
 function stop() { projector?.dispose(); ${ canvasSource ? 'feed?.dispose?.();' : '' } }
 `
 	};
@@ -224,6 +243,22 @@ function stop() { projector?.dispose(); ${ canvasSource ? 'feed?.dispose?.();' :
 export function upgradeProjectorScript( script ) {
 
 	if ( script.assetBehavior !== 'projector' || typeof script.source !== 'string' ) return;
+	if ( ! script.source.includes( 'function drawTargetAperture(' ) ) {
+
+		const start = script.source.indexOf( 'function projectorRuntime( THREE, root, player )' );
+		const end = script.source.indexOf( '\nlet projector', start );
+		if ( start >= 0 && end > start ) {
+
+			const mask = script.source.includes( 'function applyProjectionMask(' ) ? '' : applyProjectionMask.toString() + '\n';
+			script.source = script.source.slice( 0, start ) + mask + drawTargetAperture.toString() + '\n' +
+				warpProjection.toString() + '\n' + projectorRuntime.toString() + script.source.slice( end );
+			if ( ! script.source.includes( 'function update(' ) ) script.source += '\nfunction update() { projector.update(); }\n';
+			script.source = script.source.replace( 'if ( current.grid ) return;\n feed.update', 'if ( ! current.grid ) feed.update' );
+
+		}
+
+	}
+
 	const runtime = 'function projectorRuntime( THREE, root, player )';
 	const upload = '\n\t\ttexture.needsUpdate = true;';
 	if ( ! script.source.includes( runtime ) || ! script.source.includes( upload ) ) return;

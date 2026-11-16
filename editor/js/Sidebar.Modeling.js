@@ -1,3 +1,4 @@
+import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js';
 import * as THREE from 'three';
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
@@ -214,11 +215,13 @@ export function SidebarModeling( editor ) {
 		if ( ! object || hasRestriction( object, 'locked' ) || ! isVisible( object ) ) return;
 		if ( isProjector( object ) ) {
 
+			addProjectorTargetControl( editor, object, body, run );
 			updateMask = SidebarProjectionMask( editor, object, body, run );
 			return;
 
 		}
 		if ( ! object.geometry?.userData.modeling && ! editableMesh( object ) ) return;
+		if ( editableMesh( object ) ) modelButton( body, 'Edit UVs', 'toolGrid', () => openUVEditor( editor, object ) );
 		if ( tools.object !== object ) {
 
 			modelButton( body, 'Edit points', 'editMode', () => run( () => tools.start( object ) ) );

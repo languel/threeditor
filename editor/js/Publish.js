@@ -375,6 +375,7 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'assets/Projector.js', 'editor/js/assets/Projector.js' );
 	await project.copy( 'modeling/LightView.js', 'editor/js/modeling/LightView.js' );
 	await project.copy( 'modeling/ProjectionMask.js', 'editor/js/modeling/ProjectionMask.js' );
+	await project.copy( 'modeling/ProjectorMapping.js', 'editor/js/modeling/ProjectorMapping.js' );
 	await project.copy( 'modeling/ProjectorOutput.js', 'editor/js/modeling/ProjectorOutput.js' );
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );

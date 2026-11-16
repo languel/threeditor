@@ -2678,3 +2678,37 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 }
 .transform-dropdown .transform-pie-choice { border-color: transparent; white-space: normal; }
 .transform-dropdown .transform-pie-choice:is(:hover, :focus-visible, [aria-pressed="true"]) { border-color: var(--theme-accent); }
+
+.mapping-editor {
+	max-width: calc(100vw - 24px);
+	max-height: calc(100vh - 24px);
+	padding: 12px;
+	border: 1px solid #535965;
+	border-radius: 6px;
+	background: #23262b;
+	color: #ebedf2;
+}
+
+.mapping-editor::backdrop {
+	background: #0007;
+}
+
+.mapping-editor > div {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.mapping-editor canvas {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	touch-action: none;
+}
+
+.mapping-editor output {
+	display: block;
+	color: #ffc9a5;
+}

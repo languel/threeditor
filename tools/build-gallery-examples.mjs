@@ -398,7 +398,7 @@ for ( const id of [ 'edison-fred-otts-sneeze-1894', 'edison-may-irwin-kiss-1896'
 }
 
 const cinema = setup( 'DDA Gallery · Lofts and cinema fragments', dda, {
-	position: [ 10.6, 6.9, 6.15 ], target: [ -.15, 1.15, -.35 ], scanFloor: -.055, fov: 49, ambientStrength: .75,
+	position: [ 3.85, 5.35, 9.25 ], target: [ -.15, 1.11, -.45 ], scanFloor: -.055, fov: 47, ambientStrength: .92,
 	instructions: 'Orbit outside the proxy room to see its cutaway. The locked DDA scan is aligned and can be revealed in the outliner. Three lofted plates carry archival films. Split the Director and any Orb projector view to inspect its head and hand fragments. Turn on Live tracking under that projector’s Script tab to test MediaPipe against the running archival clip.'
 } );
 ddaRoom( cinema );
@@ -435,14 +435,14 @@ cinema.reference.traverse( object => {
 
 } );
 
-function loft( name, position, heading, height, profiles, tint ) {
+function loft( name, position, heading, height, profiles, tint, depth, tilt ) {
 
 	const curves = profiles.map( ( row, index ) => new THREE.CatmullRomCurve3(
 		row.map( ( z, j ) => new THREE.Vector3( ( j - 1.5 ) * .78, index * height / 2, z ) ) ) );
 	const points = [], faces = [], stride = 19;
-	for ( const thickness of [ -.064, .064 ] ) for ( const curve of curves ) for ( const point of curve.getPoints( stride - 1 ) ) {
+	for ( const face of [ -1, 1 ] ) for ( const curve of curves ) for ( const point of curve.getPoints( stride - 1 ) ) {
 
-		point.z += thickness;
+		point.z += face * ( depth[ 0 ] + ( depth[ 1 ] - depth[ 0 ] ) * point.y / height ) / 2;
 		points.push( point.toArray() );
 
 	}
@@ -465,49 +465,96 @@ function loft( name, position, heading, height, profiles, tint ) {
 	object.material.color.set( tint );
 	object.material.roughness = .84;
 	object.castShadow = object.receiveShadow = true;
-	object.userData.loft = { profiles, height };
-	cinema.add( object, name, position ).rotation.y = heading;
+	object.userData.loft = { profiles, height, depth };
+	cinema.add( object, name, position );
+	object.rotation.set( tilt[ 0 ], heading, tilt[ 1 ], 'YXZ' );
+	object.position.y += .025 - new THREE.Box3().setFromObject( object, true ).min.y;
+	return object;
 
 }
 
 const installations = [
-	{ name: 'Fold · Serpentine', position: [ -2.8, .035, -.4 ], angle: .58, height: 2.45, aim: [ -2.8, 1.22, -.4 ], from: [ -1.8, 1.8, 2.55 ],
+	{ name: 'Fold · Serpentine', position: [ -3.05, 0, -.6 ], angle: -.08, height: 2.5, depth: [ .25, .10 ], tilt: [ -.1, .14 ], aim: [ -3.15, 1.34, -.55 ], from: [ -3.75, 1.8, 3.25 ],
 		profiles: [ [ .5,-.2,-.28,.45 ], [ .42,-.12,-.08,.57 ], [ .2,-.10,.28,.72 ] ], tint: 0xaa826e, clip: shorts[ 'danse-serpentine-lumiere-1897' ] },
-	{ name: 'Arc · The Kiss', position: [ 2.6, .035, -.8 ], angle: -.66, height: 2.35, aim: [ 2.6, 1.15, -.8 ], from: [ 1.6, 1.65, 2.0 ],
+	{ name: 'Arc · The Kiss', position: [ 3, 0, -.9 ], angle: .16, height: 2.27, depth: [ .11, .30 ], tilt: [ .16, -.13 ], aim: [ 3.15, 1.25, -.72 ], from: [ 4.05, 1.55, 2.95 ],
 		profiles: [ [ -.3,.38,.48,-.14 ], [ -.23,.34,.37,-.3 ], [ -.13,.18,.23,-.56 ] ], tint: 0x9b8277, clip: shorts[ 'edison-may-irwin-kiss-1896' ] },
-	{ name: 'Lean · Fred Ott', position: [ -.3, .035, -3.49 ], angle: -.13, height: 2.25, aim: [ -.3, 1.1, -3.49 ], from: [ -.7, 1.7, -1.43 ],
+	{ name: 'Lean · Fred Ott', position: [ -.36, 0, -3.45 ], angle: -.24, height: 2.05, depth: [ .34, .15 ], tilt: [ -.2, -.09 ], aim: [ -.25, 1.07, -3.44 ], from: [ -1.25, 2.45, -.3 ],
 		profiles: [ [ -.1,.12,-.17,-.35 ], [ -.15,.22,.09,-.4 ], [ -.24,.12,.56,-.09 ] ], tint: 0x9e796a, clip: shorts[ 'edison-fred-otts-sneeze-1894' ] }
 ];
+const beams = [];
 for ( const work of installations ) {
 
-	loft( work.name, work.position, work.angle, work.height, work.profiles, work.tint );
-	cinema.projector( 'Plate projector · ' + work.name, work.from, work.aim, {
+	const receiver = loft( work.name, work.position, work.angle, work.height, work.profiles, work.tint, work.depth, work.tilt );
+	const rig = cinema.projector( 'Plate projector · ' + work.name, work.from, work.aim, {
 		...( work.name.startsWith( 'Lean' ) ? {
 			canvas: { create: createPlateFeed, args: [ 'assets/' + work.clip.path, 17.05, 19.48 ] }, aspect: 4 / 3
-		} : { asset: work.clip } ),
-		intensity: 5.2, throwRatio: 1.25, range: 6
+		} : { asset: work.clip, aspect: 4 / 3 } ),
+		intensity: 5.2, throwRatio: 1.1, range: 6
 	} );
+	rig.userData.projectorTarget = receiver.uuid;
+	beams.push( [ rig, receiver ] );
 
 }
 
-const center = [ -.18, 1.12, .31 ];
+const center = [ .12, 0, .63 ];
 const ball = new THREE.Mesh( new THREE.SphereGeometry( .77, 64, 40 ),
 	new THREE.MeshStandardMaterial( { color: 0x9c9d9e, roughness: .88 } ) );
 ball.castShadow = ball.receiveShadow = true;
 cinema.add( ball, 'Orb · Moving fragments', center );
-cinema.box( 'Orb mount', [ .32, .39, .32 ], [ center[ 0 ], .18, center[ 2 ] ], 0x595758 );
+ball.scale.set( .84, 1.55, 1.04 );
+ball.rotation.set( .16, .3, -.29 );
+ball.updateMatrix();
+const axes = ball.matrix.elements;
+ball.position.y = center[ 1 ] = .77 * Math.hypot( axes[ 1 ], axes[ 5 ], axes[ 9 ] );
 for ( const [ i, entry ] of fragments.entries() ) {
 
-	const angle = i * Math.PI * 2 / 3 + .16;
-	const position = [ center[ 0 ] + Math.sin( angle ) * 2.68, 1.88, center[ 2 ] + Math.cos( angle ) * 2.68 ];
-	cinema.projector( 'Orb projector · ' + [ 'South', 'Northeast', 'Northwest' ][ i ], position, center, {
+	const angle = [ .16, 2.25, 3.75 ][ i ];
+	const distance = [ 2.68, 2.35, 2.68 ][ i ];
+	const position = [ center[ 0 ] + Math.sin( angle ) * distance, 1.88, center[ 2 ] + Math.cos( angle ) * distance ];
+	const rig = cinema.projector( 'Orb projector · ' + [ 'South', 'Northeast', 'Northwest' ][ i ], position, center, {
 		canvas: {
 			create: createFragmentFeed,
 			args: [ 'assets/' + shorts[ entry.clip ].path, entry.keys, entry.seed, entry.roles ],
 			parameters: '// @param liveTracking = false\n// @label liveTracking = "Live tracking"\n// @param drift = 0.45 (0..2)\n// @label drift = "Fragment drift"\n// @param fragmentSize = 1 (0.35..1.4)\n// @label fragmentSize = "Fragment size"'
 		},
-		aspect: 1, intensity: 5.6, throwRatio: 1.76, range: 3.4
+		aspect: 1, intensity: 5.6, throwRatio: 1.55, range: 3.8
 	} );
+	rig.userData.projectorTarget = ball.uuid;
+	beams.push( [ rig, ball ] );
+
+}
+// Sample each optical frame for obstructions from opaque gallery geometry.
+cinema.scene.updateMatrixWorld( true );
+const blockers = [];
+cinema.scene.traverseVisible( object => { if ( object.isMesh && ! object.material.transparent ) blockers.push( object ); } );
+const ray = new THREE.Raycaster();
+for ( const [ rig, receiver ] of beams ) {
+
+	const { aspect, throwRatio, range } = cinema.scripts[ rig.uuid ][ 0 ].paramValues;
+	const camera = new THREE.PerspectiveCamera( THREE.MathUtils.radToDeg( 2 * Math.atan( 1 / ( 2 * throwRatio * aspect ) ) ), aspect, .01, range );
+	rig.getWorldPosition( camera.position );
+	rig.getWorldQuaternion( camera.quaternion );
+	camera.updateMatrixWorld( true );
+	ray.far = range;
+	let hits = 0, blocked = 0;
+	const obstructions = new Set();
+	for ( let y = -24; y <= 24; y ++ ) for ( let x = -24; x <= 24; x ++ ) {
+
+		ray.setFromCamera( new THREE.Vector2( x / 24, y / 24 ), camera );
+		const hit = ray.intersectObject( receiver, false )[ 0 ];
+		if ( ! hit ) continue;
+		hits ++;
+		const obstruction = ray.intersectObjects( blockers, false ).find( candidate => candidate.object !== receiver && candidate.distance < hit.distance - .001 );
+		if ( obstruction ) {
+
+			blocked ++;
+			obstructions.add( obstruction.object.name );
+
+		}
+
+	}
+	if ( hits < 300 || blocked ) throw new Error( rig.name + ' — ' + hits + ' receiver rays, ' + blocked + ' blocked by ' + [ ...obstructions ].join( ', ' ) );
+	console.log( rig.name + ' — ' + hits + ' clear receiver rays' );
 
 }
 await cinema.save( 'dda-cinema', Object.values( shorts ) );
