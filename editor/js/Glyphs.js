@@ -220,6 +220,8 @@ const LABELS = new Map( [
 	[ 'Theme name', 'theme' ],
 	[ 'Save theme', 'save' ],
 	[ 'Delete', 'delete' ],
+	[ 'Disable look', 'none' ],
+	[ 'New shader', 'code' ],
 	[ 'Apply', 'apply' ],
 	[ 'Apply ▶', 'play' ],
 	[ 'auto', 'autohide' ],

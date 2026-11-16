@@ -1,25 +1,25 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=scene-timeline';
+import { Editor } from './Editor.js?v=look-controls';
 import { Keymap } from './Keymap.js?v=timeline-keying';
 import { ModalTransform } from './ModalTransform.js?v=viewport-tools';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
-import { applyGlyphMode } from './Glyphs.js?v=viewport-tools';
+import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=scene-timeline';
 import { Toolbar } from './Toolbar.js?v=viewport-tools';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=timeline-keying';
+import { Sidebar } from './Sidebar.js?v=look-controls';
 import { Menubar } from './Menubar.js?v=scene-timeline';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
-import { CodePanel } from './CodePanel.js';
+import { CodePanel } from './CodePanel.js?v=look-controls';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=timeline-keying';
+import { Animation } from './Animation.js?v=look-controls';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

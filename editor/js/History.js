@@ -1,4 +1,4 @@
-import * as Commands from './commands/Commands.js';
+import * as Commands from './commands/Commands.js?v=look-controls';
 
 class History {
 

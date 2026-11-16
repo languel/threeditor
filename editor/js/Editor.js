@@ -12,7 +12,7 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 
 import { Config } from './Config.js?v=viewport-tools';
 import { Loader } from './Loader.js';
-import { History as _History } from './History.js';
+import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
 import { Selector } from './Selector.js?v=viewport-tools';

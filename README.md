@@ -55,14 +55,16 @@ The outliner uses distinct icons for cameras, projectors, lights, models, groups
 
 ## Stock material looks
 
-Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. The whole group assignment is one undo step. Switch to **Preview** to see the shader, or edit it through a mesh’s **Material → Program**.
+Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. Switch to **Preview** to see the shader. Look parameters appear below the selector and include fill color, ink color, and outline width. Click a diamond to keyframe a parameter. On a group with a common look, edits and keys apply to all its mesh material slots.
 
-- **Line drawing** uses an ink contour and a paper-colored fill.
-- **Blueprint** adds a grid and bright contours over a blue surface.
-- **Sketch** crosshatches shaded areas.
-- **Neon** adds a bright rim. Enable **Bloom** to spread the glow.
+- **Line drawing** exposes the shade threshold for the ink-and-paper effect.
+- **Blueprint** exposes grid frequency and line width.
+- **Sketch** exposes hatch frequency and width.
+- **Neon** exposes glow intensity, falloff, and rim intensity. Enable **Bloom** to spread the glow.
 
-Use the WebGL renderer for these looks. The shader source is available under **Material → Program** and saves with the scene.
+Choose **Disable look** to restore the material from before the stock look was applied. Older scenes without a saved original restore a standard material. You can undo either operation.
+
+In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragment shader. Open **Material → Program** for the vertex shader or program info. A custom float such as `uniform float gain;` can be added to Program Info as `"gain": { "value": 1 }` under `uniforms`. Use a hex value such as `"#83a9e1"` for a color uniform declared as `vec3`. Numeric, color, and toggle uniforms appear under Material with keyframe diamonds. The shader and its uniforms save with the scene.
 
 ## Projection mapping
 

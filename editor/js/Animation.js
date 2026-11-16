@@ -211,7 +211,7 @@ function Animation( editor ) {
 
 	function keyTargets( target ) {
 
-		const targets = target ? [ target ] : armed.size ? [ ...armed.values() ] : [ chosenTarget() ];
+		const targets = target ? [ target ].flat() : armed.size ? [ ...armed.values() ] : [ chosenTarget() ];
 		return targets.filter( Boolean ).map( stableTarget ).filter( Boolean ).map( ( { option, ...target } ) => target );
 
 	}
@@ -219,11 +219,16 @@ function Animation( editor ) {
 	function toggleArmed( property ) {
 
 		if ( recording || ! property ) return;
-		if ( armed.delete( targetId( property ) ) ) return refresh();
-		if ( ! timelineBinding( context, property ) ) return;
-		const { option, ...target } = stableTarget( property );
-		const id = targetId( target );
-		if ( ! armed.delete( id ) ) armed.set( id, target );
+		const targets = keyTargets( property );
+		if ( targets.every( target => armed.has( targetId( target ) ) ) ) {
+
+			for ( const target of targets ) armed.delete( targetId( target ) );
+
+		} else {
+
+			for ( const target of targets ) if ( timelineBinding( context, target ) ) armed.set( targetId( target ), target );
+
+		}
 		refresh();
 
 	}
@@ -244,6 +249,16 @@ function Animation( editor ) {
 
 	}
 
+	function inspectorKeyState( target ) {
+
+		if ( ! Array.isArray( target ) ) return keyState( target );
+		const states = target.map( keyState );
+		return { available: states.some( state => state.available ), animated: states.some( state => state.animated ),
+			keyed: states.length && states.every( state => state.keyed ), armed: states.length && states.every( state => state.armed ),
+			value: states[ 0 ]?.value };
+
+	}
+
 	function editClipFor( target ) {
 
 		const selected = clip();
@@ -253,19 +268,30 @@ function Animation( editor ) {
 
 	}
 
-	function toggleKey( target ) {
+	function toggleKey( property ) {
 
-		if ( ! target || recording ) return;
-		const entry = editClipFor( target );
-		if ( entry && selection !== entry.id ) selectClip( entry.id );
-		const key = keyAtFrame( trackAt( entry, target ), entry );
-		if ( ! key ) return insertKey( target );
-		modify( 'Delete keyframe', doc => {
+		if ( ! property || recording ) return;
+		const targets = keyTargets( property );
+		const entries = targets.map( target => {
 
-			const clip = doc.clips.find( item => item.id === entry.id );
-			const track = trackAt( clip, target );
-			track.keys = track.keys.filter( item => item.time !== key.time );
-			if ( ! track.keys.length ) clip.tracks.splice( clip.tracks.indexOf( track ), 1 );
+			const entry = editClipFor( target );
+			const key = keyAtFrame( trackAt( entry, target ), entry );
+			return { target, entry, key };
+
+		} );
+		if ( ! entries.length ) return;
+		if ( entries.some( entry => ! entry.key ) ) return insertKey( property );
+		if ( selection !== entries[ 0 ].entry.id ) selectClip( entries[ 0 ].entry.id );
+		modify( entries.length === 1 ? 'Delete keyframe' : 'Delete keyframes', doc => {
+
+			for ( const { target, entry, key } of entries ) {
+
+				const clip = doc.clips.find( item => item.id === entry.id );
+				const track = trackAt( clip, target );
+				track.keys = track.keys.filter( item => item.time !== key.time );
+				if ( ! track.keys.length ) clip.tracks.splice( clip.tracks.indexOf( track ), 1 );
+
+			}
 
 		} );
 		pulse();
@@ -753,7 +779,7 @@ function Animation( editor ) {
 	signals.editorCleared.add( reset );
 	signals.startPlayer.add( stop );
 	editor.timeline = {
-		tick, insertKey, toggleKey, keyState, toggleArmed,
+		tick, insertKey, toggleKey, keyState: inspectorKeyState, toggleArmed,
 		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,

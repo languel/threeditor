@@ -7,6 +7,7 @@
 // The view follows the selection: nothing -> scene code; object with a script -> that script; otherwise the
 // scene code scrolled to the object's lines.
 
+import { Color } from 'three';
 import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCodeExporter.js';
 import { PanelDock } from './PanelDock.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
@@ -355,7 +356,10 @@ function CodePanel( editor ) {
 
 		if ( key === 'programInfo' ) {
 
-			const json = { defines: m.defines, uniforms: m.uniforms, attributes: m.attributes };
+			const uniforms = Object.fromEntries( Object.entries( m.uniforms ).map( ( [ name, uniform ] ) => [
+				name, uniform.value?.isColor ? { ...uniform, value: '#' + uniform.value.getHexString() } : uniform
+			] ) );
+			const json = { defines: m.defines, uniforms, attributes: m.attributes };
 			showSource( { kind: 'json', object, key, slot, material: m }, 'json', JSON.stringify( json, null, '\t' ), 'Program info: changes are saved as you type.' );
 
 		} else {
@@ -502,6 +506,17 @@ function CodePanel( editor ) {
 			const { material, slot } = target;
 			if ( editor.getObjectMaterial( object, slot ) !== material ) return;
 			const json = JSON.parse( value );
+			if ( json.uniforms && typeof json.uniforms === 'object' ) {
+
+				for ( const [ name, uniform ] of Object.entries( json.uniforms ) ) {
+
+					const previous = Object.hasOwn( material.uniforms, name ) ? material.uniforms[ name ] : undefined;
+					if ( previous && JSON.stringify( previous ) === JSON.stringify( uniform ) ) json.uniforms[ name ] = previous;
+					else if ( typeof uniform?.value === 'string' && /^#[\da-f]{6}$/i.test( uniform.value ) ) uniform.value = new Color( uniform.value );
+
+				}
+
+			}
 			for ( const key of [ 'defines', 'uniforms', 'attributes' ] ) {
 
 				if ( JSON.stringify( material[ key ] ) !== JSON.stringify( json[ key ] ) ) {

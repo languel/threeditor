@@ -3,7 +3,8 @@ import * as THREE from 'three';
 
 import { UIButton, UIDiv, UIInput, UIPanel, UIRow, UISelect, UIText, UITextArea } from './libs/ui.js';
 
-import { createStockMaterialLook, groupLookSlots, stockMaterialLooks } from './StockMaterialLooks.js';
+import { createCustomShaderMaterial, createStockMaterialLook, groupLookSlots, loadStockLookBase,
+	stockMaterialLooks, upgradeStockMaterialLook } from './StockMaterialLooks.js?v=look-controls';
 import { isProjector } from './assets/Projector.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { SetMaterialCommand } from './commands/SetMaterialCommand.js';
@@ -15,6 +16,7 @@ import { SidebarMaterialConstantProperty } from './Sidebar.Material.ConstantProp
 import { SidebarMaterialMapProperty } from './Sidebar.Material.MapProperty.js?v=timeline-keying';
 import { SidebarMaterialNumberProperty } from './Sidebar.Material.NumberProperty.js?v=timeline-keying';
 import { SidebarMaterialProgram } from './Sidebar.Material.Program.js';
+import { SidebarMaterialUniforms } from './Sidebar.Material.Uniforms.js';
 
 function SidebarMaterial( editor ) {
 
@@ -57,30 +59,96 @@ function SidebarMaterial( editor ) {
 	const stockLookRow = new UIRow();
 	const stockLook = new UISelect().setWidth( '150px' ).setOptions( { '': 'Choose a look…', ...stockMaterialLooks } );
 	stockLook.dom.setAttribute( 'aria-label', 'Stock look' );
+	const stockActions = new UIRow();
+	const disableLook = new UIButton( 'Disable look' ).onClick( restoreLooks );
+	const newShader = new UIButton( 'New shader' ).onClick( () => {
+
+		const [ entry ] = selectedSlots();
+		if ( ! entry || currentObject.isGroup ) return;
+		const material = createCustomShaderMaterial( entry.material );
+		editor.execute( new SetMaterialCommand( editor, entry.object, material, entry.slot ), 'New shader material' );
+		signals.editScript.dispatch( entry.object, 'fragmentShader', entry.slot );
+
+	} );
+	disableLook.dom.setAttribute( 'aria-label', 'Disable look' );
+	newShader.dom.setAttribute( 'aria-label', 'New shader' );
+	const status = new UIText();
+	status.dom.setAttribute( 'role', 'status' );
+	stockActions.add( disableLook, newShader, status );
+	const uniformPanel = new SidebarMaterialUniforms( editor );
+
+	function selectedSlots() {
+
+		if ( ! currentObject ) return [];
+		if ( currentObject.isGroup ) return groupLookSlots( currentObject );
+		const material = editor.getObjectMaterial( currentObject, currentMaterialSlot );
+		return material ? [ { object: currentObject, slot: currentMaterialSlot, material } ] : [];
+
+	}
+
+	function applyMaterials( assignments, title ) {
+
+		const commands = assignments.map( ( { object, slot, replacement } ) => new SetMaterialCommand( editor, object, replacement, slot ) );
+		if ( commands.length ) editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( editor, commands ), title );
+
+	}
+
 	stockLook.onChange( () => {
 
 		const look = stockLook.getValue();
 		if ( ! Object.hasOwn( stockMaterialLooks, look ) ) return refreshUI();
-		if ( currentObject.isGroup ) {
+		const replacements = new Map();
+		const assignments = [];
+		for ( const entry of selectedSlots() ) {
 
-			const shared = new Map();
-			const commands = groupLookSlots( currentObject ).map( ( { object, material, slot } ) => {
-
-				if ( ! shared.has( material.side ) ) shared.set( material.side, createStockMaterialLook( look, material ) );
-				return new SetMaterialCommand( editor, object, shared.get( material.side ), slot );
-
-			} );
-			if ( commands.length ) editor.execute( new MultiCmdsCommand( editor, commands ), 'Apply look to group: ' + stockMaterialLooks[ look ] );
-			return;
+			const { material } = entry;
+			if ( material.userData.stockLook === look ) continue;
+			if ( ! replacements.has( material ) ) replacements.set( material, createStockMaterialLook( look, material ) );
+			assignments.push( { ...entry, replacement: replacements.get( material ) } );
 
 		}
-		const previous = editor.getObjectMaterial( currentObject, currentMaterialSlot );
-		const material = createStockMaterialLook( look, previous );
-		editor.execute( new SetMaterialCommand( editor, currentObject, material, currentMaterialSlot ), 'Apply look: ' + material.name );
+		applyMaterials( assignments, 'Apply look: ' + stockMaterialLooks[ look ] );
 
 	} );
+
+	let restoring = false;
+	async function restoreLooks() {
+
+		if ( restoring ) return;
+		const selected = currentObject;
+		const entries = selectedSlots().filter( ( { material } ) => material.userData.stockLook );
+		const snapshots = new Map();
+		restoring = true;
+		disableLook.setDisabled( true );
+		status.setValue( '' );
+		try {
+
+			const assignments = await Promise.all( entries.map( async entry => {
+
+				const replacement = await loadStockLookBase( entry.material, editor.materials, snapshots );
+				return { ...entry, replacement };
+
+			} ) );
+			if ( currentObject !== selected || assignments.some( ( { object, slot, material } ) =>
+				editor.getObjectMaterial( object, slot ) !== material || editor.objectByUuid( object.uuid ) !== object ) ) return;
+			applyMaterials( assignments, 'Disable stock look' );
+
+		} catch ( error ) {
+
+			status.setValue( 'Could not restore the original material.' );
+			console.error( error );
+
+		} finally {
+
+			restoring = false;
+			refreshUI();
+
+		}
+
+	}
+
 	stockLookRow.add( new UIText( 'Stock look' ).setClass( 'Label' ), stockLook );
-	container.add( stockLookRow, details );
+	container.add( stockLookRow, stockActions, uniformPanel, details );
 
 	// uuid
 
@@ -564,6 +632,7 @@ function SidebarMaterial( editor ) {
 			try {
 
 				const userData = JSON.parse( materialUserData.getValue() );
+				if ( material.userData.stockLookBase && userData && typeof userData === 'object' ) userData.stockLookBase = material.userData.stockLookBase;
 				if ( JSON.stringify( material.userData ) != JSON.stringify( userData ) ) {
 
 					editor.execute( new SetMaterialValueCommand( editor, currentObject, 'userData', userData, currentMaterialSlot ) );
@@ -606,19 +675,28 @@ function SidebarMaterial( editor ) {
 
 		const webGPU = editor.config.getKey( 'project/renderer/type' ) === 'WebGPURenderer';
 		const group = currentObject.isGroup;
+		if ( Array.isArray( currentObject.material ) ) currentMaterialSlot = Math.max( 0, Math.min( currentMaterialSlot, currentObject.material.length - 1 ) );
+		const slots = selectedSlots();
+		for ( const { material } of slots ) upgradeStockMaterialLook( material );
+		const value = slots[ 0 ]?.material.userData.stockLook;
+		const commonLook = Object.hasOwn( stockMaterialLooks, value ) &&
+			slots.every( ( { material } ) => material.userData.stockLook === value ) ? value : '';
+		const hasLook = slots.some( ( { material } ) => material.userData.stockLook );
 		details.setDisplay( group ? 'none' : '' );
 		stockLookRow.setDisplay( currentObject.isMesh || group ? '' : 'none' );
-		stockLook.setDisabled( webGPU );
+		stockLook.setDisabled( webGPU || slots.length === 0 );
+		stockLook.setValue( commonLook );
 		stockLook.dom.title = webGPU ? 'Stock looks require the WebGL renderer' :
 			group ? 'Apply to every mesh material slot in this group' : 'Replace this material slot with a stock shader';
+		disableLook.setDisplay( hasLook ? '' : 'none' ).setDisabled( restoring );
+		disableLook.dom.title = slots.some( ( { material } ) => material.userData.stockLook && ! material.userData.stockLookBase ) ?
+			'Older looks restore to a standard material' : 'Restore the original material';
+		newShader.setDisplay( currentObject.isMesh && ! webGPU ? '' : 'none' );
+		stockActions.setDisplay( hasLook || currentObject.isMesh && ! webGPU ? '' : 'none' );
+		uniformPanel.update( group && ! commonLook ? [] : slots, commonLook );
 		if ( group ) {
 
 			materialSlotRow.setDisplay( 'none' );
-			const slots = groupLookSlots( currentObject );
-			const value = slots[ 0 ]?.material.userData.stockLook;
-			stockLook.setDisabled( webGPU || slots.length === 0 );
-			stockLook.setValue( Object.hasOwn( stockMaterialLooks, value ) &&
-				slots.every( ( { material } ) => material.userData.stockLook === value ) ? value : '' );
 			return;
 
 		}
@@ -713,7 +791,12 @@ function SidebarMaterial( editor ) {
 
 		if ( hasMaterial || ( object?.isGroup && ! isProjector( object ) ) ) {
 
-			if ( currentObject !== object ) currentMaterialSlot = 0;
+			if ( currentObject !== object ) {
+
+				currentMaterialSlot = 0;
+				status.setValue( '' );
+
+			}
 			currentObject = object;
 			refreshUI();
 			container.setDisplay( '' );
