@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { modelGeometry, modelObject, outlinePoints, removePoints } from './ModelGeometry.js';
+import { addFace, extrudeFace, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from './ModelGeometry.js';
 
 
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
@@ -22,6 +23,8 @@ export class ModelViewport {
 		this.viewport = viewport;
 		this.render = render;
 		this.indices = [];
+		this.editMode = false;
+		this.extrudeDistance = 0.3;
 		this.proxy = new THREE.Object3D();
 		this.proxy.name = 'Modeling pivot';
 		this.ray = new THREE.Raycaster();
@@ -74,13 +77,17 @@ export class ModelViewport {
 			this.changed();
 
 		} );
-		signals.objectSelected.add( object => { if ( object !== this.object ) this.stop(); } );
-		signals.objectChanged.add( () => { if ( this.object && ! this.canEdit() ) this.stop(); } );
+		signals.objectSelected.add( object => {
+
+			if ( this.editMode && object !== this.object ) this.setTarget( object );
+
+		} );
+		signals.objectChanged.add( () => { if ( this.object && ! this.canEdit() ) this.setTarget( null ); } );
 		signals.startPlayer.add( () => this.stop() );
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.object || document.querySelector( 'dialog[open]' ) ) return;
+			if ( ! this.object || editor.viewTools?.mode || document.querySelector( 'dialog[open]' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( event.key === 'Escape' && ( this.gesture || this.drag ) ) {
 
@@ -140,33 +147,137 @@ export class ModelViewport {
 
 	}
 
+	setMode( mode ) {
+
+		if ( mode === 'edit' ) this.start( this.editor.selected );
+		else this.stop();
+
+	}
+
 	start( object ) {
 
-		if ( ! object?.geometry?.userData.modeling && ! editableMesh( object ) ) return;
-		if ( ! object.geometry.userData.modeling?.points && object.geometry.attributes.position.count > 20000 ) throw new Error( 'Vertex editing supports meshes with up to 20,000 buffer vertices.' );
 		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
-		this.object = object;
-		if ( ! this.canEdit() ) { this.object = null; return; }
-		this.data = this.read( object );
-		this.indices = [];
-		this.adding = false;
-		this.overlay.hidden = false;
-		this.changed();
-		this.render();
+		this.editMode = true;
+		this.setTarget( object );
 
 	}
 
 	stop() {
 
-		if ( ! this.object ) return;
+		if ( ! this.editMode ) return;
+		this.editMode = false;
+		this.setTarget( null );
+
+	}
+
+	setTarget( object ) {
+
 		this.releaseDrag();
 		if ( this.gesture?.modal ) this.finishTransform( false );
 		else if ( this.gesture ) this.cancelGizmo?.();
-		this.object = this.data = null;
+		const data = object?.geometry?.userData.modeling;
+		const editable = object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
+			! object.userData.surfaceMark && ( data?.points || object.geometry.attributes.position.count <= 20000 );
+		this.object = editable ? object : null;
+		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
-		this.overlay.hidden = true;
+		this.adding = false;
+		this.overlay.hidden = ! this.object;
 		this.changed();
 		this.render();
+
+	}
+
+	syncTool() {
+
+		if ( this.editor.viewTools?.mode ) {
+
+			this.releaseDrag();
+			if ( this.gesture?.modal ) this.finishTransform( false );
+			else if ( this.gesture ) this.cancelGizmo?.();
+
+		}
+		this.overlay.hidden = ! this.object || !! this.editor.viewTools?.mode;
+
+	}
+
+	create( kind, empty = false ) {
+
+		const labels = { path: 'Editable path', shape: 'Editable shape', mesh: 'Editable mesh' };
+		const data = modelData( kind );
+		if ( empty ) {
+
+			data.points = [];
+			if ( data.faces ) data.faces = [];
+
+		}
+		const object = modelObject( THREE, data, labels[ kind ] );
+		this.editor.execute( new AddObjectCommand( this.editor, object ) );
+		this.start( object );
+		this.adding = empty;
+		this.changed();
+		this.render();
+
+	}
+
+	actions() {
+
+		if ( ! this.data ) return [];
+		const { data, indices } = this;
+		const actions = [];
+		const add = ( label, glyph, run, disabled = false, pressed ) => actions.push( { label, glyph, run, disabled, pressed } );
+		if ( data.kind === 'vertices' ) return actions;
+		add( this.adding ? 'Stop adding' : 'Add points', 'add', () => {
+
+			this.adding = ! this.adding;
+			this.changed();
+			this.render();
+
+		}, false, this.adding );
+		add( 'Remove selected', 'remove', () => this.edit( 'Remove modeling points', next => { removePoints( next, indices ); return []; } ), ! indices.length );
+		add( 'Clear points', 'delete', () => this.edit( 'Clear modeling points', next => {
+
+			next.points = [];
+			if ( next.faces ) next.faces = [];
+			return [];
+
+		} ), ! data.points.length );
+		if ( data.kind === 'mesh' ) {
+
+			const face = data.faces.findIndex( face => face.length === indices.length && face.every( index => indices.includes( index ) ) );
+			const adjacent = indices.length === 2 && data.faces.some( face => face.some( ( point, index ) =>
+				indices.includes( point ) && indices.includes( face[ ( index + 1 ) % face.length ] ) ) );
+			add( 'Fill face', 'snapFace', () => this.edit( 'Fill mesh face', next => addFace( THREE, next, indices ) ), indices.length < 3 || face >= 0 );
+			add( 'Split edge', 'snapMidpoint', () => this.edit( 'Split mesh edge', next => [ splitEdge( next, ...indices ) ] ), ! adjacent );
+			add( 'Delete face', 'deleteFace', () => this.edit( 'Delete mesh face', next => { next.faces.splice( face, 1 ); } ), face < 0 );
+			add( 'Extrude face', 'extrude', () => this.edit( 'Extrude mesh face', next => extrudeFace( THREE, next, face, this.extrudeDistance ) ), face < 0 );
+
+		} else {
+
+			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
+
+				const i = indices[ 0 ];
+				const following = data.kind === 'shape' || data.closed ? ( i + 1 ) % next.points.length : i + 1;
+				const other = next.points[ following ] || next.points[ i - 1 ];
+				const sign = next.points[ following ] ? 1 : - 1;
+				const point = next.points[ i ].map( ( value, axis ) => other ? value + sign * ( other[ axis ] - value ) * 0.5 : value + ( axis === 0 ? 0.5 : 0 ) );
+				next.points.splice( i + 1, 0, point );
+				return [ i + 1 ];
+
+			} ), indices.length !== 1 );
+			if ( data.kind === 'path' ) add( 'Create shape from path', 'snapFace', () => {
+
+				const object = this.object;
+				const shape = this.toShape();
+				object.updateWorldMatrix( true, false );
+				if ( object.parent !== this.editor.scene ) object.matrixWorld.decompose( shape.position, shape.quaternion, shape.scale );
+				this.editor.execute( new AddObjectCommand( this.editor, shape ) );
+				this.start( shape );
+
+			}, ! data.closed || data.points.length < 3 );
+
+		}
+		return actions;
 
 	}
 
@@ -176,6 +287,7 @@ export class ModelViewport {
 		if ( this.canEdit() && this.indices.length && ! this.gesture && ! this.drag ) this.updateProxy();
 		this.onSelectionChange?.();
 		this.onChange?.();
+		this.onToolsChange?.();
 
 	}
 
@@ -513,7 +625,7 @@ export class ModelViewport {
 
 	draw() {
 
-		if ( ! this.canEdit() || ! this.editor.renderer ) return;
+		if ( ! this.canEdit() || ! this.editor.renderer || this.editor.viewTools?.mode ) return;
 		const { width, height, x, y } = this.rect();
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		if ( ! width || ! height ) return;
@@ -688,7 +800,7 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
-		if ( ! this.canEdit() || this.drag || event.button !== 0 || event.altKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || event.button !== 0 || event.altKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
 		if ( ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
@@ -742,7 +854,7 @@ export class ModelViewport {
 		const drag = this.drag;
 		if ( ! drag ) {
 
-			if ( ! this.canEdit() || ! this.adding || this.gesture || ! this.editor.viewLayout.navigation ) return;
+			if ( ! this.canEdit() || this.editor.viewTools?.mode || ! this.adding || this.gesture || ! this.editor.viewLayout.navigation ) return;
 			const marker = {};
 			if ( this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && modelSnapMode( this.editor.config, event.ctrlKey ) ) {
 

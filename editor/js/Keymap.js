@@ -26,6 +26,7 @@ const definitions = [
  ['fly','Fly active camera','View','backquote','backquote'], ['shading','Cycle viewport shading','View','z','z'], ['shadingBack','Cycle viewport shading backward','View','shift+z','shift+z'],
  ['play','Start / stop player','Playback','alt+p','alt+p'], ['presentation','Presentation mode','Playback','mod+alt+p','mod+alt+p'],
  ['code','Toggle code panel','Workspace','',''], ['sidebar','Toggle sidebar','Workspace','','n'], ['timeline','Toggle timeline','Workspace','',''],
+ ['workspaceMode','Switch Object / Edit mode','Modeling','tab','tab'],
  ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
@@ -75,7 +76,7 @@ class Keymap {
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
   const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
-  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
+  if(t?.closest?.('button') && !(action.id==='workspaceMode' && t.closest('.viewport-tool-panel')) && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
   e.preventDefault();action.run();
  }
  registerMenu(menu){
@@ -154,6 +155,7 @@ class Keymap {
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
    case 'duplicate':e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
+   case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
    case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;

@@ -1,4 +1,5 @@
-import { icon } from '../Glyphs.js?v=viewport-tools';
+import { icon } from '../Glyphs.js?v=edit-modes';
+import { modelButton, modelField } from './ModelControls.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -13,26 +14,6 @@ function element( tag, parent, text ) {
 	const node = document.createElement( tag );
 	if ( text ) node.textContent = text;
 	parent.append( node );
-	return node;
-
-}
-
-function field( parent, name, type, value ) {
-
-	const label = element( 'label', parent, name );
-	const input = element( 'input', label );
-	input.type = type;
-	if ( type === 'checkbox' ) input.checked = value;
-	else input.value = value;
-	return input;
-
-}
-
-function button( parent, name, action ) {
-
-	const node = element( 'button', parent, name );
-	node.type = 'button';
-	node.onclick = action;
 	return node;
 
 }
@@ -70,6 +51,14 @@ export class ViewportTools {
 		this.context = this.overlay.getContext( '2d' );
 		this.panel = element( 'div', viewport );
 		this.panel.className = 'viewport-tool-panel';
+		const workspace = element( 'div', this.panel );
+		workspace.className = 'viewport-workspace';
+		workspace.setAttribute( 'role', 'group' );
+		workspace.setAttribute( 'aria-label', 'Viewport mode' );
+		this.modeButtons = new Map( [
+			[ 'object', modelButton( workspace, 'Object mode', 'objectMode', () => this.setWorkspaceMode( 'object' ) ) ],
+			[ 'edit', modelButton( workspace, 'Edit mode', 'editMode', () => this.setWorkspaceMode( 'edit' ) ) ]
+		] );
 		const tools = [
 			[ '', 'Select & navigate', 'toolSelect' ], [ 'mask', 'Edit light mask', 'toolMask' ],
 			[ 'measure', 'Measure', 'toolMeasure' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'toolPaint' ]
@@ -77,7 +66,7 @@ export class ViewportTools {
 		this.selector = select( this.panel, 'Viewport tool', tools );
 		this.selector.className = 'viewport-tool-select';
 		this.selector.onchange = () => this.setMode( this.selector.value );
-		this.editMask = button( this.panel, 'Edit mask', () => this.setMode( 'mask' ) );
+		this.editMask = modelButton( this.panel, 'Edit mask', 'toolMask', () => this.setMode( 'mask' ) );
 		this.editMask.className = 'viewport-tool-mask-text';
 		const strip = element( 'div', this.panel );
 		strip.className = 'viewport-tool-strip';
@@ -85,13 +74,23 @@ export class ViewportTools {
 		strip.setAttribute( 'aria-label', 'Viewport tools' );
 		this.toolButtons = new Map( tools.map( ( [ mode, label, glyph ] ) => {
 
-			const control = button( strip, label, () => this.setMode( mode ) );
+			const control = element( 'button', strip );
+			control.type = 'button';
+			control.onclick = () => this.setMode( mode );
 			control.innerHTML = icon( glyph );
 			control.title = label;
 			control.setAttribute( 'aria-label', label );
 			return [ mode, control ];
 
 		} ) );
+		this.creation = element( 'div', this.panel );
+		this.creation.className = 'viewport-creation';
+		for ( const [ kind, label, glyph ] of [
+			[ 'path', 'Draw path', 'toolPath' ], [ 'shape', 'Draw shape', 'surface' ], [ 'mesh', 'Build mesh', 'shadingWire' ]
+		] ) modelButton( this.creation, label, glyph, () => this.run( () => editor.modeling.create( kind, true ) ) );
+		this.modelOptions = element( 'div', this.panel );
+		this.modelOptions.className = 'viewport-tool-options viewport-model-options';
+		editor.modeling.onToolsChange = () => this.refreshWorkspace();
 		this.controls = element( 'div', this.panel );
 		this.controls.className = 'viewport-tool-options';
 		this.status = element( 'output', this.panel );
@@ -144,6 +143,7 @@ export class ViewportTools {
 
 		} );
 		this.syncMaskControls();
+		this.refreshWorkspace();
 
 	}
 
@@ -152,10 +152,53 @@ export class ViewportTools {
 		const source = this.editor.viewportSource;
 		const editable = canEditLightMask( source );
 		if ( this.mode === 'mask' && ( ! editable || this.maskSource !== source ) ) this.setMode( '' );
-		this.selector.options[ 1 ].disabled = ! editable;
+		this.selector.querySelector( 'option[value="mask"]' ).disabled = ! editable;
 		this.toolButtons.get( 'mask' ).disabled = ! editable;
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode === this.mode || ! mode && ! this.mode ) );
 		this.editMask.hidden = ! editable || this.mode === 'mask';
+
+	}
+
+	setWorkspaceMode( mode ) {
+
+		if ( this.mode ) this.setMode( '' );
+		if ( this.editor.modeling.editMode !== ( mode === 'edit' ) ) this.editor.modeling.setMode( mode );
+
+	}
+
+	toggleWorkspaceMode() {
+
+		this.setWorkspaceMode( this.editor.modeling.editMode ? 'object' : 'edit' );
+
+	}
+
+	refreshWorkspace() {
+
+		const model = this.editor.modeling;
+		const edit = model.editMode;
+		for ( const [ mode, button ] of this.modeButtons ) button.setAttribute( 'aria-pressed', String( mode === ( edit ? 'edit' : 'object' ) ) );
+		for ( const mode of [ 'path', 'paint' ] ) {
+
+			this.toolButtons.get( mode ).hidden = ! edit;
+			this.selector.querySelector( 'option[value="' + mode + '"]' ).hidden = ! edit;
+
+		}
+		this.creation.hidden = ! edit || !! this.mode;
+		this.modelOptions.replaceChildren();
+		if ( ! edit || this.mode ) return;
+		const options = this.modelOptions;
+		for ( const { label, glyph, run, disabled, pressed } of model.actions() ) {
+
+			const control = modelButton( options, label, glyph, () => this.run( run ), disabled );
+			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
+
+		}
+		if ( model.data?.kind === 'mesh' && model.indices.length >= 3 ) {
+
+			const distance = modelField( options, 'Extrusion distance', 'extrude', 'number', model.extrudeDistance );
+			distance.onchange = () => { if ( Number.isFinite( distance.valueAsNumber ) ) model.extrudeDistance = distance.valueAsNumber; };
+
+		}
 
 	}
 
@@ -177,7 +220,14 @@ export class ViewportTools {
 		this.selected = - 1;
 		this.status.textContent = '';
 		this.readout.textContent = '';
-		if ( mode ) this.editor.modeling.stop();
+		if ( ( mode === 'path' || mode === 'paint' ) && ! this.editor.modeling.editMode ) {
+
+			this.mode = '';
+			this.editor.modeling.start( this.editor.selected );
+			this.mode = mode;
+
+		}
+		this.editor.modeling.syncTool();
 		if ( mode === 'mask' ) {
 
 			this.maskSource = this.editor.viewportSource;
@@ -199,6 +249,7 @@ export class ViewportTools {
 		}
 		this.buildOptions();
 		this.syncMaskControls();
+		this.refreshWorkspace();
 		this.render();
 
 	}
@@ -209,7 +260,15 @@ export class ViewportTools {
 		this.points = structuredClone( mask?.points || [] );
 		this.maskMode = mask?.mode || 'inside';
 		this.selected = - 1;
-		if ( this.maskSelect ) this.maskSelect.value = this.maskMode;
+		this.syncMaskMode();
+
+	}
+
+	syncMaskMode() {
+
+		if ( ! this.maskSelect ) return;
+		this.maskSelect.value = this.maskMode;
+		this.maskButtons?.forEach( ( button, index ) => button.setAttribute( 'aria-pressed', String( this.maskMode === [ 'inside', 'cutout' ][ index ] ) ) );
 
 	}
 
@@ -217,49 +276,58 @@ export class ViewportTools {
 
 		const parent = this.controls;
 		parent.replaceChildren();
-		this.maskSelect = this.finishButton = this.removeButton = null;
+		this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
 		if ( ! this.mode ) return;
 		if ( this.mode === 'mask' ) {
 
 			this.maskSelect = select( parent, 'Light mask mode', [ [ 'inside', 'Light inside' ], [ 'cutout', 'Block inside' ] ] );
-			this.maskSelect.value = this.maskMode;
-			this.maskSelect.onchange = () => { this.maskMode = this.maskSelect.value; this.draw(); };
-			button( parent, 'New outline', () => { this.points = []; this.selected = - 1; this.draw(); } );
-			button( parent, 'Clear mask', () => this.run( () => {
+			this.maskSelect.className = 'viewport-mask-mode-select';
+			this.maskButtons = [ 'inside', 'cutout' ].map( mode => {
+
+				const button = modelButton( parent, mode === 'inside' ? 'Light inside' : 'Block inside', mode === 'inside' ? 'toolMask' : 'maskCutout',
+					() => { this.maskMode = mode; this.syncMaskMode(); this.draw(); } );
+				button.classList.add( 'viewport-mask-mode-button' );
+				return button;
+
+			} );
+			this.syncMaskMode();
+			this.maskSelect.onchange = () => { this.maskMode = this.maskSelect.value; this.syncMaskMode(); this.draw(); };
+			modelButton( parent, 'New outline', 'add', () => { this.points = []; this.selected = - 1; this.draw(); } );
+			modelButton( parent, 'Clear mask', 'delete', () => this.run( () => {
 
 				setLightMask( this.editor, this.maskSource, null );
 				this.readMask();
 				this.render();
 
 			} ) );
-			this.finishButton = button( parent, 'Apply mask', () => this.run( () => this.finish() ) );
+			this.finishButton = modelButton( parent, 'Apply mask', 'apply', () => this.run( () => this.finish() ) );
 
 		} else if ( this.mode === 'measure' ) {
 
 			const unit = select( parent, 'Measurement units', Object.keys( lengthUnits ).map( name => [ name, name ] ) );
 			unit.value = this.measure.unit;
 			unit.onchange = () => { this.measure.unit = unit.value; this.draw(); };
-			field( parent, 'Closed', 'checkbox', this.measure.closed ).onchange = event => { this.measure.closed = event.target.checked; this.draw(); };
-			field( parent, 'Bind to mesh', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
-			field( parent, 'Snap vertices', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
-			this.finishButton = button( parent, 'Save ruler', () => this.run( () => this.finish() ) );
-			button( parent, 'New ruler', () => { this.ruler = null; this.points = []; this.selected = - 1; this.draw(); } );
-			const known = field( parent, 'Known length', 'number', '' );
+			modelField( parent, 'Closed', 'toolMask', 'checkbox', this.measure.closed ).onchange = event => { this.measure.closed = event.target.checked; this.draw(); };
+			modelField( parent, 'Bind to mesh', 'link', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
+			modelField( parent, 'Snap vertices', 'snapVertex', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
+			this.finishButton = modelButton( parent, 'Save ruler', 'save', () => this.run( () => this.finish() ) );
+			modelButton( parent, 'New ruler', 'add', () => { this.ruler = null; this.points = []; this.selected = - 1; this.draw(); } );
+			const known = modelField( parent, 'Known length', 'toolMeasure', 'number', '' );
 			known.min = '0';
 			known.step = 'any';
-			button( parent, 'Calibrate units', () => this.run( () => this.calibrate( known.valueAsNumber ) ) );
+			modelButton( parent, 'Calibrate units', 'calibrate', () => this.run( () => this.calibrate( known.valueAsNumber ) ) );
 
 		} else {
 
-			field( parent, 'Color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
-			if ( this.mode === 'path' ) this.finishButton = button( parent, 'Save path', () => this.run( () => this.finish() ) );
+			modelField( parent, 'Color', 'color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
+			if ( this.mode === 'path' ) this.finishButton = modelButton( parent, 'Save path', 'save', () => this.run( () => this.finish() ) );
 			else {
 
-				const width = field( parent, 'Brush (px)', 'number', this.brush.diameter );
+				const width = modelField( parent, 'Brush (px)', 'brushWidth', 'number', this.brush.diameter );
 				width.min = '2';
 				width.max = '100';
 				width.onchange = () => { this.brush.diameter = THREE.MathUtils.clamp( width.valueAsNumber || 14, 2, 100 ); width.value = this.brush.diameter; };
-				const opacity = field( parent, 'Opacity', 'number', this.brush.opacity );
+				const opacity = modelField( parent, 'Opacity', 'opacity', 'number', this.brush.opacity );
 				opacity.min = '0.05';
 				opacity.max = '1';
 				opacity.step = '.05';
@@ -268,8 +336,8 @@ export class ViewportTools {
 			}
 
 		}
-		if ( this.mode !== 'paint' ) this.removeButton = button( parent, 'Remove point', () => this.removePoint() );
-		button( parent, 'Done', () => this.setMode( '' ) );
+		if ( this.mode !== 'paint' ) this.removeButton = modelButton( parent, 'Remove point', 'remove', () => this.removePoint() );
+		modelButton( parent, 'Done', 'exitTool', () => this.setMode( '' ) );
 
 	}
 
@@ -678,7 +746,9 @@ export class ViewportTools {
 			const scene = this.editor.scene;
 			const points = worldMeasurePoints( THREE, scene, this.ruler, this.points );
 			const scale = scene.userData.metersPerUnit || 1;
-			this.readout.textContent = points.length < 2 ? '' : 'Total ' + formatMeasurement( measurementLength( points, this.measure.closed ), this.measure.unit, scale );
+			this.readout.title = 'Total length';
+			this.readout.setAttribute( 'aria-label', 'Total length' );
+			this.readout.textContent = points.length < 2 ? '' : formatMeasurement( measurementLength( points, this.measure.closed ), this.measure.unit, scale );
 
 		}
 

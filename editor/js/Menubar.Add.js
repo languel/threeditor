@@ -2,7 +2,6 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow } from './libs/ui.js';
 
-import { modelData, modelObject } from './modeling/ModelGeometry.js';
 import { projectorScript } from './assets/Projector.js';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
@@ -71,10 +70,8 @@ function MenubarAdd( editor ) {
 		option = new UIRow().setClass( 'option' ).setTextContent( label );
 		option.onClick( () => {
 
-			const object = modelObject( THREE, modelData( kind ), label );
-			editor.execute( new AddObjectCommand( editor, object ) );
+			editor.modeling.create( kind );
 			editor.modeling.show?.();
-			editor.modeling.start( object );
 
 		} );
 		meshSubmenu.add( option );

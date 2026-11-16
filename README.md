@@ -90,7 +90,7 @@ Select an unlocked projector or spotlight and choose **Object → Edit mask in v
 
 ### Measure and draw on receivers
 
-Viewport tools work in either pane. Compact mode uses icons for Select, Mask, Measure, Surface Path, and Surface Paint. Hover an icon to see its name. Other interface styles use the **Viewport tool** dropdown.
+Use the **Object mode** and **Edit mode** buttons at the upper left of the viewport, or press **Tab**. Object mode is for selecting and moving objects. Edit mode adds **Surface path**, **Surface paint**, and geometry creation and editing. Measure and light masks are available in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
 
 - **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Rulers show distances, corner angles, and area when **Closed**. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
 - **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Saved paths can be edited in **Modeling**.
@@ -100,7 +100,7 @@ Use **Enter** to apply a mask or save a ruler or path, and **Esc** to exit a vie
 
 ## Paths, shapes, and meshes
 
-Open **Add → Mesh** and choose **Editable path**, **Editable shape**, or **Editable mesh**. Replace the starting points with **Clear points** and **Add points**, or edit them in place. Drag handles in the viewport, Shift-click to select several, or enter exact coordinates in **Modeling**. Use the viewport toolbar to move, rotate, or scale the selection. The pivot can follow the median, selection bounds, last selected point, or world origin. The orientation can follow the world, the object, its parent, the view, or the selected geometry’s normal. In split view, edit points in the Director pane. Press **Esc** or **Done** to return to object editing. Point and topology edits support undo and redo.
+Enter Edit mode and use **Draw path**, **Draw shape**, or **Build mesh** to start with an empty object and place its points in the viewport. **Add → Mesh** also offers editable objects with starter points. Select an existing editable object and enter Edit mode to access its point and topology tools directly in the viewport. Drag handles in the viewport, Shift-click to select several, or enter exact coordinates in **Modeling**. Use the viewport toolbar to move, rotate, or scale the selection. The pivot can follow the median, selection bounds, last selected point, or world origin. The orientation can follow the world, the object, its parent, the view, or the selected geometry’s normal. In split view, edit points in the Director pane. Press **Tab** or choose **Object mode** to return to object editing. **Esc** cancels the current drag or closes the active tool first. Point and topology edits support undo and redo.
 
 - **Paths** can use straight segments or smooth curves, with open or closed ends. Uncheck **Constrain to local XY** for a spatial curve. Close a planar path to turn it into a filled shape.
 - **Shapes** can stay flat or use **Extrusion depth** to become solid projection surfaces.

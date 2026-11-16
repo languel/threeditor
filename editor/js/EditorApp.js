@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=model-transform';
-import { Keymap } from './Keymap.js?v=model-transform';
+import { Keymap } from './Keymap.js?v=edit-modes';
 import { ModalTransform } from './ModalTransform.js?v=model-transform';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=model-transform';
+import { Viewport } from './Viewport.js?v=edit-modes';
 import { Toolbar } from './Toolbar.js?v=model-transform';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=model-transform';
-import { Menubar } from './Menubar.js?v=scene-timeline';
+import { Sidebar } from './Sidebar.js?v=edit-modes';
+import { Menubar } from './Menubar.js?v=edit-modes';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';

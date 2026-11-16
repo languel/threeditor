@@ -27,9 +27,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=viewport-tools';
+import { ViewportTools } from './modeling/ViewportTools.js?v=edit-modes';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=model-transform';
+import { ModelViewport } from './modeling/ModelViewport.js?v=edit-modes';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -154,11 +154,11 @@ function Viewport( editor ) {
 		const selected = selector.selection;
 		const available = selected.length > 0 && selected.every( object => object !== scene && object !== camera &&
 			isVisible( object ) && ! hasRestriction( object, 'locked' ) );
-		const candidate = model.object ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.drag ? model.proxy : null ) :
+		const candidate = model.editMode ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.drag ? model.proxy : null ) :
 			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
 		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
 		else if ( ! candidate && transformControls.object ) transformControls.detach();
-		transformControls.enabled = ! editor.viewTools.mode && ( ! model.object || candidate === model.proxy && ! model.gesture?.modal );
+		transformControls.enabled = ! editor.viewTools.mode && ( ! model.editMode || candidate === model.proxy && ! model.gesture?.modal );
 		transformControls.setSpace( model.object || editor.config.getKey( 'settings/transformOrientation' ) === 'local' ? 'local' : 'world' );
 		setControlSnap( false );
 

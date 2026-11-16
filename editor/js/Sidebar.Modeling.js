@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { UIPanel } from './libs/ui.js';
-import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { isProjector } from './assets/Projector.js';
 import { setLightMask } from './modeling/LightMask.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
-import { addFace, extrudeFace, outlinePoints, removePoints, splitEdge } from './modeling/ModelGeometry.js';
-import { editableMesh } from './modeling/ModelViewport.js?v=model-transform';
+import { outlinePoints } from './modeling/ModelGeometry.js';
+import { editableMesh } from './modeling/ModelViewport.js?v=edit-modes';
+import { modelButton, modelField } from './modeling/ModelControls.js';
 import { maskFromOutline } from './modeling/ProjectionMask.js';
 
 function element( tag, text, parent ) {
@@ -17,23 +17,9 @@ function element( tag, text, parent ) {
 
 }
 
-function button( label, parent, action, disabled = false ) {
+function field( label, glyph, parent, type, value, change ) {
 
-	const node = element( 'button', label, parent );
-	node.type = 'button';
-	node.disabled = disabled;
-	node.onclick = action;
-	return node;
-
-}
-
-function field( label, parent, type, value, change ) {
-
-	const row = element( 'label', label, parent );
-	const input = element( 'input', null, row );
-	input.type = type;
-	if ( type === 'checkbox' ) input.checked = !! value;
-	else { input.value = value; input.step = 'any'; }
+	const input = modelField( parent, label, glyph, type, value );
 	input.onchange = () => change( type === 'checkbox' ? input.checked : input.valueAsNumber );
 	return input;
 
@@ -52,8 +38,8 @@ function SidebarProjectionMask( editor, object, host, run ) {
 	const ctx = canvas.getContext( '2d' );
 	const controls = element( 'div', null, host );
 	controls.className = 'modeling-actions';
-	const newMask = button( 'Draw new mask', controls, () => { points = []; selected = - 1; draw(); } );
-	const remove = button( 'Remove point', controls, () => {
+	const newMask = modelButton( controls, 'Draw new mask', 'add', () => { points = []; selected = - 1; draw(); } );
+	const remove = modelButton( controls, 'Remove point', 'remove', () => {
 
 		if ( selected < 0 ) return;
 		points.splice( selected, 1 );
@@ -61,8 +47,8 @@ function SidebarProjectionMask( editor, object, host, run ) {
 		draw();
 
 	} );
-	const apply = button( 'Apply mask', controls, () => run( () => commit( { mode, points: points.map( point => [ ...point ] ) } ) ) );
-	button( 'Clear mask', controls, () => run( () => {
+	const apply = modelButton( controls, 'Apply mask', 'apply', () => run( () => commit( { mode, points: points.map( point => [ ...point ] ) } ) ) );
+	modelButton( controls, 'Clear mask', 'delete', () => run( () => {
 
 		commit( null );
 		points = [];
@@ -102,7 +88,7 @@ function SidebarProjectionMask( editor, object, host, run ) {
 		draw();
 
 	} );
-	element( 'p', 'Click to add points or drag a handle. Apply the mask to update the light.', host );
+	element( 'p', 'Click to add points or drag a handle. Apply the mask to update the light.', host ).className = 'modeling-instructions';
 	let frame = { x: 0, y: 0, width: 320, height: 240 };
 	let lastTexture, lastVersion = - 1;
 
@@ -210,7 +196,6 @@ export function SidebarModeling( editor ) {
 	panel.dom.className = 'modeling-panel';
 	const tools = editor.modeling;
 	let updateMask;
-	let extrudeDistance = .3;
 	const status = element( 'p', '', panel.dom );
 	status.setAttribute( 'role', 'status' );
 	const body = element( 'div', null, panel.dom );
@@ -236,31 +221,31 @@ export function SidebarModeling( editor ) {
 		if ( ! object.geometry?.userData.modeling && ! editableMesh( object ) ) return;
 		if ( tools.object !== object ) {
 
-			button( 'Edit points', body, () => run( () => tools.start( object ) ) );
+			modelButton( body, 'Edit points', 'editMode', () => run( () => tools.start( object ) ) );
 			return;
 
 		}
 		const { data, indices } = tools;
 		const actions = element( 'div', null, body );
 		actions.className = 'modeling-actions';
-		button( 'Done', actions, () => tools.stop() );
-		if ( data.kind !== 'vertices' ) {
+		modelButton( actions, 'Object mode', 'objectMode', () => tools.stop() );
+		for ( const { label, glyph, run: action, disabled, pressed } of tools.actions() ) {
 
-			const add = button( tools.adding ? 'Stop adding' : 'Add points', actions, () => { tools.adding = ! tools.adding; tools.changed(); tools.render(); } );
-			add.setAttribute( 'aria-pressed', String( tools.adding ) );
-			button( 'Remove selected', actions, () => run( () => tools.edit( 'Remove modeling points', next => { removePoints( next, indices ); return []; } ) ), ! indices.length );
-			if ( data.points.length ) button( 'Clear points', actions, () => tools.edit( 'Clear modeling points', next => { next.points = []; if ( next.faces ) next.faces = []; return []; } ) );
+			const control = modelButton( actions, label, glyph, () => run( action ), disabled );
+			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
 
 		}
-		element( 'p', tools.adding ? 'Click the viewport to place points.' : 'Shift-click to extend the selection. Use the viewport gizmo to move, rotate, or scale points.', body );
-		element( 'p', indices.length ? indices.length + ' selected' : data.points.length + ' points', body );
+		element( 'p', tools.adding ? 'Click the viewport to place points.' :
+			'Shift-click to extend the selection. Use the viewport gizmo to move, rotate, or scale points.', body ).className = 'modeling-instructions';
+		const count = element( 'output', indices.length ? indices.length + ' selected' : data.points.length + ' points', body );
+		count.className = 'modeling-instructions';
 		if ( indices.length === 1 ) {
 
 			const coords = element( 'div', null, body );
 			coords.className = 'modeling-coordinates';
 			for ( const [ i, axis ] of ( data.kind === 'shape' || data.planar ? [ 'X', 'Y' ] : [ 'X', 'Y', 'Z' ] ).entries() ) {
 
-				field( axis, coords, 'number', Number( data.points[ indices[ 0 ] ][ i ].toFixed( 4 ) ), value => run( () => {
+				field( axis, '', coords, 'number', Number( data.points[ indices[ 0 ] ][ i ].toFixed( 4 ) ), value => run( () => {
 
 					if ( Number.isFinite( value ) ) tools.edit( 'Set point coordinate', next => { next.points[ indices[ 0 ] ][ i ] = value; } );
 
@@ -271,30 +256,20 @@ export function SidebarModeling( editor ) {
 		}
 		if ( data.kind === 'path' || data.kind === 'shape' ) {
 
-			field( 'Smooth curve', body, 'checkbox', data.smooth, value => tools.edit( 'Set curve interpolation', next => { next.smooth = value; } ) );
+			field( 'Smooth curve', 'toolPath', body, 'checkbox', data.smooth, value => tools.edit( 'Set curve interpolation', next => { next.smooth = value; } ) );
 			if ( data.kind === 'path' ) {
 
-				field( 'Closed path', body, 'checkbox', data.closed, value => tools.edit( 'Set path closure', next => { next.closed = value; } ) );
-				field( 'Constrain to local XY', body, 'checkbox', data.planar, value => tools.edit( 'Set path editing plane', next => {
+				field( 'Closed path', 'toolMask', body, 'checkbox', data.closed, value => tools.edit( 'Set path closure', next => { next.closed = value; } ) );
+				field( 'Constrain to local XY', 'toolGrid', body, 'checkbox', data.planar, value => tools.edit( 'Set path editing plane', next => {
 
 					next.planar = value;
 					if ( value ) next.points.forEach( point => { point[ 2 ] = 0; } );
 
 				} ) );
-				button( 'Create shape from path', actions, () => run( () => {
-
-					const shape = tools.toShape();
-					const parent = object.parent;
-					object.updateWorldMatrix( true, false );
-					if ( parent !== editor.scene ) object.matrixWorld.decompose( shape.position, shape.quaternion, shape.scale );
-					editor.execute( new AddObjectCommand( editor, shape ) );
-					tools.start( shape );
-
-				} ), ! data.closed || data.points.length < 3 );
 
 			} else {
 
-				field( 'Extrusion depth', body, 'number', data.depth, value => run( () => {
+				field( 'Extrusion depth', 'extrude', body, 'number', data.depth, value => run( () => {
 
 					if ( ! Number.isFinite( value ) || value < 0 ) throw new Error( 'Enter a depth of zero or greater.' );
 					tools.edit( 'Set shape depth', next => { next.depth = value; } );
@@ -302,30 +277,10 @@ export function SidebarModeling( editor ) {
 				} ) ).min = 0;
 
 			}
-			button( 'Insert point', actions, () => run( () => tools.edit( 'Insert outline point', next => {
-
-				const i = indices[ 0 ];
-				const following = data.kind === 'shape' || data.closed ? ( i + 1 ) % next.points.length : i + 1;
-				const other = next.points[ following ] || next.points[ i - 1 ];
-				const sign = next.points[ following ] ? 1 : - 1;
-				const point = next.points[ i ].map( ( value, axis ) => other ? value + sign * ( other[ axis ] - value ) * .5 : value + ( axis === 0 ? .5 : 0 ) );
-				next.points.splice( i + 1, 0, point );
-				return [ i + 1 ];
-
-			} ) ), indices.length !== 1 );
-
 		}
-		if ( data.kind === 'mesh' ) {
-
-			const faceIndex = data.faces.findIndex( face => face.length === indices.length && face.every( index => indices.includes( index ) ) );
-			button( 'Fill face', actions, () => run( () => tools.edit( 'Fill mesh face', next => { addFace( THREE, next, indices ); } ) ), indices.length < 3 );
-			button( 'Split edge', actions, () => run( () => tools.edit( 'Split mesh edge', next => [ splitEdge( next, ...indices ) ] ) ), indices.length !== 2 );
-			button( 'Delete face', actions, () => tools.edit( 'Delete mesh face', next => { next.faces.splice( faceIndex, 1 ); } ), faceIndex < 0 );
-			button( 'Extrude face', actions, () => run( () => tools.edit( 'Extrude mesh face', next => extrudeFace( THREE, next, faceIndex, extrudeDistance ) ) ), faceIndex < 0 );
-			field( 'Extrusion distance', body, 'number', extrudeDistance, value => { if ( Number.isFinite( value ) ) extrudeDistance = value; } );
-			element( 'p', 'Select vertices in boundary order to fill a face. Select all vertices of a face to extrude or delete it.', body );
-
-		}
+		if ( data.kind === 'mesh' ) field( 'Extrusion distance', 'extrude', body, 'number', tools.extrudeDistance, value => {
+			if ( Number.isFinite( value ) ) tools.extrudeDistance = value;
+		} );
 
 	}
 
