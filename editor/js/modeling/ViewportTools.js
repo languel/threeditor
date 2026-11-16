@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
-import { canMaskLight, setLightMask } from './LightMask.js';
+import { canEditLightMask, setLightMask } from './LightMask.js';
 import { rayToView, meshHit } from './SurfacePicking.js';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js';
@@ -74,6 +74,7 @@ export class ViewportTools {
 			[ 'path', 'Surface path' ], [ 'paint', 'Surface paint' ]
 		] );
 		this.selector.onchange = () => this.setMode( this.selector.value );
+		this.editMask = button( this.panel, 'Edit mask', () => this.setMode( 'mask' ) );
 		this.controls = element( 'div', this.panel );
 		this.controls.className = 'viewport-tool-options';
 		this.status = element( 'output', this.panel );
@@ -105,14 +106,15 @@ export class ViewportTools {
 		signals.sceneGraphChanged.add( () => this.collectMeasurements() );
 		signals.objectChanged.add( ( object, property ) => {
 
-			if ( property === 'userData' && this.mode === 'mask' && object === this.maskSource ) this.readMask();
+			if ( property !== 'userData' ) return;
+			this.syncMaskControls();
+			if ( this.mode === 'mask' && object === this.maskSource ) this.readMask();
 
 		} );
 		signals.viewportCameraChanged.add( () => {
 
 			if ( this.pointer ) this.release();
-			this.selector.options[ 1 ].disabled = ! canMaskLight( editor.viewportSource );
-			if ( this.mode === 'mask' && this.maskSource !== editor.viewportSource ) this.setMode( '' );
+			this.syncMaskControls();
 
 		} );
 		signals.editorCleared.add( () => { this.setMode( '' ); this.collectMeasurements(); } );
@@ -124,7 +126,17 @@ export class ViewportTools {
 			if ( includes( this.target ) || includes( this.ruler ) ) this.setMode( '' );
 
 		} );
-		this.selector.options[ 1 ].disabled = true;
+		this.syncMaskControls();
+
+	}
+
+	syncMaskControls() {
+
+		const source = this.editor.viewportSource;
+		const editable = canEditLightMask( source );
+		if ( this.mode === 'mask' && ( ! editable || this.maskSource !== source ) ) this.setMode( '' );
+		this.selector.options[ 1 ].disabled = ! editable;
+		this.editMask.hidden = ! editable || this.mode === 'mask';
 
 	}
 
@@ -137,7 +149,7 @@ export class ViewportTools {
 
 	setMode( mode ) {
 
-		if ( mode === 'mask' && ! canMaskLight( this.editor.viewportSource ) ) mode = '';
+		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
 		this.mode = mode;
 		this.selector.value = mode;
@@ -167,6 +179,7 @@ export class ViewportTools {
 
 		}
 		this.buildOptions();
+		this.syncMaskControls();
 		this.render();
 
 	}

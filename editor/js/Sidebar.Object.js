@@ -1,6 +1,6 @@
 import { openProjectorOutput } from './modeling/ProjectorOutput.js';
 import { hasLightView } from './modeling/LightView.js';
-import { canMaskLight } from './modeling/LightMask.js';
+import { canEditLightMask, canMaskLight } from './modeling/LightMask.js';
 import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';
@@ -87,7 +87,8 @@ function SidebarObject( editor ) {
 
 	const lightView = new UIRow().setDisplay( 'none' );
 	lightView.add( new UIText( 'View' ).setClass( 'Label' ) );
-	lightView.add( new UIButton( 'Look through' ).onClick( () => editor.setViewportSource( editor.selected ) ) );
+	const lookThrough = new UIButton( 'Look through' ).onClick( () => editor.setViewportSource( editor.selected ) );
+	lightView.add( lookThrough );
 	const maskInView = new UIButton( 'Edit mask in view' ).onClick( () => {
 
 		editor.setViewportSource( editor.selected );
@@ -915,6 +916,11 @@ function SidebarObject( editor ) {
 	function updateUI( object ) {
 
 		updateCameraController( object );
+		lightView.setDisplay( hasLightView( object ) ? '' : 'none' );
+		lookThrough.setDisabled( hasRestriction( object, 'disabled' ) );
+		maskInView.setDisplay( canMaskLight( object ) ? '' : 'none' );
+		maskInView.setDisabled( ! canEditLightMask( object ) );
+		maskInView.dom.title = canEditLightMask( object ) ? '' : 'Enable and unlock this light to edit its mask';
 
 		const locked = hasRestriction( object, 'locked' );
 		for ( const row of [ objectPositionRow, objectRotationRow, objectScaleRow ] ) {

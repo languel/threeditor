@@ -84,7 +84,7 @@ Select a projector or light in the viewport’s **View** selector, or select it 
 
 Click **Split view** to keep the **Director** camera on the left and the selected view on the right. Navigate in the left pane. The light pane follows the light’s position, aim, and optics. Choose **Solid** to see the director’s guides and the orange camera and projector bodies. Each lens marks the start of its frustum. Play and exports use the assigned main camera. The split and light panes use the direct renderer while you work.
 
-Choose **Edit mask in view** for a projector or spotlight. Draw over the receiver in the light pane, drag the handles, choose **Light inside** or **Block inside**, then apply. In a split view you can check the result from the director at the same time.
+Select an unlocked projector or spotlight and choose **Object → Edit mask in view**. If you’re already looking through the light, click **Edit mask** beside the viewport tool menu. Draw over the receiver in the light pane, drag the handles, choose **Light inside** or **Block inside**, then apply. In a split view you can check the result from the director at the same time.
 
 ### Measure and draw on receivers
 

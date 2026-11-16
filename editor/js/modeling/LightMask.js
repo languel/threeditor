@@ -12,6 +12,12 @@ export function canMaskLight( object ) {
 
 }
 
+export function canEditLightMask( object ) {
+
+	return canMaskLight( object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' );
+
+}
+
 function spotMaskScript() {
 
 	return {
@@ -62,7 +68,7 @@ function stop() {
 
 export function setLightMask( editor, object, mask ) {
 
-	if ( ! canMaskLight( object ) || hasRestriction( object, 'locked' ) ) throw new Error( 'Select an unlocked projector or spotlight.' );
+	if ( ! canEditLightMask( object ) ) throw new Error( 'Select an enabled, unlocked projector or spotlight.' );
 	const userData = { ...object.userData };
 	if ( mask ) userData.projectionMask = mask;
 	else delete userData.projectionMask;
