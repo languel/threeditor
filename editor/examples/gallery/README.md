@@ -19,3 +19,13 @@ The proxy geometry was fitted from the visible scan surfaces and splat positions
 - The wall projections reuse Eadweard Muybridge’s *The Horse in Motion* and Carleton Watkins’s *View from the Sentinel Dome, Yosemite*. [Projection example credits](../projection/README.md)
 
 Run `node tools/build-gallery-examples.mjs` to rebuild from the published catalog. Pass a Mediatheque checkout as the first argument to use a local copy. The builder checks each source SPZ against the catalog’s SHA-256 digest.
+
+## DDA Gallery · Lofts and cinema fragments
+
+Open this scene under **File → Examples → Captured spaces**. The proxy walls and glazing use inward-facing polygons to make the room a cutaway from outside. The aligned DDA scan is bundled and starts hidden so the cutaway stays clear. Reveal the scan from the outliner.
+
+Three thickened lofts made from sampled curves receive *Danse serpentine*, *The May Irwin Kiss*, and *Fred Ott’s Sneeze*. Three separate projectors around the center orb show drifting, elliptical head and hand crops from two Edison films. The crops follow manually timed marks by default.
+
+Select an **Orb projector** and turn on **Script → Live tracking** to run MediaPipe Face and Hand Landmarker on its playing clip. The tracker downloads its model and WASM on demand. Authored crops fill in for regions without landmarks. The Script panel reports the live head and hand counts or the fallback state. **Fragment drift** and **Fragment size** adjust the output in either mode.
+
+Each clip is a bundled public-domain proxy from [Languel’s Mediatheque](https://languel.github.io/mediatheque/site/). The example catalog carries the individual film credits and source links. To regenerate just this scene from a local checkout, run `node tools/build-gallery-examples.mjs ~/dev/mediatheque --cinema-only`.

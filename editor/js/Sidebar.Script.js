@@ -23,6 +23,7 @@ function SidebarScript( editor ) {
 
 	const scriptsContainer = new UIRow();
 	let parameterControls = [];
+	let trackingStatus;
 	container.add( scriptsContainer );
 
 	const newScript = new UIButton( strings.getKey( 'sidebar/script/new' ) );
@@ -55,6 +56,7 @@ function SidebarScript( editor ) {
 
 		scriptsContainer.clear();
 		parameterControls = [];
+		trackingStatus = null;
 		scriptsContainer.setDisplay( 'none' );
 
 		const object = editor.selected;
@@ -174,6 +176,12 @@ function SidebarScript( editor ) {
 						caption.dom.title = caption.dom.textContent;
 						parameterControls.push( { script, field, control } );
 						scriptsContainer.add( new UIRow().addClass( 'script-parameter-row' ).add( favorite, caption, control ) );
+						if ( script.assetBehavior === 'projector' && field.name === 'liveTracking' ) {
+
+							trackingStatus = new UIText().setDisplay( 'none' );
+							scriptsContainer.add( new UIRow().add( trackingStatus ) );
+
+						}
 						if ( ! field.initializer ) addTimelineKey( editor, caption, field.label || field.name, () => ( {
 							kind: 'script', object: object.uuid, index: editor.scripts[ object.uuid ]?.indexOf( script ),
 							scriptId: script.timelineId, property: field.name, label: script.name + ' · ' + ( field.label || field.name )
@@ -225,6 +233,18 @@ function SidebarScript( editor ) {
 			if ( entry.script === script ) entry.control.setValue( scriptParamValue( script, entry.field ) );
 
 		}
+
+	} );
+
+	signals.sceneRendered.add( () => {
+
+		if ( ! trackingStatus ) return;
+		const output = editor.selected?.projectorOutput;
+		const mode = output?.tracking;
+		const status = mode === 'live' ? `Live · ${ output.trackingHeads } heads, ${ output.trackingHands } hands` :
+			mode === 'fallback' ? 'Authored fallback · no landmarks' :
+				mode === 'loading-or-fallback' ? 'Authored fallback · waiting for tracker' : 'Authored masks';
+		if ( trackingStatus.getValue() !== status ) trackingStatus.setValue( status ).setDisplay( '' );
 
 	} );
 

@@ -112,5 +112,86 @@ export const galleryExamples = [
         }
       }
     ]
+  },
+  {
+    "title": "DDA Gallery · Lofts and cinema fragments",
+    "file": "examples/gallery/dda-cinema.app.json",
+    "assets": [
+      {
+        "path": "ddagallery-empty-dark.spz",
+        "file": "examples/gallery/assets/ddagallery-empty-dark.spz",
+        "meta": {
+          "id": "mediatheque:ddagallery-empty-dark",
+          "title": "DDA Gallery Empty Dark (Gaussian Splat .spz)",
+          "kind": "splat",
+          "url": "https://languel.github.io/mediatheque/items/ddagallery-empty-dark/media.spz",
+          "page": "https://languel.github.io/mediatheque/site/index.html#/ddagallery-empty-dark",
+          "credit": "DDA Gallery Empty Dark 3D Gaussian Splat (.spz), @languel, 2026 (CC0 1.0).",
+          "rights": {
+            "status": "public-domain",
+            "license": "CC0-1.0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "credit": "DDA Gallery Empty Dark 3D Gaussian Splat (.spz), @languel, 2026 (CC0 1.0).",
+            "notes": ""
+          }
+        }
+      },
+      {
+        "path": "edison-fred-otts-sneeze-1894.webm",
+        "file": "examples/gallery/assets/edison-fred-otts-sneeze-1894.webm",
+        "meta": {
+          "id": "mediatheque:edison-fred-otts-sneeze-1894",
+          "title": "Edison Kinetoscopic Record of a Sneeze (Fred Ott's Sneeze)",
+          "kind": "video",
+          "url": "https://languel.github.io/mediatheque/items/edison-fred-otts-sneeze-1894/proxy.webm",
+          "page": "https://languel.github.io/mediatheque/site/index.html#/edison-fred-otts-sneeze-1894",
+          "credit": "William K. L. Dickson, 1894. Edison Kinetoscopic Record of a Sneeze. Edison Manufacturing Co. / Library of Congress. Public domain.",
+          "rights": {
+            "status": "public-domain",
+            "license": "PD-US-expired",
+            "license_url": null,
+            "credit": "William K. L. Dickson, 1894. Edison Kinetoscopic Record of a Sneeze. Edison Manufacturing Co. / Library of Congress. Public domain.",
+            "notes": "Public domain early movement study with clear archival provenance."
+          }
+        }
+      },
+      {
+        "path": "edison-may-irwin-kiss-1896.webm",
+        "file": "examples/gallery/assets/edison-may-irwin-kiss-1896.webm",
+        "meta": {
+          "id": "mediatheque:edison-may-irwin-kiss-1896",
+          "title": "The May Irwin Kiss",
+          "kind": "video",
+          "url": "https://languel.github.io/mediatheque/items/edison-may-irwin-kiss-1896/proxy.webm",
+          "page": "https://languel.github.io/mediatheque/site/index.html#/edison-may-irwin-kiss-1896",
+          "credit": "William K. L. Dickson, 1896. The Kiss (The May Irwin Kiss). Edison Manufacturing Co. / Library of Congress. Public domain.",
+          "rights": {
+            "status": "public-domain",
+            "license": "PD-US-expired",
+            "credit": "William K. L. Dickson, 1896. The Kiss (The May Irwin Kiss). Edison Manufacturing Co. / Library of Congress. Public domain.",
+            "notes": "Public domain early movement study with clear archival provenance."
+          }
+        }
+      },
+      {
+        "path": "danse-serpentine-lumiere-1897.webm",
+        "file": "examples/gallery/assets/danse-serpentine-lumiere-1897.webm",
+        "meta": {
+          "id": "mediatheque:danse-serpentine-lumiere-1897",
+          "title": "Danse serpentine (Lumière, 1897)",
+          "kind": "video",
+          "url": "https://languel.github.io/mediatheque/items/danse-serpentine-lumiere-1897/proxy.webm",
+          "page": "https://languel.github.io/mediatheque/site/index.html#/danse-serpentine-lumiere-1897",
+          "credit": "Auguste and Louis Lumière, 1897 (Catalogue Lumière no. 765). Public domain.",
+          "rights": {
+            "status": "public-domain",
+            "license": "PD-US",
+            "license_url": "https://commons.wikimedia.org/wiki/Template:PD-US",
+            "credit": "Auguste and Louis Lumière, 1897 (Catalogue Lumière no. 765). Public domain.",
+            "notes": ""
+          }
+        }
+      }
+    ]
   }
 ];

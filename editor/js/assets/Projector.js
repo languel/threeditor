@@ -93,7 +93,8 @@ function projectorRuntime( THREE, root, player ) {
 
 		}
 		applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );
-		root.projectorOutput = { canvas, x, y, width: w, height: h };
+		root.projectorOutput = { canvas, x, y, width: w, height: h, tracking: media?.dataset.tracking,
+			trackingHeads: Number( media?.dataset.trackingHeads || 0 ), trackingHands: Number( media?.dataset.trackingHands || 0 ) };
 		texture.needsUpdate = true;
 
 	}
@@ -188,7 +189,7 @@ ${ projectorRuntime.toString() }
 let projector${ canvasSource ? ', feed, current' : '' };
 function init() {
  projector = projectorRuntime( THREE, this, player );
- ${ canvasSource ? `feed = (${ canvasSource.create.toString() })( params );
+ ${ canvasSource ? `feed = (${ canvasSource.create.toString() })( params${ ( canvasSource.args || [] ).map( value => ', ' + JSON.stringify( value ) ).join( '' ) } );
  current = params;
  feed.update( 0, current );
  projector.attach( feed.canvas );` : ! source ? '' : video ? `const media = document.createElement( 'video' );
@@ -212,7 +213,7 @@ ${ canvasSource ? `function update( event ) {
  feed.update( event.time / 1000, current );
  projector.update();
 }` : video ? 'function update() { projector.update(); }' : '' }
-function stop() { projector?.dispose(); }
+function stop() { projector?.dispose(); ${ canvasSource ? 'feed?.dispose?.();' : '' } }
 `
 	};
 

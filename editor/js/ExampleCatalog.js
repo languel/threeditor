@@ -1,5 +1,5 @@
 import { projectionExamples } from '../examples/projection/catalog.js';
-import { galleryExamples } from '../examples/gallery/catalog.js';
+import { galleryExamples } from '../examples/gallery/catalog.js?v=dda-cinema';
 
 // Ordered folders and lessons. Paths resolve relative to editor/ on every host.
 const exampleCatalog = [

@@ -1,7 +1,7 @@
 import { collectPlayableProject, inlineScriptDependencies } from './Publish.js';
 import { embedResources, loadEsbuild } from './SingleHtml.js';
 import { stateId, serializeState, snapshotEditor } from './PortableSession.js';
-import { exampleResources } from './ExampleCatalog.js';
+import { exampleResources } from './ExampleCatalog.js?v=dda-cinema';
 import buildThreeDefs from './libs/tern-threejs/build-defs.js';
 
 const base = new URL( '../', import.meta.url );

@@ -86,7 +86,7 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 test( 'Editable HTML resources follow nested examples and include lesson source assets', async () => {
 	const resources = exampleResources();
-	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 27 );
+	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 28 );
 	assert.ok( resources.includes( '../demos/fox-follow/assets/fox.glb' ) );
 	assert.ok( resources.includes( 'examples/threejs/arkanoid.app.json' ) );
 	for ( const path of resources ) assert.ok( ( await readFile( new URL( '../editor/' + path, import.meta.url ) ) ).length > 0 );
@@ -96,7 +96,7 @@ test( 'Editable HTML resources follow nested examples and include lesson source 
 test( 'Captured-space examples retain both source scans and the gallery’s independent mapping rigs', async () => {
 
 	const entries = exampleCatalog.find( entry => entry.title === 'Captured spaces' ).children;
-	assert.equal( entries.length, 3 );
+	assert.equal( entries.length, 4 );
 	assert.equal( entries[ 0 ].assets[ 0 ].path, entries[ 1 ].assets[ 0 ].path );
 	for ( const [ entry, count ] of [ [ entries[ 0 ], 230992 ], [ entries[ 2 ], 309343 ] ] ) {
 
@@ -118,5 +118,37 @@ test( 'Captured-space examples retain both source scans and the gallery’s inde
 	assert.ok( projectors.every( rig => rig.userData.projectionMask.points.length >= 3 ) );
 	const particles = scene.getObjectByName( 'Pedestal particles' );
 	assert.match( json.scripts[ particles.uuid ][ 0 ].source, /projector\.attach\( feed\.canvas \)/ );
+
+} );
+
+test( 'DDA cinema loads inward walls, three editable lofts and three tracked orb feeds', async () => {
+
+	const entry = exampleCatalog.find( folder => folder.title === 'Captured spaces' ).children.find( item => item.file.includes( 'dda-cinema' ) );
+	assert.equal( entry.assets.filter( asset => asset.meta.kind === 'video' ).length, 3 );
+	const json = JSON.parse( await readFile( new URL( '../editor/' + entry.file, import.meta.url ) ) );
+	const scene = await new THREE.ObjectLoader().parseAsync( json.scene );
+	assert.equal( json.camera.object.name, 'Director' );
+	assert.equal( scene.getObjectByName( 'Orb · Moving fragments' ).geometry.type, 'SphereGeometry' );
+	const walls = [ 'West wall', 'East wall', 'Entrance glazing pane 1', 'Rear glazing pane 1' ];
+	for ( const name of walls ) {
+
+		const wall = scene.getObjectByName( name );
+		assert.equal( wall.material.side, THREE.FrontSide );
+		const vertex = new THREE.Vector3().fromBufferAttribute( wall.geometry.attributes.position, 0 );
+		const normal = new THREE.Vector3().fromBufferAttribute( wall.geometry.attributes.normal, 0 );
+		assert.ok( normal.dot( new THREE.Vector3( 0, 1.5, 0 ).sub( vertex ) ) > 0 );
+
+	}
+	assert.equal( scene.children.filter( object => object.userData.loft ).length, 3 );
+	const orb = scene.children.filter( object => object.name.startsWith( 'Orb projector' ) );
+	assert.equal( orb.length, 3 );
+	for ( const light of orb ) {
+
+		const { source } = json.scripts[ light.uuid ][ 0 ];
+		assert.match( source, /@param liveTracking = false/ );
+		assert.match( source, /detectForVideo\( video, now \)/ );
+		assert.ok( entry.assets.some( asset => source.includes( 'assets/' + asset.path ) ) );
+
+	}
 
 } );

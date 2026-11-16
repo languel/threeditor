@@ -2,7 +2,7 @@ import { UIPanel } from './libs/ui.js';
 
 import { MenubarAdd } from './Menubar.Add.js?v=edit-modes';
 import { MenubarEdit } from './Menubar.Edit.js';
-import { MenubarFile } from './Menubar.File.js';
+import { MenubarFile } from './Menubar.File.js?v=dda-cinema';
 import { MenubarView } from './Menubar.View.js?v=viewport-tools';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';

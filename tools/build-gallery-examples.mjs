@@ -1,3 +1,4 @@
+import { createFragmentFeed, createPlateFeed, fragments } from './gallery-cinema-mask.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -5,12 +6,13 @@ import * as THREE from '../build/three.module.js';
 import { projectorScript } from '../editor/js/assets/Projector.js';
 import { sdfMaterial } from '../editor/js/assets/MathObjects.js';
 import { splatScript } from '../editor/js/assets/SplatObjects.js';
-import { modelObject } from '../editor/js/modeling/ModelGeometry.js';
+import { modelGeometry, modelObject } from '../editor/js/modeling/ModelGeometry.js';
 import { projectionExamples } from '../editor/examples/projection/catalog.js';
 
 const base = 'https://languel.github.io/mediatheque/';
 const output = new URL( '../editor/examples/gallery/', import.meta.url );
-const source = process.argv[ 2 ];
+const source = process.argv.slice( 2 ).find( arg => ! arg.startsWith( '--' ) );
+const cinemaOnly = process.argv.includes( '--cinema-only' );
 await mkdir( new URL( 'assets/', output ), { recursive: true } );
 
 async function assetFile( id, file ) {
@@ -38,12 +40,14 @@ async function scanAsset( id ) {
 
 }
 
-const dda = await scanAsset( 'ddagallery-empty-dark' );
-const spatial = await scanAsset( 'spatialcomproom' );
+const existing = cinemaOnly ? ( await import( new URL( 'catalog.js', output ) ) ).galleryExamples : [];
+const existingScan = id => existing.flatMap( entry => entry.assets ).find( asset => asset.meta.id === 'mediatheque:' + id );
+const dda = cinemaOnly ? existingScan( 'ddagallery-empty-dark' ) : await scanAsset( 'ddagallery-empty-dark' );
+const spatial = cinemaOnly ? existingScan( 'spatialcomproom' ) : await scanAsset( 'spatialcomproom' );
 const assetFromProjection = id => projectionExamples.flatMap( entry => entry.assets ).find( asset => asset.meta.id === 'mediatheque:' + id );
 const gallop = assetFromProjection( 'muybridge-sallie-gardner-1878' );
 const yosemite = assetFromProjection( 'watkins-sentinel-dome-1865' );
-const examples = [];
+const examples = existing.filter( entry => ! entry.file.endsWith( '/dda-cinema.app.json' ) );
 
 function setup( title, scan, options ) {
 
@@ -54,6 +58,7 @@ function setup( title, scan, options ) {
 	scene.userData.lesson = { title, instructions: options.instructions, source: scan.meta.page, credit: scan.meta.credit };
 	const ambient = new THREE.HemisphereLight( 0xdce8ff, 0x686379, survey ? .54 : .57 );
 	ambient.name = 'Ambient fill';
+	if ( options.ambientStrength ) ambient.intensity = options.ambientStrength;
 	ambient.userData.threeditor = { locked: true };
 	scene.add( ambient );
 	const camera = new THREE.PerspectiveCamera( fov, 1, .025, 80 );
@@ -151,6 +156,7 @@ function setup( title, scan, options ) {
 	}
 	async function save( id, assets = [] ) {
 
+		if ( cinemaOnly && id !== 'dda-cinema' ) return;
 		const file = id + '.app.json';
 		camera.updateMatrixWorld( true );
 		scene.updateMatrixWorld( true );
@@ -163,7 +169,7 @@ function setup( title, scan, options ) {
 		examples.push( { title, file: 'examples/gallery/' + file, assets: [ scan, ...assets ] } );
 
 	}
-	return { add, panel, box, projector, reference, scripts, save };
+	return { add, panel, box, projector, reference, scene, scripts, save };
 
 }
 
@@ -373,5 +379,137 @@ target.material.depthWrite = true;
 target.receiveShadow = true;
 study.projector( 'Back wall projector', [ -1.1, 2.74, .95 ], [ -.02, 1.84, -6.05 ], { throwRatio: 1.6, intensity: 2.5 } );
 await study.save( 'spatial-alignment' );
+
+const shorts = {};
+for ( const id of [ 'edison-fred-otts-sneeze-1894', 'edison-may-irwin-kiss-1896', 'danse-serpentine-lumiere-1897' ] ) {
+
+	const item = JSON.parse( await assetFile( id, 'item.json' ) );
+	if ( item.rights.status !== 'public-domain' ) throw new Error( 'Expected public-domain footage for ' + id );
+	const proxy = item.files.proxy;
+	const bytes = await assetFile( id, proxy.path );
+	if ( proxy.sha256 && createHash( 'sha256' ).update( bytes ).digest( 'hex' ) !== proxy.sha256 ) throw new Error( 'Film proxy checksum differs for ' + id );
+	const path = id + '.webm';
+	await writeFile( new URL( 'assets/' + path, output ), bytes );
+	shorts[ id ] = { path, file: 'examples/gallery/assets/' + path, meta: {
+		id: 'mediatheque:' + id, title: item.title, kind: 'video', url: base + 'items/' + id + '/' + proxy.path,
+		page: base + 'site/index.html#/' + id, credit: item.rights.credit, rights: item.rights
+	} };
+
+}
+
+const cinema = setup( 'DDA Gallery · Lofts and cinema fragments', dda, {
+	position: [ 10.6, 6.9, 6.15 ], target: [ -.15, 1.15, -.35 ], scanFloor: -.055, fov: 49, ambientStrength: .75,
+	instructions: 'Orbit outside the proxy room to see its cutaway. The locked DDA scan is aligned and can be revealed in the outliner. Three lofted plates carry archival films. Split the Director and any Orb projector view to inspect its head and hand fragments. Turn on Live tracking under that projector’s Script tab to test MediaPipe against the running archival clip.'
+} );
+ddaRoom( cinema );
+cinema.scene.getObjectByName( 'Bench' )?.removeFromParent();
+cinema.scene.getObjectByName( 'Pedestal' )?.removeFromParent();
+cinema.reference.traverse( object => {
+
+	const data = object.geometry?.userData.modeling;
+	if ( / glazing (mullion|rail)/.test( object.name ) ) {
+
+		const { width, height } = object.geometry.parameters;
+		object.geometry.dispose();
+		object.geometry = new THREE.PlaneGeometry( width, height );
+		if ( object.name.startsWith( 'Entrance' ) ) object.rotation.y = Math.PI;
+		object.material.side = THREE.FrontSide;
+		object.castShadow = false;
+
+	}
+	if ( ! data?.faces ) return;
+	const center = new THREE.Vector3();
+	for ( const point of data.points ) center.add( new THREE.Vector3( ...point ) );
+	center.divideScalar( data.points.length );
+	const normals = object.geometry.attributes.normal;
+	if ( new THREE.Vector3().fromBufferAttribute( normals, 0 ).dot( new THREE.Vector3( 0, 1.5, 0 ).sub( center ) ) < 0 ) {
+
+		// Reverse the editable polygon and its rendered normal as one operation.
+		for ( const face of data.faces ) face.reverse();
+		object.geometry.dispose();
+		object.geometry = modelGeometry( THREE, data );
+
+	}
+	object.material.side = THREE.FrontSide;
+	object.castShadow = false;
+
+} );
+
+function loft( name, position, heading, height, profiles, tint ) {
+
+	const curves = profiles.map( ( row, index ) => new THREE.CatmullRomCurve3(
+		row.map( ( z, j ) => new THREE.Vector3( ( j - 1.5 ) * .78, index * height / 2, z ) ) ) );
+	const points = [], faces = [], stride = 19;
+	for ( const thickness of [ -.064, .064 ] ) for ( const curve of curves ) for ( const point of curve.getPoints( stride - 1 ) ) {
+
+		point.z += thickness;
+		points.push( point.toArray() );
+
+	}
+	const layer = stride * curves.length;
+	for ( let row = 0; row < curves.length - 1; row ++ ) for ( let j = 0; j < stride - 1; j ++ ) {
+
+		const i = row * stride + j;
+		faces.push( [ i, i + stride, i + stride + 1, i + 1 ], [ i + layer, i + layer + 1, i + layer + stride + 1, i + layer + stride ] );
+
+	}
+	const rim = [ ...Array.from( { length: stride }, ( _, i ) => i ), 2 * stride - 1,
+		...Array.from( { length: stride }, ( _, i ) => layer - 1 - i ), stride ];
+	rim.forEach( ( i, k ) => {
+
+		const j = rim[ ( k + 1 ) % rim.length ];
+		faces.push( [ i, j, j + layer, i + layer ] );
+
+	} );
+	const object = modelObject( THREE, { kind: 'mesh', points, faces }, name );
+	object.material.color.set( tint );
+	object.material.roughness = .84;
+	object.castShadow = object.receiveShadow = true;
+	object.userData.loft = { profiles, height };
+	cinema.add( object, name, position ).rotation.y = heading;
+
+}
+
+const installations = [
+	{ name: 'Fold · Serpentine', position: [ -2.8, .035, -.4 ], angle: .58, height: 2.45, aim: [ -2.8, 1.22, -.4 ], from: [ -1.8, 1.8, 2.55 ],
+		profiles: [ [ .5,-.2,-.28,.45 ], [ .42,-.12,-.08,.57 ], [ .2,-.10,.28,.72 ] ], tint: 0xaa826e, clip: shorts[ 'danse-serpentine-lumiere-1897' ] },
+	{ name: 'Arc · The Kiss', position: [ 2.6, .035, -.8 ], angle: -.66, height: 2.35, aim: [ 2.6, 1.15, -.8 ], from: [ 1.6, 1.65, 2.0 ],
+		profiles: [ [ -.3,.38,.48,-.14 ], [ -.23,.34,.37,-.3 ], [ -.13,.18,.23,-.56 ] ], tint: 0x9b8277, clip: shorts[ 'edison-may-irwin-kiss-1896' ] },
+	{ name: 'Lean · Fred Ott', position: [ -.3, .035, -3.49 ], angle: -.13, height: 2.25, aim: [ -.3, 1.1, -3.49 ], from: [ -.7, 1.7, -1.43 ],
+		profiles: [ [ -.1,.12,-.17,-.35 ], [ -.15,.22,.09,-.4 ], [ -.24,.12,.56,-.09 ] ], tint: 0x9e796a, clip: shorts[ 'edison-fred-otts-sneeze-1894' ] }
+];
+for ( const work of installations ) {
+
+	loft( work.name, work.position, work.angle, work.height, work.profiles, work.tint );
+	cinema.projector( 'Plate projector · ' + work.name, work.from, work.aim, {
+		...( work.name.startsWith( 'Lean' ) ? {
+			canvas: { create: createPlateFeed, args: [ 'assets/' + work.clip.path, 17.05, 19.48 ] }, aspect: 4 / 3
+		} : { asset: work.clip } ),
+		intensity: 5.2, throwRatio: 1.25, range: 6
+	} );
+
+}
+
+const center = [ -.18, 1.12, .31 ];
+const ball = new THREE.Mesh( new THREE.SphereGeometry( .77, 64, 40 ),
+	new THREE.MeshStandardMaterial( { color: 0x9c9d9e, roughness: .88 } ) );
+ball.castShadow = ball.receiveShadow = true;
+cinema.add( ball, 'Orb · Moving fragments', center );
+cinema.box( 'Orb mount', [ .32, .39, .32 ], [ center[ 0 ], .18, center[ 2 ] ], 0x595758 );
+for ( const [ i, entry ] of fragments.entries() ) {
+
+	const angle = i * Math.PI * 2 / 3 + .16;
+	const position = [ center[ 0 ] + Math.sin( angle ) * 2.68, 1.88, center[ 2 ] + Math.cos( angle ) * 2.68 ];
+	cinema.projector( 'Orb projector · ' + [ 'South', 'Northeast', 'Northwest' ][ i ], position, center, {
+		canvas: {
+			create: createFragmentFeed,
+			args: [ 'assets/' + shorts[ entry.clip ].path, entry.keys, entry.seed, entry.roles ],
+			parameters: '// @param liveTracking = false\n// @label liveTracking = "Live tracking"\n// @param drift = 0.45 (0..2)\n// @label drift = "Fragment drift"\n// @param fragmentSize = 1 (0.35..1.4)\n// @label fragmentSize = "Fragment size"'
+		},
+		aspect: 1, intensity: 5.6, throwRatio: 1.76, range: 3.4
+	} );
+
+}
+await cinema.save( 'dda-cinema', Object.values( shorts ) );
 
 await writeFile( new URL( 'catalog.js', output ), '// Generated by tools/build-gallery-examples.mjs.\nexport const galleryExamples = ' + JSON.stringify( examples, null, 2 ) + ';\n' );

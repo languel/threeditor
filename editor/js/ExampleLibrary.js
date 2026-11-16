@@ -1,4 +1,4 @@
-import { exampleCatalog } from './ExampleCatalog.js';
+import { exampleCatalog } from './ExampleCatalog.js?v=dda-cinema';
 import { ProjectLibrary, projectPath, projectRecord, projectTree } from './ProjectLibrary.js';
 
 function createExampleLibrary( editor ) {
