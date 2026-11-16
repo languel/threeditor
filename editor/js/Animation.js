@@ -1,6 +1,6 @@
 import { MathUtils } from 'three';
 import { UIPanel } from './libs/ui.js';
-import { icon } from './Glyphs.js';
+import { icon } from './Glyphs.js?v=timeline-glyphs';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { availableTargets, authoredParam, timelineBinding } from './animation/TimelineBindings.js';
 import { putKey, targetId, timelineData, timelineEnd } from './animation/TimelineData.js';
@@ -50,17 +50,26 @@ function Animation( editor ) {
 		button.className = 'Button';
 		button.title = label;
 		button.setAttribute( 'aria-label', label );
-		if ( glyph ) button.innerHTML = icon( glyph );
+		if ( glyph ) {
+			button.classList.add( 'scene-timeline-glyph-button' );
+			button.innerHTML = icon( glyph );
+			element( 'span', button, label ).className = 'scene-timeline-label';
+		}
 		button.onclick = action;
 		return button;
 
 	}
 
-	function number( parent, label, value, change, step = '1' ) {
+	function number( parent, label, value, change, step = '1', glyph ) {
 
-		const wrapper = element( 'label', parent, label );
+		const wrapper = element( 'label', parent );
+		wrapper.title = label;
+		if ( glyph ) wrapper.innerHTML = icon( glyph );
+		element( 'span', wrapper, label ).className = glyph ? 'scene-timeline-label' : '';
+
 		const input = element( 'input', wrapper );
 		input.type = 'number';
+		input.setAttribute( 'aria-label', label );
 		input.step = step;
 		input.value = value;
 		input.onchange = () => {
@@ -83,29 +92,29 @@ function Animation( editor ) {
 	stageHeight( 188 );
 
 	const play = button( bar, 'Play timeline', togglePlayback, 'play' );
-	button( bar, 'Stop timeline', stop );
-	const rec = button( bar, 'Record parameter', toggleRecord );
+	button( bar, 'Stop timeline', stop, 'stop' );
+	const rec = button( bar, 'Record parameter', toggleRecord, 'record' );
 	const loopButton = button( bar, 'Loop timeline', () => {
 
 		loop = ! loop;
 		loopButton.setAttribute( 'aria-pressed', String( loop ) );
 
-	} );
+	}, 'loop' );
 	loopButton.setAttribute( 'aria-pressed', 'false' );
-	const frame = number( bar, 'Frame', 0, value => seek( Math.max( 0, value ) / data().fps ) );
+	const frame = number( bar, 'Frame', 0, value => seek( Math.max( 0, value ) / data().fps ), '1', 'frame' );
 	frame.min = 0;
-	const fps = number( bar, 'FPS', 30, value => modify( 'Set timeline frame rate', doc => doc.fps = Math.min( 120, Math.max( 1, Math.round( value ) ) ) ) );
+	const fps = number( bar, 'FPS', 30, value => modify( 'Set timeline frame rate', doc => doc.fps = Math.min( 120, Math.max( 1, Math.round( value ) ) ) ), '1', 'frameRate' );
 	fps.min = 1;
 	fps.max = 120;
 	button( bar, 'Add clip', () => {
 
 		modify( 'Add parameter clip', doc => newClip( doc ) );
 
-	} );
+	}, 'add' );
 
 	const targetSelect = element( 'select', params );
 	targetSelect.setAttribute( 'aria-label', 'Timeline parameter' );
-	const keyButton = button( params, 'Insert keyframe', insertKey );
+	const keyButton = button( params, 'Insert keyframe', insertKey, 'keyframe' );
 	const inspector = element( 'div', params );
 	inspector.className = 'scene-timeline-inspector';
 	const readout = element( 'output', bar );
@@ -330,7 +339,9 @@ function Animation( editor ) {
 		play.setAttribute( 'aria-label', playing ? 'Pause timeline' : 'Play timeline' );
 		play.title = play.getAttribute( 'aria-label' );
 		rec.setAttribute( 'aria-pressed', String( !! recording ) );
-		rec.textContent = recording ? 'Stop recording' : 'Record';
+		rec.lastElementChild.textContent = recording ? 'Stop recording' : 'Record';
+		rec.title = recording ? 'Stop recording' : 'Record parameter';
+		rec.setAttribute( 'aria-label', rec.title );
 		readout.textContent = recording ? recording.target.label : '';
 		for ( const marker of lanes.querySelectorAll( '.scene-timeline-playhead' ) ) marker.style.left = 100 * time / visibleEnd() + '%';
 
@@ -563,7 +574,7 @@ function Animation( editor ) {
 					if ( ! lane.keys.length ) item.tracks.splice( item.tracks.indexOf( lane ), 1 );
 					keyTime = undefined;
 
-				} ) );
+				} ), 'delete' );
 
 			}
 

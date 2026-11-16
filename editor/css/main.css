@@ -2458,3 +2458,9 @@ body[data-ui-style="compact"] .viewport-tool-mask-text { display: none; }
 .scene-timeline-key[aria-pressed="true"] { background: var(--theme-accent); }
 .imported-clips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px; }
 .imported-clips input[type="range"] { flex-basis: 100%; width: 100%; }
+
+.scene-timeline-bar svg { flex: none; vertical-align: middle; }
+.scene-timeline-bar label > svg { display: none; }
+body[data-ui-style="compact"] .scene-timeline-bar label > svg { display: block; }
+body[data-ui-style="compact"] .scene-timeline-label { display: none; }
+.scene-timeline-glyph-button { display: inline-flex; align-items: center; gap: 4px; }
