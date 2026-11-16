@@ -18,6 +18,10 @@ const ICONS = {
 	pivotOrigin: svg( '<path d="M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M12 2v4M12 18v4M2 12h4M18 12h4"/>' ),
 	toolPath: svg( '<path d="M4 18c5 0 4-12 11-12h5"/><rect x="2" y="16" width="4" height="4"/><rect x="18" y="4" width="4" height="4"/>' ),
 	toolPaint: svg( '<path d="M14 4l6 6-7.5 7.5-6-6z"/><path d="M6.5 11.5C4 12 3 14 3 16.5 3 18 2.5 19.5 1.5 20.5c3 0 6.5-.5 8-2 1.3-1.3 1.5-3 1-4.5"/>' ),
+	viewportSplit: svg( '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/>' ),
+	shadingSolid: svg( '<circle cx="12" cy="12" r="8"/><path d="M6 17c1-5 6-10 11-11"/>' ),
+	shadingNormals: svg( '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4.8 8.5h14.4M4.8 15.5h14.4"/>' ),
+	shadingWire: svg( '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9ZM4 7.5l8 4.5 8-4.5M12 12v9"/>' ),
 	// Tabs
 	scene: svg( '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>' ),
 	assets: svg( '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>' ),

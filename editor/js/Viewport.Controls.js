@@ -1,6 +1,7 @@
+import { icon } from './Glyphs.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';
-import { UIPanel, UISelect, UIButton } from './libs/ui.js';
+import { UISpan, UIPanel, UISelect, UIButton } from './libs/ui.js';
 import { ViewportParameters } from './Viewport.Parameters.js';
 
 function ViewportControls( editor ) {
@@ -12,6 +13,22 @@ function ViewportControls( editor ) {
 	container.setPosition( 'absolute' );
 	container.setRight( '10px' );
 	container.setTop( '10px' );
+
+	function glyphSelect( select, glyph ) {
+
+		const wrapper = new UISpan().addClass( 'viewport-glyph-select' );
+		const symbol = new UISpan().addClass( 'viewport-select-symbol' );
+		wrapper.add( symbol, select );
+		const sync = ( name = glyph ) => {
+
+			symbol.dom.innerHTML = icon( name );
+			wrapper.dom.title = select.dom.selectedOptions[ 0 ]?.textContent || select.dom.getAttribute( 'aria-label' );
+
+		};
+		container.add( wrapper );
+		return sync;
+
+	}
 
 	// camera
 
@@ -25,7 +42,7 @@ function ViewportControls( editor ) {
 		else editor.setViewportCamera( value );
 
 	} );
-	container.add( cameraSelect );
+	const syncCameraGlyph = glyphSelect( cameraSelect, 'camera' );
 
 	const split = new UIButton( 'Split view' ).onClick( () => {
 
@@ -40,6 +57,9 @@ function ViewportControls( editor ) {
 
 	} );
 	split.dom.classList.add( 'viewport-split-button' );
+	split.dom.setAttribute( 'aria-label', 'Split view' );
+	split.dom.title = 'Split view';
+	split.dom.innerHTML = '<span class="viewport-select-symbol">' + icon( 'viewportSplit' ) + '</span><span class="viewport-split-label">Split view</span>';
 	container.add( split );
 	signals.cameraAdded.add( update );
 	signals.cameraRemoved.add( update );
@@ -75,8 +95,18 @@ function ViewportControls( editor ) {
 	} );
 	const parameters = new ViewportParameters( editor );
 	editor.viewportParameters = parameters;
-	container.add( shadingSelect, parameters );
-	signals.viewportShadingChanged.add( () => shadingSelect.setValue( editor.viewportShading ) );
+	const syncShadingGlyph = glyphSelect( shadingSelect, 'shadingSolid' );
+	container.add( parameters );
+	function syncShading() {
+
+		const mode = editor.viewportShading;
+		shadingSelect.setValue( mode );
+		const glyph = { realistic: 'environment', preview: 'preview', solid: 'shadingSolid', normals: 'shadingNormals', wireframe: 'shadingWire' }[ mode ];
+		syncShadingGlyph( glyph );
+
+	}
+	signals.viewportShadingChanged.add( syncShading );
+	syncShading();
 
 	signals.editorCleared.add( function () {
 
@@ -117,6 +147,7 @@ function ViewportControls( editor ) {
 		cameraSelect.setOptions( options );
 		const value = editor.viewportSource ? 'light:' + editor.viewportSource.uuid : editor.viewportCamera.uuid;
 		cameraSelect.setValue( value in options ? value : editor.camera.uuid );
+		syncCameraGlyph();
 		split.dom.setAttribute( 'aria-pressed', String( editor.viewportSplit ) );
 		return value in options;
 

@@ -125,7 +125,7 @@ function Viewport( editor ) {
 	grid2.material.vertexColors = false;
 	grid.add( grid2 );
 
-	const viewHelper = new ViewHelper( camera, container );
+	const viewHelper = new ViewHelper( camera, container, ( dx, dy ) => controls.rotate( new THREE.Vector3( dx, dy, 0 ) ) );
 
 	//
 
@@ -1157,6 +1157,8 @@ function Viewport( editor ) {
 		if ( ! width || ! height ) return;
 		const frames = layout.update( width, height );
 		const tiled = frames.length > 1 || !! layout.optical;
+		const showViewHelper = ! tiled && frames[ 0 ].camera === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting;
+		viewHelper.panel.hidden = ! showViewHelper;
 		// Each eye needs its own asynchronous Gaussian depth order.
 		if ( frames.length > 1 ) secondarySplats ||= new SplatHost();
 		else if ( secondarySplats ) {
@@ -1205,7 +1207,7 @@ function Viewport( editor ) {
 			const view = frames[ 0 ].camera;
 			draw( view, splatHost, mode === 'preview' || mode === 'realistic' );
 			drawGuides( view );
-			if ( view === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting ) viewHelper.render( renderer );
+			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;
 
 		} else {
