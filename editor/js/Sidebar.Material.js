@@ -1,7 +1,7 @@
 import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
-import { UIButton, UIDiv, UIInput, UIPanel, UIRow, UISelect, UIText, UITextArea } from './libs/ui.js';
+import { UIButton, UIDiv, UIInput, UIPanel, UIRow, UISelect, UISpan, UIText, UITextArea } from './libs/ui.js';
 
 import { createCustomShaderMaterial, createStockMaterialLook, groupLookSlots, loadStockLookBase,
 	stockMaterialLooks, upgradeStockMaterialLook } from './StockMaterialLooks.js?v=look-controls';
@@ -16,7 +16,7 @@ import { SidebarMaterialConstantProperty } from './Sidebar.Material.ConstantProp
 import { SidebarMaterialMapProperty } from './Sidebar.Material.MapProperty.js?v=timeline-keying';
 import { SidebarMaterialNumberProperty } from './Sidebar.Material.NumberProperty.js?v=timeline-keying';
 import { SidebarMaterialProgram } from './Sidebar.Material.Program.js';
-import { SidebarMaterialUniforms } from './Sidebar.Material.Uniforms.js';
+import { SidebarMaterialUniforms } from './Sidebar.Material.Uniforms.js?v=material-look-layout';
 
 function SidebarMaterial( editor ) {
 
@@ -56,10 +56,10 @@ function SidebarMaterial( editor ) {
 
 	details.add( materialClassRow );
 
-	const stockLookRow = new UIRow();
-	const stockLook = new UISelect().setWidth( '150px' ).setOptions( { '': 'Choose a look…', ...stockMaterialLooks } );
+	const stockLookRow = new UIRow().addClass( 'material-look-picker' );
+	const stockLook = new UISelect().setOptions( { '': 'Choose a look…', ...stockMaterialLooks } );
 	stockLook.dom.setAttribute( 'aria-label', 'Stock look' );
-	const stockActions = new UIRow();
+	const stockActions = new UISpan().setClass( 'material-look-actions' );
 	const disableLook = new UIButton( 'Disable look' ).onClick( restoreLooks );
 	const newShader = new UIButton( 'New shader' ).onClick( () => {
 
@@ -72,9 +72,9 @@ function SidebarMaterial( editor ) {
 	} );
 	disableLook.dom.setAttribute( 'aria-label', 'Disable look' );
 	newShader.dom.setAttribute( 'aria-label', 'New shader' );
-	const status = new UIText();
+	const status = new UIText().setClass( 'material-look-status' ).setDisplay( 'none' );
 	status.dom.setAttribute( 'role', 'status' );
-	stockActions.add( disableLook, newShader, status );
+	stockActions.add( disableLook, newShader );
 	const uniformPanel = new SidebarMaterialUniforms( editor );
 
 	function selectedSlots() {
@@ -120,7 +120,7 @@ function SidebarMaterial( editor ) {
 		const snapshots = new Map();
 		restoring = true;
 		disableLook.setDisabled( true );
-		status.setValue( '' );
+		status.setValue( '' ).setDisplay( 'none' );
 		try {
 
 			const assignments = await Promise.all( entries.map( async entry => {
@@ -135,7 +135,7 @@ function SidebarMaterial( editor ) {
 
 		} catch ( error ) {
 
-			status.setValue( 'Could not restore the original material.' );
+			status.setValue( 'Could not restore the original material.' ).setDisplay( 'block' );
 			console.error( error );
 
 		} finally {
@@ -147,8 +147,10 @@ function SidebarMaterial( editor ) {
 
 	}
 
-	stockLookRow.add( new UIText( 'Stock look' ).setClass( 'Label' ), stockLook );
-	container.add( stockLookRow, stockActions, uniformPanel, details );
+	const stockControls = new UISpan().setClass( 'material-look-controls' ).add( stockLook, stockActions );
+	stockLookRow.add( new UIText( 'Stock look' ).setClass( 'Label' ), stockControls );
+	const lookPanel = new UIDiv().setClass( 'material-look' ).add( stockLookRow, status, uniformPanel );
+	container.add( lookPanel, details );
 
 	// uuid
 
@@ -794,7 +796,7 @@ function SidebarMaterial( editor ) {
 			if ( currentObject !== object ) {
 
 				currentMaterialSlot = 0;
-				status.setValue( '' );
+				status.setValue( '' ).setDisplay( 'none' );
 
 			}
 			currentObject = object;

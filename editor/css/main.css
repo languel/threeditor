@@ -2495,3 +2495,45 @@ body[data-ui-style="compact"] .scene-timeline-label { display: none; }
 #sidebar .Row .Label:has(+ .timeline-key-dot) { width: 102px; }
 #sidebar .script-parameter-row > .Label:has(+ .timeline-key-dot) { width: auto; }
 body[data-ui-style="compact"] .scene-timeline-bar input[type="number"] { width: 49px; }
+
+
+#sidebar .material-look { --look-label-width: min(120px, 40%); }
+#sidebar .Row.material-look-picker,
+#sidebar .Row.material-look-parameter {
+	display: grid;
+	grid-template-columns: var(--look-label-width) minmax(0, 1fr);
+	align-items: center;
+}
+#sidebar .Row.material-look-parameter {
+	grid-template-columns: calc(var(--look-label-width) - 19px) 19px minmax(0, 1fr);
+}
+#sidebar .material-look .Row > .Label {
+	width: auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.material-look-controls, .material-look-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 3px;
+	min-width: 0;
+}
+.material-look-controls > .Select {
+	box-sizing: border-box;
+	flex: 1 1 98px;
+	min-width: 0;
+	max-width: 118px;
+	margin: 0;
+}
+.material-look-controls > .Select::picker-icon { margin-inline-start: auto; }
+.material-look-actions > .Button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+#sidebar .material-look-parameter > .timeline-key-dot { justify-self: center; margin: 0; }
+.material-look-parameter > input { justify-self: start; max-width: 100%; margin: 0; }
+.material-look-status { margin-bottom: 6px; white-space: normal; }

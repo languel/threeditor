@@ -10,7 +10,7 @@ import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=scene-timeline';
 import { Toolbar } from './Toolbar.js?v=viewport-tools';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=look-controls';
+import { Sidebar } from './Sidebar.js?v=material-look-layout';
 import { Menubar } from './Menubar.js?v=scene-timeline';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';

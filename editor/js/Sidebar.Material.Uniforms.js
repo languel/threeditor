@@ -62,7 +62,8 @@ function SidebarMaterialUniforms( editor ) {
 					.setScrubDefault( field ? Number( field.initial ) : first ).setStep( field ? field.step * 16 : 1 )
 					.setNudge( field?.step ?? 0.01 ).setRange( field?.min ?? - Infinity, field?.max ?? Infinity );
 				const label = new UIText( name ).setClass( 'Label' );
-				const row = new UIRow();
+				label.dom.title = name;
+				const row = new UIRow().addClass( 'material-look-parameter' );
 				row.add( label, input );
 				panel.add( row );
 				input.dom.setAttribute( 'aria-label', name );
