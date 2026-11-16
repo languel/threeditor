@@ -8,7 +8,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { fitView } from './modeling/LightView.js';
 import { drawProjectorOutput, renderFittedView } from './modeling/ProjectorOutput.js';
 import { resolvePlaybackAssets } from './assets/AssetRuntime.js';
-import { APP } from './libs/app.js';
+import { APP } from './libs/app.js?v=scene-timeline';
 import { setupRenderEnvironment, setupPathTracingEnvironment } from './RenderEnvironment.js';
 
 function MenubarRender( editor ) {

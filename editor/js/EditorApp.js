@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=viewport-tools';
-import { Keymap } from './Keymap.js?v=viewport-tools';
+import { Editor } from './Editor.js?v=scene-timeline';
+import { Keymap } from './Keymap.js?v=scene-timeline';
 import { ModalTransform } from './ModalTransform.js?v=viewport-tools';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=viewport-tools';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=viewport-tools';
+import { Viewport } from './Viewport.js?v=scene-timeline';
 import { Toolbar } from './Toolbar.js?v=viewport-tools';
-import { Player } from './Player.js?v=preview-color';
-import { Sidebar } from './Sidebar.js';
-import { Menubar } from './Menubar.js?v=viewport-tools';
+import { Player } from './Player.js?v=scene-timeline';
+import { Sidebar } from './Sidebar.js?v=scene-timeline';
+import { Menubar } from './Menubar.js?v=scene-timeline';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
@@ -19,7 +19,7 @@ import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js';
+import { Animation } from './Animation.js?v=scene-timeline';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
@@ -103,6 +103,7 @@ async function startEditor( portable = null ) {
 	editor.assetBrowser.reveal = () => { sidebar.select( 'assets' ); sidebarDock.toggle( true ); };
 	editor.assetBrowser.bindViewport( viewport.dom );
 	const timelineDock = new PanelDock( editor, animation.dom, animationResizer.dom, 'bottom' );
+	editor.timeline.reveal = () => timelineDock.toggle( true );
 	editor.signals.animationPanelChanged.add( () => editor.signals.windowResize.dispatch() );
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );

@@ -58,6 +58,8 @@ function Editor( portable = false ) {
 		transformGizmoSizeChanged: new Signal(),
 		viewportLabelsChanged: new Signal(),
 		snapChanged: new Signal(),
+		timelineFrameChanged: new Signal(),
+		timelinePlaybackStarted: new Signal(),
 		transformSettingsChanged: new Signal(),
 		spaceChanged: new Signal(),
 		rendererCreated: new Signal(),
@@ -929,6 +931,12 @@ Editor.prototype = {
 	},
 
 	toJSON: function () {
+
+		return this.timeline ? this.timeline.withBase( () => this.serializeScene() ) : this.serializeScene();
+
+	},
+
+	serializeScene: function () {
 
 		// scripts clean up
 

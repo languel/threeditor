@@ -30,6 +30,7 @@ const definitions = [
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
  ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
  ['grid','Toggle grid','View','',''], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
+ ['timelineInsertKey','Insert timeline keyframe','Animation','i','i'],
  ['animationPlay','Play animation','Animation','','space'], ['animationPause','Pause animation','Animation','',''], ['animationStop','Stop animation','Animation','','']
 ];
 
@@ -152,6 +153,7 @@ class Keymap {
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
+   case 'timelineInsertKey':e.timeline?.insertKey();break;
    case 'animationPlay':case 'animationPause':case 'animationStop':e.animationCommands?.[id]?.();break;
   }
  }

@@ -1,11 +1,11 @@
 import { UITabbedPanel, UISpan } from './libs/ui.js';
 
 import { SidebarScene } from './Sidebar.Scene.js';
-import { SidebarProperties } from './Sidebar.Properties.js';
+import { SidebarProperties } from './Sidebar.Properties.js?v=scene-timeline';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js';
 import { SidebarStreams } from './Sidebar.Streams.js';
-import { SidebarAssets } from './Sidebar.Assets.js';
+import { SidebarAssets } from './Sidebar.Assets.js?v=scene-timeline';
 
 function Sidebar( editor ) {
 

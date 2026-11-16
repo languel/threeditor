@@ -10,7 +10,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=viewport-alignment">
+		<link rel="stylesheet" href="css/main.css?v=scene-timeline">
 
 		<script type="importmap">
 			{
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=viewport-tools';
+			import { startEditor } from './js/EditorApp.js?v=scene-timeline';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

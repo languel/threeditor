@@ -1,3 +1,5 @@
+import { TimelineRuntime } from '../animation/TimelineRuntime.js';
+import { timelineData } from '../animation/TimelineData.js';
 import { isProjector } from '../assets/Projector.js';
 import { lightViewCamera } from '../modeling/LightView.js';
 import { drawProjectorOutput, renderFittedView } from '../modeling/ProjectorOutput.js';
@@ -69,7 +71,7 @@ const APP = {
 		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
-		let camera, scene, projector, projectorContext;
+		let camera, scene, projector, projectorContext, timeline;
 
 		let events = {};
 		let splatHost;
@@ -89,6 +91,7 @@ const APP = {
 		this.load = async function ( json ) {
 
 			const project = json.project;
+			timeline?.clear();
 			splatHost?.dispose();
 			splatHost = new SplatHost();
 
@@ -155,6 +158,13 @@ const APP = {
 				fn( { ...obj, [ param ]: value } );
 				return true;
 			};
+			timeline = new TimelineRuntime( {
+				scene, scripts: json.scripts || {},
+				object: uuid => camera.uuid === uuid ? camera : scene.getObjectByProperty( 'uuid', uuid ),
+				getParam: streams.getParam,
+				setParam: streams.setParam
+			} );
+
 			events = {
 				init: [],
 				start: [],
@@ -375,6 +385,7 @@ const APP = {
 
 			try {
 
+				timeline.apply( timelineData( scene ), ( time - startTime ) / 1000 );
 				dispatch( events.update, { time: time - startTime, delta: time - prevTime } );
 
 			} catch ( e ) {
@@ -448,12 +459,14 @@ const APP = {
 			renderer.setAnimationLoop( null );
 			controller?.dispose();
 			controller = undefined;
+			timeline?.clear();
 			dispatch( events.stop, arguments );
 
 		};
 
 		this.render = function ( time ) {
 
+			timeline.apply( timelineData( scene ), time );
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 			streams.tick( scene );
 
@@ -463,6 +476,8 @@ const APP = {
 
 		this.dispose = function () {
 
+			timeline?.clear();
+			timeline = null;
 			postHost.dispose();
 			splatHost?.dispose();
 			splatHost = null;

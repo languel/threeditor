@@ -67,6 +67,7 @@ function Viewport( editor ) {
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
 	const labels = new ViewportLabels( editor, container.dom );
 	signals.viewportLabelsChanged.add( render );
+	signals.timelineFrameChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	const splatHost = new SplatHost();
@@ -1091,7 +1092,7 @@ function Viewport( editor ) {
 
 		}
 
-		if ( needsUpdate === true ) render();
+		if ( editor.timeline?.tick( delta ) || needsUpdate ) render();
 
 		updatePT();
 

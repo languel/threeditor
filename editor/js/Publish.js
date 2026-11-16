@@ -378,6 +378,11 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ProjectorOutput.js', 'editor/js/modeling/ProjectorOutput.js' );
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
+	for ( const module of [ 'TimelineData', 'TimelineBindings', 'TimelineRuntime' ] ) {
+
+		await project.copy( 'animation/' + module + '.js', 'editor/js/animation/' + module + '.js' );
+
+	}
 	await project.copy( 'ScriptParams.js', 'editor/js/ScriptParams.js' );
 	await project.copy( 'libs/acorn/acorn.mjs', 'editor/js/libs/acorn/acorn.mjs' );
 	await project.copy( 'js/app-bootstrap.js', 'editor/js/libs/app-bootstrap.js' );

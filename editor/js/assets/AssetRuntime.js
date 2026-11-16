@@ -49,7 +49,8 @@ export class AssetRuntime {
 				for ( const runtime of this.active.values() ) {
 					if ( runtime.script !== script || ! runtime.setParameters ) continue;
 					const { object } = runtime;
-					runtime.setParameters.call( object, serializeScript( script ).parameters || {} );
+					Object.assign( runtime.parameters, serializeScript( script ).parameters );
+					runtime.setParameters.call( object, runtime.parameters );
 					editor.signals.objectChanged.dispatch( object );
 					return;
 				}
@@ -91,6 +92,16 @@ export class AssetRuntime {
 		} );
 		for ( const script of this.active.keys() ) if ( ! live.has( script ) ) this.stop( script );
 	}
+	setPreviewParam( uuid, index, property, value ) {
+
+		const script = this.editor.scripts[ uuid ]?.[ index ];
+		const runtime = this.active.get( script );
+		if ( ! runtime || ! Object.hasOwn( runtime.parameters, property ) ) return;
+		runtime.parameters[ property ] = value;
+		runtime.setParameters?.call( runtime.object, { ...runtime.parameters } );
+
+	}
+
 	update( delta ) {
 		let animated = false;
 		for ( const panel of document.querySelectorAll( '#viewport .asset-engine-controls' ) ) {

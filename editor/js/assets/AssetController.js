@@ -11,7 +11,7 @@ import { mathDefinition, mathScript } from './MathObjects.js';
 import { modelScript } from './ModelBehavior.js';
 import { mediaPlane, mediaScript, movingTextureScript, webcamPlane } from './MediaObjects.js';
 import { landmarkScript, landmarkTextureScript } from './LandmarkObjects.js';
-import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js';
+import { AssetRuntime, evaluateAssetScript } from './AssetRuntime.js?v=scene-timeline';
 import { ASSET_MIME } from './AssetLibrary.js';
 import { loadAssetTexture } from './AssetTexture.js';
 import { SetMaterialMapCommand } from '../commands/SetMaterialMapCommand.js';

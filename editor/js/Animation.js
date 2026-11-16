@@ -1,599 +1,605 @@
-import { UIPanel, UIText, UIButton, UINumber } from './libs/ui.js';
+import { MathUtils } from 'three';
+import { UIPanel } from './libs/ui.js';
+import { icon } from './Glyphs.js';
+import { SetValueCommand } from './commands/SetValueCommand.js';
+import { availableTargets, authoredParam, timelineBinding } from './animation/TimelineBindings.js';
+import { putKey, targetId, timelineData, timelineEnd } from './animation/TimelineData.js';
+import { TimelineRuntime } from './animation/TimelineRuntime.js';
 
-import { AnimationPathHelper } from 'three/addons/helpers/AnimationPathHelper.js';
+const trackAt = ( clip, target ) => clip?.tracks?.find( track => targetId( track.target ) === targetId( target ) );
 
-import { hasRestriction } from './ObjectRestrictions.js';
+function element( tag, parent, text ) {
+
+	const node = document.createElement( tag );
+	if ( text ) node.textContent = text;
+	parent.appendChild( node );
+	return node;
+
+}
 
 function Animation( editor ) {
 
-	const signals = editor.signals;
-	const strings = editor.strings;
-	const mixer = editor.mixer;
+	const { signals } = editor;
+	const container = new UIPanel().setId( 'animation' ).setDisplay( 'flex' );
+	const panel = container.dom;
+	panel.classList.add( 'scene-timeline' );
+	const bar = element( 'div', panel );
+	bar.className = 'scene-timeline-bar';
+	const params = element( 'div', panel );
+	params.className = 'scene-timeline-bar';
+	const lanes = element( 'div', panel );
+	lanes.className = 'scene-timeline-lanes';
 
-	const container = new UIPanel();
-	container.setId( 'animation' );
-	container.dom.style.flexDirection = 'column';
+	let time = 0, playing = false, recording = null, previewing = false, loop = false;
+	let selection, channel, keyTime, draft;
+	const data = () => draft || timelineData( editor.scene );
+	const clip = () => data().clips.find( clip => clip.id === selection );
+	const context = {
+		scene: editor.scene,
+		get scripts() { return editor.scripts; },
+		object: uuid => editor.camera.uuid === uuid ? editor.camera : editor.objectByUuid( uuid ),
+		getParam: ( uuid, index, property ) => editor.streams.getParam?.( uuid, index, property ) ?? authoredParam( editor.scripts, uuid, index, property ),
+		setParam: ( ...args ) => editor.assetBrowser?.runtime?.setPreviewParam?.( ...args )
+	};
+	const runtime = new TimelineRuntime( context );
 
-	let panelHeight = 36;
+	function button( parent, label, action, glyph ) {
 
-	// Listen for resizer changes
-	signals.animationPanelResized.add( function ( height ) {
+		const button = element( 'button', parent, glyph ? '' : label );
+		button.type = 'button';
+		button.className = 'Button';
+		button.title = label;
+		button.setAttribute( 'aria-label', label );
+		if ( glyph ) button.innerHTML = icon( glyph );
+		button.onclick = action;
+		return button;
 
-		panelHeight = height;
+	}
+
+	function number( parent, label, value, change, step = '1' ) {
+
+		const wrapper = element( 'label', parent, label );
+		const input = element( 'input', wrapper );
+		input.type = 'number';
+		input.step = step;
+		input.value = value;
+		input.onchange = () => {
+
+			if ( input.value !== '' && Number.isFinite( input.valueAsNumber ) ) change( input.valueAsNumber );
+			refresh();
+
+		};
+		return input;
+
+	}
+
+	function stageHeight( height ) {
+
 		document.body.style.setProperty( '--animation-height', height + 'px' );
 		signals.animationPanelChanged.dispatch( height );
 
+	}
+	signals.animationPanelResized.add( stageHeight );
+	stageHeight( 188 );
+
+	const play = button( bar, 'Play timeline', togglePlayback, 'play' );
+	button( bar, 'Stop timeline', stop );
+	const rec = button( bar, 'Record parameter', toggleRecord );
+	const loopButton = button( bar, 'Loop timeline', () => {
+
+		loop = ! loop;
+		loopButton.setAttribute( 'aria-pressed', String( loop ) );
+
+	} );
+	loopButton.setAttribute( 'aria-pressed', 'false' );
+	const frame = number( bar, 'Frame', 0, value => seek( Math.max( 0, value ) / data().fps ) );
+	frame.min = 0;
+	const fps = number( bar, 'FPS', 30, value => modify( 'Set timeline frame rate', doc => doc.fps = Math.min( 120, Math.max( 1, Math.round( value ) ) ) ) );
+	fps.min = 1;
+	fps.max = 120;
+	button( bar, 'Add clip', () => {
+
+		modify( 'Add parameter clip', doc => newClip( doc ) );
+
 	} );
 
-	// Top bar - playback controls
-	const controlsPanel = new UIPanel();
-	controlsPanel.dom.style.padding = '6px 10px';
-	controlsPanel.dom.style.borderBottom = '1px solid #ccc';
-	controlsPanel.dom.style.display = 'flex';
-	controlsPanel.dom.style.alignItems = 'center';
-	controlsPanel.dom.style.justifyContent = 'center';
-	controlsPanel.dom.style.gap = '6px';
-	controlsPanel.dom.style.flexShrink = '0';
-	container.add( controlsPanel );
+	const targetSelect = element( 'select', params );
+	targetSelect.setAttribute( 'aria-label', 'Timeline parameter' );
+	const keyButton = button( params, 'Insert keyframe', insertKey );
+	const inspector = element( 'div', params );
+	inspector.className = 'scene-timeline-inspector';
+	const readout = element( 'output', bar );
+	readout.setAttribute( 'aria-live', 'polite' );
 
-	// SVG icons
-	const playIcon = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 1.5v9l7-4.5z" fill="currentColor"/></svg>';
-	const pauseIcon = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 1h3v10H2zM7 1h3v10H7z" fill="currentColor"/></svg>';
-	const stopIcon = '<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" fill="currentColor"/></svg>';
+	function newClip( doc, animation ) {
 
-	const playButton = new UIButton();
-	playButton.dom.innerHTML = playIcon;
-	playButton.dom.style.width = '24px';
-	playButton.dom.style.height = '24px';
-	playButton.dom.style.padding = '0';
-	playButton.dom.style.borderRadius = '4px';
-	playButton.dom.style.display = 'flex';
-	playButton.dom.style.alignItems = 'center';
-	playButton.dom.style.justifyContent = 'center';
-	playButton.onClick( function () {
+		const id = MathUtils.generateUUID();
+		selectClip( id );
+		const entry = {
+			id, name: animation?.name || 'Clip ' + ( doc.clips.length + 1 ), start: snapTime( time ),
+			duration: Math.max( 1 / doc.fps, animation?.duration ?? 3 ), tracks: []
+		};
+		if ( animation ) entry.animation = { object: animation.object, clip: animation.uuid };
+		doc.clips.push( entry );
+		return entry;
 
-		if ( currentAction ) {
+	}
 
-			if ( currentAction.paused ) {
+	function selectClip( id ) {
 
-				currentAction.paused = false;
+		selection = id;
+		channel = keyTime = undefined;
 
-			} else if ( ! currentAction.isRunning() ) {
+	}
 
-				currentAction.reset();
-				currentAction.play();
+	function snapTime( value ) {
+
+		const fps = data().fps;
+		return Math.max( 0, Math.round( value * fps ) / fps );
+
+	}
+
+	function commit( doc, name ) {
+
+		const command = new SetValueCommand( editor, editor.scene, 'userData', { ...editor.scene.userData, timeline: doc } );
+		command.updatable = false;
+		editor.execute( command, name );
+
+	}
+
+	function modify( name, edit ) {
+
+		if ( recording ) return;
+		const doc = structuredClone( data() );
+		edit( doc );
+		commit( doc, name );
+		refresh();
+
+	}
+
+	function chosenTarget( stable = false ) {
+
+		const candidate = availableTargets( editor.selected, editor.scripts ).find( candidate => targetId( candidate ) === targetSelect.value );
+		if ( candidate?.kind === 'script' && stable ) {
+
+			const script = editor.scripts[ candidate.object ][ candidate.index ];
+			script.timelineId ||= MathUtils.generateUUID();
+			candidate.scriptId = script.timelineId;
+			targetSelect.selectedOptions[ 0 ].value = targetId( candidate );
+
+		}
+		return candidate;
+
+	}
+
+	function recordKey( doc, target, value, at, continuous = false ) {
+
+		let entry = doc.clips.find( clip => clip.id === selection && ! clip.animation );
+		if ( ! entry || at < entry.start ) entry = newClip( doc );
+		const relative = Math.max( 0, at - entry.start );
+		entry.duration = Math.max( entry.duration, relative + 1 / doc.fps );
+		let track = trackAt( entry, target );
+		if ( ! track ) {
+
+			track = { target, keys: [] };
+			entry.tracks.push( track );
+
+		}
+		const interpolation = typeof value === 'boolean' || typeof value === 'string' && ! /^#[\da-f]{6}$/i.test( value ) ? 'hold' : 'linear';
+		putKey( track, relative, value, interpolation );
+		if ( ! continuous ) {
+
+			channel = targetId( target );
+			keyTime = relative;
+
+		}
+
+	}
+
+	function insertKey() {
+
+		if ( recording ) return;
+		const target = chosenTarget( true );
+		const value = target && timelineBinding( context, target )?.read();
+		if ( value === undefined ) return;
+		modify( 'Insert keyframe', doc => recordKey( doc, target, value, snapTime( time ) ) );
+		pulse();
+
+	}
+
+	function seek( at ) {
+
+		if ( recording ) return;
+		playing = false;
+		time = at;
+		previewing = true;
+		signals.timelinePlaybackStarted.dispatch();
+		pulse();
+		refreshTransport();
+
+	}
+
+	function pulse() {
+
+		runtime.apply( data(), time );
+		signals.timelineFrameChanged.dispatch();
+
+	}
+
+	function stop() {
+
+		if ( recording ) finishRecord();
+		playing = previewing = false;
+		time = 0;
+		runtime.clear();
+		signals.timelineFrameChanged.dispatch();
+		refreshTransport();
+
+	}
+
+	function togglePlayback() {
+
+		if ( recording ) return finishRecord();
+		const end = timelineEnd( data() );
+		if ( ! end ) return;
+		playing = ! playing;
+		if ( playing ) signals.timelinePlaybackStarted.dispatch();
+		if ( playing && time >= end ) time = 0;
+		previewing = true;
+		refreshTransport();
+
+	}
+
+	function toggleRecord() {
+
+		if ( recording ) return finishRecord();
+		const target = chosenTarget( true );
+		const binding = target && timelineBinding( context, target );
+		const value = binding?.read();
+		if ( value === undefined ) return;
+		draft = structuredClone( data() );
+		recording = { target, binding, last: JSON.stringify( value ), frame: Math.round( time * draft.fps ) };
+		recordKey( draft, target, value, snapTime( time ), true );
+		playing = previewing = true;
+		signals.timelinePlaybackStarted.dispatch();
+		refresh();
+
+	}
+
+	function finishRecord() {
+
+		const title = recording.target.label;
+		recording = null;
+		playing = false;
+		const doc = draft;
+		draft = null;
+		commit( doc, 'Record ' + title );
+		refresh();
+
+	}
+
+	function tick( delta ) {
+
+		if ( ! playing ) return false;
+		time += delta;
+		if ( recording ) {
+
+			const f = Math.floor( time * draft.fps );
+			if ( f > recording.frame ) {
+
+				const value = recording.binding.read();
+				const text = JSON.stringify( value );
+				if ( value !== undefined && text !== recording.last ) {
+
+					const track = trackAt( clip(), recording.target );
+					const last = track?.keys.at( -1 );
+					const previous = recording.frame / draft.fps - clip().start;
+					if ( last && previous > last.time ) putKey( track, previous, last.value, last.interpolation );
+					recordKey( draft, recording.target, value, f / draft.fps, true );
+					recording.last = text;
+
+				}
+				recording.frame = f;
+
+			}
+			clip().duration = Math.max( clip().duration, time - clip().start );
+
+		} else {
+
+			const end = timelineEnd( data() );
+			if ( time >= end && loop ) time %= end || 1;
+			else if ( time >= end ) {
+
+				time = end;
+				playing = false;
 
 			}
 
 		}
-
-	} );
-	controlsPanel.add( playButton );
-
-	const pauseButton = new UIButton();
-	pauseButton.dom.innerHTML = pauseIcon;
-	pauseButton.dom.style.width = '24px';
-	pauseButton.dom.style.height = '24px';
-	pauseButton.dom.style.padding = '0';
-	pauseButton.dom.style.borderRadius = '4px';
-	pauseButton.dom.style.display = 'flex';
-	pauseButton.dom.style.alignItems = 'center';
-	pauseButton.dom.style.justifyContent = 'center';
-	pauseButton.onClick( function () {
-
-		if ( currentAction ) {
-
-			currentAction.paused = true;
-
-		}
-
-	} );
-	controlsPanel.add( pauseButton );
-
-	const stopButton = new UIButton();
-	stopButton.dom.innerHTML = stopIcon;
-	stopButton.dom.style.width = '24px';
-	stopButton.dom.style.height = '24px';
-	stopButton.dom.style.padding = '0';
-	stopButton.dom.style.borderRadius = '4px';
-	stopButton.dom.style.display = 'flex';
-	stopButton.dom.style.alignItems = 'center';
-	stopButton.dom.style.justifyContent = 'center';
-	stopButton.onClick( function () {
-
-		if ( currentAction ) {
-
-			currentAction.stop();
-
-		}
-
-	} );
-	controlsPanel.add( stopButton );
-	editor.animationCommands = {
-		isEnabled: () => ! hasRestriction( currentRoot, 'disabled' ),
-		animationPlay: () => { if ( currentAction?.isRunning() && ! currentAction.paused ) pauseButton.dom.click(); else playButton.dom.click(); },
-		animationPause: () => pauseButton.dom.click(),
-		animationStop: () => stopButton.dom.click()
-	};
-
-	// Time display
-	const timeDisplay = document.createElement( 'div' );
-	timeDisplay.style.display = 'flex';
-	timeDisplay.style.alignItems = 'center';
-	timeDisplay.style.justifyContent = 'center';
-	timeDisplay.style.gap = '4px';
-	timeDisplay.style.height = '24px';
-	timeDisplay.style.padding = '0 8px';
-	timeDisplay.style.background = 'rgba(0,0,0,0.05)';
-	timeDisplay.style.borderRadius = '4px';
-	timeDisplay.style.fontFamily = 'monospace';
-	timeDisplay.style.fontSize = '11px';
-	controlsPanel.dom.appendChild( timeDisplay );
-
-	const timeText = new UIText( '0.00' ).setWidth( '36px' );
-	timeText.dom.style.textAlign = 'right';
-	timeDisplay.appendChild( timeText.dom );
-
-	const separator = new UIText( '/' );
-	timeDisplay.appendChild( separator.dom );
-
-	const durationText = new UIText( '0.00' ).setWidth( '36px' );
-	timeDisplay.appendChild( durationText.dom );
-
-	// Time Scale
-	const mixerTimeScaleNumber = new UINumber( 1 ).setWidth( '60px' ).setRange( - 10, 10 );
-	mixerTimeScaleNumber.onChange( function () {
-
-		mixer.timeScale = mixerTimeScaleNumber.getValue();
-
-	} );
-
-	controlsPanel.add( new UIText( strings.getKey( 'sidebar/animations/timescale' ) ).setClass( 'Label' ) );
-	controlsPanel.add( mixerTimeScaleNumber );
-
-	// Timeline area with track rows
-	const timelineArea = document.createElement( 'div' );
-	timelineArea.style.flex = '1';
-	timelineArea.style.display = 'flex';
-	timelineArea.style.flexDirection = 'column';
-	timelineArea.style.overflow = 'hidden';
-	timelineArea.style.position = 'relative';
-	container.dom.appendChild( timelineArea );
-
-	// Scrollable track list
-	const trackListContainer = document.createElement( 'div' );
-	trackListContainer.style.flex = '1';
-	trackListContainer.style.overflowY = 'auto';
-	trackListContainer.style.overflowX = 'hidden';
-	timelineArea.appendChild( trackListContainer );
-
-	// Playhead (spans entire timeline area)
-	const playhead = document.createElement( 'div' );
-	playhead.style.position = 'absolute';
-	playhead.style.top = '0';
-	playhead.style.bottom = '0';
-	playhead.style.width = '2px';
-	playhead.style.background = '#f00';
-	playhead.style.left = '150px'; // Start at timeline start (after labels)
-	playhead.style.pointerEvents = 'none';
-	playhead.style.zIndex = '10';
-	timelineArea.appendChild( playhead );
-
-	// Timeline scrubbing
-	let isDragging = false;
-	const labelWidth = 150;
-
-	function updateTimeFromPosition( clientX ) {
-
-		const rect = timelineArea.getBoundingClientRect();
-		const timelineStart = labelWidth;
-		const timelineWidth = rect.width - labelWidth;
-		const x = Math.max( 0, Math.min( clientX - rect.left - timelineStart, timelineWidth ) );
-		const percent = x / timelineWidth;
-
-		if ( currentAction && currentClip && ! hasRestriction( currentRoot, 'disabled' ) ) {
-
-			const time = percent * currentClip.duration;
-			currentAction.play();
-			currentAction.time = time;
-			currentAction.paused = true;
-			editor.mixer.update( 0 );
-
-		}
+		runtime.apply( data(), time, recording && targetId( recording.target ) );
+		if ( recording && Math.floor( time * 10 ) !== Math.floor( ( time - delta ) * 10 ) ) drawLanes();
+		refreshTransport();
+		return true;
 
 	}
 
-	timelineArea.addEventListener( 'mousedown', function ( event ) {
+	function refreshTransport() {
 
-		const rect = timelineArea.getBoundingClientRect();
-		if ( event.clientX - rect.left > labelWidth ) {
-
-			event.preventDefault();
-
-			isDragging = true;
-			updateTimeFromPosition( event.clientX );
-
-		}
-
-	} );
-
-	document.addEventListener( 'mousemove', function ( event ) {
-
-		if ( isDragging ) {
-
-			updateTimeFromPosition( event.clientX );
-
-		}
-
-	} );
-
-	document.addEventListener( 'mouseup', function () {
-
-		isDragging = false;
-
-	} );
-
-	// Track colors by type
-	const trackColors = {
-		position: '#4CAF50',
-		quaternion: '#2196F3',
-		rotation: '#2196F3',
-		scale: '#FF9800',
-		morphTargetInfluences: '#9C27B0',
-		default: '#607D8B'
-	};
-
-	function getTrackColor( trackName ) {
-
-		for ( const type in trackColors ) {
-
-			if ( trackName.endsWith( '.' + type ) ) {
-
-				return trackColors[ type ];
-
-			}
-
-		}
-
-		return trackColors.default;
+		if ( document.activeElement !== frame ) frame.value = Math.round( time * data().fps );
+		play.innerHTML = icon( playing ? 'pause' : 'play' );
+		play.setAttribute( 'aria-label', playing ? 'Pause timeline' : 'Play timeline' );
+		play.title = play.getAttribute( 'aria-label' );
+		rec.setAttribute( 'aria-pressed', String( !! recording ) );
+		rec.textContent = recording ? 'Stop recording' : 'Record';
+		readout.textContent = recording ? recording.target.label : '';
+		for ( const marker of lanes.querySelectorAll( '.scene-timeline-playhead' ) ) marker.style.left = 100 * time / visibleEnd() + '%';
 
 	}
 
-	function getTrackType( trackName ) {
+	function visibleEnd() {
 
-		const parts = trackName.split( '.' );
-		return parts[ parts.length - 1 ];
+		return Math.max( 10, Math.ceil( timelineEnd( data() ) ), Math.ceil( time ) );
 
 	}
 
-	// Hover path helper
-	let hoverHelper = null;
-	let currentAction = null;
-	let currentClip = null;
-	let currentRoot = null;
+	function drawLanes() {
 
-	// Get all clips of the selected object
-	function getAnimationClips() {
+		const scroll = lanes.scrollTop;
+		lanes.replaceChildren();
+		const end = visibleEnd();
+		const row = ( name, classes = '' ) => {
 
-		const object = editor.selected;
-		const clips = [];
+			const line = element( 'div', lanes );
+			line.className = 'scene-timeline-row ' + classes;
+			const label = element( 'span', line, name );
+			label.title = name;
+			const lane = element( 'div', line );
+			const marker = element( 'span', lane );
+			marker.className = 'scene-timeline-playhead';
+			marker.style.left = time / end * 100 + '%';
+			return lane;
 
-		if ( object !== null ) {
+		};
+		const ruler = row( 'Time', 'scene-timeline-ruler' );
+		const step = Math.max( 1, Math.ceil( end / 10 ) );
+		for ( let i = 0; i <= end; i += step ) {
 
-			for ( const clip of object.animations ) {
+			const tick = element( 'span', ruler, i + 's' );
+			tick.style.left = i / end * 100 + '%';
 
-				clips.push( { clip: clip, root: object } );
+		}
+		function secondsAt( event, lane ) {
 
-			}
+			const rect = lane.getBoundingClientRect();
+			return snapTime( MathUtils.clamp( ( event.clientX - rect.left ) / rect.width, 0, 1 ) * end );
 
 		}
 
-		return clips;
+		ruler.onpointerdown = event => {
 
-	}
+			if ( recording || event.button !== 0 ) return;
+			ruler.setPointerCapture( event.pointerId );
+			const at = secondsAt( event, ruler );
+			playing = false;
+			time = at;
+			previewing = true;
+			signals.timelinePlaybackStarted.dispatch();
+			pulse();
+			refreshTransport();
 
-	function getObjectName( trackName, root ) {
+		};
+		ruler.onpointermove = event => { if ( ruler.hasPointerCapture( event.pointerId ) ) seek( secondsAt( event, ruler ) ); };
 
-		// Extract UUID from track name (format: uuid.property)
-		const dotIndex = trackName.lastIndexOf( '.' );
-		if ( dotIndex === - 1 ) return trackName;
+		function dragTime( node, lane, original, min, max, apply ) {
 
-		const uuid = trackName.substring( 0, dotIndex );
-		const object = root.getObjectByProperty( 'uuid', uuid );
+			node.onpointerdown = event => {
 
-		return object ? ( object.name || 'Object' ) : uuid.substring( 0, 8 );
+				if ( recording || event.button !== 0 ) return;
+				const anchor = event.clientX, width = lane.getBoundingClientRect().width;
+				let next = original;
+				node.setPointerCapture( event.pointerId );
+				node.onpointermove = move => {
 
-	}
+					next = MathUtils.clamp( snapTime( original + ( move.clientX - anchor ) / width * end ), min, max );
+					node.style.left = next / end * 100 + '%';
 
-	function update() {
+				};
+				node.onpointerup = () => {
 
-		trackListContainer.innerHTML = '';
+					node.onpointermove = null;
+					if ( next !== original ) apply( next );
 
-		const clips = getAnimationClips();
+				};
+				node.onpointercancel = () => {
 
-		if ( clips.length === 0 ) {
+					node.onpointermove = null;
+					node.style.left = original / end * 100 + '%';
 
-			return;
+				};
+
+			};
 
 		}
 
-		for ( const { clip, root } of clips ) {
+		for ( const entry of data().clips ) {
 
-			// Clip header row
-			const clipRow = document.createElement( 'div' );
-			clipRow.style.display = 'flex';
-			clipRow.style.alignItems = 'center';
-			clipRow.style.height = '24px';
-			clipRow.style.borderBottom = '1px solid #ccc';
-			clipRow.style.cursor = 'pointer';
-			clipRow.style.background = currentClip === clip ? 'rgba(0, 136, 255, 0.1)' : '';
+			const lane = row( entry.name, entry.id === selection ? 'selected' : '' );
+			const clipButton = button( lane, entry.name, null );
+			clipButton.classList.add( 'scene-timeline-clip' );
+			clipButton.style.left = entry.start / end * 100 + '%';
+			clipButton.style.width = entry.duration / end * 100 + '%';
+			clipButton.onclick = () => {
 
-			const clipLabel = document.createElement( 'div' );
-			clipLabel.style.width = labelWidth + 'px';
-			clipLabel.style.padding = '0 10px';
-			clipLabel.style.fontSize = '11px';
-			clipLabel.style.fontWeight = 'bold';
-			clipLabel.style.overflow = 'hidden';
-			clipLabel.style.textOverflow = 'ellipsis';
-			clipLabel.style.whiteSpace = 'nowrap';
-			clipLabel.style.flexShrink = '0';
-			clipLabel.style.boxSizing = 'border-box';
-			clipLabel.textContent = clip.name || 'Animation';
-			clipRow.appendChild( clipLabel );
+				if ( recording ) return;
+				selectClip( entry.id );
+				refresh();
 
-			const clipTimeline = document.createElement( 'div' );
-			clipTimeline.style.flex = '1';
-			clipTimeline.style.height = '100%';
-			clipTimeline.style.background = 'rgba(0,0,0,0.03)';
-			clipRow.appendChild( clipTimeline );
+			};
+			dragTime( clipButton, lane, entry.start, 0, Infinity, start => {
 
-			clipRow.addEventListener( 'click', function () {
-
-				selectClip( clip, root );
-				update(); // Refresh to update highlighting
+				selectClip( entry.id );
+				modify( 'Move timeline clip', doc => doc.clips.find( clip => clip.id === entry.id ).start = start );
 
 			} );
+			if ( entry.id !== selection ) continue;
+			for ( const track of entry.tracks ) {
 
-			trackListContainer.appendChild( clipRow );
+				const object = context.object( track.target.object );
+				const trackLane = row( ( object?.name || object?.type || 'Missing object' ) + ' · ' + track.target.label, 'scene-timeline-track' );
+				const id = targetId( track.target );
+				for ( const key of track.keys ) {
 
-			// Only show tracks for selected clip
-			if ( currentClip === clip ) {
+					const mark = button( trackLane, 'Keyframe ' + Math.round( ( entry.start + key.time ) * data().fps ), () => {
 
-				const duration = clip.duration;
+						if ( recording ) return;
+						channel = id;
+						keyTime = key.time;
+						seek( entry.start + key.time );
+						refresh();
 
-				for ( const track of clip.tracks ) {
+					} );
+					mark.classList.add( 'scene-timeline-key' );
+					mark.setAttribute( 'aria-pressed', String( channel === id && keyTime === key.time ) );
+					mark.style.left = ( entry.start + key.time ) / end * 100 + '%';
+					dragTime( mark, trackLane, entry.start + key.time, entry.start, entry.start + entry.duration, at => {
 
-					const times = track.times;
-					if ( times.length === 0 ) continue;
+						channel = id;
+						keyTime = at - entry.start;
+						modify( 'Move keyframe', doc => {
 
-					const startTime = times[ 0 ];
-					const endTime = times[ times.length - 1 ];
-					const startPercent = ( startTime / duration ) * 100;
-					const widthPercent = ( ( endTime - startTime ) / duration ) * 100;
+							const edit = trackAt( doc.clips.find( clip => clip.id === entry.id ), track.target );
+							edit.keys = edit.keys.filter( item => item.time !== key.time );
+							putKey( edit, keyTime, key.value, key.interpolation );
 
-					const trackRow = document.createElement( 'div' );
-					trackRow.style.display = 'flex';
-					trackRow.style.alignItems = 'center';
-					trackRow.style.height = '20px';
-					trackRow.style.borderBottom = '1px solid #eee';
+						} );
 
-					// Track label
-					const trackLabel = document.createElement( 'div' );
-					trackLabel.style.width = labelWidth + 'px';
-					trackLabel.style.padding = '0 10px 0 20px';
-					trackLabel.style.fontSize = '10px';
-					trackLabel.style.overflow = 'hidden';
-					trackLabel.style.textOverflow = 'ellipsis';
-					trackLabel.style.whiteSpace = 'nowrap';
-					trackLabel.style.flexShrink = '0';
-					trackLabel.style.boxSizing = 'border-box';
-					trackLabel.style.color = '#666';
-
-					const objectName = getObjectName( track.name, root );
-					const trackType = getTrackType( track.name );
-					trackLabel.textContent = objectName + '.' + trackType;
-					trackLabel.title = track.name;
-					trackRow.appendChild( trackLabel );
-
-					// Track timeline with block
-					const trackTimeline = document.createElement( 'div' );
-					trackTimeline.style.flex = '1';
-					trackTimeline.style.height = '100%';
-					trackTimeline.style.position = 'relative';
-					trackTimeline.style.background = 'rgba(0,0,0,0.02)';
-
-					const block = document.createElement( 'div' );
-					block.style.position = 'absolute';
-					block.style.left = startPercent + '%';
-					block.style.width = Math.max( 0.5, widthPercent ) + '%';
-					block.style.top = '3px';
-					block.style.bottom = '3px';
-					block.style.background = getTrackColor( track.name );
-					block.style.borderRadius = '2px';
-					block.style.opacity = '0.6';
-					block.title = trackType + ': ' + startTime.toFixed( 2 ) + 's - ' + endTime.toFixed( 2 ) + 's';
-
-					trackTimeline.appendChild( block );
-
-					// Add keyframe markers
-					for ( let i = 0; i < times.length; i ++ ) {
-
-						const keyframePercent = ( times[ i ] / duration ) * 100;
-						const keyframe = document.createElement( 'div' );
-						keyframe.style.position = 'absolute';
-						keyframe.style.left = keyframePercent + '%';
-						keyframe.style.top = '50%';
-						keyframe.style.width = '6px';
-						keyframe.style.height = '6px';
-						keyframe.style.marginLeft = '-3px';
-						keyframe.style.marginTop = '-3px';
-						keyframe.style.background = getTrackColor( track.name );
-						keyframe.style.borderRadius = '1px';
-						keyframe.style.transform = 'rotate(45deg)';
-						keyframe.title = times[ i ].toFixed( 3 ) + 's';
-						trackTimeline.appendChild( keyframe );
-
-					}
-
-					trackRow.appendChild( trackTimeline );
-
-					// Hover on position tracks to show path helper
-					if ( track.name.endsWith( '.position' ) && track.getValueSize() === 3 ) {
-
-						const uuid = track.name.replace( '.position', '' );
-						const object = root.getObjectByProperty( 'uuid', uuid );
-
-						if ( object ) {
-
-							trackRow.addEventListener( 'mouseenter', function () {
-
-								showPath( clip, object );
-
-							} );
-
-							trackRow.addEventListener( 'mouseleave', function () {
-
-								hidePath();
-
-							} );
-
-						}
-
-					}
-
-					trackListContainer.appendChild( trackRow );
+					} );
 
 				}
 
 			}
 
 		}
+		lanes.scrollTop = scroll;
 
 	}
 
-	function selectClip( clip, root ) {
+	function refresh() {
 
-		const toggle = ( currentClip === clip );
+		const previous = targetSelect.value;
+		const choices = availableTargets( editor.selected, editor.scripts );
+		targetSelect.replaceChildren( new Option( choices.length ? 'Choose a parameter…' : 'Select an object', '' ),
+			...choices.map( target => new Option( target.label, targetId( target ) ) ) );
+		targetSelect.value = choices.some( target => targetId( target ) === previous ) ? previous : '';
+		if ( ! targetSelect.value && choices.length === 1 ) targetSelect.value = choices[ 0 ] && targetId( choices[ 0 ] );
+		syncParameterControls();
+		fps.value = data().fps;
+		inspector.replaceChildren();
+		const entry = clip();
+		if ( entry && ! recording ) {
 
-		deselectClip();
+			const edit = ( name, change ) => modify( name, doc => change( doc.clips.find( clip => clip.id === entry.id ) ) );
+			const name = element( 'input', inspector );
+			name.value = entry.name;
+			name.setAttribute( 'aria-label', 'Clip name' );
+			name.onchange = () => edit( 'Rename timeline clip', item => item.name = name.value.trim() || item.name );
+			number( inspector, 'Start', entry.start, value => edit( 'Move timeline clip', item => item.start = snapTime( value ) ), 'any' );
+			number( inspector, 'Length', entry.duration, value => edit( 'Resize timeline clip', item => {
 
-		if ( toggle === false ) {
+				item.duration = Math.max( 1 / data().fps, snapTime( value ), ...item.tracks.flatMap( track => track.keys.map( key => key.time ) ) );
 
-			// Select clip without playing
-			currentClip = clip;
-			currentRoot = root;
-			currentAction = editor.mixer.clipAction( clip, root );
+			} ), 'any' );
+			button( inspector, 'Delete clip', () => modify( 'Delete timeline clip', doc => {
 
-			// Update duration display
-			durationText.setValue( clip.duration.toFixed( 2 ) );
+				doc.clips = doc.clips.filter( clip => clip.id !== entry.id );
+				selectClip();
+
+			} ), 'delete' );
+			const selected = entry.tracks.find( track => targetId( track.target ) === channel )?.keys.find( key => key.time === keyTime );
+			if ( selected ) {
+
+				const track = item => item.tracks.find( track => targetId( track.target ) === channel );
+				const find = item => track( item ).keys.find( key => key.time === keyTime );
+				const value = element( 'input', inspector );
+				value.type = typeof selected.value === 'number' ? 'number' : 'text';
+				value.step = 'any';
+				value.setAttribute( 'aria-label', 'Key value' );
+				value.title = 'Key value';
+				value.value = Array.isArray( selected.value ) ? selected.value.join( ', ' ) : selected.value;
+				value.onchange = () => {
+
+					const text = value.value;
+					let next = text;
+					if ( typeof selected.value === 'number' ) next = value.valueAsNumber;
+					else if ( typeof selected.value === 'boolean' ) next = text === 'true' ? true : text === 'false' ? false : undefined;
+					else if ( Array.isArray( selected.value ) ) next = text.split( ',' ).map( part => part.trim() ? Number( part ) : NaN );
+					if ( next === undefined || typeof next === 'number' && ! Number.isFinite( next ) ||
+						Array.isArray( next ) && ( next.length !== selected.value.length || ! next.every( Number.isFinite ) ) ||
+						typeof selected.value === 'string' && /^#[\da-f]{6}$/i.test( selected.value ) && ! /^#[\da-f]{6}$/i.test( text ) ) return refresh();
+					edit( 'Set keyframe value', item => find( item ).value = next );
+
+				};
+				number( inspector, 'Key time', entry.start + keyTime, value => edit( 'Move keyframe', item => {
+
+					const key = find( item );
+					const lane = track( item );
+					lane.keys.splice( lane.keys.indexOf( key ), 1 );
+					const next = MathUtils.clamp( snapTime( value ) - item.start, 0, item.duration );
+					putKey( lane, next, key.value, key.interpolation );
+					keyTime = next;
+
+				} ), 'any' );
+				const interpolation = element( 'select', inspector );
+				interpolation.setAttribute( 'aria-label', 'Keyframe interpolation' );
+				interpolation.replaceChildren( new Option( 'Linear', 'linear' ), new Option( 'Ease in/out', 'ease' ), new Option( 'Hold', 'hold' ) );
+				interpolation.value = selected.interpolation;
+				interpolation.onchange = () => edit( 'Set keyframe interpolation', item => find( item ).interpolation = interpolation.value );
+				button( inspector, 'Delete keyframe', () => edit( 'Delete keyframe', item => {
+
+					const lane = track( item );
+					lane.keys = lane.keys.filter( key => key.time !== keyTime );
+					if ( ! lane.keys.length ) item.tracks.splice( item.tracks.indexOf( lane ), 1 );
+					keyTime = undefined;
+
+				} ) );
+
+			}
+
+		}
+		drawLanes();
+		refreshTransport();
+
+	}
+
+	function syncParameterControls() {
+
+		keyButton.disabled = ! targetSelect.value || !! recording;
+		rec.disabled = ! targetSelect.value && ! recording;
+
+	}
+	targetSelect.onchange = syncParameterControls;
+	for ( const signal of [ signals.objectSelected, signals.scriptAdded, signals.scriptRemoved, signals.materialChanged ] ) signal.add( refresh );
+	signals.objectChanged.add( ( object, attribute ) => {
+
+		if ( object === editor.scene && attribute === 'userData' ) {
+
+			if ( previewing && ! recording ) pulse();
+			refresh();
 
 		}
 
-	}
-
-	function deselectClip() {
-
-		// Stop current action
-		if ( currentAction ) {
-
-			currentAction.stop();
-
-		}
-
-		currentAction = null;
-		currentClip = null;
-		currentRoot = null;
-
-		timeText.setValue( '0.00' );
-		durationText.setValue( '0.00' );
-
-		playhead.style.left = labelWidth + 'px';
-
-	}
-
-	function showPath( clip, object ) {
-
-		hidePath();
-
-		hoverHelper = new AnimationPathHelper( currentRoot, clip, object );
-		editor.sceneHelpers.add( hoverHelper );
-		signals.sceneGraphChanged.dispatch();
-
-	}
-
-	function hidePath() {
-
-		if ( hoverHelper ) {
-
-			editor.sceneHelpers.remove( hoverHelper );
-			hoverHelper.dispose();
-			hoverHelper = null;
-			signals.sceneGraphChanged.dispatch();
-
-		}
-
-	}
-
-	function clear() {
-
-		hidePath();
-		trackListContainer.innerHTML = '';
-		deselectClip();
-
-	}
-
-	// Update time display and playhead during playback
-	function updateTime() {
-
-		if ( currentAction && currentClip && ! hasRestriction( currentRoot, 'disabled' ) ) {
-
-			const time = currentAction.time % currentClip.duration;
-			timeText.setValue( time.toFixed( 2 ) );
-
-			// Update playhead position
-			const rect = timelineArea.getBoundingClientRect();
-			const timelineWidth = rect.width - labelWidth;
-			const playheadX = labelWidth + ( time / currentClip.duration ) * timelineWidth;
-			playhead.style.left = playheadX + 'px';
-
-		}
-
-		requestAnimationFrame( updateTime );
-
-	}
-
-	function onObjectSelected( object ) {
-
-		deselectClip();
-
-		if ( object !== null && object.animations.length > 0 ) {
-
-			selectClip( object.animations[ 0 ], object );
-
-			// experiment tweak: the panel starts collapsed (controls only), so open it to show the clips
-			if ( panelHeight < 120 ) signals.animationPanelResized.dispatch( 160 );
-
-		}
-
-		update();
-
-	}
-
-	updateTime();
-
-	// Auto-select clip when an object with animations is selected
-	signals.objectSelected.add( onObjectSelected );
-
-	// Update when scene changes
-	signals.editorCleared.add( clear );
-	signals.objectAdded.add( update );
-	signals.objectChanged.add( ( object, attribute ) => { if ( attribute === 'animations' ) update(); } );
-	signals.objectRemoved.add( update );
-
-	// Show panel on initial load
-	container.setDisplay( 'flex' );
-	signals.animationPanelChanged.dispatch( panelHeight );
-
+	} );
+	signals.projectLoaded.add( () => { stop(); selectClip(); refresh(); } );
+	signals.editorCleared.add( () => { stop(); selectClip(); refresh(); } );
+	signals.startPlayer.add( stop );
+	editor.timeline = {
+		tick, insertKey,
+		withBase: callback => runtime.withBase( callback ),
+		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,
+			{ object: object.uuid, name: clip.name || 'Imported animation', duration: clip.duration, uuid: clip.uuid } ) )
+	};
+	editor.animationCommands = { animationPlay: togglePlayback, animationPause: () => { if ( recording ) finishRecord(); playing = false; refreshTransport(); }, animationStop: stop };
+	refresh();
 	return container;
 
 }

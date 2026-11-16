@@ -1,3 +1,4 @@
+import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UITabbedPanel } from './libs/ui.js';
 
 import { SidebarObject } from './Sidebar.Object.js';
@@ -20,6 +21,7 @@ function SidebarProperties( editor ) {
 	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ) );
 	container.addTab( 'scriptTab', strings.getKey( 'sidebar/properties/script' ), new SidebarScript( editor ) );
 	container.addTab( 'modelingTab', 'Modeling', new SidebarModeling( editor ) );
+	container.addTab( 'animationsTab', 'Animations', new SidebarAnimationClips( editor ) );
 	editor.modeling.reveal = () => container.select( 'modelingTab' );
 	container.select( 'objectTab' );
 
@@ -41,6 +43,7 @@ function SidebarProperties( editor ) {
 	const materialTab = getTabByTabId( container.tabs, 'materialTab' );
 	const modelingTab = getTabByTabId( container.tabs, 'modelingTab' );
 	const scriptTab = getTabByTabId( container.tabs, 'scriptTab' );
+	const animationsTab = getTabByTabId( container.tabs, 'animationsTab' );
 
 	function toggleTabs( object ) {
 
@@ -53,6 +56,8 @@ function SidebarProperties( editor ) {
 		materialTab.setHidden( ! object.material && ( ! object.isGroup || isProjector( object ) ) );
 
 		scriptTab.setHidden( object === editor.camera );
+		animationsTab.setHidden( ! object.animations.length );
+		if ( container.selected === 'animationsTab' && animationsTab.isHidden() ) container.select( 'objectTab' );
 
 		modelingTab.setHidden( ! object.geometry?.userData.modeling && ! editableMesh( object ) && ! isProjector( object ) );
 

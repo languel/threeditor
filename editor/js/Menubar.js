@@ -4,7 +4,7 @@ import { MenubarAdd } from './Menubar.Add.js';
 import { MenubarEdit } from './Menubar.Edit.js';
 import { MenubarFile } from './Menubar.File.js';
 import { MenubarView } from './Menubar.View.js?v=viewport-tools';
-import { MenubarRender } from './Menubar.Render.js';
+import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
 
 function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {

@@ -181,7 +181,14 @@ function update(event) {
 
 The script player binds `this` to the script's object. It provides `THREE`, `scene`, `camera`, `renderer`, and `player`. Frame time and delta are in milliseconds. Other handlers include `init`, `start`, `stop`, `keydown`, `keyup`, and the pointer events.
 
-The **bottom timeline** previews one stored animation clip at a time. Select the imported model's root to show its clips, then use the transport or scrub the tracks. The bundled [spinner model](test-models/spinner.glb) has two clips to try. Use a script with `THREE.AnimationMixer` for playback that mixes clips.
+The **bottom timeline** arranges parameter clips and imported animation clips on a shared clock. Select an object and choose **Timeline parameter** to find its numeric, vector, color, toggle, material, morph, shader uniform, or declared Script parameters. Select the scene to keyframe effects such as Bloom or Focus.
+
+- Set the playhead by clicking or dragging the ruler, or enter a **Frame**. Change the parameter in the inspector and choose **Insert keyframe** or press **I**. Insert the first key again at another frame to animate it. Use **Add clip** to start a separate section.
+- Move clips by dragging their bars or editing **Start**. Edit **Length** to trim or extend the clip. Drag a keyframe diamond to move it, or select it to edit its time, value, or interpolation. When overlapping clips address the same parameter, the last clip in the list supplies the value.
+- **Record** captures changes to the chosen parameter while the playhead runs. Change the value in the inspector, with a gizmo, or through a routed stream, then stop recording to commit the take as one undoable edit.
+- Find GLB clips under **Properties → Animations**. Preview or scrub a clip there, or choose **Add to timeline** to schedule it at the current frame. Try the bundled [spinner model](test-models/spinner.glb).
+
+Play and playable exports run the saved timeline. Script parameters attached to live asset behaviors can also be previewed while editing.
 
 ## Streams and devices
 
