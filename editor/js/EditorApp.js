@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=model-transform';
+import { Editor } from './Editor.js?v=timeline-autokey';
 import { Keymap } from './Keymap.js?v=edit-modes';
 import { ModalTransform } from './ModalTransform.js?v=model-transform';
 import { P5Preview } from './P5Preview.js';
@@ -19,7 +19,7 @@ import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js?v=look-controls';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=look-controls';
+import { Animation } from './Animation.js?v=timeline-autokey';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

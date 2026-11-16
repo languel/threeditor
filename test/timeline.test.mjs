@@ -75,3 +75,23 @@ test( 'The picker exposes shadow, fog, inherited material and per-map texture va
 	assert.deepEqual( material.normalMap.offset.toArray(), [ 0, 0 ] );
 
 } );
+
+test( 'Auto Key samples committed transform and script values inside a compound edit', async () => {
+
+	const { autoKeySamples } = await import( '../editor/js/animation/TimelineAutoKey.js' );
+	const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+	const script = { name: 'Drive', source: '// @param gain = 1\n// @param enabled = true' };
+	const editor = { scripts: { [ mesh.uuid ]: [ script ] } };
+	// Viewport drags have already moved the object when the history command is created.
+	mesh.position.x = 2;
+	const move = {
+		type: 'SetPositionCommand', object: mesh, oldPosition: new THREE.Vector3(), newPosition: mesh.position.clone()
+	};
+	const param = {
+		type: 'SetScriptValueCommand', object: mesh, script, attributeName: 'paramValues', newValue: { gain: 3, enabled: true }
+	};
+	const compound = { type: 'MultiCmdsCommand', cmdArray: [ move, param, { ...move, newPosition: new THREE.Vector3( 4, 0, 0 ) } ] };
+	const values = autoKeySamples( editor, compound ).map( ( { target, value } ) => [ target.kind, target.property, value ] );
+	assert.deepEqual( values, [ [ 'object', 'position', [ 4, 0, 0 ] ], [ 'script', 'gain', 3 ] ] );
+
+} );

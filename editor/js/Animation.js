@@ -1,8 +1,10 @@
 import { MathUtils } from 'three';
 import { UIPanel } from './libs/ui.js';
-import { icon } from './Glyphs.js?v=timeline-glyphs';
+import { icon } from './Glyphs.js?v=timeline-autokey';
+import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js?v=timeline-autokey';
+import { autoKeySamples } from './animation/TimelineAutoKey.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
-import { availableTargets, authoredParam, discreteTarget, timelineBinding } from './animation/TimelineBindings.js?v=timeline-keying';
+import { availableTargets, authoredParam, discreteTarget, timelineBinding } from './animation/TimelineBindings.js?v=timeline-autokey';
 import { putKey, targetId, timelineData, timelineEnd } from './animation/TimelineData.js?v=timeline-keying';
 import { TimelineRuntime } from './animation/TimelineRuntime.js?v=timeline-keying';
 import { refreshTimelineKeyControls, watchTimelineFields } from './animation/TimelineKeyControl.js';
@@ -109,6 +111,22 @@ function Animation( editor ) {
 	const play = button( bar, 'Play timeline', togglePlayback, 'play' );
 	button( bar, 'Stop timeline', stop, 'stop' );
 	const rec = button( bar, 'Record parameter', toggleRecord, 'record' );
+	const autoKey = button( bar, 'Auto Key', () => {
+
+		editor.config.setKey( 'settings/timelineAutoKey', ! autoKeyEnabled() );
+		syncAutoKey();
+
+	}, 'autoKey' );
+	autoKey.classList.add( 'scene-timeline-autokey' );
+	const autoKeyEnabled = () => !! editor.config.getKey( 'settings/timelineAutoKey' );
+
+	function syncAutoKey() {
+
+		autoKey.setAttribute( 'aria-pressed', String( autoKeyEnabled() ) );
+		autoKey.title = autoKeyEnabled() ? 'Auto Key on · key edited properties at the playhead' : 'Auto Key off';
+
+	}
+	syncAutoKey();
 	const loopButton = button( bar, 'Loop timeline', () => {
 
 		loop = ! loop;
@@ -166,12 +184,39 @@ function Animation( editor ) {
 
 	}
 
-	function commit( doc, name ) {
+	function timelineCommand( doc ) {
 
 		const command = runtime.withBase( () => new SetValueCommand( editor, editor.scene, 'userData',
 			{ ...editor.scene.userData, timeline: doc } ) );
 		command.updatable = false;
-		editor.execute( command, name );
+		return command;
+
+	}
+
+	function commit( doc, name ) {
+
+		editor.execute( timelineCommand( doc ), name );
+
+	}
+
+	function autoKeyCommand( command ) {
+
+		if ( ! autoKeyEnabled() || playing || recording || editor.history.historyDisabled ) return command;
+		const samples = autoKeySamples( editor, command ).filter( ( { target } ) => timelineBinding( context, target ) );
+		if ( ! samples.length ) return command;
+		const at = snapTime( time );
+		const wrapped = new MultiCmdsCommand( editor, [ command ], () => {
+
+			const doc = structuredClone( data() );
+			const target = stableTarget( samples[ 0 ].target );
+			const entry = editClipFor( target );
+			if ( entry && selection !== entry.id ) selectClip( entry.id );
+			for ( const sample of samples ) recordKey( doc, stableTarget( sample.target ), sample.value, at );
+			return timelineCommand( doc );
+
+		} );
+		wrapped.name = command.name;
+		return wrapped;
 
 	}
 
@@ -779,7 +824,7 @@ function Animation( editor ) {
 	signals.editorCleared.add( reset );
 	signals.startPlayer.add( stop );
 	editor.timeline = {
-		tick, insertKey, toggleKey, keyState: inspectorKeyState, toggleArmed,
+		tick, insertKey, toggleKey, autoKeyCommand, keyState: inspectorKeyState, toggleArmed,
 		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,

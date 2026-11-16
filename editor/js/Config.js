@@ -37,6 +37,7 @@ function Config( persist = true ) {
 		'settings/transformSnap': null,
 		'settings/transformSnapTarget': 'grid',
 		'settings/transformOrientation': 'global',
+		'settings/timelineAutoKey': false,
 		'settings/transformPivot': 'auto',
 		'settings/emulateThreeButtonMouse': true,
 		'settings/autoHideMenubar': false,

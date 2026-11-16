@@ -2633,3 +2633,8 @@ body[data-ui-style="compact"] .model-control-button:focus-visible {
 body[data-ui-style="compact"] .modeling-coordinates .model-control-label { display: inline; }
 .viewport-tool-panel .model-control-field { pointer-events: auto; }
 .viewport-model-options:not(:empty) { flex-basis: 100%; }
+
+.scene-timeline-bar .scene-timeline-autokey[aria-pressed="true"] {
+	color: #ee7777;
+	background: color-mix(in srgb, #d65151, transparent 84%);
+}

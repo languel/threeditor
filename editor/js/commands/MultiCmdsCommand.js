@@ -8,7 +8,7 @@ class MultiCmdsCommand extends Command {
 	 * @param {Array<Command>} [cmdArray=[]]
 	 * @constructor
 	 */
-	constructor( editor, cmdArray = [] ) {
+	constructor( editor, cmdArray = [], afterExecute = null ) {
 
 		super( editor );
 
@@ -16,36 +16,55 @@ class MultiCmdsCommand extends Command {
 		this.name = editor.strings.getKey( 'command/MultiCmds' );
 
 		this.cmdArray = cmdArray;
+		this.afterExecute = afterExecute;
 
 	}
 
 	execute() {
 
-		this.editor.signals.sceneGraphChanged.active = false;
+		const signal = this.editor.signals.sceneGraphChanged;
+		const wasActive = signal.active;
+		signal.active = false;
+		try {
 
-		for ( let i = 0; i < this.cmdArray.length; i ++ ) {
+			for ( const command of this.cmdArray ) command.execute();
+			if ( this.afterExecute ) {
 
-			this.cmdArray[ i ].execute();
+				const followUp = this.afterExecute();
+				this.afterExecute = null;
+				if ( followUp ) {
+
+					followUp.execute();
+					this.cmdArray.push( followUp );
+
+				}
+
+			}
+
+		} finally {
+
+			signal.active = wasActive;
 
 		}
-
-		this.editor.signals.sceneGraphChanged.active = true;
-		this.editor.signals.sceneGraphChanged.dispatch();
+		signal.dispatch();
 
 	}
 
 	undo() {
 
-		this.editor.signals.sceneGraphChanged.active = false;
+		const signal = this.editor.signals.sceneGraphChanged;
+		const wasActive = signal.active;
+		signal.active = false;
+		try {
 
-		for ( let i = this.cmdArray.length - 1; i >= 0; i -- ) {
+			for ( let i = this.cmdArray.length - 1; i >= 0; i -- ) this.cmdArray[ i ].undo();
 
-			this.cmdArray[ i ].undo();
+		} finally {
+
+			signal.active = wasActive;
 
 		}
-
-		this.editor.signals.sceneGraphChanged.active = true;
-		this.editor.signals.sceneGraphChanged.dispatch();
+		signal.dispatch();
 
 	}
 

@@ -86,6 +86,7 @@ const ICONS = {
 	record: svg( '<circle cx="12" cy="12" r="6" fill="currentColor"/>' ),
 	loop: svg( '<path d="m16 3 4 4-4 4M20 7H7a3 3 0 0 0-3 3m4 11-4-4 4-4m-4 4h13a3 3 0 0 0 3-3"/>' ),
 	keyframe: svg( '<path d="m12 4 8 8-8 8-8-8z"/>' ),
+	autoKey: svg( '<path d="m10 5 7 7-7 7-7-7zM19 4v5M16.5 6.5h5M19 15v4"/>' ),
 	frame: svg( '<path d="M4 8V5h16v3M4 16v3h16v-3M12 8v8"/>' ),
 	frameRate: svg( '<path d="M4 17a8 8 0 1 1 16 0H4Zm8 0 4-5"/>' ),
 	pause: svg( '<path d="M8 5v14M16 5v14"/>' ),

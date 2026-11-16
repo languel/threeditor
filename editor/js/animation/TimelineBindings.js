@@ -46,7 +46,7 @@ const projection = new Set( [ 'fov', 'zoom', 'near', 'far', 'left', 'right', 'to
 const transforms = new Set( [ 'position', 'rotation', 'scale' ] );
 const reserved = new Set( [ 'id', 'uuid', 'type', 'version', 'needsUpdate', '__proto__', 'constructor', 'prototype' ] );
 
-function readValue( value ) {
+export function readValue( value ) {
 
 	if ( value?.isColor ) return '#' + value.getHexString();
 	if ( value?.isEuler ) return [ value.x, value.y, value.z ];

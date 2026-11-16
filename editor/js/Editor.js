@@ -10,7 +10,7 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=model-transform';
+import { Config } from './Config.js?v=timeline-autokey';
 import { Loader } from './Loader.js';
 import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';
@@ -997,7 +997,7 @@ Editor.prototype = {
 
 	execute: function ( cmd, optionalName ) {
 
-		this.history.execute( cmd, optionalName );
+		this.history.execute( this.timeline?.autoKeyCommand?.( cmd ) ?? cmd, optionalName );
 
 	},
 
