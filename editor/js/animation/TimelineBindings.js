@@ -12,17 +12,46 @@ const properties = new Set( [
 	'normalScale', 'clearcoatNormalScale', 'alphaTest', 'size', 'linewidth', 'dashSize', 'gapSize', 'wireframe',
 	'transparent', 'depthWrite', 'depthTest', 'sizeAttenuation', 'backgroundIntensity', 'backgroundBlurriness',
 	'environmentIntensity', 'environmentRotation', 'backgroundRotation', 'background', 'castShadow', 'receiveShadow',
-	'blur', 'radius', 'bias', 'normalBias'
+	'blur', 'radius', 'bias', 'normalBias', 'name', 'dispersion', 'iridescenceThicknessMinimum',
+	'iridescenceThicknessMaximum', 'clipShadows', 'shadowSide', 'alphaHash', 'alphaToCoverage', 'forceSinglePass', 'combine',
+	'frustumCulled', 'vertexColors', 'flatShading', 'toneMapped', 'premultiplyAlpha', 'colorSpace'
 ] );
+const discrete = new Set( [
+	'name', 'renderOrder', 'side', 'shadowSide', 'blending', 'depthPacking', 'depthFunc', 'combine', 'normalMapType',
+	'blendSrc', 'blendDst', 'blendEquation', 'blendSrcAlpha', 'blendDstAlpha', 'blendEquationAlpha',
+	'stencilFunc', 'stencilRef', 'stencilFuncMask', 'stencilWriteMask', 'stencilFail', 'stencilZFail', 'stencilZPass',
+	'mapping', 'wrapS', 'wrapT', 'minFilter', 'magFilter', 'anisotropy', 'colorSpace'
+] );
+const textureFields = [ 'offset', 'repeat', 'center', 'rotation', 'mapping', 'wrapS', 'wrapT',
+	'minFilter', 'magFilter', 'anisotropy', 'premultiplyAlpha', 'colorSpace' ];
+const materialProgram = new Set( [ 'transparent', 'alphaTest', 'alphaHash', 'alphaToCoverage', 'side', 'forceSinglePass',
+	'vertexColors', 'flatShading', 'toneMapped', 'sizeAttenuation', 'depthPacking', 'wireframe' ] );
+
+const scriptFields = new WeakMap();
+
+function fieldsOf( script ) {
+
+	let entry = scriptFields.get( script );
+	if ( ! entry || entry.source !== script.source ) {
+
+		entry = { source: script.source, fields: scriptParams( script.source ).filter( field => ! field.initializer ) };
+		scriptFields.set( script, entry );
+
+	}
+	return entry.fields;
+
+}
+
 const projection = new Set( [ 'fov', 'zoom', 'near', 'far', 'left', 'right', 'top', 'bottom' ] );
 const transforms = new Set( [ 'position', 'rotation', 'scale' ] );
-const reserved = new Set( [ 'id', 'uuid', 'type', 'name', 'version', 'needsUpdate', '__proto__', 'constructor', 'prototype' ] );
+const reserved = new Set( [ 'id', 'uuid', 'type', 'version', 'needsUpdate', '__proto__', 'constructor', 'prototype' ] );
 
 function readValue( value ) {
 
 	if ( value?.isColor ) return '#' + value.getHexString();
 	if ( value?.isEuler ) return [ value.x, value.y, value.z ];
 	if ( value?.isVector2 || value?.isVector3 || value?.isVector4 ) return value.toArray();
+	if ( value === Infinity || value === - Infinity ) return String( value );
 	if ( Number.isFinite( value ) || typeof value === 'boolean' || typeof value === 'string' ) return value;
 
 }
@@ -33,7 +62,7 @@ function assign( owner, name, value ) {
 	if ( current?.isColor ) current.set( value );
 	else if ( current?.isEuler ) current.set( ...value, current.order );
 	else if ( current?.isVector2 || current?.isVector3 || current?.isVector4 ) current.fromArray( value );
-	else owner[ name ] = value;
+	else owner[ name ] = typeof current === 'number' ? Number( value ) : value;
 
 }
 
@@ -43,17 +72,25 @@ function slots( object ) {
 
 }
 
-function addProperties( items, source, target, prefix = '' ) {
+function addProperties( items, source, target, prefix = '', keys ) {
 
-	for ( const property of Object.keys( source ) ) {
+	if ( ! source ) return;
+	for ( const property of keys || new Set( [ ...Object.keys( source ), ...properties, ...discrete ] ) ) {
 
-		// Include custom numeric, boolean and vector controls without exposing identity or renderer bookkeeping.
+		// Include custom scalar and vector controls without exposing identity or renderer flags.
 		const value = source[ property ];
 		if ( reserved.has( property ) || property.startsWith( '_' ) ||
-			( ! properties.has( property ) && ( typeof value === 'string' || typeof value === 'boolean' && property.startsWith( 'is' ) ) ) ) continue;
+			( ! properties.has( property ) && ! discrete.has( property ) &&
+				( typeof value === 'string' || typeof value === 'boolean' && property.startsWith( 'is' ) ) ) ) continue;
 		if ( readValue( value ) !== undefined ) items.push( { ...target, property, label: prefix + property } );
 
 	}
+
+}
+
+export function discreteTarget( target ) {
+
+	return discrete.has( target.property ) && target.kind !== 'script' && target.kind !== 'uniform';
 
 }
 
@@ -63,10 +100,19 @@ export function availableTargets( object, scripts ) {
 	const items = [];
 	const id = object.uuid;
 	addProperties( items, object, { object: id, kind: 'object' } );
+	addProperties( items, object.shadow, { object: id, kind: 'shadow' }, 'Shadow · ', [ 'intensity', 'bias', 'normalBias', 'radius' ] );
+	addProperties( items, object.fog, { object: id, kind: 'fog' }, 'Fog · ', [ 'color', 'near', 'far', 'density' ] );
+	addProperties( items, object.geometry, { object: id, kind: 'geometry' }, 'Geometry · ', [ 'name' ] );
 	slots( object ).forEach( ( material, slot ) => {
 
 		if ( ! material ) return;
 		addProperties( items, material, { object: id, kind: 'material', slot }, 'Material ' + ( slot + 1 ) + ' · ' );
+		for ( const [ map, texture ] of Object.entries( material ) ) {
+
+			if ( texture?.isTexture ) addProperties( items, texture, { object: id, kind: 'texture', slot, map },
+				'Material ' + ( slot + 1 ) + ' · ' + map + ' · ', textureFields );
+
+		}
 		for ( const [ property, uniform ] of Object.entries( material.uniforms || {} ) ) {
 
 			if ( ! reserved.has( property ) && readValue( uniform.value ) !== undefined ) items.push( { object: id, kind: 'uniform', slot, property, label: 'Uniform · ' + property } );
@@ -77,9 +123,9 @@ export function availableTargets( object, scripts ) {
 	( scripts[ id ] || [] ).forEach( ( script, index ) => {
 
 		if ( script.generated || script.enabled === false ) return;
-		for ( const field of scriptParams( script.source ) ) {
+		for ( const field of fieldsOf( script ) ) {
 
-			if ( ! field.initializer ) items.push( { object: id, kind: 'script', index, scriptId: script.timelineId, property: field.name, label: script.name + ' · ' + ( field.label || field.name ) } );
+			items.push( { object: id, kind: 'script', index, scriptId: script.timelineId, property: field.name, label: script.name + ' · ' + ( field.label || field.name ) } );
 
 		}
 
@@ -105,7 +151,7 @@ export function timelineBinding( context, target ) {
 		const scripts = context.scripts[ object.uuid ] || [];
 		const index = target.scriptId ? scripts.findIndex( script => script.timelineId === target.scriptId ) : target.index;
 		const script = scripts[ index ];
-		if ( ! script || script.enabled === false ) return;
+		if ( ! script || script.enabled === false || ! fieldsOf( script ).some( field => field.name === property ) ) return;
 		return {
 			transient: true,
 			read: () => context.getParam( object.uuid, index, property ),
@@ -122,9 +168,12 @@ export function timelineBinding( context, target ) {
 
 	const material = slots( object )[ target.slot ];
 	const uniform = kind === 'uniform' ? material?.uniforms?.[ property ] : null;
-	const owner = { object, material, uniform, morph: object.morphTargetInfluences }[ kind ];
+	const texture = kind === 'texture' && textureFields.includes( property ) && material?.[ target.map ];
+	const owner = { object, material, uniform, texture, geometry: object.geometry, shadow: object.shadow, fog: object.fog,
+		morph: object.morphTargetInfluences }[ kind ];
 	const name = uniform ? 'value' : property;
-	if ( ! owner || ! Object.hasOwn( owner, name ) || readValue( owner[ name ] ) === undefined ) return;
+	if ( ! owner || ( ! Object.hasOwn( owner, name ) && ! properties.has( name ) && ! discrete.has( name ) ) ||
+		readValue( owner[ name ] ) === undefined ) return;
 	return {
 		read: () => readValue( owner[ name ] ),
 		write: value => {
@@ -132,7 +181,9 @@ export function timelineBinding( context, target ) {
 			assign( owner, name, value );
 			if ( kind === 'object' && transforms.has( property ) ) object.updateMatrix();
 			if ( kind === 'object' && projection.has( property ) ) object.updateProjectionMatrix?.();
-			if ( kind === 'material' && [ 'transparent', 'wireframe', 'alphaTest' ].includes( property ) ) material.needsUpdate = true;
+			if ( kind === 'material' && materialProgram.has( property ) ) material.needsUpdate = true;
+			if ( texture?.isTexture && ( discrete.has( property ) || property === 'premultiplyAlpha' ) ) texture.needsUpdate = true;
+			if ( texture?.isTexture && property === 'colorSpace' ) material.needsUpdate = true;
 
 		}
 	};
@@ -142,7 +193,7 @@ export function timelineBinding( context, target ) {
 export function authoredParam( scripts, uuid, index, property ) {
 
 	const script = scripts[ uuid ]?.[ index ];
-	const field = script && scriptParams( script.source ).find( field => ! field.initializer && field.name === property );
+	const field = script && fieldsOf( script ).find( field => field.name === property );
 	return field ? scriptParamValue( script, field ) : undefined;
 
 }

@@ -13,8 +13,8 @@ export function timelineEnd( data ) {
 
 export function targetId( target ) {
 
-	const { kind, object, property, slot, scriptId, index } = target;
-	return JSON.stringify( [ kind, object, property, slot, scriptId || index ] );
+	const { kind, object, property, slot, scriptId, index, map } = target;
+	return JSON.stringify( [ kind, object, property, slot, scriptId || index, ...( map ? [ map ] : [] ) ] );
 
 }
 

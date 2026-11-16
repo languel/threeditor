@@ -41,3 +41,37 @@ test( 'Timeline bindings update the serialized transform and retain script addre
 	assert.deepEqual( written, [ mesh.uuid, 1, 'speed', 2 ] );
 
 } );
+
+test( 'The picker exposes shadow, fog, inherited material and per-map texture values', () => {
+
+	const scene = new THREE.Scene();
+	scene.fog = new THREE.Fog( '#000000', 1, 10 );
+	const light = new THREE.SpotLight();
+	const material = new THREE.MeshPhysicalMaterial( { map: new THREE.Texture(), normalMap: new THREE.Texture() } );
+	const mesh = new THREE.Mesh( new THREE.BoxGeometry(), material );
+	scene.add( light, mesh );
+	const context = { scripts: {}, object: uuid => scene.getObjectByProperty( 'uuid', uuid ) };
+	const find = ( object, kind, property ) => availableTargets( object, {} ).find( target => target.kind === kind && target.property === property );
+
+	timelineBinding( context, find( light, 'shadow', 'bias' ) ).write( 0.1 );
+	assert.equal( light.shadow.bias, 0.1 );
+	timelineBinding( context, find( scene, 'fog', 'color' ) ).write( '#ff0000' );
+	assert.equal( scene.fog.color.getHexString(), 'ff0000' );
+	timelineBinding( context, find( mesh, 'material', 'clearcoat' ) ).write( 0.7 );
+	assert.equal( material.clearcoat, 0.7 );
+
+	const distance = timelineBinding( context, find( mesh, 'material', 'attenuationDistance' ) );
+	assert.equal( distance.read(), 'Infinity' );
+	distance.write( 3 );
+	assert.equal( material.attenuationDistance, 3 );
+	distance.write( 'Infinity' );
+	assert.equal( material.attenuationDistance, Infinity );
+
+	const offsets = availableTargets( mesh, {} ).filter( target => target.kind === 'texture' && target.property === 'offset' );
+	assert.equal( offsets.length, 2 );
+	assert.notEqual( targetId( offsets[ 0 ] ), targetId( offsets[ 1 ] ) );
+	timelineBinding( context, offsets.find( target => target.map === 'map' ) ).write( [ 0.2, 0.3 ] );
+	assert.deepEqual( material.map.offset.toArray(), [ 0.2, 0.3 ] );
+	assert.deepEqual( material.normalMap.offset.toArray(), [ 0, 0 ] );
+
+} );

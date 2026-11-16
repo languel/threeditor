@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
 import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
@@ -550,6 +551,25 @@ function SidebarScene( editor ) {
 	container.add( dofRow );
 
 	//
+
+	for ( const [ field, kind, property, title, anchor = field ] of [
+		[ backgroundColor, 'object', 'background', 'Background color' ],
+		[ backgroundBlurriness, 'object', 'backgroundBlurriness', 'Background blur' ],
+		[ backgroundIntensity, 'object', 'backgroundIntensity', 'Background intensity' ],
+		[ fogColor, 'fog', 'color', 'Fog color' ], [ fogNear, 'fog', 'near', 'Fog near' ],
+		[ fogFar, 'fog', 'far', 'Fog far' ], [ fogDensity, 'fog', 'density', 'Fog density' ],
+		[ bloomEnabled, 'effect', 'bloom', 'Bloom', { dom: bloomRow.dom.firstElementChild } ],
+		[ bloomStrength, 'effect', 'bloomStrength', 'Bloom strength' ],
+		[ bloomRadius, 'effect', 'bloomRadius', 'Bloom radius' ], [ bloomThreshold, 'effect', 'bloomThreshold', 'Bloom threshold' ],
+		[ dofEnabled, 'effect', 'dof', 'Focus', { dom: dofRow.dom.firstElementChild } ],
+		[ dofFocus, 'effect', 'focus', 'Focus distance' ], [ dofAperture, 'effect', 'aperture', 'Aperture' ],
+		[ dofMaxBlur, 'effect', 'maxblur', 'Maximum blur' ]
+	] ) addTimelineKey( editor, anchor, title, () => ( { object: editor.scene.uuid, kind, property, label: title } ),
+		{ field, display: value => field.setValue( value ) } );
+
+	addTimelineKey( editor, backgroundRotation, 'Background rotation', () => ( {
+		object: editor.scene.uuid, kind: 'object', property: 'backgroundRotation', label: 'Background rotation'
+	} ), { display: value => backgroundRotation.setValue( value[ 1 ] * THREE.MathUtils.RAD2DEG ) } );
 
 	function refreshUI() {
 

@@ -1,13 +1,13 @@
 import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UITabbedPanel } from './libs/ui.js';
 
-import { SidebarObject } from './Sidebar.Object.js';
-import { SidebarGeometry } from './Sidebar.Geometry.js';
-import { SidebarMaterial } from './Sidebar.Material.js';
+import { SidebarObject } from './Sidebar.Object.js?v=timeline-keying';
+import { SidebarGeometry } from './Sidebar.Geometry.js?v=timeline-keying';
+import { SidebarMaterial } from './Sidebar.Material.js?v=timeline-keying';
 import { SidebarModeling } from './Sidebar.Modeling.js';
 import { editableMesh } from './modeling/ModelViewport.js';
 import { isProjector } from './assets/Projector.js';
-import { SidebarScript } from './Sidebar.Script.js';
+import { SidebarScript } from './Sidebar.Script.js?v=timeline-keying';
 
 function SidebarProperties( editor ) {
 

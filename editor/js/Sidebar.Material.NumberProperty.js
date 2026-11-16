@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UINumber, UIRow, UIText } from './libs/ui.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 
@@ -6,7 +7,8 @@ function SidebarMaterialNumberProperty( editor, property, name, range = [ - Infi
 	const signals = editor.signals;
 
 	const container = new UIRow();
-	container.add( new UIText( name ).setClass( 'Label' ) );
+	const label = new UIText( name ).setClass( 'Label' );
+	container.add( label );
 
 	const number = new UINumber().setWidth( '60px' ).setRange( range[ 0 ], range[ 1 ] ).setPrecision( precision ).setStep( step ).setNudge( nudge ).setUnit( unit ).onChange( onChange );
 	container.add( number );
@@ -14,6 +16,11 @@ function SidebarMaterialNumberProperty( editor, property, name, range = [ - Infi
 	let object = null;
 	let materialSlot = null;
 	let material = null;
+
+	addTimelineKey( editor, label, name, () => object && ( { object: object.uuid, kind: 'material', slot: materialSlot, property,
+		label: 'Material ' + ( materialSlot + 1 ) + ' · ' + property } ),
+	{ field: number, display: value => number.setValue( Number( value ) ) } );
+
 
 	function onChange() {
 

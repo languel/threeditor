@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
@@ -173,6 +174,10 @@ function SidebarScript( editor ) {
 						caption.dom.title = caption.dom.textContent;
 						parameterControls.push( { script, field, control } );
 						scriptsContainer.add( new UIRow().addClass( 'script-parameter-row' ).add( favorite, caption, control ) );
+						if ( ! field.initializer ) addTimelineKey( editor, caption, field.label || field.name, () => ( {
+							kind: 'script', object: object.uuid, index: editor.scripts[ object.uuid ]?.indexOf( script ),
+							scriptId: script.timelineId, property: field.name, label: script.name + ' · ' + ( field.label || field.name )
+						} ), { field: control, display: value => control.setValue( value ) } );
 
 					}
 
@@ -181,6 +186,8 @@ function SidebarScript( editor ) {
 			}
 
 		}
+
+		editor.timeline?.refreshKeyControls();
 
 	}
 

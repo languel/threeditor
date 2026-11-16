@@ -1,7 +1,7 @@
 import { AnimationMixer, LoopOnce } from 'three';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { timelineBinding } from './TimelineBindings.js';
-import { targetId, valueAt } from './TimelineData.js';
+import { timelineBinding } from './TimelineBindings.js?v=timeline-keying';
+import { targetId, valueAt } from './TimelineData.js?v=timeline-keying';
 
 const equal = ( a, b ) => Array.isArray( a ) && Array.isArray( b ) ?
 	a.length === b.length && a.every( ( value, index ) => value === b[ index ] ) : a === b;
@@ -29,7 +29,7 @@ export class TimelineRuntime {
 			for ( const track of clip.tracks || [] ) {
 
 				const id = targetId( track.target );
-				if ( id !== except && track.keys.length ) values.set( id, { target: track.target, value: valueAt( track.keys, time - clip.start ) } );
+				if ( ! except?.has( id ) && track.keys.length ) values.set( id, { target: track.target, value: valueAt( track.keys, time - clip.start ) } );
 
 			}
 
@@ -39,7 +39,8 @@ export class TimelineRuntime {
 		for ( const [ id, state ] of this.bound ) {
 
 			if ( values.has( id ) ) continue;
-			if ( ! state.binding.transient || id !== except ) this.restore( state );
+			if ( except?.has( id ) ) continue;
+			this.restore( state );
 			this.bound.delete( id );
 			changed = true;
 

@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UIColor, UINumber, UIRow, UIText } from './libs/ui.js';
 import { SetMaterialColorCommand } from './commands/SetMaterialColorCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
@@ -8,7 +9,8 @@ function SidebarMaterialColorProperty( editor, property, name ) {
 	const signals = editor.signals;
 
 	const container = new UIRow();
-	container.add( new UIText( name ).setClass( 'Label' ) );
+	const label = new UIText( name ).setClass( 'Label' );
+	container.add( label );
 
 	const color = new UIColor().onInput( onChange );
 	container.add( color );
@@ -56,6 +58,21 @@ function SidebarMaterialColorProperty( editor, property, name ) {
 	let object = null;
 	let materialSlot = null;
 	let material = null;
+
+	addTimelineKey( editor, label, name, () => object && ( { object: object.uuid, kind: 'material', slot: materialSlot, property,
+		label: 'Material ' + ( materialSlot + 1 ) + ' · ' + property } ),
+	{ field: color, display: value => color.setValue( value ) } );
+
+	if ( intensity ) addTimelineKey( editor, intensity, name + ' intensity', () => object && ( {
+		object: object.uuid, kind: 'material', slot: materialSlot, property: property + 'Intensity', label: 'Material · ' + property + 'Intensity'
+	} ), { display: value => intensity.setValue( value ) } );
+	if ( alpha ) addTimelineKey( editor, { dom: alpha }, 'Material color opacity', () => object && ( {
+		object: object.uuid, kind: 'material', slot: materialSlot, property: 'opacity', label: 'Material · opacity'
+	} ), { display: value => {
+		alpha.value = Math.round( value * 100 );
+		alphaValue.textContent = alpha.value + '%';
+	} } );
+
 
 	function onChange() {
 

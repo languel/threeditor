@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
 import { UIButton, UIDiv, UIInput, UIPanel, UIRow, UISelect, UIText, UITextArea } from './libs/ui.js';
@@ -8,11 +9,11 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { SetMaterialCommand } from './commands/SetMaterialCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 
-import { SidebarMaterialBooleanProperty } from './Sidebar.Material.BooleanProperty.js';
-import { SidebarMaterialColorProperty } from './Sidebar.Material.ColorProperty.js';
-import { SidebarMaterialConstantProperty } from './Sidebar.Material.ConstantProperty.js';
-import { SidebarMaterialMapProperty } from './Sidebar.Material.MapProperty.js';
-import { SidebarMaterialNumberProperty } from './Sidebar.Material.NumberProperty.js';
+import { SidebarMaterialBooleanProperty } from './Sidebar.Material.BooleanProperty.js?v=timeline-keying';
+import { SidebarMaterialColorProperty } from './Sidebar.Material.ColorProperty.js?v=timeline-keying';
+import { SidebarMaterialConstantProperty } from './Sidebar.Material.ConstantProperty.js?v=timeline-keying';
+import { SidebarMaterialMapProperty } from './Sidebar.Material.MapProperty.js?v=timeline-keying';
+import { SidebarMaterialNumberProperty } from './Sidebar.Material.NumberProperty.js?v=timeline-keying';
 import { SidebarMaterialProgram } from './Sidebar.Material.Program.js';
 
 function SidebarMaterial( editor ) {
@@ -110,6 +111,9 @@ function SidebarMaterial( editor ) {
 
 	materialNameRow.add( new UIText( strings.getKey( 'sidebar/material/name' ) ).setClass( 'Label' ) );
 	materialNameRow.add( materialName );
+	addTimelineKey( editor, { dom: materialNameRow.dom.firstElementChild }, 'Material name',
+		() => currentObject && ( { object: currentObject.uuid, kind: 'material', slot: currentMaterialSlot, property: 'name', label: 'Material · name' } ),
+		{ field: materialName, display: value => materialName.setValue( value ) } );
 
 	details.add( materialNameRow );
 

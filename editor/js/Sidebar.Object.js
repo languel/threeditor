@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { openProjectorOutput } from './modeling/ProjectorOutput.js';
 import { hasLightView } from './modeling/LightView.js';
 import { canEditLightMask, canMaskLight } from './modeling/LightMask.js';
@@ -591,6 +592,41 @@ function SidebarObject( editor ) {
 	container.add( exportJson );
 
 	//
+
+	function key( anchor, property, field, kind = 'object', display = value => field.setValue( value ), label = anchor.dom.textContent ) {
+
+		addTimelineKey( editor, anchor, label, () => editor.selected && ( {
+			object: editor.selected.uuid, kind, property, label: kind === 'shadow' ? 'Shadow · ' + property : property
+		} ), { field, display } );
+
+	}
+	for ( const [ row, property, field ] of [
+		[ objectNameRow, 'name', objectName ], [ objectFovRow, 'fov', objectFov ],
+		[ objectLeftRow, 'left', objectLeft ], [ objectRightRow, 'right', objectRight ],
+		[ objectTopRow, 'top', objectTop ], [ objectBottomRow, 'bottom', objectBottom ],
+		[ objectNearRow, 'near', objectNear ], [ objectFarRow, 'far', objectFar ],
+		[ objectIntensityRow, 'intensity', objectIntensity ], [ objectColorRow, 'color', objectColor ],
+		[ objectGroundColorRow, 'groundColor', objectGroundColor ], [ objectDistanceRow, 'distance', objectDistance ],
+		[ objectAngleRow, 'angle', objectAngle ], [ objectPenumbraRow, 'penumbra', objectPenumbra ],
+		[ objectDecayRow, 'decay', objectDecay ], [ objectVisibleRow, 'visible', objectVisible ],
+		[ objectFrustumCulledRow, 'frustumCulled', objectFrustumCulled ], [ objectRenderOrderRow, 'renderOrder', objectRenderOrder ]
+	] ) key( { dom: row.dom.firstElementChild }, property, field );
+
+	for ( const [ row, property, controls ] of [
+		[ objectPositionRow, 'position', [ objectPositionX, objectPositionY, objectPositionZ ] ],
+		[ objectRotationRow, 'rotation', [ objectRotationX, objectRotationY, objectRotationZ ] ],
+		[ objectScaleRow, 'scale', [ objectScaleX, objectScaleY, objectScaleZ ] ]
+	] ) key( { dom: row.dom.firstElementChild }, property, row, 'object', values => {
+
+		controls.forEach( ( control, index ) => control.setValue( values[ index ] * ( property === 'rotation' ? THREE.MathUtils.RAD2DEG : 1 ) ) );
+
+	} );
+	for ( const [ row, property, field ] of [
+		[ objectShadowIntensityRow, 'intensity', objectShadowIntensity ], [ objectShadowBiasRow, 'bias', objectShadowBias ],
+		[ objectShadowNormalBiasRow, 'normalBias', objectShadowNormalBias ], [ objectShadowRadiusRow, 'radius', objectShadowRadius ]
+	] ) key( { dom: row.dom.firstElementChild }, property, field, 'shadow' );
+	key( objectCastShadow, 'castShadow', objectCastShadow );
+	key( objectReceiveShadow, 'receiveShadow', objectReceiveShadow );
 
 	function update() {
 

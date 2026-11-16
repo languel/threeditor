@@ -1,6 +1,6 @@
 import { UIPanel } from './libs/ui.js';
 import * as THREE from 'three';
-import { APP } from './libs/app.js?v=scene-timeline';
+import { APP } from './libs/app.js?v=timeline-keying';
 import { resolvePlaybackAssets } from './assets/AssetRuntime.js?v=scene-timeline';
 import { serializeScript } from './ScriptParams.js';
 import { setupRenderEnvironment } from './RenderEnvironment.js';

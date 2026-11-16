@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UIRow, UISelect, UIText } from './libs/ui.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 
@@ -6,7 +7,8 @@ function SidebarMaterialConstantProperty( editor, property, name, options ) {
 	const signals = editor.signals;
 
 	const container = new UIRow();
-	container.add( new UIText( name ).setClass( 'Label' ) );
+	const label = new UIText( name ).setClass( 'Label' );
+	container.add( label );
 
 	const constant = new UISelect().setOptions( options ).onChange( onChange );
 	container.add( constant );
@@ -14,6 +16,11 @@ function SidebarMaterialConstantProperty( editor, property, name, options ) {
 	let object = null;
 	let materialSlot = null;
 	let material = null;
+
+	addTimelineKey( editor, label, name, () => object && ( { object: object.uuid, kind: 'material', slot: materialSlot, property,
+		label: 'Material ' + ( materialSlot + 1 ) + ' · ' + property } ),
+	{ field: constant, display: value => constant.setValue( value ) } );
+
 
 	function onChange() {
 

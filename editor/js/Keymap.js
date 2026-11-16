@@ -1,3 +1,4 @@
+import { hoveredTimelineProperty } from './animation/TimelineKeyControl.js';
 import { hasLightView } from './modeling/LightView.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
@@ -153,7 +154,7 @@ class Keymap {
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
-   case 'timelineInsertKey':e.timeline?.insertKey();break;
+   case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;
    case 'animationPlay':case 'animationPause':case 'animationStop':e.animationCommands?.[id]?.();break;
   }
  }

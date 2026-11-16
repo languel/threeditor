@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=scene-timeline';
-import { Keymap } from './Keymap.js?v=scene-timeline';
+import { Keymap } from './Keymap.js?v=timeline-keying';
 import { ModalTransform } from './ModalTransform.js?v=viewport-tools';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
@@ -9,8 +9,8 @@ import { applyGlyphMode } from './Glyphs.js?v=viewport-tools';
 import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=scene-timeline';
 import { Toolbar } from './Toolbar.js?v=viewport-tools';
-import { Player } from './Player.js?v=scene-timeline';
-import { Sidebar } from './Sidebar.js?v=scene-timeline';
+import { Player } from './Player.js?v=timeline-keying';
+import { Sidebar } from './Sidebar.js?v=timeline-keying';
 import { Menubar } from './Menubar.js?v=scene-timeline';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
@@ -19,7 +19,7 @@ import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=timeline-glyphs';
+import { Animation } from './Animation.js?v=timeline-keying';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

@@ -1,5 +1,5 @@
-import { TimelineRuntime } from '../animation/TimelineRuntime.js';
-import { timelineData } from '../animation/TimelineData.js';
+import { TimelineRuntime } from '../animation/TimelineRuntime.js?v=timeline-keying';
+import { timelineData } from '../animation/TimelineData.js?v=timeline-keying';
 import { isProjector } from '../assets/Projector.js';
 import { lightViewCamera } from '../modeling/LightView.js';
 import { drawProjectorOutput, renderFittedView } from '../modeling/ProjectorOutput.js';

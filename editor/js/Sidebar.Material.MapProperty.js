@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
 import { UIButton, UICheckbox, UIDiv, UINumber, UIRow, UIText } from './libs/ui.js';
@@ -92,6 +93,22 @@ function SidebarMaterialMapProperty( editor, property, name ) {
 	let object = null;
 	let materialSlot = null;
 	let material = null;
+
+	function key( field, channel, title, display ) {
+
+		addTimelineKey( editor, field, title, () => object && ( {
+			object: object.uuid, kind: 'material', slot: materialSlot, property: channel, label: 'Material · ' + channel
+		} ), { display } );
+
+	}
+	if ( intensity ) key( intensity, property + 'Intensity', name + ' intensity', value => intensity.setValue( value ) );
+	if ( scale ) key( scale, mapType + 'Scale', name + ' scale', value => scale.setValue( value ) );
+	if ( scaleX ) key( scaleY, mapType + 'Scale', name + ' scale', values => {
+		scaleX.setValue( values[ 0 ] );
+		scaleY.setValue( values[ 1 ] );
+	} );
+	if ( rangeMin ) key( rangeMin, mapType + 'Minimum', name + ' minimum', value => rangeMin.setValue( value ) );
+	if ( rangeMax ) key( rangeMax, mapType + 'Maximum', name + ' maximum', value => rangeMax.setValue( value ) );
 
 	function onChange() {
 

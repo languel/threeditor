@@ -2,11 +2,24 @@ import { MathUtils } from 'three';
 import { UIPanel } from './libs/ui.js';
 import { icon } from './Glyphs.js?v=timeline-glyphs';
 import { SetValueCommand } from './commands/SetValueCommand.js';
-import { availableTargets, authoredParam, timelineBinding } from './animation/TimelineBindings.js';
-import { putKey, targetId, timelineData, timelineEnd } from './animation/TimelineData.js';
-import { TimelineRuntime } from './animation/TimelineRuntime.js';
+import { availableTargets, authoredParam, discreteTarget, timelineBinding } from './animation/TimelineBindings.js?v=timeline-keying';
+import { putKey, targetId, timelineData, timelineEnd } from './animation/TimelineData.js?v=timeline-keying';
+import { TimelineRuntime } from './animation/TimelineRuntime.js?v=timeline-keying';
+import { refreshTimelineKeyControls, watchTimelineFields } from './animation/TimelineKeyControl.js';
 
-const trackAt = ( clip, target ) => clip?.tracks?.find( track => targetId( track.target ) === targetId( target ) );
+function trackAt( clip, target ) {
+
+	const id = targetId( target );
+	return clip?.tracks?.find( track => targetId( track.target ) === id );
+
+}
+
+function holdsValue( target, value ) {
+
+	return discreteTarget( target ) || typeof value === 'boolean' ||
+		typeof value === 'string' && ( target.kind === 'script' || ! /^#[\da-f]{6}$/i.test( value ) );
+
+}
 
 function element( tag, parent, text ) {
 
@@ -31,7 +44,9 @@ function Animation( editor ) {
 	lanes.className = 'scene-timeline-lanes';
 
 	let time = 0, playing = false, recording = null, previewing = false, loop = false;
-	let selection, channel, keyTime, draft;
+	let selection, channel, keyTime, draft, lastFrame;
+	const armed = new Map();
+	let choices = [];
 	const data = () => draft || timelineData( editor.scene );
 	const clip = () => data().clips.find( clip => clip.id === selection );
 	const context = {
@@ -114,7 +129,10 @@ function Animation( editor ) {
 
 	const targetSelect = element( 'select', params );
 	targetSelect.setAttribute( 'aria-label', 'Timeline parameter' );
-	const keyButton = button( params, 'Insert keyframe', insertKey, 'keyframe' );
+	const armButton = button( params, 'Arm parameter', () => toggleArmed( chosenTarget() ), 'add' );
+	const keyButton = button( params, 'Insert keyframe', () => insertKey(), 'keyframe' );
+	const armedList = element( 'div', params );
+	armedList.className = 'scene-timeline-armed';
 	const inspector = element( 'div', params );
 	inspector.className = 'scene-timeline-inspector';
 	const readout = element( 'output', bar );
@@ -150,7 +168,8 @@ function Animation( editor ) {
 
 	function commit( doc, name ) {
 
-		const command = new SetValueCommand( editor, editor.scene, 'userData', { ...editor.scene.userData, timeline: doc } );
+		const command = runtime.withBase( () => new SetValueCommand( editor, editor.scene, 'userData',
+			{ ...editor.scene.userData, timeline: doc } ) );
 		command.updatable = false;
 		editor.execute( command, name );
 
@@ -166,18 +185,90 @@ function Animation( editor ) {
 
 	}
 
-	function chosenTarget( stable = false ) {
+	function chosenTarget() {
 
-		const candidate = availableTargets( editor.selected, editor.scripts ).find( candidate => targetId( candidate ) === targetSelect.value );
-		if ( candidate?.kind === 'script' && stable ) {
+		return choices.find( candidate => targetId( candidate ) === targetSelect.value );
 
-			const script = editor.scripts[ candidate.object ][ candidate.index ];
-			script.timelineId ||= MathUtils.generateUUID();
-			candidate.scriptId = script.timelineId;
-			targetSelect.selectedOptions[ 0 ].value = targetId( candidate );
+	}
+
+	function stableTarget( target ) {
+
+		if ( target?.kind !== 'script' || target.scriptId ) return target;
+		const script = editor.scripts[ target.object ]?.[ target.index ];
+		if ( ! script ) return;
+		const option = [ ...targetSelect.options ].find( item => item.value === targetId( target ) );
+		script.timelineId ||= MathUtils.generateUUID();
+		if ( option ) {
+
+			const previous = choices.find( item => targetId( item ) === option.value );
+			if ( previous ) previous.scriptId = script.timelineId;
+			option.value = targetId( { ...target, scriptId: script.timelineId } );
 
 		}
-		return candidate;
+		return { ...target, scriptId: script.timelineId };
+
+	}
+
+	function keyTargets( target ) {
+
+		const targets = target ? [ target ] : armed.size ? [ ...armed.values() ] : [ chosenTarget() ];
+		return targets.filter( Boolean ).map( stableTarget ).filter( Boolean ).map( ( { option, ...target } ) => target );
+
+	}
+
+	function toggleArmed( property ) {
+
+		if ( recording || ! property ) return;
+		if ( armed.delete( targetId( property ) ) ) return refresh();
+		if ( ! timelineBinding( context, property ) ) return;
+		const { option, ...target } = stableTarget( property );
+		const id = targetId( target );
+		if ( ! armed.delete( id ) ) armed.set( id, target );
+		refresh();
+
+	}
+
+	function keyAtFrame( track, entry ) {
+
+		return track?.keys.find( key => Math.abs( entry.start + key.time - snapTime( time ) ) < 1e-6 );
+
+	}
+
+	function keyState( target ) {
+
+		const binding = timelineBinding( context, target );
+		const entry = editClipFor( target );
+		const animated = data().clips.some( clip => trackAt( clip, target ) );
+		return { available: !! binding && ! recording, animated, keyed: !! keyAtFrame( trackAt( entry, target ), entry ),
+			armed: armed.has( targetId( target ) ), value: binding?.read() };
+
+	}
+
+	function editClipFor( target ) {
+
+		const selected = clip();
+		if ( selected && ! selected.animation ) return selected;
+		const at = snapTime( time );
+		return data().clips.findLast( entry => at >= entry.start && at <= entry.start + entry.duration && trackAt( entry, target ) );
+
+	}
+
+	function toggleKey( target ) {
+
+		if ( ! target || recording ) return;
+		const entry = editClipFor( target );
+		if ( entry && selection !== entry.id ) selectClip( entry.id );
+		const key = keyAtFrame( trackAt( entry, target ), entry );
+		if ( ! key ) return insertKey( target );
+		modify( 'Delete keyframe', doc => {
+
+			const clip = doc.clips.find( item => item.id === entry.id );
+			const track = trackAt( clip, target );
+			track.keys = track.keys.filter( item => item.time !== key.time );
+			if ( ! track.keys.length ) clip.tracks.splice( clip.tracks.indexOf( track ), 1 );
+
+		} );
+		pulse();
 
 	}
 
@@ -194,7 +285,7 @@ function Animation( editor ) {
 			entry.tracks.push( track );
 
 		}
-		const interpolation = typeof value === 'boolean' || typeof value === 'string' && ! /^#[\da-f]{6}$/i.test( value ) ? 'hold' : 'linear';
+		const interpolation = holdsValue( target, value ) ? 'hold' : 'linear';
 		putKey( track, relative, value, interpolation );
 		if ( ! continuous ) {
 
@@ -205,13 +296,19 @@ function Animation( editor ) {
 
 	}
 
-	function insertKey() {
+	function insertKey( property ) {
 
 		if ( recording ) return;
-		const target = chosenTarget( true );
-		const value = target && timelineBinding( context, target )?.read();
-		if ( value === undefined ) return;
-		modify( 'Insert keyframe', doc => recordKey( doc, target, value, snapTime( time ) ) );
+		const samples = keyTargets( property ).map( target => ( { target, value: timelineBinding( context, target )?.read() } ) )
+			.filter( sample => sample.value !== undefined );
+		if ( ! samples.length ) return;
+		const entry = editClipFor( samples[ 0 ].target );
+		if ( entry && selection !== entry.id ) selectClip( entry.id );
+		modify( samples.length === 1 ? 'Insert keyframe' : 'Insert keyframes', doc => {
+
+			for ( const { target, value } of samples ) recordKey( doc, target, value, snapTime( time ) );
+
+		} );
 		pulse();
 
 	}
@@ -232,6 +329,7 @@ function Animation( editor ) {
 
 		runtime.apply( data(), time );
 		signals.timelineFrameChanged.dispatch();
+		refreshTimelineKeyControls( editor.timeline );
 
 	}
 
@@ -242,6 +340,7 @@ function Animation( editor ) {
 		time = 0;
 		runtime.clear();
 		signals.timelineFrameChanged.dispatch();
+		refreshTimelineKeyControls( editor.timeline );
 		refreshTransport();
 
 	}
@@ -262,13 +361,19 @@ function Animation( editor ) {
 	function toggleRecord() {
 
 		if ( recording ) return finishRecord();
-		const target = chosenTarget( true );
-		const binding = target && timelineBinding( context, target );
-		const value = binding?.read();
-		if ( value === undefined ) return;
+		const channels = keyTargets().map( target => {
+
+			const binding = timelineBinding( context, target );
+			const value = binding?.read();
+			return { target, binding, value, last: JSON.stringify( value ) };
+
+		} ).filter( sample => sample.value !== undefined );
+		if ( ! channels.length ) return;
+		const entry = editClipFor( channels[ 0 ].target );
+		if ( entry && selection !== entry.id ) selectClip( entry.id );
 		draft = structuredClone( data() );
-		recording = { target, binding, last: JSON.stringify( value ), frame: Math.round( time * draft.fps ) };
-		recordKey( draft, target, value, snapTime( time ), true );
+		recording = { channels, ids: new Set( channels.map( sample => targetId( sample.target ) ) ), frame: Math.round( time * draft.fps ) };
+		for ( const { target, value } of channels ) recordKey( draft, target, value, snapTime( time ), true );
 		playing = previewing = true;
 		signals.timelinePlaybackStarted.dispatch();
 		refresh();
@@ -277,7 +382,7 @@ function Animation( editor ) {
 
 	function finishRecord() {
 
-		const title = recording.target.label;
+		const title = recording.channels.length === 1 ? recording.channels[ 0 ].target.label : recording.channels.length + ' parameters';
 		recording = null;
 		playing = false;
 		const doc = draft;
@@ -296,16 +401,17 @@ function Animation( editor ) {
 			const f = Math.floor( time * draft.fps );
 			if ( f > recording.frame ) {
 
-				const value = recording.binding.read();
-				const text = JSON.stringify( value );
-				if ( value !== undefined && text !== recording.last ) {
+				for ( const sample of recording.channels ) {
 
-					const track = trackAt( clip(), recording.target );
-					const last = track?.keys.at( -1 );
+					const value = sample.binding.read();
+					const text = JSON.stringify( value );
+					if ( value === undefined || text === sample.last ) continue;
+					const track = trackAt( clip(), sample.target );
 					const previous = recording.frame / draft.fps - clip().start;
-					if ( last && previous > last.time ) putKey( track, previous, last.value, last.interpolation );
-					recordKey( draft, recording.target, value, f / draft.fps, true );
-					recording.last = text;
+					const last = JSON.parse( sample.last );
+					if ( previous >= 0 ) putKey( track, previous, last, holdsValue( sample.target, last ) ? 'hold' : 'linear' );
+					recordKey( draft, sample.target, value, f / draft.fps, true );
+					sample.last = text;
 
 				}
 				recording.frame = f;
@@ -325,9 +431,15 @@ function Animation( editor ) {
 			}
 
 		}
-		runtime.apply( data(), time, recording && targetId( recording.target ) );
+		runtime.apply( data(), time, recording?.ids );
 		if ( recording && Math.floor( time * 10 ) !== Math.floor( ( time - delta ) * 10 ) ) drawLanes();
 		refreshTransport();
+		refreshTimelineKeyControls( editor.timeline );
+		const currentFrame = Math.round( time * data().fps );
+		if ( currentFrame !== lastFrame ) {
+			lastFrame = currentFrame;
+			refreshTimelineKeyControls( editor.timeline );
+		}
 		return true;
 
 	}
@@ -342,7 +454,7 @@ function Animation( editor ) {
 		rec.lastElementChild.textContent = recording ? 'Stop recording' : 'Record';
 		rec.title = recording ? 'Stop recording' : 'Record parameter';
 		rec.setAttribute( 'aria-label', rec.title );
-		readout.textContent = recording ? recording.target.label : '';
+		readout.textContent = recording ? recording.channels.map( sample => sample.target.label ).join( ', ' ) : '';
 		for ( const marker of lanes.querySelectorAll( '.scene-timeline-playhead' ) ) marker.style.left = 100 * time / visibleEnd() + '%';
 
 	}
@@ -500,9 +612,13 @@ function Animation( editor ) {
 	function refresh() {
 
 		const previous = targetSelect.value;
-		const choices = availableTargets( editor.selected, editor.scripts );
+		const selectedObjects = editor.selected ? [ editor.selected ] : editor.selector.selection;
+		choices = selectedObjects.flatMap( object => availableTargets( object, editor.scripts ).map( target => ( {
+			...target,
+			option: selectedObjects.length < 2 ? target.label : ( object.name || object.type ) + ' · ' + target.label
+		} ) ) );
 		targetSelect.replaceChildren( new Option( choices.length ? 'Choose a parameter…' : 'Select an object', '' ),
-			...choices.map( target => new Option( target.label, targetId( target ) ) ) );
+			...choices.map( target => new Option( target.option, targetId( target ) ) ) );
 		targetSelect.value = choices.some( target => targetId( target ) === previous ) ? previous : '';
 		if ( ! targetSelect.value && choices.length === 1 ) targetSelect.value = choices[ 0 ] && targetId( choices[ 0 ] );
 		syncParameterControls();
@@ -516,12 +632,12 @@ function Animation( editor ) {
 			name.value = entry.name;
 			name.setAttribute( 'aria-label', 'Clip name' );
 			name.onchange = () => edit( 'Rename timeline clip', item => item.name = name.value.trim() || item.name );
-			number( inspector, 'Start', entry.start, value => edit( 'Move timeline clip', item => item.start = snapTime( value ) ), 'any' );
+			number( inspector, 'Start', entry.start, value => edit( 'Move timeline clip', item => item.start = snapTime( value ) ), 'any', 'history' );
 			number( inspector, 'Length', entry.duration, value => edit( 'Resize timeline clip', item => {
 
 				item.duration = Math.max( 1 / data().fps, snapTime( value ), ...item.tracks.flatMap( track => track.keys.map( key => key.time ) ) );
 
-			} ), 'any' );
+			} ), 'any', 'toolMeasure' );
 			button( inspector, 'Delete clip', () => modify( 'Delete timeline clip', doc => {
 
 				doc.clips = doc.clips.filter( clip => clip.id !== entry.id );
@@ -561,8 +677,9 @@ function Animation( editor ) {
 					putKey( lane, next, key.value, key.interpolation );
 					keyTime = next;
 
-				} ), 'any' );
+				} ), 'any', 'frame' );
 				const interpolation = element( 'select', inspector );
+				interpolation.disabled = holdsValue( track( entry ).target, selected.value );
 				interpolation.setAttribute( 'aria-label', 'Keyframe interpolation' );
 				interpolation.replaceChildren( new Option( 'Linear', 'linear' ), new Option( 'Ease in/out', 'ease' ), new Option( 'Hold', 'hold' ) );
 				interpolation.value = selected.interpolation;
@@ -581,17 +698,39 @@ function Animation( editor ) {
 		}
 		drawLanes();
 		refreshTransport();
+		refreshTimelineKeyControls( editor.timeline );
 
 	}
 
 	function syncParameterControls() {
 
-		keyButton.disabled = ! targetSelect.value || !! recording;
-		rec.disabled = ! targetSelect.value && ! recording;
+		const target = chosenTarget();
+		const available = target && timelineBinding( context, target );
+		armButton.disabled = ! available || !! recording;
+		armButton.setAttribute( 'aria-pressed', String( !! target && armed.has( targetId( target ) ) ) );
+		keyButton.disabled = ! ( available || armed.size ) || !! recording;
+		rec.disabled = ! ( available || armed.size || recording );
+		armedList.replaceChildren();
+		for ( const target of armed.values() ) {
+
+			const object = context.object( target.object );
+			const name = ( object?.name || object?.type || 'Missing object' ) + ' · ' + target.label;
+			const item = button( armedList, name + ' ×', () => toggleArmed( target ) );
+			item.title = 'Disarm ' + name;
+			item.setAttribute( 'aria-label', item.title );
+			item.disabled = !! recording;
+
+		}
 
 	}
 	targetSelect.onchange = syncParameterControls;
-	for ( const signal of [ signals.objectSelected, signals.scriptAdded, signals.scriptRemoved, signals.materialChanged ] ) signal.add( refresh );
+	for ( const signal of [ signals.objectSelected, signals.scriptAdded, signals.scriptRemoved, signals.materialChanged,
+		signals.sceneBackgroundChanged, signals.sceneFogChanged, signals.geometryChanged ] ) signal.add( refresh );
+	signals.scriptChanged.add( ( script, attribute ) => {
+
+		if ( attribute !== 'paramValues' && attribute !== 'favoriteParams' ) refresh();
+
+	} );
 	signals.objectChanged.add( ( object, attribute ) => {
 
 		if ( object === editor.scene && attribute === 'userData' ) {
@@ -602,16 +741,26 @@ function Animation( editor ) {
 		}
 
 	} );
-	signals.projectLoaded.add( () => { stop(); selectClip(); refresh(); } );
-	signals.editorCleared.add( () => { stop(); selectClip(); refresh(); } );
+	function reset() {
+
+		stop();
+		armed.clear();
+		selectClip();
+		refresh();
+
+	}
+	signals.projectLoaded.add( reset );
+	signals.editorCleared.add( reset );
 	signals.startPlayer.add( stop );
 	editor.timeline = {
-		tick, insertKey,
+		tick, insertKey, toggleKey, keyState, toggleArmed,
+		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,
 			{ object: object.uuid, name: clip.name || 'Imported animation', duration: clip.duration, uuid: clip.uuid } ) )
 	};
 	editor.animationCommands = { animationPlay: togglePlayback, animationPause: () => { if ( recording ) finishRecord(); playing = false; refreshTransport(); }, animationStop: stop };
+	watchTimelineFields( document );
 	refresh();
 	return container;
 

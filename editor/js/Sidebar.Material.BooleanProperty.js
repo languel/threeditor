@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UICheckbox, UIRow, UIText } from './libs/ui.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 
@@ -6,7 +7,8 @@ function SidebarMaterialBooleanProperty( editor, property, name ) {
 	const signals = editor.signals;
 
 	const container = new UIRow();
-	container.add( new UIText( name ).setClass( 'Label' ) );
+	const label = new UIText( name ).setClass( 'Label' );
+	container.add( label );
 
 	const boolean = new UICheckbox().setLeft( '100px' ).onChange( onChange );
 	container.add( boolean );
@@ -14,6 +16,11 @@ function SidebarMaterialBooleanProperty( editor, property, name ) {
 	let object = null;
 	let materialSlot = null;
 	let material = null;
+
+	addTimelineKey( editor, label, name, () => object && ( { object: object.uuid, kind: 'material', slot: materialSlot, property,
+		label: 'Material ' + ( materialSlot + 1 ) + ' · ' + property } ),
+	{ field: boolean, display: value => boolean.setValue( value ) } );
+
 
 	function onChange() {
 

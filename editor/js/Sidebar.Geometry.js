@@ -1,3 +1,4 @@
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIText, UIInput, UIButton, UISpan, UITextArea, UINumber, UIDiv, UIBreak } from './libs/ui.js';
@@ -146,6 +147,9 @@ function SidebarGeometry( editor ) {
 
 	geometryNameRow.add( new UIText( strings.getKey( 'sidebar/geometry/name' ) ).setClass( 'Label' ) );
 	geometryNameRow.add( geometryName );
+	addTimelineKey( editor, { dom: geometryNameRow.dom.firstElementChild }, 'Geometry name',
+		() => editor.selected && ( { kind: 'geometry', object: editor.selected.uuid, property: 'name', label: 'Geometry · name' } ),
+		{ field: geometryName, display: value => geometryName.setValue( value ) } );
 
 	container.add( geometryNameRow );
 
@@ -407,6 +411,9 @@ function SidebarGeometry( editor ) {
 		morphInfluence.setValue( morphTargetInfluences[ index ] );
 
 		container.add( morphInfluence );
+		addTimelineKey( editor, morphName, name, () => editor.selected?.morphTargetInfluences === morphTargetInfluences && ( {
+			kind: 'morph', object: editor.selected.uuid, property: String( index ), label: 'Morph · ' + name
+		} ), { field: morphInfluence, display: value => morphInfluence.setValue( value ) } );
 		morphUIElements.push( morphInfluence );
 
 		return container;
