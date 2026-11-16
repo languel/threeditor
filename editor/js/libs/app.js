@@ -400,18 +400,21 @@ const APP = {
 				return;
 
 			}
-			const draw = () => splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, camera ) ) );
-			if ( projector ) {
+			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => {
 
-				lightViewCamera( THREE, projector, camera );
-				renderFittedView( THREE, renderer, scene, camera, this.width, this.height, draw );
+				const draw = () => renderer.render( scene, camera );
+				if ( projector ) {
 
-			} else {
+					lightViewCamera( THREE, projector, camera );
+					renderFittedView( THREE, renderer, scene, camera, this.width, this.height, draw );
 
-				postHost.render( renderer, scene, camera, this.width, this.height, draw );
+				} else {
 
-			}
+					postHost.render( renderer, scene, camera, this.width, this.height, draw );
 
+				}
+
+			} ) );
 		};
 
 		this.play = function () {

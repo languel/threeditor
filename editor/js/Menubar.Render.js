@@ -1,3 +1,4 @@
+import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIButton, UIInteger, UISelect, UIText } from './libs/ui.js';
@@ -349,11 +350,11 @@ class RenderImageDialog {
 				case 'normals':
 				case 'wireframe':
 
-					scene.overrideMaterial = shadingTypeSelect.getValue() === 'normals' ? new THREE.MeshNormalMaterial() : shadingTypeSelect.getValue() === 'wireframe' ? new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } ) : null;
-					const draw = () => withEnabledObjects( scene, () => renderer.render( scene, camera ) );
+					const draw = () => withEnabledObjects( scene, () =>
+						withViewportShading( scene, shadingTypeSelect.getValue(), () => renderer.render( scene, camera ) )
+					);
 					if ( opticalCamera ) renderFittedView( THREE, renderer, scene, camera, outputWidth, outputHeight, draw );
 					else draw();
-					scene.overrideMaterial?.dispose();
 					environmentTarget?.dispose();
 					renderer.dispose();
 

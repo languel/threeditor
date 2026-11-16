@@ -113,7 +113,7 @@ export class PostProcessingHost {
 		const cfg = scene?.userData?.postprocessing;
 		const wantBloom = Boolean( cfg?.bloom );
 		const wantDof = Boolean( cfg?.dof );
-		if ( ( ! wantBloom && ! wantDof ) || renderer?.isWebGPURenderer ) {
+		if ( ( ! wantBloom && ! wantDof ) || renderer?.isWebGPURenderer || scene?.overrideMaterial ) {
 
 			if ( this.composer ) this.disposeComposer();
 			drawFallback();

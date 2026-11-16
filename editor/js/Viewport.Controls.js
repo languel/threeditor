@@ -65,6 +65,7 @@ function ViewportControls( editor ) {
 	// shading
 
 	const shadingSelect = new UISelect();
+	shadingSelect.dom.setAttribute( 'aria-label', 'Viewport shading' );
 	shadingSelect.setOptions( { 'realistic': 'realistic', 'preview': 'preview', 'solid': 'solid', 'normals': 'normals', 'wireframe': 'wireframe' } );
 	shadingSelect.setValue( 'solid' );
 	shadingSelect.onChange( function () {

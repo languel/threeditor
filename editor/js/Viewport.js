@@ -1,3 +1,4 @@
+import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
@@ -921,29 +922,7 @@ function Viewport( editor ) {
 
 	signals.viewportShadingChanged.add( function () {
 
-		const viewportShading = editor.viewportShading;
-
-		switch ( viewportShading ) {
-
-			case 'realistic':
-				if ( pathtracer && ! editor.viewportSplit && ! editor.viewportSource ) pathtracer.init( scene, editor.viewportCamera );
-				break;
-
-			case 'solid':
-			case 'preview':
-				scene.overrideMaterial = null;
-				break;
-
-			case 'normals':
-				scene.overrideMaterial = new THREE.MeshNormalMaterial();
-				break;
-
-			case 'wireframe':
-				scene.overrideMaterial = new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } );
-				break;
-
-		}
-
+		initPT();
 		render();
 
 	} );
@@ -1191,9 +1170,18 @@ function Viewport( editor ) {
 		transformControls.viewport = tiled && navRect ?
 			new THREE.Vector4( navRect.x, height - navRect.y - navRect.height, navRect.width, navRect.height ) : null;
 
-		const draw = ( view, host = splatHost ) => host.render(
-			renderer, scene, () => withEnabledObjects( scene, () => renderer.render( scene, view ) ), queueSplatRender
-		);
+		const mode = editor.viewportShading;
+		const draw = ( view, host = splatHost, post = false ) => host.render( renderer, scene, () => {
+
+			withEnabledObjects( scene, () => withViewportShading( scene, mode, () => {
+
+				const raster = () => renderer.render( scene, view );
+				if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
+				else raster();
+
+			} ) );
+
+		}, queueSplatRender );
 		const drawGuides = view => {
 
 			if ( view !== camera || editor.viewportShading === 'preview' ) return;
@@ -1214,7 +1202,7 @@ function Viewport( editor ) {
 		if ( ! tiled ) {
 
 			const view = frames[ 0 ].camera;
-			postHost.render( renderer, scene, view, width, height, () => draw( view ), queueSplatRender );
+			draw( view, splatHost, mode === 'preview' || mode === 'realistic' );
 			drawGuides( view );
 			if ( view === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting ) viewHelper.render( renderer );
 			renderer.autoClear = true;

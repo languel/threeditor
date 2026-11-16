@@ -161,7 +161,7 @@ function Editor( portable = false ) {
 	this.viewportSource = null;
 	this.viewportSplit = false;
 	this.activeSceneCameraUuid = null;
-	this.viewportShading = 'default';
+	this.viewportShading = 'solid';
 	this.viewportColor = new THREE.Color();
 
 	this.addCamera( this.camera );
@@ -735,7 +735,7 @@ Editor.prototype = {
 
 	setViewportShading: function ( value ) {
 
-		this.viewportShading = value;
+		this.viewportShading = value === 'default' ? 'preview' : value;
 		this.signals.viewportShadingChanged.dispatch();
 
 	},
