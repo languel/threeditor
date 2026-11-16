@@ -1,3 +1,4 @@
+import { createTopicPicker, streamTopicLabel } from './streams/TopicPicker.js';
 import { drawStreamPreview } from './streams/LandmarkPreview.js';
 import { isInputAsset, isMovingAsset, isStillInput } from './assets/AssetController.js';
 import { fileKind } from './assets/AssetLibrary.js';
@@ -688,12 +689,30 @@ function SidebarStreams( editor ) {
 	const routes = section( panel.dom, 'Routes', true );
 	const status = node( 'output', '', routes );
 	const list = node( 'div', '', routes );
-	const topic = input( routes, 'Source topic', '' );
-	const suggestions = node( 'datalist', '', routes );
-	suggestions.id = 'stream-topics';
-	topic.setAttribute( 'list', suggestions.id );
-	topic.onfocus = () => suggestions.replaceChildren( ...bus.topics().map( name => new Option( name ) ) );
-	const fallback = input( routes, 'Preview fallback', '' );
+	const sourceName = id => available.get( id )?.title || inputs.get( id )?.title ||
+		( id.includes( 'webcam:' ) ? 'Webcam' : id.includes( 'microphone:' ) ? 'Microphone' : id.replace( /^project:/, '' ) );
+	const pickTopic = createTopicPicker( bus, sourceName, () => [
+		...getRoutes().flatMap( route => [ route.source, route.fallback, route.target?.topic ] ),
+		...getEvents().flatMap( rule => [ rule.source, rule.fallback, rule.action?.topic,
+			rule.action?.name && 'event.' + rule.action.name ] )
+	], () => inputs.keys() );
+
+	function topicInput( parent, label, numeric = false ) {
+
+		const field = input( parent, label, '' );
+		field.className = 'Input';
+		const controls = node( 'div', '', parent );
+		controls.className = 'stream-topic-field';
+		controls.append( field.parentElement );
+		const pick = button( controls, 'Browse…', () => pickTopic( field, pick, numeric ), status );
+		pick.className = 'Button';
+		pick.setAttribute( 'aria-label', 'Browse ' + label.toLowerCase() );
+		return field;
+
+	}
+
+	const topic = topicInput( routes, 'Source topic', true );
+	const fallback = topicInput( routes, 'Preview fallback', true );
 	const kind = select( routes, 'Destination', [
 		[ 'object', 'Scene object' ], [ 'param', 'Script parameter' ], [ 'morph', 'Morph target' ],
 		[ 'scene', 'Scene property' ], [ 'serial', 'Serial line' ], [ 'topic', 'Mapped topic' ],
@@ -781,10 +800,8 @@ function SidebarStreams( editor ) {
 	const eventsPanel = section( panel.dom, 'Events', false );
 	const eventStatus = node( 'output', '', eventsPanel );
 	const eventList = node( 'div', '', eventsPanel );
-	const eventSource = input( eventsPanel, 'Source / event', '' );
-	eventSource.setAttribute( 'list', suggestions.id );
-	eventSource.onfocus = () => suggestions.replaceChildren( ...bus.topics().map( name => new Option( name ) ) );
-	const eventFallback = input( eventsPanel, 'Preview fallback', '' );
+	const eventSource = topicInput( eventsPanel, 'Source / event' );
+	const eventFallback = topicInput( eventsPanel, 'Preview fallback' );
 	const eventTrigger = select( eventsPanel, 'Trigger', [
 		[ 'rising', 'Crosses above' ], [ 'falling', 'Crosses below' ], [ 'enter', 'Enters range' ],
 		[ 'exit', 'Exits range' ], [ 'match', 'Matches text' ], [ 'change', 'On change' ], [ 'event', 'Named event' ]
@@ -847,8 +864,8 @@ function SidebarStreams( editor ) {
 		getRoutes().forEach( ( route, index ) => {
 
 			const targetLabel = route.target.param || route.target.morph || route.target.property || route.target.topic || route.target.kind;
-			const label = route.source + ' → ' + targetLabel;
-			button( list, label, () => {
+			const label = streamTopicLabel( route.source, sourceName ) + ' → ' + targetLabel;
+			const row = button( list, label, () => {
 
 				editing = index;
 				topic.value = route.source;
@@ -875,6 +892,8 @@ function SidebarStreams( editor ) {
 				status.textContent = 'Editing driver ' + ( index + 1 );
 
 			}, status );
+			row.className = 'stream-route-row';
+			row.title = route.source;
 
 		} );
 
@@ -882,7 +901,7 @@ function SidebarStreams( editor ) {
 		getEvents().forEach( ( rule, index ) => {
 
 			const actionLabel = rule.action?.name || rule.action?.param || rule.action?.property || rule.action?.topic || rule.action?.kind;
-			button( eventList, `${ rule.source } [${ rule.trigger }] → ${ actionLabel }`, () => {
+			const row = button( eventList, `${ streamTopicLabel( rule.source, sourceName ) } [${ rule.trigger }] → ${ actionLabel }`, () => {
 
 				editingEvent = index;
 				eventSource.value = rule.source || '';
@@ -911,6 +930,8 @@ function SidebarStreams( editor ) {
 				eventStatus.textContent = 'Editing event ' + ( index + 1 );
 
 			}, eventStatus );
+			row.className = 'stream-route-row';
+			row.title = rule.source;
 
 		} );
 

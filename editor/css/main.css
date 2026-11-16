@@ -2139,6 +2139,59 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--theme-accent); }
 input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outline-offset: 2px; }
 
+.stream-topic-field { display: flex; align-items: center; gap: 6px; }
+.stream-topic-field label { flex: 1; min-width: 0; }
+.stream-topic-field button { flex: none; }
+.stream-panel .stream-route-row { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.stream-topic-picker {
+	box-sizing: border-box;
+	width: min(540px, calc(100vw - 24px));
+	max-height: calc(100dvh - 24px);
+	padding: 16px;
+	color: var(--theme-text);
+	background: var(--theme-background);
+	border: 1px solid color-mix(in srgb, var(--theme-text) 25%, transparent);
+	border-radius: 8px;
+}
+.stream-topic-picker::backdrop { background: #0007; }
+.stream-topic-picker header, .stream-topic-filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stream-topic-picker strong { font-size: 1.15em; }
+.stream-topic-filters { margin: 12px 0; }
+.stream-topic-picker label { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.stream-topic-picker select, .stream-topic-picker input { box-sizing: border-box; width: 100%; min-width: 0; }
+.stream-topic-results { max-height: 44vh; overflow: auto; margin-top: 8px; }
+.stream-topic-results button {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 3px 12px;
+	width: 100%;
+	padding: 8px;
+	text-align: left;
+	border-bottom: 1px solid color-mix(in srgb, var(--theme-text) 13%, transparent);
+}
+.stream-topic-results span, .stream-topic-results small { overflow-wrap: anywhere; grid-column: 1; }
+.stream-topic-results .stream-topic-value { grid-column: 2; grid-row: 1; }
+.stream-topic-landmarks:not([hidden]) { display: grid; justify-items: center; gap: 12px; }
+.stream-topic-landmarks label { width: min(100%, 280px); }
+.stream-topic-diagram { position: relative; height: min(310px, 40vh); max-width: calc(100% - 18px); }
+.stream-topic-diagram canvas { display: block; width: 100%; height: 100%; }
+.stream-topic-diagram button {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	width: 12px;
+	height: 12px;
+	padding: 0;
+	border: 1px solid var(--theme-background);
+	border-radius: 50%;
+	background: var(--theme-text);
+}
+.stream-topic-diagram button:hover, .stream-topic-diagram button[aria-pressed="true"] { background: var(--theme-accent); z-index: 1; }
+.stream-topic-axes { display: flex; justify-content: center; gap: 8px; }
+.stream-topic-axes button { min-width: 52px; }
+.stream-topic-results button[aria-pressed="true"], .stream-topic-axes button[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--theme-accent) 22%, var(--theme-surface));
+}
+
 /* Modeling guides and projector mask controls */
 
 .modeling-overlay {
