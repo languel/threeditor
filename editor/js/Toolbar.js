@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js';
+import { addTransformSettings } from './TransformSettings.js?v=viewport-tools';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

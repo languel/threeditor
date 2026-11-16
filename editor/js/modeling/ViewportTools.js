@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js';
+import { icon } from '../Glyphs.js?v=viewport-tools';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';

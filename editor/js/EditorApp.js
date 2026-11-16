@@ -1,20 +1,20 @@
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js';
-import { Keymap } from './Keymap.js';
-import { ModalTransform } from './ModalTransform.js';
+import { Editor } from './Editor.js?v=viewport-tools';
+import { Keymap } from './Keymap.js?v=viewport-tools';
+import { ModalTransform } from './ModalTransform.js?v=viewport-tools';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
-import { applyGlyphMode } from './Glyphs.js';
+import { applyGlyphMode } from './Glyphs.js?v=viewport-tools';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=camera-playback';
-import { Toolbar } from './Toolbar.js';
+import { Viewport } from './Viewport.js?v=viewport-tools';
+import { Toolbar } from './Toolbar.js?v=viewport-tools';
 import { Player } from './Player.js?v=preview-color';
 import { Sidebar } from './Sidebar.js';
-import { Menubar } from './Menubar.js';
+import { Menubar } from './Menubar.js?v=viewport-tools';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js';
-import { AgentAPI } from './AgentAPI.js';
+import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js';

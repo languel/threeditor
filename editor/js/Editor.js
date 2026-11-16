@@ -10,12 +10,12 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js';
+import { Config } from './Config.js?v=viewport-tools';
 import { Loader } from './Loader.js';
 import { History as _History } from './History.js';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
-import { Selector } from './Selector.js';
+import { Selector } from './Selector.js?v=viewport-tools';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );

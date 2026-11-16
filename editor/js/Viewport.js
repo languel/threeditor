@@ -1,4 +1,4 @@
-import { transformSnapStep } from './TransformSettings.js';
+import { transformSnapStep } from './TransformSettings.js?v=viewport-tools';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -10,12 +10,12 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=camera-playback';
 
 import { ViewportLabels } from './Viewport.Labels.js';
-import { ViewportControls } from './Viewport.Controls.js';
+import { ViewportControls } from './Viewport.Controls.js?v=viewport-tools';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
 
-import { ViewHelper } from './Viewport.ViewHelper.js';
+import { ViewHelper } from './Viewport.ViewHelper.js?v=viewport-tools';
 import { XR } from './Viewport.XR.js';
 
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
@@ -27,7 +27,7 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js';
+import { ViewportTools } from './modeling/ViewportTools.js?v=viewport-tools';
 import { ViewLayout } from './modeling/ViewLayout.js';
 import { ModelViewport } from './modeling/ModelViewport.js';
 import { PostProcessingHost } from './PostProcessing.js';
@@ -129,6 +129,7 @@ function Viewport( editor ) {
 	grid.visible = editor.config.getKey( 'settings/gridVisible' );
 
 	const viewHelper = new ViewHelper( camera, container, ( dx, dy ) => controls.rotate( new THREE.Vector3( dx, dy, 0 ) ) );
+	const viewHelperPanel = viewHelper.panel ?? container.dom.querySelector( '#viewHelper' );
 
 	//
 
@@ -1171,7 +1172,7 @@ function Viewport( editor ) {
 		const frames = layout.update( width, height );
 		const tiled = frames.length > 1 || !! layout.optical;
 		const showViewHelper = ! tiled && frames[ 0 ].camera === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting;
-		viewHelper.panel.hidden = ! showViewHelper;
+		if ( viewHelperPanel ) viewHelperPanel.hidden = ! showViewHelper;
 		// Each eye needs its own asynchronous Gaussian depth order.
 		if ( frames.length > 1 ) secondarySplats ||= new SplatHost();
 		else if ( secondarySplats ) {

@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js';
+import { icon } from './Glyphs.js?v=viewport-tools';
 
 export function transformSnapStep( config, held = false ) {
 
