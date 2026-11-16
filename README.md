@@ -92,7 +92,7 @@ Select an unlocked projector or spotlight and choose **Object → Edit mask in v
 
 Use the **Object mode** and **Edit mode** buttons at the upper left of the viewport, or press **Tab**. Object mode is for selecting and moving objects. Edit mode adds **Surface path**, **Surface paint**, and geometry creation and editing. Measure and light masks are available in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
 
-- **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Rulers show distances, corner angles, and area when **Closed**. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
+- **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Double-click the first point after placing at least three points to close the ruler. Closed rulers also show area. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
 - **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Double-click the first point to close the loop before saving. Saved paths can be edited in **Modeling**.
 - **Surface paint** makes colored marks by raycasting the brush onto a mesh. Each stroke becomes an undoable mesh child. The marks move with the receiver.
 

@@ -102,12 +102,13 @@ export class ViewportTools {
 		for ( const type of [ 'pointerup', 'pointercancel', 'lostpointercapture' ] ) viewport.addEventListener( type, event => this.pointerEnd( event ), true );
 		viewport.addEventListener( 'dblclick', event => {
 
-			if ( this.mode !== 'path' || this.points.length < 3 || event.target !== editor.renderer?.domElement ) return;
+			if ( ! [ 'path', 'measure' ].includes( this.mode ) || this.points.length < 3 || event.target !== editor.renderer?.domElement ) return;
 			const frame = layout.at( event.clientX, event.clientY );
-			if ( ! frame || frame.key !== this.pathView || this.nearestHandle( frame, event.clientX, event.clientY ) !== 0 ) return;
+			if ( ! frame || ( this.mode === 'path' && frame.key !== this.pathView ) || this.nearestHandle( frame, event.clientX, event.clientY ) !== 0 ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			this.pathClosed = true;
+			if ( this.mode === 'path' ) this.pathClosed = true;
+			else this.measureClosed.checked = this.measure.closed = true;
 			this.draw();
 
 		}, true );
@@ -319,7 +320,8 @@ export class ViewportTools {
 			const unit = select( parent, 'Measurement units', Object.keys( lengthUnits ).map( name => [ name, name ] ) );
 			unit.value = this.measure.unit;
 			unit.onchange = () => { this.measure.unit = unit.value; this.draw(); };
-			modelField( parent, 'Closed', 'toolMask', 'checkbox', this.measure.closed ).onchange = event => { this.measure.closed = event.target.checked; this.draw(); };
+			this.measureClosed = modelField( parent, 'Closed', 'toolMask', 'checkbox', this.measure.closed );
+			this.measureClosed.onchange = event => { this.measure.closed = event.target.checked; this.draw(); };
 			modelField( parent, 'Bind to mesh', 'link', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
 			modelField( parent, 'Snap vertices', 'snapVertex', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
 			this.finishButton = modelButton( parent, 'Save ruler', 'save', () => this.run( () => this.finish() ) );
