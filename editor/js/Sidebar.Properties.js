@@ -1,5 +1,5 @@
-import { SidebarModifiers } from './Sidebar.Modifiers.js';
-import { canModify } from './modeling/Modifiers.js';
+import { SidebarModifiers } from './Sidebar.Modifiers.js?v=poly-context';
+import { canModify } from './modeling/Modifiers.js?v=poly-context';
 import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UITabbedPanel } from './libs/ui.js';
 

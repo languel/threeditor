@@ -1,6 +1,6 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
 import { selectionCandidates, applySelection, edgeLoop, pointInPolygon } from './MeshSelection.js';
-import { modifierSource, setModifierStack } from './Modifiers.js';
+import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';

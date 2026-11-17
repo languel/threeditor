@@ -1,4 +1,4 @@
-import { originActions } from './modeling/OriginActions.js?v=bottom-pivot';
+import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
 import { formatCombo } from './Keymap.js';
 

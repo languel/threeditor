@@ -1,6 +1,6 @@
 import { UIPanel } from './libs/ui.js';
 import { modelButton } from './modeling/ModelControls.js?v=modifiers';
-import { MODIFIERS, canModify, createModifier, setModifierStack, applyModifier } from './modeling/Modifiers.js';
+import { MODIFIERS, canModify, createModifier, setModifierStack, applyModifier } from './modeling/Modifiers.js?v=poly-context';
 import { hasRestriction } from './ObjectRestrictions.js';
 
 export function SidebarModifiers( editor ) {
