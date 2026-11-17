@@ -4,9 +4,9 @@ threeditor started as the `editor-experiment/` folder in `languel/threejslessons
 
 ## Run and deploy
 
-- Run `python3 -m http.server 5300` from the repository root and open `/editor/`. Keep the trailing slash for the relative module and asset paths.
+- Run `python3 -m http.server 5300` from the repository root and open `/`. The root entry uses an `editor/` base so modules, assets, and older `/editor/` links keep working. Keep both entry HTML files in sync.
 - GitHub Pages uses the Actions workflow in `.github/workflows/pages.yml`. A push to `main` assembles the static site and deploys it. The workflow can also be dispatched manually.
-- Smoke-test the deployed editor, including the `/threeditor/` base path, at [GitHub Pages](https://languel.github.io/threeditor/editor/).
+- Smoke-test the deployed editor, including the `/threeditor/` base path, at [GitHub Pages](https://languel.github.io/threeditor/).
 - The editor still registers the upstream cleanup service worker. It unregisters itself and clears old caches. Hard-reload if an older session is serving stale modules.
 
 ## Projection mapping and modeling
@@ -108,7 +108,7 @@ Validation: `node --test test/*.test.mjs` now has fifteen passing checks. Open `
 
 The final export smoke test caught and fixed a stale flat-demo list in `EditorHtml.js`; it now uses recursive `exampleResources()` from `ExampleCatalog.js`, including lesson assets. Source ZIP and a 34.5 MB Editable HTML exported successfully; the standalone HTML reopened on a separate origin with original GLBs and reimported Fox with its animation clips.
 
-The app remains available at `http://localhost:5300/editor/`. The separate exported-HTML QA server on port 5301 was stopped after the reopen check; no unrelated development servers were stopped. Deployment uses the GitHub Pages workflow on pushes to main.
+The app remains available at `http://localhost:5300/`. The separate exported-HTML QA server on port 5301 was stopped after the reopen check; no unrelated development servers were stopped. Deployment uses the GitHub Pages workflow on pushes to main.
 
 
 ## Asset previews and editable behaviors

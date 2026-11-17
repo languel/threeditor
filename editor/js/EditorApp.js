@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=mask-editor';
-import { Keymap } from './Keymap.js?v=surface-tools';
+import { Keymap } from './Keymap.js?v=blender-tools';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=surface-tools';
+import { Viewport } from './Viewport.js?v=blender-tools';
 import { Toolbar } from './Toolbar.js?v=mesh-build';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=surface-tools';

@@ -30,7 +30,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=surface-tools';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=surface-tools';
+import { ModelViewport } from './modeling/ModelViewport.js?v=blender-tools';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

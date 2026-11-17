@@ -2,7 +2,7 @@
 
 threeditor is a lightweight three.js workspace for staging a scene, editing readable JavaScript, and publishing a standalone project. It is based on the three.js r187 editor.
 
-[Open threeditor on GitHub Pages](https://languel.github.io/threeditor/editor/) · [Upstream three.js editor](https://github.com/mrdoob/three.js/tree/dev/editor)
+[Open threeditor on GitHub Pages](https://languel.github.io/threeditor/) · [Upstream three.js editor](https://github.com/mrdoob/three.js/tree/dev/editor)
 
 ## Run locally
 
@@ -10,7 +10,7 @@ threeditor is a lightweight three.js workspace for staging a scene, editing read
 python3 -m http.server 5300
 ```
 
-Open `http://127.0.0.1:5300/editor/` with the trailing slash. The hosted editor runs as static ES modules and loads a few libraries from a CDN. Serve it without COEP or COOP headers.
+Open `http://127.0.0.1:5300/` with the trailing slash. The hosted editor runs as static ES modules and loads a few libraries from a CDN. Serve it without COEP or COOP headers.
 
 Try the [Fox woodland demo](demos/fox-follow/) for an animated character with a Third Person follow camera. Its **Edit scene** link opens the saved project in the editor.
 
@@ -136,7 +136,7 @@ Right-click with an outline selected to close it, convert a planar path to a sha
 
 Select an authored mesh and press **2** to enter Edit mode. Switch on **Topology pen** with **6**. Click an edge to insert a point at the cursor. Drag a boundary edge to pull out a connected quad, or drag an interior edge or face to move it. **Ctrl-click** a face to insert a vertex. Shift-click vertices to extend the selection and press **M** to weld them. **Esc** cancels the active drag or exits the tool.
 
-**Draw freehand** samples a drag into an editable path using the current Placement setting. Press **3** or choose **Sculpt brushes** to sculpt an editable mesh, path, or shape. Pick **Grab**, **Push**, **Smooth**, **Relax**, **Pinch**, or **Twist**. Hold **Shift** to smooth during another brush stroke, and **Ctrl** to reverse Pinch and Twist. Relax slides points along the local surface or path to even out spacing. Use **[** and **]** to change the brush radius. Sculpting moves existing points, so denser geometry gives finer detail. Each stroke commits one undo step.
+**Draw freehand** samples each drag into a separate editable path using the current Placement setting. The tool stays active until you switch tools or press Escape. Blender shortcuts are the default. In Edit mode, **A** selects points, **Alt+A** deselects them, and **X** removes selected authored points. Press **3** or choose **Sculpt brushes** to sculpt an editable mesh, path, or shape. Pick **Grab**, **Push**, **Smooth**, **Relax**, **Pinch**, or **Twist**. Hold **Shift** to smooth during another brush stroke, and **Ctrl** to reverse Pinch and Twist. Relax slides points along the local surface or path to even out spacing. Use **[** and **]** to change the brush radius. Sculpting moves existing points, so denser geometry gives finer detail. Each stroke commits one undo step.
 
 - **Paths** can use straight segments or smooth curves, with open or closed ends. Uncheck **Constrain to local XY** for a spatial curve. Close a planar path to turn it into a filled shape.
 - **Shapes** can stay flat or use **Extrusion depth** to become solid projection surfaces.

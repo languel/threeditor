@@ -146,16 +146,11 @@ export class ModelViewport {
 			if ( event.key === 'Escape' ) {
 
 				if ( this.pen ) this.togglePen();
-				else if ( this.brush && this.brush !== 'freehand' ) this.setBrush( '' );
+				else if ( this.brush ) this.setBrush( '' );
 				else this.stop();
 
 			}
-			else if ( this.data.kind !== 'vertices' && this.indices.length ) this.edit( 'Remove modeling points', next => {
-
-				removePoints( next, this.indices );
-				return [];
-
-			} );
+			else this.removeSelection();
 
 		}, true );
 
@@ -229,9 +224,9 @@ export class ModelViewport {
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
 		this.adding = Boolean( this.data?.profile );
-		this.pen = false;
+		this.pen = this.editMode && Boolean( this.pen );
 		this.penHover = null;
-		this.brush = '';
+		if ( ! this.editMode ) this.brush = '';
 		this.overlay.hidden = ! this.object;
 		this.changed();
 		this.render();
@@ -267,7 +262,8 @@ export class ModelViewport {
 		this.editor.execute( new AddObjectCommand( this.editor, object ) );
 		this.start( object );
 		this.adding = empty && ! freehand;
-		if ( freehand ) this.brush = 'freehand';
+		this.pen = false;
+		this.brush = freehand ? 'freehand' : '';
 		this.changed();
 		this.render();
 
@@ -361,9 +357,25 @@ export class ModelViewport {
 
 	}
 
+	selectPoints( all ) {
+
+		if ( ! this.canEdit() ) return;
+		this.indices = all ? this.data.points.map( ( _, index ) => index ) : [];
+		this.changed();
+		this.render();
+
+	}
+
+	removeSelection() {
+
+		if ( this.data?.kind === 'vertices' || ! this.indices.length ) return;
+		this.edit( 'Remove modeling points', next => { removePoints( next, this.indices ); return []; } );
+
+	}
+
 	setBrush( brush ) {
 
-		if ( ! this.canEdit() || this.drag || this.gesture || ! this.data.points.length || brush && ! meshBrushes.some( ( [ id ] ) => id === brush ) ) return;
+		if ( ! this.canEdit() || this.drag || this.gesture || brush && ( ! this.data.points.length || ! meshBrushes.some( ( [ id ] ) => id === brush ) ) ) return;
 		this.pen = false;
 		this.brush = brush;
 		this.adding = false;
@@ -468,7 +480,7 @@ export class ModelViewport {
 
 	withPreview( draw ) {
 
-		const geometry = ( this.gesture || this.drag )?.geometry;
+		const geometry = this.drag?.newStroke ? null : ( this.gesture || this.drag )?.geometry;
 		if ( ! geometry || ! this.object ) return draw();
 		const object = this.object, original = object.geometry;
 		object.geometry = geometry;
@@ -1342,7 +1354,7 @@ export class ModelViewport {
 		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
-		if ( this.brush ) {
+		if ( this.brush && ( this.brush !== 'freehand' || this.data.kind === 'path' ) ) {
 
 			this.beginBrush( event );
 			return;
@@ -1351,7 +1363,7 @@ export class ModelViewport {
 		if ( ! this.pen && ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
-		if ( this.pen && hit < 0 && ! event.shiftKey ) {
+		if ( this.pen && this.data.faces?.length && hit < 0 && ! event.shiftKey ) {
 
 			if ( this.beginPen( event ) ) {
 
@@ -1423,6 +1435,7 @@ export class ModelViewport {
 			const placement = this.placementPoint( event, {} );
 			if ( ! placement?.point ) return;
 			stroke.samples = [ placement.point.toArray() ];
+			stroke.newStroke = this.data.points.length > 0;
 
 		} else {
 
@@ -1462,6 +1475,7 @@ export class ModelViewport {
 			stroke.cursor = cursor;
 			stroke.samples.push( placement.point.toArray() );
 			this.preview( stroke, stroke.samples.slice() );
+			if ( stroke.newStroke ) stroke.draft.closed = false;
 
 		} else {
 
@@ -1508,7 +1522,7 @@ export class ModelViewport {
 		const drag = this.drag;
 		if ( ! drag ) {
 
-			if ( this.pen && this.canEdit() && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
+			if ( this.pen && this.canEdit() && this.data.faces?.length && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
 
 				this.penHover = this.penHit( event ).edge;
 				this.draw();
@@ -1570,11 +1584,22 @@ export class ModelViewport {
 		event.stopImmediatePropagation();
 		const drag = this.releaseDrag( true );
 		if ( drag.pen ) { this.finishPen( drag, cancel ); return; }
-		const changed = drag.brush ? drag.draft?.points.some( ( point, index ) =>
+		const changed = drag.brush === 'freehand' ? drag.draft?.points.length >= 2 : drag.brush ? drag.draft?.points.some( ( point, index ) =>
 			point.some( ( value, axis ) => value !== this.data.points[ index ]?.[ axis ] ) ) : drag.draft && this.pointsChanged( drag );
 		if ( ! cancel && drag.geometry && this.canEdit() && changed ) {
 
-			if ( drag.brush === 'freehand' ) this.brush = '';
+			if ( drag.newStroke ) {
+
+				const source = this.object;
+				const object = modelObject( THREE, drag.draft, 'Editable path' );
+				object.position.copy( source.position );
+				object.quaternion.copy( source.quaternion );
+				object.scale.copy( source.scale );
+				drag.geometry.dispose();
+				this.editor.execute( new AddObjectCommand( this.editor, object, source.parent ), 'Draw freehand path' );
+				return;
+
+			}
 			this.commit( drag.brush === 'freehand' ? 'Draw freehand path' : drag.brush ? 'Sculpt mesh' : 'Move modeling points',
 				drag.draft, this.indices, drag.geometry );
 
