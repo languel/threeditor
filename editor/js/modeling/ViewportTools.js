@@ -153,10 +153,25 @@ export class ViewportTools {
 		}, true );
 
 		const signals = editor.signals;
+		signals.objectSelected.add( object => {
+
+			if ( this.mode === 'measure' || this.editor.modeling.editMode && object?.userData.measurement ) this.setMode( object?.userData.measurement ? 'measure' : '' );
+			else this.draw();
+
+		} );
 		signals.sceneRendered.add( () => this.draw() );
 		signals.sceneGraphChanged.add( () => this.collectMeasurements() );
 		signals.objectChanged.add( ( object, property ) => {
 
+			if ( this.mode === 'measure' && object === this.ruler && ! this.pointer ) {
+
+				const data = object.userData.measurement;
+				this.points = structuredClone( data.points );
+				Object.assign( this.measure, { unit: data.unit, closed: data.closed } );
+				this.buildOptions();
+				this.draw();
+
+			}
 			if ( property !== 'userData' ) return;
 			this.syncMaskControls();
 			if ( this.mode === 'mask' && object === this.maskSource ) this.readMask();
@@ -388,9 +403,9 @@ export class ViewportTools {
 
 			const unit = select( parent, 'Measurement units', Object.keys( lengthUnits ).map( name => [ name, name ] ) );
 			unit.value = this.measure.unit;
-			unit.onchange = () => { this.measure.unit = unit.value; this.draw(); };
+			unit.onchange = () => { this.measure.unit = unit.value; if ( this.ruler ) this.finish(); this.draw(); };
 			this.measureClosed = modelField( parent, 'Closed', 'toolMask', 'checkbox', this.measure.closed );
-			this.measureClosed.onchange = event => { this.measure.closed = event.target.checked; this.draw(); };
+			this.measureClosed.onchange = event => { this.measure.closed = event.target.checked; if ( this.ruler ) this.finish(); this.draw(); };
 			modelField( parent, 'Bind to mesh', 'link', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
 			modelField( parent, 'Snap vertices', 'snapVertex', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
 			this.finishButton = modelButton( parent, 'Save ruler', 'save', () => this.run( () => this.finish() ) );
@@ -455,6 +470,7 @@ export class ViewportTools {
 		if ( ! this.points.length ) return;
 		this.points.splice( this.selected < 0 ? this.points.length - 1 : this.selected, 1 );
 		this.selected = - 1;
+		if ( this.mode === 'measure' && this.ruler ) this.finish();
 		this.draw();
 
 	}
@@ -839,6 +855,7 @@ export class ViewportTools {
 		if ( this.pointer?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const stroke = this.stroke;
+		if ( event.type === 'pointerup' && this.mode === 'measure' && this.ruler ) this.finish();
 		this.release();
 		if ( event.type === 'pointerup' && stroke ) {
 
@@ -902,7 +919,7 @@ export class ViewportTools {
 
 				if ( ! isVisible( ruler ) || this.mode === 'measure' && ruler === this.ruler ) continue;
 				const data = ruler.userData.measurement;
-				this.drawRuler( ctx, frame, ruler, data.points, data, false );
+				this.drawRuler( ctx, frame, ruler, data.points, data, this.editor.selector.selection.includes( ruler ) );
 
 			}
 			if ( this.mode === 'measure' ) this.drawRuler( ctx, frame, this.ruler, this.points, this.measure, true );

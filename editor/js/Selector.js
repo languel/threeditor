@@ -1,3 +1,4 @@
+import { worldMeasurePoints } from './modeling/Measurements.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 
@@ -149,7 +150,36 @@ class Selector {
 
 		raycaster.setFromCamera( mouse, camera );
 
-		return this.getIntersects( raycaster );
+		const hits = this.getIntersects( raycaster );
+		const frame = this.editor.viewLayout?.frames.find( frame => frame.camera === camera );
+		const rect = frame?.rect || this.editor.renderer.domElement.getBoundingClientRect();
+		const cursor = new THREE.Vector2( point.x * rect.width, point.y * rect.height );
+		this.editor.scene.traverseVisible( object => {
+
+			const data = object.userData.measurement;
+			if ( ! data || ! isVisible( object ) || hasRestriction( object, 'unselectable' ) ) return;
+			const world = worldMeasurePoints( THREE, this.editor.scene, object, data.points );
+			const points = world.map( p => p.clone().project( camera ) );
+			const count = data.closed ? points.length : points.length - 1;
+			for ( let i = 0; i < count; i ++ ) {
+
+				const a = points[ i ], b = points[ ( i + 1 ) % points.length ];
+				if ( a.z < - 1 || a.z > 1 || b.z < - 1 || b.z > 1 ) continue;
+				const start = new THREE.Vector2( ( a.x + 1 ) * rect.width / 2, ( 1 - a.y ) * rect.height / 2 );
+				const end = new THREE.Vector2( ( b.x + 1 ) * rect.width / 2, ( 1 - b.y ) * rect.height / 2 );
+				const delta = end.clone().sub( start );
+				const t = delta.lengthSq() ? THREE.MathUtils.clamp( cursor.clone().sub( start ).dot( delta ) / delta.lengthSq(), 0, 1 ) : 0;
+				if ( cursor.distanceTo( start.addScaledVector( delta, t ) ) <= 8 ) {
+
+					hits.unshift( { object, point: world[ i ].clone().lerp( world[ ( i + 1 ) % world.length ], t ), distance: 0 } );
+					break;
+
+				}
+
+			}
+
+		} );
+		return hits;
 
 	}
 

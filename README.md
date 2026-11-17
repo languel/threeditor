@@ -258,3 +258,5 @@ Import asset files and their companion files together. Use literal asset paths s
 GitHub Pages deploys the static site when `main` is pushed. The [handoff](HANDOFF.md) covers the runtime, export paths, verification, and known gaps.
 
 The bundled formatter in `editor/js/libs/code-tools.js` is built from `tools/code-tools-entry.mjs` with Prettier 3.9.10, Terser 5.51.2, and esbuild: `esbuild tools/code-tools-entry.mjs --bundle --minify --format=esm --target=es2020 --legal-comments=inline --outfile=editor/js/libs/code-tools.js`.
+
+Saved measurements are selectable by clicking their lines or choosing them in the outliner. Press **Tab** (Edit mode) to drag endpoints, add points, change units, or close the ruler. Existing ruler edits save on pointer release and support undo/redo. Press **Tab** to return to Object mode; use **New ruler** to start a separate measurement.

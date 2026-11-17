@@ -211,6 +211,7 @@ export class ModelViewport {
 		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.setViewportSplit( true );
 		this.editMode = true;
 		this.setTarget( object );
+		if ( object?.userData.measurement ) this.editor.viewTools.setMode( 'measure' );
 
 	}
 
