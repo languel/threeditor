@@ -31,7 +31,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=poly-context';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=poly-context';
+import { ModelViewport } from './modeling/ModelViewport.js?v=context-tools';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
