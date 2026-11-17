@@ -1,3 +1,4 @@
+import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { modelButton } from './ModelControls.js';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
@@ -7,10 +8,14 @@ import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js';
 
-export function openMaskEditor( editor, light, showPicker = false ) {
+export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
 
-	if ( ! canEditLightMask( light ) || document.querySelector( '.mask-editor' ) ) return;
-	const initial = light.userData.projectionMask;
+	if ( ! vectorMode && ! canEditLightMask( light ) ) return;
+	const scene = editor.scene;
+	const saved = () => vectorMode ? scene.userData.vectorDrawing : light.userData.projectionMask;
+	let initial = saved();
+	let reference, referenceURL;
+	let referenceVisible = true;
 	let shapes = maskShapes( initial ), active = shapes.length - 1, vertex = -1, tool = 'edit', draft = [], gesture;
 	const undo = [], redo = [];
 	const node = ( tag, parent, label ) => {
@@ -21,11 +26,12 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		return item;
 
 	};
-	const dialog = node( 'dialog', document.body );
-	dialog.className = 'mapping-editor mask-editor';
-	dialog.setAttribute( 'aria-label', '2D mask editor' );
-	node( 'h3', dialog, ( light.name || light.type ) + ' · Mask editor' );
-	const toolbar = node( 'div', dialog );
+	const workspacePanel = node( 'section' );
+	workspacePanel.className = 'mapping-editor mask-editor';
+	if ( vectorMode ) workspacePanel.classList.add( 'vector-editor' );
+	workspacePanel.setAttribute( 'aria-label', vectorMode ? 'Image and vector editor' : '2D mask editor' );
+	node( 'h3', workspacePanel, vectorMode ? 'Image and vector editor' : ( light.name || light.type ) + ' · Mask editor' );
+	const toolbar = node( 'div', workspacePanel );
 	const tools = new Map();
 	const addTool = ( id, label, glyph ) => tools.set( id, modelButton( toolbar, label, glyph, () => {
 
@@ -49,7 +55,7 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 	radius.oninput = () => draw();
 	modelButton( toolbar, 'Undo mask edit', 'undo', () => restore( undo, redo ) );
 	modelButton( toolbar, 'Redo mask edit', 'redo', () => restore( redo, undo ) );
-	const workspace = node( 'section', dialog );
+	const workspace = node( 'section', workspacePanel );
 	const canvas = node( 'canvas', workspace );
 	canvas.setAttribute( 'aria-label', 'Projection frame' );
 	canvas.tabIndex = 0;
@@ -57,7 +63,7 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 	canvas.height = 490;
 	const ctx = canvas.getContext( '2d' );
 	const panel = node( 'aside', workspace );
-	node( 'label', panel, 'Mask shapes' ).htmlFor = 'mask-shape-list';
+	node( 'label', panel, vectorMode ? 'Vector shapes' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
 	const layers = node( 'select', panel );
 	layers.id = 'mask-shape-list';
 	layers.size = 5;
@@ -67,8 +73,16 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 	name.onchange = () => change( () => { shapes[ active ].name = name.value.trim() || 'Mask'; } );
 	const mode = node( 'select', panel );
 	mode.setAttribute( 'aria-label', 'Shape operation' );
-	mode.append( new Option( 'Light inside', 'inside' ), new Option( 'Block inside', 'cutout' ) );
+	mode.append( new Option( vectorMode ? 'Fill' : 'Light inside', 'inside' ), new Option( vectorMode ? 'Cutout' : 'Block inside', 'cutout' ) );
 	mode.onchange = () => change( () => { shapes[ active ].mode = mode.value; } );
+	const fill = vectorMode ? node( 'input', panel ) : null;
+	if ( fill ) {
+
+		fill.type = 'color';
+		fill.setAttribute( 'aria-label', 'Shape fill' );
+		fill.onchange = () => change( () => { shapes[ active ].color = fill.value; } );
+
+	}
 	const layerActions = node( 'div', panel );
 	layerActions.className = 'modeling-actions';
 	const remove = modelButton( layerActions, 'Delete shape', 'delete', () => change( () => {
@@ -103,7 +117,7 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 	const importActions = node( 'div', picker );
 	importActions.className = 'modeling-actions';
 	const fit = modelButton( importActions, 'Fit outline to frame', 'toolGrid', () => importOutline( false ) );
-	const project = modelButton( importActions, 'Project outline in place', 'toolMask', () => importOutline( true ) );
+	const project = ! vectorMode && modelButton( importActions, 'Project outline in place', 'toolMask', () => importOutline( true ) );
 	const pickerNotes = node( 'small', picker );
 	function filter() {
 
@@ -111,29 +125,73 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		const matches = available.filter( ( [ , path ] ) => path.toLowerCase().includes( query ) );
 		sources.replaceChildren( ...matches.map( ( [ object, path ] ) => new Option( path, object.uuid ) ) );
 		sources.selectedIndex = matches.length ? 0 : -1;
-		fit.disabled = project.disabled = ! matches.length;
+		fit.disabled = ! matches.length;
+		if ( project ) project.disabled = fit.disabled;
 		pickerNotes.textContent = matches.length ? '' : available.length ? 'No matching outlines.' : 'Create a closed Shape or Path in the scene first.';
 
 	}
 	search.oninput = filter;
 	filter();
 
-	const footer = node( 'div', dialog );
+	const footer = node( 'div', workspacePanel );
 	const status = node( 'output', footer );
 	status.setAttribute( 'role', 'status' );
-	modelButton( footer, 'Apply masks', 'apply', () => {
+	if ( vectorMode ) {
+
+		const media = node( 'div', panel );
+		const upload = node( 'input', media );
+		upload.type = 'file';
+		upload.accept = 'image/*';
+		upload.hidden = true;
+		modelButton( media, 'Open reference image', 'assets', () => upload.click() );
+		const toggle = modelButton( media, 'Show reference image', 'scene', () => {
+
+			referenceVisible = ! referenceVisible;
+			toggle.setAttribute( 'aria-pressed', String( referenceVisible ) );
+			draw();
+
+		} );
+		toggle.setAttribute( 'aria-pressed', 'true' );
+		upload.onchange = () => {
+
+			const file = upload.files[ 0 ];
+			if ( ! file ) return;
+			if ( referenceURL ) URL.revokeObjectURL( referenceURL );
+			const image = new Image();
+			reference = image;
+			image.onload = draw;
+			image.onerror = () => { status.textContent = 'The image could not be decoded.'; };
+			image.src = referenceURL = URL.createObjectURL( file );
+			image.alt = file.name;
+			upload.value = '';
+
+		};
+		modelButton( footer, 'Export SVG', 'code', exportSVG );
+		modelButton( footer, 'Export PNG', 'save', exportPNG );
+
+	}
+
+	modelButton( footer, vectorMode ? 'Apply drawing' : 'Apply masks', 'apply', () => {
 
 		try {
 
 			if ( draft.length ) throw new Error( 'Close the polygon with Enter, or press Escape to discard it.' );
-			if ( light.userData.projectionMask !== initial ) throw new Error( 'The masks changed. Reopen the editor to continue.' );
-			setLightMask( editor, light, shapes.length ? { shapes } : null );
-			dialog.close();
+			if ( saved() !== initial ) throw new Error( 'The saved shapes changed. Reopen the editor to continue.' );
+			const value = { shapes: structuredClone( shapes ) };
+			if ( vectorMode ) {
+
+				const command = new SetValueCommand( editor, scene, 'userData', { ...scene.userData, vectorDrawing: value } );
+				command.updatable = false;
+				editor.execute( command, 'Edit vector drawing' );
+
+			} else setLightMask( editor, light, shapes.length ? value : null );
+			initial = saved();
+			status.textContent = vectorMode ? 'Drawing applied.' : 'Masks applied.';
 
 		} catch ( error ) { status.textContent = error.message; }
 
 	} );
-	modelButton( footer, 'Cancel', 'remove', () => dialog.close() );
+
 
 	function snapshot() {
 
@@ -217,6 +275,12 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		name.value = shape?.name || '';
 		mode.value = shape?.mode || 'inside';
 		name.disabled = mode.disabled = remove.disabled = duplicate.disabled = ! shape;
+		if ( fill ) {
+
+			fill.value = color( shape );
+			fill.disabled = ! shape || shape.mode === 'cutout';
+
+		}
 		draw();
 
 	}
@@ -232,11 +296,65 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		if ( closed ) ctx.closePath();
 
 	}
+	function color( shape ) {
+
+		return /^#[0-9a-f]{6}$/i.test( shape?.color ) ? shape.color : '#72cbef';
+
+	}
+	function drawImage( target, image, x, y, width, height ) {
+
+		const iw = image?.videoWidth || image?.naturalWidth || image?.width;
+		const ih = image?.videoHeight || image?.naturalHeight || image?.height;
+		if ( ! iw || ! ih ) return;
+		const scale = Math.min( width / iw, height / ih );
+		try { target.drawImage( image, x + ( width - iw * scale ) / 2, y + ( height - ih * scale ) / 2, iw * scale, ih * scale ); }
+		catch { /* Wait for a decoded image. */ }
+
+	}
+	function drawVectors( target, width, height ) {
+
+		target.save();
+		for ( const operation of [ 'inside', 'cutout' ] ) for ( const shape of shapes ) {
+
+			if ( shape.mode !== operation ) continue;
+			target.globalCompositeOperation = operation === 'cutout' ? 'destination-out' : 'source-over';
+			target.fillStyle = color( shape );
+			target.beginPath();
+			shape.points.forEach( ( [ x, y ], i ) => target[ i ? 'lineTo' : 'moveTo' ]( x * width, y * height ) );
+			target.closePath();
+			target.fill( 'evenodd' );
+
+		}
+		target.restore();
+
+	}
+	const vectorCanvas = document.createElement( 'canvas' );
+	function exportSVG() {
+
+		const path = shape => shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' ) + ' Z';
+		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape =>
+			'<path fill="' + ( operation === 'cutout' ? 'black' : color( shape ) ) + '" fill-rule="evenodd" d="' + path( shape ) + '"/>' ).join( '' );
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' +
+			layers( 'cutout' ) + '</mask></defs><g mask="url(#cutouts)">' + layers( 'inside' ) + '</g></svg>';
+		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
+
+	}
+	function exportPNG() {
+
+		const output = document.createElement( 'canvas' );
+		const side = output.width = output.height = 1024;
+		const target = output.getContext( '2d' );
+		if ( referenceVisible ) drawImage( target, reference, 0, 0, side, side );
+		drawVectors( target, side, side );
+		output.toBlob( blob => { if ( blob ) editor.utils.save( blob, 'drawing.png' ); }, 'image/png' );
+
+	}
+
 	function draw() {
 
-		const output = light.projectorOutput;
-		const image = output?.source || ( ! output && light.map?.image );
-		const aspect = light.projectorFrame?.aspect || 1;
+		const output = light?.projectorOutput;
+		const image = vectorMode ? ( referenceVisible && reference ) : output?.source || ( ! output && light.map?.image );
+		const aspect = light?.projectorFrame?.aspect || 1;
 		const width = Math.min( canvas.width - 36, ( canvas.height - 36 ) * aspect ), height = width / aspect;
 		frame = { x: ( canvas.width - width ) / 2, y: ( canvas.height - height ) / 2, width, height };
 		const { x, y } = frame;
@@ -257,16 +375,23 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 			ctx.stroke();
 
 		}
-		const iw = image?.videoWidth || image?.naturalWidth || image?.width;
-		const ih = image?.videoHeight || image?.naturalHeight || image?.height;
-		if ( iw && ih ) {
+		if ( vectorMode ) {
 
-			const scale = Math.min( width / iw, height / ih );
-			try { ctx.drawImage( image, x + ( width - iw * scale ) / 2, y + ( height - ih * scale ) / 2, iw * scale, ih * scale ); }
-			catch { /* Wait for a decoded image. */ }
+			const w = Math.ceil( width ), h = Math.ceil( height );
+			if ( vectorCanvas.width !== w ) vectorCanvas.width = w;
+			if ( vectorCanvas.height !== h ) vectorCanvas.height = h;
+			const layer = vectorCanvas.getContext( '2d' );
+			layer.clearRect( 0, 0, w, h );
+			drawImage( layer, image, 0, 0, w, h );
+			drawVectors( layer, w, h );
+			ctx.drawImage( vectorCanvas, x, y, width, height );
+
+		} else {
+
+			drawImage( ctx, image, x, y, width, height );
+			applyProjectionMask( ctx, { shapes }, x, y, width, height );
 
 		}
-		applyProjectionMask( ctx, { shapes }, x, y, width, height );
 		for ( const [ index, shape ] of shapes.entries() ) {
 
 			trace( shape.points, true );
@@ -425,9 +550,8 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		if ( best ) change( () => { points.splice( best[ 0 ], 0, best[ 1 ] ); vertex = best[ 0 ]; } );
 
 	};
-	dialog.onkeydown = event => {
+	workspacePanel.onkeydown = event => {
 
-		event.stopPropagation();
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
 		if ( key === 'enter' && draft.length ) { event.preventDefault(); closeDraft(); }
@@ -441,14 +565,23 @@ export function openMaskEditor( editor, light, showPicker = false ) {
 		}
 
 	};
-	dialog.oncancel = event => {
+	const abortDraft = event => {
 
-		if ( draft.length ) { event.preventDefault(); draft = []; draw(); }
+		if ( event.key !== 'Escape' || ! draft.length ) return;
+		event.preventDefault();
+		draft = [];
+		draw();
 
 	};
-	const tick = setInterval( () => draw(), 150 );
-	dialog.addEventListener( 'close', () => { clearInterval( tick ); dialog.remove(); } );
-	dialog.showModal();
+	workspacePanel.addEventListener( 'keydown', abortDraft );
+	const tick = light?.projectorOutput && setInterval( draw, 150 );
+	editor.editWorkspace.mount( vectorMode ? 'image' : 'mask', light, workspacePanel, () => {
+
+		clearInterval( tick );
+		if ( reference ) reference.onload = reference.onerror = null;
+		if ( referenceURL ) URL.revokeObjectURL( referenceURL );
+
+	} );
 	refresh();
 	if ( showPicker ) search.focus();
 	else canvas.focus();

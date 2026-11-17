@@ -1,3 +1,4 @@
+import { createEditWorkspace } from './modeling/EditWorkspace.js';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
@@ -27,7 +28,7 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=mask-editor';
+import { ViewportTools } from './modeling/ViewportTools.js?v=docked-2d';
 import { ViewLayout } from './modeling/ViewLayout.js';
 import { ModelViewport } from './modeling/ModelViewport.js?v=outline-brushes';
 import { PostProcessingHost } from './PostProcessing.js';
@@ -77,6 +78,7 @@ function Viewport( editor ) {
 	signals.timelineFrameChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
+	editor.editWorkspace = createEditWorkspace( editor, container.dom, toolbarRow );
 	const splatHost = new SplatHost();
 	let secondarySplats = null;
 	const postHost = new PostProcessingHost();

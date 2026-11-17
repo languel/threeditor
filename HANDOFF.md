@@ -21,6 +21,12 @@ threeditor started as the `editor-experiment/` folder in `languel/threejslessons
 
 Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open **File → Examples → Projection mapping**. Move a ridge vertex in **Yosemite relief** and undo it, apply an inverted mask in **Canyon aperture**, then enter Play in **Gallop triptych** and confirm that the video advances across the three panels. The [example notes](editor/examples/projection/README.md) describe the scenes and their sources.
 
+### Docked 2D editing
+
+- `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp in the viewport and retains the 3D layout on exit. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.
+- Image & Vector reuses the drawing workspace in `MaskEditor.js`. It saves the vector contours in `scene.userData.vectorDrawing`. The local reference image is held in memory during editing. SVG exports the vectors, and PNG renders the shape and reference composite.
+- Smoke-test by opening Mask from the viewport toolbar and applying a multi-shape mask, switching to UV on a selected mesh, then loading a reference in Image & Vector. Apply a colored contour, export SVG and PNG, and reopen the mode to confirm the contour persists. Use **3D View** to return, then test the projector in Play.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

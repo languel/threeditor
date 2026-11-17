@@ -2669,18 +2669,58 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 .transform-dropdown .transform-pie-choice { border-color: transparent; white-space: normal; }
 .transform-dropdown .transform-pie-choice:is(:hover, :focus-visible, [aria-pressed="true"]) { border-color: var(--theme-accent); }
 
-.mapping-editor {
-	max-width: calc(100vw - 24px);
-	max-height: calc(100vh - 24px);
-	padding: 12px;
-	border: 1px solid #535965;
-	border-radius: 6px;
-	background: #23262b;
-	color: #ebedf2;
+.viewport-edit-workspace {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	background: var(--theme-background);
+	color: var(--theme-text);
 }
 
-.mapping-editor::backdrop {
-	background: #0007;
+#viewport.editing-2d > :not(.viewport-edit-workspace) { visibility: hidden; }
+
+.viewport-edit-workspace[hidden],
+.viewport-edit-modes [hidden],
+.vector-editor [hidden] { display: none !important; }
+
+body.translucent-panels #viewport .viewport-edit-workspace {
+	inset: var(--menubar-height) var(--right-dock) calc(var(--timeline-h) + var(--sidebar-bottom)) var(--left-dock);
+}
+
+.viewport-edit-modes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 4px;
+	pointer-events: auto;
+	background: var(--theme-background);
+	border-radius: 6px;
+}
+
+.viewport-edit-workspace > .viewport-edit-modes {
+	flex-shrink: 0;
+	border-bottom: 1px solid #80808048;
+	padding: 8px 12px;
+	border-radius: 0;
+}
+
+.viewport-edit-modes button[aria-pressed="true"],
+.viewport-edit-workspace button[aria-pressed="true"] {
+	background: #7099c442;
+}
+
+.viewport-edit-content {
+	padding: 10px 12px;
+	min-height: 0;
+	min-width: 0;
+	overflow: auto;
+	container-type: inline-size;
+}
+
+.mapping-editor {
+	color: var(--theme-text);
 }
 
 .mapping-editor > div {
@@ -2703,14 +2743,12 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 	color: #ffc9a5;
 }
 
-.mask-editor {
-	width: min(1040px, calc(100vw - 54px));
-}
-
 .mask-editor h3 {
 	font-size: 14px;
 	margin: 0 0 10px;
 }
+
+.mapping-editor canvas:focus-visible { outline: 1px solid var(--theme-accent); }
 
 .mask-editor section {
 	display: grid;
@@ -2736,11 +2774,7 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 	margin-bottom: 5px;
 }
 
-.mask-editor button[aria-pressed="true"] {
-	background: #7099c442;
-}
-
-@media (max-width: 620px) {
+@container (max-width: 530px) {
 	.mask-editor section {
 		grid-template-columns: 1fr;
 	}

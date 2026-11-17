@@ -52,21 +52,23 @@ export function addProjectorTargetControl( editor, projector, host, run ) {
 
 export function openUVEditor( editor, object ) {
 
-	if ( document.querySelector( '.mapping-editor' ) || hasRestriction( object, 'locked' ) ) return;
+	if ( ! object || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) return;
 	const warp = isProjector( object );
-	const dialog = document.createElement( 'dialog' );
-	dialog.className = 'mapping-editor';
-	dialog.setAttribute( 'aria-label', warp ? 'Projection warp editor' : 'UV editor' );
+	const workspacePanel = document.createElement( 'section' );
+	workspacePanel.className = 'mapping-editor';
+	workspacePanel.setAttribute( 'aria-label', warp ? 'Projection warp editor' : 'UV editor' );
 	const toolbar = document.createElement( 'div' );
 	const canvas = document.createElement( 'canvas' );
-	canvas.width = canvas.height = 440;
+	canvas.width = canvas.height = 640;
+	canvas.tabIndex = 0;
+	canvas.setAttribute( 'aria-label', warp ? 'Projection warp grid' : 'UV grid' );
 	const ctx = canvas.getContext( '2d' );
 	const status = document.createElement( 'output' );
 	status.setAttribute( 'role', 'status' );
 	const size = object.userData.projectorWarp?.size || 4;
 	let geometry = object.geometry;
 	let selected = [], dragging;
-	const original = object.geometry;
+	let original = object.geometry;
 	function reset() {
 
 		if ( warp ) return structuredClone( object.userData.projectorWarp?.points || Array.from( { length: size * size },
@@ -115,19 +117,21 @@ export function openUVEditor( editor, object ) {
 
 			if ( object.geometry !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
 			if ( ! points.length ) throw new Error( 'Choose an automatic layout first.' );
-			const next = geometry.clone();
+			const next = new THREE.BufferGeometry().copy( geometry );
 			const uv = next.attributes.uv;
 			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
 			uv.needsUpdate = true;
 			const command = new SetGeometryCommand( editor, object, next );
 			command.updatable = false;
 			editor.execute( command, 'Edit UVs' );
+			if ( geometry !== original ) geometry.dispose();
+			original = geometry = next;
 
 		}
-		dialog.close();
+		status.textContent = warp ? 'Warp applied.' : 'UVs applied.';
 
 	} ) );
-	modelButton( toolbar, 'Cancel', 'remove', () => dialog.close() );
+	modelButton( toolbar, 'Close workspace', 'exitTool', () => editor.editWorkspace.close() );
 	function line( indices ) {
 
 		ctx.beginPath();
@@ -228,10 +232,13 @@ export function openUVEditor( editor, object ) {
 		draw();
 
 	};
-	dialog.append( toolbar, canvas, status );
-	document.body.append( dialog );
-	dialog.addEventListener( 'close', () => { if ( ! warp && geometry !== original ) geometry.dispose(); dialog.remove(); } );
-	dialog.showModal();
+	workspacePanel.append( toolbar, canvas, status );
+	editor.editWorkspace.mount( warp ? 'warp' : 'uv', object, workspacePanel, () => {
+
+		if ( ! warp && geometry !== original ) geometry.dispose();
+
+	} );
+	canvas.focus();
 	draw();
 
 }
