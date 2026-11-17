@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
-import { formatCombo } from './Keymap.js?v=mode-shelves';
+import { formatCombo } from './Keymap.js?v=mixed-editor-areas';
 
 function ContextMenu( editor, viewport ) {
 
@@ -182,6 +182,12 @@ function ContextMenu( editor, viewport ) {
 				{ label: 'Horizontal Split', section, run: () => editor.setViewportSplit( true, 'horizontal' ) }
 			);
 			if ( editor.viewportSplit ) actions.push( { label: 'Close Area', section, run: () => editor.viewLayout.closeArea( areaPointer ) } );
+
+		} else if ( area === 'editor-2d' ) {
+
+			const section = 'Editor area';
+			if ( editor.editWorkspace.canSplit ) actions.push( { label: 'Toggle 3D view alongside', section, run: () => editor.editWorkspace.toggleSplit() } );
+			actions.push( { label: 'Close Area', section, run: () => editor.editWorkspace.close() } );
 
 		}
 		show( 'Command palette', actions, { x: rect.left + rect.width / 2 - 115, y: rect.top + Math.min( 90, rect.height / 4 ) } );

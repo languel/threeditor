@@ -2,19 +2,19 @@ import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=area-splits';
-import { Keymap } from './Keymap.js?v=mode-shelves';
+import { Keymap } from './Keymap.js?v=mixed-editor-areas';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=mode-shelves';
+import { Viewport } from './Viewport.js?v=mixed-editor-areas';
 import { Toolbar } from './Toolbar.js?v=workspace-modes';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=properties-areas';
+import { Sidebar } from './Sidebar.js?v=mixed-editor-areas';
 import { Menubar } from './Menubar.js?v=mode-shelves';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=mode-shelves';
+import { ContextMenu } from './ContextMenu.js?v=mixed-editor-areas';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
@@ -76,7 +76,7 @@ async function startEditor( portable = null ) {
 	editor.modalTransform = new ModalTransform( editor );
 	editor.p5Preview = new P5Preview( editor );
 	const viewport = new Viewport( editor );
-	document.body.appendChild( viewport.dom );
+	document.body.append( viewport.dom, editor.editWorkspace.dock );
 
 	const toolbar = new Toolbar( editor );
 	editor.viewportToolbar.prepend( toolbar.dom );

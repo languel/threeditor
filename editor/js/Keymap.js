@@ -58,7 +58,7 @@ const definitions = [
  ['animationPlay','Play animation','Animation','','space'], ['animationPause','Pause animation','Animation','',''], ['animationStop','Stop animation','Animation','','']
 ];
 
-const areaSelector = '#viewport, #outliner, #sidebar, #animation, #code-panel, #menubar';
+const areaSelector = '#viewport, #editor-2d, #outliner, #sidebar, #animation, #code-panel, #menubar';
 const textControls = 'input, textarea, select, .CodeMirror, [contenteditable]:not([contenteditable="false"])';
 const sceneSelection = new Set( ['clearSelection','selectAll','selectNone','delete','deleteBack','duplicate'] );
 const viewportCategories = new Set( ['Modeling','Transform','Navigation','View','Selection'] );
@@ -129,7 +129,7 @@ class Keymap {
   const focused=document.activeElement;
   const pointed=this.pointer&&document.elementFromPoint(...this.pointer);
   const area=(focused?.closest(textControls)&&areaOf(focused)) || areaOf(pointed) || areaOf(focused) || 'viewport';
-  return area==='viewport'&&this.editor.editWorkspace?.mode?'2d':area;
+  return area==='viewport'&&this.editor.editWorkspace?.exclusive?'editor-2d':area;
  }
  allowsViewportInput(event){
   return this.area==='viewport'&&!this.recording&&!event.defaultPrevented&&!event.isComposing&&
@@ -158,7 +158,7 @@ class Keymap {
   const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
   const meshAction = meshActions.includes(id);
   if(!elementSelect&&!meshAction&&!['modePie','objectMode','surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
-  if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
+  if(!m||e.editWorkspace?.exclusive||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
   if ( id === 'meshSculptMode' ) return m.canSculptTarget( e.selected );
   if ( id === 'modePie' || id === 'objectMode' ) return true;
   if ( elementSelect || meshAction ) {

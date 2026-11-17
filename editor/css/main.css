@@ -506,7 +506,7 @@ body.presenting .presentation-exit { display: block; }
 	.presentation-exit:hover { opacity: 1; }
 }
 
-body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-panel, #animation, #animation-resizer, .panel-edge) {
+body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resizer, #code-panel, #animation, #animation-resizer, .panel-edge) {
 	visibility: hidden;
 }
 
@@ -2717,7 +2717,7 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 
 .viewport-edit-workspace {
 	position: absolute;
-	inset: 0;
+	inset: var(--menubar-height) var(--right-dock) calc(var(--timeline-h) + var(--sidebar-bottom)) var(--left-dock);
 	z-index: 5;
 	display: flex;
 	flex-direction: column;
@@ -2725,15 +2725,33 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 	color: var(--theme-text);
 }
 
-#viewport.editing-2d > :not(.viewport-edit-workspace) { visibility: hidden; }
+#viewport.editing-2d { visibility: hidden; }
 
 .viewport-edit-workspace[hidden],
 .viewport-edit-modes [hidden],
 .vector-editor [hidden] { display: none !important; }
 
-body.translucent-panels #viewport .viewport-edit-workspace {
-	inset: var(--menubar-height) var(--right-dock) calc(var(--timeline-h) + var(--sidebar-bottom)) var(--left-dock);
+body.workspace-2d-split {
+	--editor-split-width: calc((100vw - var(--left-dock) - var(--right-dock)) * var(--editor-split-ratio, .5));
 }
+body.workspace-2d-split #editor-2d { width: var(--editor-split-width); right: auto; }
+body.workspace-2d-split #viewport {
+	inset: var(--menubar-height) var(--right-dock) calc(var(--timeline-h) + var(--sidebar-bottom)) calc(var(--left-dock) + var(--editor-split-width));
+}
+body.workspace-2d-split.translucent-panels #viewport .viewport-header { inset: 0 0 auto; }
+body.workspace-2d-split.translucent-panels #viewport #viewHelper { right: 0 !important; top: 30px !important; }
+body.workspace-2d-split.translucent-panels #viewport #info { left: 10px !important; bottom: 50px !important; }
+.editor-2d-header {
+	display: flex;
+	align-items: center;
+	min-height: 32px;
+	gap: 8px;
+	padding: 0 8px;
+	background: color-mix(in srgb, var(--theme-text) 7%, var(--theme-background));
+}
+.editor-2d-target { margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .72; }
+.editor-2d-divider { position: absolute; inset: 0 -3px 0 auto; width: 6px; z-index: 2; cursor: col-resize; touch-action: none; background: var(--theme-surface); }
+.editor-2d-divider:is(:hover, :focus-visible, :active) { background: var(--theme-accent); }
 
 .viewport-edit-modes button[aria-pressed="true"],
 .viewport-edit-workspace button[aria-pressed="true"] {

@@ -1,5 +1,5 @@
 import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=brush-shortcuts';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=mixed-editor-areas';
 import { transformSnapStep } from './TransformSettings.js?v=workspace-modes';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
@@ -31,7 +31,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=mode-shelves';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=mode-shelves';
+import { ModelViewport } from './modeling/ModelViewport.js?v=mixed-editor-areas';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -1052,7 +1052,7 @@ function Viewport( editor ) {
 
 	signals.windowResize.add( function () {
 
-		const overlay = document.body.classList.contains( 'translucent-panels' );
+		const overlay = document.body.classList.contains( 'translucent-panels' ) && ! document.body.classList.contains( 'workspace-2d-split' );
 		const sidebar = document.getElementById( 'sidebar' );
 		const right = overlay && sidebar?.dataset.dock === 'open' && window.innerWidth > 600 ? sidebar.offsetWidth : 0;
 		const top = overlay ? parseFloat( getComputedStyle( document.body ).getPropertyValue( '--menubar-height' ) ) || 0 : 0;

@@ -127,6 +127,12 @@ Use the mode selector at the upper left of the viewport to enter Object Mode, Ed
 
 Use **Enter** to apply a mask or save a ruler or path. **Esc** cancels an active operation first; otherwise it clears the selection while keeping the current tool.
 
+## 2D and 3D areas
+
+Open **UV** or **Image & Vector** from **2D Editors**. When there is room, the 2D editor opens on the left with a live 3D view on the right. Drag the divider or focus it and press Left or Right to resize. Use the split glyph in the 2D header to switch between the split and a full-width editor. Narrow windows use the full-width editor. Mask and Warp can also use the split.
+
+The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to use modeling shortcuts there.
+
 ## Outliner and Properties
 
 The Outliner stays above Properties, with a divider you can drag or resize with the arrow keys. Search filters the hierarchy and includes parents of matching objects. Properties uses vertical glyph tabs for Scene, Object, Geometry, Material, Components, Modeling, Modifiers, and Animations. The available tabs follow the selection. Open **Scene** for Background, Environment, Fog, Bloom, and Focus.

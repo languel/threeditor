@@ -20,6 +20,14 @@ async function check() {
 		await page.waitForFunction( async () => window.editor?.renderer && await editor.startupReady.then( () => true ) );
 		await page.getByLabel( '2D Editors', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Image and vector mode' } ).click();
+		const twoD = page.locator( '#editor-2d' );
+		const liveViewport = page.locator( '#viewport' );
+		const splitDivider = page.getByRole( 'separator', { name: 'Resize 2D and 3D areas' } );
+		assert.equal( await splitDivider.isVisible(), true );
+		const originalEditorWidth = ( await twoD.boundingBox() ).width;
+		await splitDivider.press( 'ArrowRight' );
+		assert.ok( ( await twoD.boundingBox() ).width > originalEditorWidth );
+		assert.equal( await liveViewport.isVisible(), true );
 		await page.getByRole( 'button', { name: 'Draw rectangle' } ).click();
 		const drawing = await page.getByLabel( 'Vector drawing canvas' ).boundingBox();
 		const start = [ drawing.x + drawing.width * .4, drawing.y + drawing.height * .4 ];
@@ -68,6 +76,34 @@ async function check() {
 		assert.ok( ( await outliner.boundingBox() ).height > oldHeight );
 		await page.locator( '#viewport' ).click( { position: { x: 240, y: 115 } } );
 		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Receiver' ) ) );
+		await page.getByLabel( '2D Editors', { exact: true } ).click();
+		await page.getByRole( 'button', { name: 'UV mode', exact: true } ).click();
+		await page.getByRole( 'region', { name: 'UV editor', exact: true } ).waitFor();
+		assert.equal( await twoD.locator( '.editor-2d-target' ).textContent(), 'Receiver' );
+		await page.evaluate( () => {
+
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+			mesh.name = 'Second UV receiver';
+			editor.addObject( mesh );
+			editor.select( mesh );
+
+		} );
+		assert.equal( await twoD.locator( '.editor-2d-target' ).textContent(), 'Second UV receiver' );
+		await twoD.getByRole( 'button', { name: 'Auto layout' } ).click();
+		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Receiver' ) ) );
+		assert.equal( await twoD.locator( '.editor-2d-target' ).textContent(), 'Second UV receiver' );
+		await liveViewport.hover();
+		await page.evaluate( () => document.activeElement.blur() );
+		await page.keyboard.press( 'Tab' );
+		assert.equal( await page.evaluate( () => editor.viewTools.workspaceMode ), 'edit' );
+		assert.equal( await splitDivider.isVisible(), true );
+		await page.keyboard.press( 'Tab' );
+		await twoD.getByRole( 'button', { name: 'Show 3D view alongside' } ).click();
+		assert.equal( await liveViewport.isVisible(), false );
+		await twoD.getByRole( 'button', { name: 'Show 3D view alongside' } ).click();
+		await twoD.getByRole( 'button', { name: 'Close editor area' } ).click();
+		await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Second UV receiver' ) ) );
+		await liveViewport.hover();
 		await page.keyboard.press( 'z' );
 		await page.getByRole( 'dialog', { name: 'Viewport shading' } ).getByRole( 'button', { name: 'Wireframe' } ).click();
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'wireframe' );

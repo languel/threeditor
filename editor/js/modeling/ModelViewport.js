@@ -122,7 +122,7 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
+			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( event.key === 'Escape' && ( this.gesture || this.drag ) ) {
 
@@ -227,7 +227,7 @@ export class ModelViewport {
 
 	start( object ) {
 
-		this.editor.editWorkspace?.close();
+		if ( this.editor.editWorkspace?.exclusive ) this.editor.editWorkspace.close();
 		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
 		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.setViewportSplit( true );
 		this.editMode = true;
@@ -1019,7 +1019,7 @@ export class ModelViewport {
 
 	draw() {
 
-		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
+		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.exclusive ) return;
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
 		const w = Math.round( bounds.width * ratio ), h = Math.round( bounds.height * ratio );
@@ -1733,7 +1733,7 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
-		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.mode &&
+		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
 			event.button === 0 && ! event.altKey && event.target === this.editor.renderer?.domElement ) {
 
 			event.preventDefault(); event.stopImmediatePropagation();
@@ -1749,7 +1749,7 @@ export class ModelViewport {
 
 		}
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.exclusive || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
 		if ( this.knife ) { this.beginKnife( event ); return; }

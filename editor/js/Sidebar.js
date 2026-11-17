@@ -1,7 +1,7 @@
 import { UITabbedPanel } from './libs/ui.js';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=properties-areas';
-import { SidebarProperties } from './Sidebar.Properties.js?v=properties-areas';
+import { SidebarProperties } from './Sidebar.Properties.js?v=mixed-editor-areas';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=selection-outline';
 import { SidebarStreams } from './Sidebar.Streams.js';
