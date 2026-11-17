@@ -11,7 +11,7 @@ import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=mode-shelves';
 import { Toolbar } from './Toolbar.js?v=workspace-modes';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=code-toggle';
+import { Sidebar } from './Sidebar.js?v=properties-areas';
 import { Menubar } from './Menubar.js?v=mode-shelves';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=mode-shelves';

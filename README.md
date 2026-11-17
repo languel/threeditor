@@ -127,6 +127,10 @@ Use the mode selector at the upper left of the viewport to enter Object Mode, Ed
 
 Use **Enter** to apply a mask or save a ruler or path. **Esc** cancels an active operation first; otherwise it clears the selection while keeping the current tool.
 
+## Outliner and Properties
+
+The Outliner stays above Properties, with a divider you can drag or resize with the arrow keys. Search filters the hierarchy and includes parents of matching objects. Properties uses vertical glyph tabs for Scene, Object, Geometry, Material, Components, Modeling, Modifiers, and Animations. The available tabs follow the selection. Open **Scene** for Background, Environment, Fog, Bloom, and Focus.
+
 ## Paths, shapes, and meshes
 
 Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view and its split companion. Projector outputs, Preview and Play stay clean. The WebGPU renderer falls back to bounds.

@@ -364,7 +364,7 @@ body.menubar-auto-hide:has(#menubar.revealed) .menubar-edge { pointer-events: no
 	top: var(--menubar-height);
 	right: var(--sidebar-size);
 	width: 5px;
-	bottom: var(--timeline-h, 0px);
+	bottom: 0;
 	transform: translatex(2.5px);
 	cursor: col-resize;
 	touch-action: none;
@@ -407,7 +407,7 @@ body.translucent-panels #viewport #info { left: calc(var(--left-dock) + 10px) !i
 #animation {
 	position: absolute;
 	left: 0;
-	right: 0;
+	right: var(--right-dock);
 	z-index: 5;
 	bottom: 0;
 	height: var(--animation-height);
@@ -428,7 +428,7 @@ body.translucent-panels #viewport #info { left: calc(var(--left-dock) + 10px) !i
 #animation-resizer {
 	position: absolute;
 	left: 0;
-	right: 0;
+	right: var(--right-dock);
 	bottom: var(--animation-height);
 	height: 5px;
 	transform: translateY(2.5px);
@@ -650,13 +650,54 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 	position: absolute;
 	right: 0;
 	top: var(--menubar-height);
-	bottom: var(--timeline-h);
+	bottom: 0;
 	width: var(--sidebar-size);
 	z-index: 3;
 	background: #eee;
-	overflow: auto;
-	overflow-x: hidden;
+	display: grid;
+	grid-template: clamp(70px, var(--outliner-height, 24%), 68%) 5px auto minmax(0, 1fr) / minmax(0, 1fr);
+	overflow: hidden;
 }
+
+#sidebar > .Panels { position: relative; inset: auto; min-width: 0; overflow: auto; }
+.sidebar-outliner { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.sidebar-area-header, .property-title {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-height: 28px;
+	padding: 0 8px;
+	color: var(--theme-text);
+	background: color-mix(in srgb, var(--theme-text) 7%, var(--theme-background));
+}
+.sidebar-area-header input { flex: 1; min-width: 0; }
+.sidebar-outliner .Outliner { height: auto; resize: none; }
+.sidebar-area-divider { cursor: row-resize; touch-action: none; background: var(--theme-background); }
+.sidebar-area-divider:is(:hover, :focus-visible, :active) { background: var(--theme-accent); }
+#properties {
+	display: grid;
+	grid-template-columns: 33px minmax(0, 1fr);
+	min-width: 0;
+	min-height: 100%;
+}
+#properties > .Tabs { display: flex; flex-direction: column; align-items: center; gap: 2px; padding-block: 4px; overflow: visible; }
+#properties > .Tabs > .Tab {
+	box-sizing: border-box;
+	width: 26px;
+	height: 27px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+}
+#properties > .Tabs > .Tab:is(.selected,:hover) {
+	color: var(--theme-text);
+	background: color-mix(in srgb, var(--theme-accent) 25%, var(--theme-background));
+}
+#properties > .Panels { position: relative; inset: auto; min-width: 0; }
+#properties .property-title { position: sticky; top: 0; z-index: 2; }
+#properties .scene-properties { border-top: 0; }
 
 	#sidebar .Panel {
 		color: #888;
@@ -849,6 +890,7 @@ body.presenting :is(#viewport, #menubar, #toolbar, #sidebar, #resizer, #code-pan
 
 	#sidebar {
 		top: auto;
+		bottom: var(--timeline-h);
 		height: min(320px, 40dvh);
 	}
 }

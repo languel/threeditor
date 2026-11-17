@@ -49,6 +49,25 @@ async function check() {
 			editor.select( mesh );
 
 		} );
+		const properties = page.getByRole( 'tablist', { name: 'Property categories' } );
+		assert.equal( await properties.getByRole( 'tab', { name: 'Object', exact: true } ).getAttribute( 'aria-selected' ), 'true' );
+		assert.equal( await page.getByRole( 'tabpanel', { name: 'Scene', exact: true } ).count(), 0 );
+		await properties.getByRole( 'tab', { name: 'Scene', exact: true } ).click();
+		assert.equal( await page.getByRole( 'tabpanel', { name: 'Scene', exact: true } ).getByText( 'Bloom', { exact: true } ).isVisible(), true );
+		await properties.getByRole( 'tab', { name: 'Object', exact: true } ).click();
+		const outlinerSearch = page.getByRole( 'searchbox', { name: 'Search Outliner' } );
+		const outliner = page.getByRole( 'region', { name: 'Outliner', exact: true } );
+		await outlinerSearch.fill( 'Receiver' );
+		assert.equal( await outliner.getByText( 'Receiver', { exact: true } ).count(), 1 );
+		assert.equal( await outliner.getByText( 'Contour 1', { exact: true } ).count(), 0 );
+		await outlinerSearch.fill( '' );
+		assert.equal( await outliner.getByText( 'Contour 1', { exact: true } ).count(), 1 );
+		const divider = page.getByRole( 'separator', { name: 'Resize Outliner' } );
+		const oldHeight = ( await outliner.boundingBox() ).height;
+		await divider.press( 'ArrowDown' );
+		assert.ok( ( await outliner.boundingBox() ).height > oldHeight );
+		await page.locator( '#viewport' ).click( { position: { x: 240, y: 115 } } );
+		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Receiver' ) ) );
 		await page.keyboard.press( 'z' );
 		await page.getByRole( 'dialog', { name: 'Viewport shading' } ).getByRole( 'button', { name: 'Wireframe' } ).click();
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'wireframe' );
