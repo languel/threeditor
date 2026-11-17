@@ -96,7 +96,11 @@ class Keymap {
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
   const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo && this.actionAvailable(a.id));if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
-  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))) && !(t.closest('#viewport')&&action.category==='Modeling'))return;
+  if ( t?.closest?.('button') ) {
+   // Viewport tool buttons may retain focus after pointer or palette use.
+   // Keep their native keyboard activation and normal tab traversal.
+   if ( !t.closest('#viewport') || ['Enter',' ','Tab'].includes(e.key) && !e.ctrlKey && !e.metaKey ) return;
+  }
   e.preventDefault();action.run();
  }
  actionAvailable(id){

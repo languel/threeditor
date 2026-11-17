@@ -64,6 +64,7 @@ async function check() {
 		assert.equal( await page.evaluate( () => editor.modeling.selectionTool ), 'box' );
 		await page.keyboard.press( '1' );
 		assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'vertex' );
+		await page.getByRole( 'button', { name: 'Box select (B)', exact: true } ).focus();
 		await page.keyboard.press( 'a' );
 		await page.keyboard.press( 'g' );
 		await page.waitForFunction( () => editor.modeling.gesture?.modal );
@@ -76,6 +77,7 @@ async function check() {
 		await page.waitForFunction( () => ! editor.modeling.gesture );
 		const edited = await page.evaluate( () => Array.from( editor.selected.geometry.attributes.position.array ) );
 		assert.ok( Math.max( ...edited ) > .65, 'Edit-mode transform changed mesh coordinates' );
+		await page.evaluate( () => document.activeElement.blur() );
 		await page.keyboard.press( 'Tab' );
 		const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 		await mode.selectOption( 'paint' );
@@ -150,19 +152,18 @@ async function check() {
 		} );
 		const actual = await page.evaluate( () => Array.from( editor.scene.getObjectByName( 'Receiver' ).geometry.attributes.position.array ) );
 		assert.deepEqual( actual, edited );
-		const download = page.waitForEvent( 'download' );
-		await page.evaluate( async () => {
+		const [ download ] = await Promise.all( [ page.waitForEvent( 'download' ), page.evaluate( async () => {
 
-			const { exportPlayableScene } = await import( '/editor/js/Publish.js' );
+			const { exportPlayableScene } = await import( new URL( 'js/Publish.js', document.baseURI ).href );
 			const { zip } = await exportPlayableScene( editor );
 			const a = document.createElement( 'a' );
 			a.href = URL.createObjectURL( zip );
 			a.download = 'workspace.zip';
 			a.click();
 
-		} );
+		} ) ] );
 		const archive = path.join( folder, 'workspace.zip' );
-		await ( await download ).saveAs( archive );
+		await download.saveAs( archive );
 		execFileSync( 'unzip', [ '-q', archive, '-d', folder ] );
 		const published = await browser.newPage();
 		published.on( 'pageerror', error => errors.push( error.message ) );
