@@ -31,6 +31,7 @@ function Config( persist = true ) {
 		'settings/keymapOverrides': {},
 		'settings/mouseNavigation': 'basic',
 		'settings/showObjectNames': false,
+		'settings/selectionHighlight': 'outline',
 		'settings/transformGizmoSize': 0.75,
 		'settings/gridVisible': true,
 		'settings/gridStep': 1,

@@ -1,3 +1,4 @@
+import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=tool-layout';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
@@ -81,6 +82,7 @@ function Viewport( editor ) {
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
 	const labels = new ViewportLabels( editor, container.dom );
 	signals.viewportLabelsChanged.add( render );
+	signals.selectionAppearanceChanged.add( render );
 	signals.timelineFrameChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
@@ -151,8 +153,10 @@ function Viewport( editor ) {
 
 	const box = new THREE.Box3();
 
-	const selectionBox = new THREE.Box3Helper( box );
+	let selectionOutline = new SelectionOutline();
+	const selectionBox = new THREE.Box3Helper( box, 0xff8a24 );
 	selectionBox.material.depthTest = false;
+	selectionBox.material.toneMapped = false;
 	selectionBox.material.transparent = true;
 	selectionBox.visible = false;
 	sceneHelpers.add( selectionBox );
@@ -602,6 +606,8 @@ function Viewport( editor ) {
 	signals.rendererCreated.add( function ( newRenderer ) {
 
 		const environment = scene.environment;
+		selectionOutline.dispose();
+		selectionOutline = new SelectionOutline();
 		if ( renderer !== null ) {
 
 			renderer.setAnimationLoop( null );
@@ -1214,11 +1220,22 @@ function Viewport( editor ) {
 
 	}
 
+	function drawSelection( view ) {
+
+		if ( view !== camera || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
+			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
+		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
+		selectionOutline.draw( renderer, scene, view, roots, () => splatHost.render( renderer, scene,
+			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () => renderer.render( scene, view ) ) ), queueSplatRender ) );
+
+	}
+
 	function updatePT() {
 
 		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.update();
+			drawSelection( editor.viewportCamera );
 			editor.signals.pathTracerUpdated.dispatch( pathtracer.getSamples() );
 
 		}
@@ -1264,6 +1281,14 @@ function Viewport( editor ) {
 			new THREE.Vector4( navRect.x, height - navRect.y - navRect.height, navRect.width, navRect.height ) : null;
 
 		const mode = editor.viewportShading;
+		const selectionStyle = editor.config.getKey( 'settings/selectionHighlight' ) || 'outline';
+		const selected = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) );
+		const outlineSupported = renderer.isWebGLRenderer && ! renderer.xr.isPresenting;
+		const surfaces = selected.filter( hasSelectionSurface );
+		const bounds = selectionStyle !== 'outline' || ! outlineSupported ? selected : selected.filter( object => ! surfaces.includes( object ) );
+		box.makeEmpty();
+		for ( const object of bounds ) box.expandByObject( object, true );
+		selectionBox.visible = ! box.isEmpty();
 		const draw = ( view, host = splatHost, post = false ) => host.render( renderer, scene, () => {
 
 			withEnabledObjects( scene, () => withViewportShading( scene, mode, () => {
@@ -1291,6 +1316,8 @@ function Viewport( editor ) {
 				return;
 
 			}
+			// Only the director's editing pane gets selection feedback.
+			drawSelection( view );
 			renderer.autoClear = false;
 			if ( grid.visible ) renderer.render( grid, view );
 			if ( sceneHelpers.visible ) {

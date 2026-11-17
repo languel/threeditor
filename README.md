@@ -122,6 +122,8 @@ Use **Enter** to apply a mask or save a ruler or path, and **Esc** to exit a vie
 
 ## Paths, shapes, and meshes
 
+Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view; projector outputs, Preview and Play remain clean. The WebGPU renderer falls back to bounds.
+
 Press **Tab** or click **Edit mode**. The single-column left tool shelf holds drawing tools, **Topology pen**, and **Sculpt brushes**. The active tool has an accent highlight and a tooltip. Mode controls stay at the top-left, transforms and grid settings are centered, and view controls stay at the top-right. Narrow viewports move transforms onto their own centered row. Open the **Mesh and point operations** menu (three dots) for fill, split, weld, extrusion, and deletion. The top toolbar holds transforms, snapping, placement, view, and the **2D Editors** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
 
 1. Choose **Build mesh** for a polygon or **Draw path** for a smooth curve. Click to place the points, then double-click the first point or press **F** to close it. A closed mesh profile becomes a selected face.

@@ -34,6 +34,10 @@ The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportT
 
 The topology pen turns on when a mesh profile closes. Subsequent empty-space clicks collect a new face draft in the same object, reusing existing vertices when picked. Clicking the first corner or pressing F closes the face. Escape discards the draft. An uncommitted face stays outside serialized geometry.
 
+### Selection feedback
+
+`Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass only runs alongside Director editing guides, never in the projector pane, Preview, Play or exported output. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.

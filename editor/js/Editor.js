@@ -10,7 +10,7 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=top-toolbar';
+import { Config } from './Config.js?v=selection-outline';
 import { Loader } from './Loader.js';
 import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';
@@ -57,6 +57,7 @@ function Editor( portable = false ) {
 		transformModeChanged: new Signal(),
 		transformGizmoSizeChanged: new Signal(),
 		viewportLabelsChanged: new Signal(),
+		selectionAppearanceChanged: new Signal(),
 		snapChanged: new Signal(),
 		timelineFrameChanged: new Signal(),
 		timelinePlaybackStarted: new Signal(),
