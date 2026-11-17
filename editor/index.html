@@ -10,7 +10,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=active-fill">
+		<link rel="stylesheet" href="css/main.css?v=modifiers">
 
 		<script type="importmap">
 			{
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=bottom-pivot';
+			import { startEditor } from './js/EditorApp.js?v=modifiers';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

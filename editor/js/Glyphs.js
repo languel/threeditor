@@ -6,6 +6,9 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	modifierUp: svg( '<path d="m6 15 6-6 6 6"/>' ),
+	modifierDown: svg( '<path d="m6 9 6 6 6-6"/>' ),
+	modifiers: svg( '<path d="M14 4a6 6 0 0 0-7 8L3 17a2 2 0 0 0 4 4l5-5a6 6 0 0 0 8-7l-4 4-4-4 4-4Z"/>' ),
 	pivotBottom: svg( '<rect x="5" y="3" width="14" height="16" stroke-dasharray="3 2"/><path d="M3 21h18m-9-9v7"/><circle cx="12" cy="19" r="2" fill="currentColor"/>' ),
 	vertexSelect: svg( '<path d="M5 19V5h14"/><circle cx="5" cy="5" r="3" fill="currentColor"/>' ),
 	edgeSelect: svg( '<path d="M5 19V5h14"/><path d="m5 19 14-14" stroke-width="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/>' ),
@@ -265,6 +268,7 @@ const LABELS = new Map( [
 	[ 'Disable look', 'none' ],
 	[ 'New shader', 'code' ],
 	[ 'Apply', 'apply' ],
+	[ 'Modifiers', 'modifiers' ],
 	[ 'Apply ▶', 'play' ],
 	[ 'auto', 'autohide' ],
 	[ 'Regenerate', 'regenerate' ],

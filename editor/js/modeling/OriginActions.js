@@ -32,7 +32,7 @@ export function originActions( editor ) {
 
 	const object = editor.selected;
 	if ( ! object || object === editor.scene || object === editor.camera || object.isSkinnedMesh || object.isInstancedMesh ||
-		object.userData.measurement || object.userData.assetObject || hasRestriction( object, 'locked' ) || ! ( object.geometry || object.children.length ) ) return [];
+		object.userData.modifierBase || object.userData.measurement || object.userData.assetObject || hasRestriction( object, 'locked' ) || ! ( object.geometry || object.children.length ) ) return [];
 	const center = () => new THREE.Box3().setFromObject( object, true ).getCenter( new THREE.Vector3() );
 	const actions = [
 		{ label: 'Origin to bounds bottom center', section: 'Set origin', run: () => {

@@ -105,7 +105,8 @@ export class ViewportTools {
 		this.freehandButton = modelButton( this.creation, 'Draw freehand', 'freehandDraw', () => this.run( () => editor.modeling.create( 'path', true, true ) ) );
 		this.primary = element( 'div', this.geometryTools );
 		this.primary.className = 'viewport-primary-tools';
-		this.penButton = modelButton( this.primary, 'Topology pen', 'topologyPen', () => this.run( () => editor.modeling.togglePen() ) );
+		this.penButton = modelButton( this.primary, 'Polybuild (6)', 'topologyPen', () => this.run( () => editor.modeling.togglePen() ) );
+		this.penButton.title = 'Polybuild / Topology pen (6)';
 		this.sculptButton = modelButton( this.primary, 'Sculpt brushes', 'sculptTool', () => this.run( () => editor.modeling.setBrush( editor.modeling.brush && editor.modeling.brush !== 'freehand' ? '' : 'grab' ) ) );
 		this.actionMenu = element( 'details', this.panel );
 		this.actionMenu.className = 'model-action-menu';

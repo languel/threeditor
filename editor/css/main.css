@@ -2904,3 +2904,11 @@ body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 .model-action-menu > summary::marker { content: ''; }
 .model-action-menu > summary::-webkit-details-marker { display: none; }
 .model-action-menu .model-control-button .model-control-icon { display: inline-grid; }
+
+.modifier-panel { padding: 8px; }
+.modifier-panel > div > select { width: 100%; margin-bottom: 8px; }
+.modifier-entry { padding: 6px; margin-bottom: 8px; border: 1px solid var(--theme-surface); border-radius: 4px; }
+.modifier-entry > summary { cursor: pointer; margin-bottom: 7px; }
+.modifier-actions { display: flex; gap: 4px; align-items: center; margin-bottom: 7px; }
+.modifier-param { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
+.modifier-param input[type=number] { width: 80px; min-width: 0; }

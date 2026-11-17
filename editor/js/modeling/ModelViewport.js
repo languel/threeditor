@@ -1,3 +1,4 @@
+import { modifierSource, setModifierStack } from './Modifiers.js';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -177,9 +178,10 @@ export class ModelViewport {
 
 	read( object ) {
 
-		const data = object.geometry.userData.modeling;
+		const geometry = modifierSource( object );
+		const data = geometry.userData.modeling;
 		if ( data && data.kind !== 'vertices' ) return structuredClone( data );
-		const position = object.geometry.attributes.position;
+		const position = geometry.attributes.position;
 		const points = [], vertices = [], coincident = new Map();
 		// Keep UV seams and hard edges intact by moving coincident buffer vertices together.
 		for ( let i = 0; i < position.count; i ++ ) {
@@ -198,7 +200,7 @@ export class ModelViewport {
 		}
 		const control = [];
 		vertices.forEach( ( list, i ) => list.forEach( index => control[ index ] = i ) );
-		const faces = [], index = object.geometry.index;
+		const faces = [], index = geometry.index;
 		for ( let i = 0, count = index?.count ?? position.count; i + 2 < count; i += 3 ) {
 
 			const face = [ 0, 1, 2 ].map( offset => control[ index ? index.getX( i + offset ) : i + offset ] );
@@ -522,7 +524,7 @@ export class ModelViewport {
 		let geometry;
 		if ( data.kind === 'vertices' ) {
 
-			geometry = reusable || new THREE.BufferGeometry().copy( object.geometry );
+			geometry = reusable || new THREE.BufferGeometry().copy( modifierSource( object ) );
 			const position = reusable ? geometry.attributes.position :
 				new THREE.Float32BufferAttribute( new Float32Array( geometry.attributes.position.count * 3 ), 3 );
 			data.points.forEach( ( point, i ) => {
@@ -549,6 +551,13 @@ export class ModelViewport {
 	commit( name, data, indices, geometry = this.buildGeometry( data ) ) {
 
 		this.indices = indices;
+		if ( this.object.userData.modifiers?.length ) {
+
+			try { setModifierStack( this.editor, this.object, this.object.userData.modifiers, geometry, name ); }
+			finally { geometry.dispose(); }
+			return;
+
+		}
 		const command = new SetGeometryCommand( this.editor, this.object, geometry );
 		command.updatable = false;
 		this.editor.execute( command, name );
@@ -569,7 +578,7 @@ export class ModelViewport {
 
 	withPreview( draw ) {
 
-		const geometry = this.drag?.newStroke ? null : ( this.gesture || this.drag )?.geometry;
+		const geometry = this.drag?.newStroke ? null : ( this.gesture || this.drag )?.geometry || ( this.object?.userData.modifierBase ? modifierSource( this.object ) : null );
 		if ( ! geometry || ! this.object ) return draw();
 		const object = this.object, original = object.geometry;
 		object.geometry = geometry;
@@ -1209,7 +1218,11 @@ export class ModelViewport {
 		const rect = this.rect();
 		this.ray.setFromCamera( new THREE.Vector2( ( event.clientX - rect.left ) * 2 / rect.width - 1,
 			1 - ( event.clientY - rect.top ) * 2 / rect.height ), this.frame.camera );
-		const hit = this.ray.intersectObject( this.object, false )[ 0 ];
+		const original = this.object.geometry;
+		this.object.geometry = modifierSource( this.object );
+		let hit;
+		try { hit = this.ray.intersectObject( this.object, false )[ 0 ]; }
+		finally { this.object.geometry = original; }
 		if ( ! hit ) return;
 		let mapping = this.data.kind === 'vertices' ? this.data.faces.map( ( _, i ) => i ) : this.object.geometry.userData.triangleFaces;
 		if ( ! mapping ) {
