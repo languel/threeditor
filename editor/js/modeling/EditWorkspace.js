@@ -1,3 +1,4 @@
+import { icon } from '../Glyphs.js?v=element-select';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=mask-editor';
 import { editableMesh } from './ModelViewport.js?v=tool-layout';
@@ -14,7 +15,9 @@ export function createEditWorkspace( editor, viewport ) {
 	const picker = document.createElement( 'details' );
 	picker.className = 'editor-picker';
 	const summary = document.createElement( 'summary' );
-	summary.textContent = '2D Editors';
+	summary.innerHTML = icon( 'editorTypes' );
+	summary.title = '2D Editors';
+	summary.setAttribute( 'aria-label', '2D Editors' );
 	picker.append( summary );
 	const modes = document.createElement( 'div' );
 	modes.className = 'viewport-edit-modes';
@@ -47,7 +50,8 @@ export function createEditWorkspace( editor, viewport ) {
 		uvButton.disabled = ! mesh();
 		warpButton.disabled = ! projector();
 		sceneButton.hidden = ! current;
-		summary.textContent = current ? { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp' }[ current.mode ] : '2D Editors';
+		summary.title = current ? { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp' }[ current.mode ] : '2D Editors';
+		summary.setAttribute( 'aria-label', summary.title );
 		for ( const [ mode, button ] of Object.entries( buttons ) ) button.setAttribute( 'aria-pressed', String( current?.mode === mode ) );
 
 	}

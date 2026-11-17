@@ -29,6 +29,7 @@ export class ModelViewport {
 		this.render = render;
 		this.indices = [];
 		this.editMode = false;
+		this.selectionMode ||= 'vertex';
 		this.brushRadius = 50;
 		this.brushStrength = 0.5;
 		this.proxy = new THREE.Object3D();
@@ -127,6 +128,14 @@ export class ModelViewport {
 
 			}
 			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
+			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && ! event.shiftKey && [ '1', '2', '3' ].includes( event.key ) ) {
+
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				this.setSelectionMode( [ 'vertex', 'edge', 'face' ][ Number( event.key ) - 1 ] );
+				return;
+
+			}
 			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
 
 				const key = event.key.toLowerCase();
@@ -187,7 +196,16 @@ export class ModelViewport {
 			vertices[ coincident.get( key ) ].push( i );
 
 		}
-		return { kind: 'vertices', points, vertices };
+		const control = [];
+		vertices.forEach( ( list, i ) => list.forEach( index => control[ index ] = i ) );
+		const faces = [], index = object.geometry.index;
+		for ( let i = 0, count = index?.count ?? position.count; i + 2 < count; i += 3 ) {
+
+			const face = [ 0, 1, 2 ].map( offset => control[ index ? index.getX( i + offset ) : i + offset ] );
+			faces.push( face );
+
+		}
+		return { kind: 'vertices', points, vertices, faces };
 
 	}
 
@@ -234,6 +252,7 @@ export class ModelViewport {
 		this.object = editable ? object : null;
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
+		this.elements = new Map();
 		this.adding = Boolean( this.data?.profile );
 		this.pen = this.editMode && Boolean( this.pen );
 		this.penHover = null;
@@ -353,7 +372,7 @@ export class ModelViewport {
 
 	togglePen() {
 
-		if ( ! this.canEdit() || ! this.data.faces?.length || this.gesture || this.drag ) return;
+		if ( ! this.canEdit() || this.data.kind !== 'mesh' || ! this.data.faces?.length || this.gesture || this.drag ) return;
 		this.pen = ! this.pen;
 		this.brush = '';
 		this.adding = false;
@@ -371,9 +390,50 @@ export class ModelViewport {
 
 	}
 
+	setSelectionMode( mode ) {
+
+		this.selectionMode = mode;
+		this.pen = false;
+		this.penChain = null;
+		this.brush = '';
+		this.adding = false;
+		this.indices = [];
+		this.elements = new Map();
+		this.editor.viewTools?.setMode( '' );
+		this.changed();
+		this.render();
+
+	}
+
+	selectElement( event ) {
+
+		const hit = this.selectionMode === 'face' ? this.faceHit( event )?.face :
+			( ( edge ) => edge && [ edge.a, edge.b ] )( this.penHit( event ).edge );
+		if ( ! event.shiftKey ) this.elements = new Map();
+		this.elements ||= new Map();
+		if ( hit ) {
+
+			const key = hit.slice().sort( ( a, b ) => a - b ).join( ':' );
+			if ( event.shiftKey && this.elements.has( key ) ) this.elements.delete( key );
+			else this.elements.set( key, hit );
+
+		}
+		this.indices = [ ...new Set( [ ...this.elements.values() ].flat() ) ];
+		this.changed();
+		this.render();
+
+	}
+
 	selectPoints( all ) {
 
 		if ( ! this.canEdit() ) return;
+		this.elements = new Map();
+		if ( all && this.data.faces && this.selectionMode !== 'vertex' ) for ( const face of this.data.faces ) {
+
+			const loops = this.selectionMode === 'face' ? [ face ] : face.map( ( a, i ) => [ a, face[ ( i + 1 ) % face.length ] ] );
+			for ( const loop of loops ) this.elements.set( loop.slice().sort( ( a, b ) => a - b ).join( ':' ), loop );
+
+		}
 		this.indices = all ? this.data.points.map( ( _, index ) => index ) : [];
 		this.changed();
 		this.render();
@@ -383,6 +443,21 @@ export class ModelViewport {
 	removeSelection() {
 
 		if ( this.data?.kind === 'vertices' || ! this.indices.length ) return;
+		if ( this.data.faces && this.selectionMode !== 'vertex' && this.elements?.size ) {
+
+			const selected = new Set( this.elements.keys() );
+			this.edit( 'Delete selected mesh elements', next => {
+
+				next.faces = next.faces.filter( face => this.selectionMode === 'face' ?
+					! selected.has( face.slice().sort( ( a, b ) => a - b ).join( ':' ) ) :
+					! face.some( ( a, i ) => selected.has( [ a, face[ ( i + 1 ) % face.length ] ].sort( ( a, b ) => a - b ).join( ':' ) ) ) );
+				return [];
+
+			} );
+			this.elements.clear();
+			return;
+
+		}
 		this.edit( 'Remove modeling points', next => { removePoints( next, this.indices ); return []; } );
 
 	}
@@ -869,7 +944,19 @@ export class ModelViewport {
 			stroke( this.penChain.indices.map( index => handles[ index ] ), false );
 
 		}
-		if ( this.indices.length > 1 ) {
+		if ( ! this.pen && this.selectionMode !== 'vertex' && this.elements?.size ) {
+
+			ctx.strokeStyle = '#ffba62';
+			ctx.fillStyle = '#ff9a3038';
+			ctx.lineWidth = 2.5;
+			for ( const element of this.elements.values() ) {
+
+				stroke( element.map( i => handles[ i ] ), this.selectionMode === 'face' );
+				if ( this.selectionMode === 'face' ) ctx.fill();
+
+			}
+
+		} else if ( this.indices.length > 1 ) {
 
 			ctx.strokeStyle = '#ffba62';
 			stroke( this.indices.map( index => handles[ index ] ), false );
@@ -1118,7 +1205,7 @@ export class ModelViewport {
 			1 - ( event.clientY - rect.top ) * 2 / rect.height ), this.frame.camera );
 		const hit = this.ray.intersectObject( this.object, false )[ 0 ];
 		if ( ! hit ) return;
-		let mapping = this.object.geometry.userData.triangleFaces;
+		let mapping = this.data.kind === 'vertices' ? this.data.faces.map( ( _, i ) => i ) : this.object.geometry.userData.triangleFaces;
 		if ( ! mapping ) {
 
 			const geometry = modelGeometry( THREE, this.data );
@@ -1417,6 +1504,14 @@ export class ModelViewport {
 
 		}
 		if ( ! this.pen && ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
+		if ( ! this.pen && ! this.adding && this.data.faces && this.selectionMode !== 'vertex' ) {
+
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.selectElement( event );
+			return;
+
+		}
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
 		if ( this.penChain && ! event.shiftKey ) {
@@ -1446,6 +1541,7 @@ export class ModelViewport {
 		}
 		if ( hit < 0 && ! this.adding && ! event.shiftKey ) {
 
+			if ( this.selectionMode === 'vertex' ) { this.indices = []; this.changed(); this.render(); return; }
 			const face = this.pickFace( event );
 			if ( ! face ) return;
 			event.preventDefault();

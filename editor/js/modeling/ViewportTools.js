@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=tool-layout';
+import { icon } from '../Glyphs.js?v=element-select';
 import { meshBrushes } from './SculptBrush.js?v=surface-tools';
 import { modelButton, modelField } from './ModelControls.js?v=tool-layout';
 import * as THREE from 'three';
@@ -64,6 +64,10 @@ export class ViewportTools {
 			[ 'object', modelButton( workspace, 'Object mode', 'objectMode', () => this.setWorkspaceMode( 'object' ) ) ],
 			[ 'edit', modelButton( workspace, 'Edit mode', 'editMode', () => this.setWorkspaceMode( 'edit' ) ) ]
 		] );
+		this.elementModes = element( 'div', this.panel );
+		this.elementModes.className = 'viewport-element-modes';
+		this.elementButtons = new Map( [ 'vertex', 'edge', 'face' ].map( ( mode, i ) => [ mode,
+			modelButton( this.elementModes, mode[ 0 ].toUpperCase() + mode.slice( 1 ) + ' select (' + ( i + 1 ) + ')', mode + 'Select', () => editor.modeling.setSelectionMode( mode ) ) ] ) );
 		const tools = [
 			[ '', 'Select & navigate', 'toolSelect' ], [ 'mask', 'Edit light mask', 'toolMask' ],
 			[ 'measure', 'Measure', 'toolMeasure' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
@@ -227,6 +231,8 @@ export class ViewportTools {
 
 		const model = this.editor.modeling;
 		const edit = model.editMode;
+		this.elementModes.hidden = ! edit || ! model.object || !! this.mode;
+		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.brush ) );
 		for ( const [ mode, button ] of this.modeButtons ) button.setAttribute( 'aria-pressed', String( mode === ( edit ? 'edit' : 'object' ) ) );
 		for ( const mode of [ 'path' ] ) {
 
@@ -250,7 +256,7 @@ export class ViewportTools {
 		this.freehandButton.setAttribute( 'aria-pressed', String( ! this.mode && model.brush === 'freehand' ) );
 		this.penButton.setAttribute( 'aria-pressed', String( ! this.mode && pen ) );
 		this.sculptButton.setAttribute( 'aria-pressed', String( ! this.mode && Boolean( sculpt ) ) );
-		this.penButton.disabled = ! model.canEdit() || ! model.data?.faces;
+		this.penButton.disabled = ! model.canEdit() || model.data?.kind !== 'mesh' || ! model.data?.faces;
 		this.sculptButton.disabled = ! model.canEdit() || ! model.data?.points.length;
 		if ( ! edit || this.mode ) return;
 		for ( const { label, glyph, run, disabled, pressed } of model.actions() ) {

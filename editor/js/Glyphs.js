@@ -6,6 +6,10 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	vertexSelect: svg( '<path d="M5 19V5h14"/><circle cx="5" cy="5" r="3" fill="currentColor"/>' ),
+	edgeSelect: svg( '<path d="M5 19V5h14"/><path d="m5 19 14-14" stroke-width="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/>' ),
+	faceSelect: svg( '<path d="M4 5h16v14H4z" fill="currentColor" fill-opacity=".4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>' ),
+	editorTypes: svg( '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M8 8v13m3-4 3-4 4 5"/><circle cx="17" cy="11" r="1"/>' ),
 	surfaceBrush: svg( '<path d="m3 16 8-4 10 4-8 5-10-5Z"/><path d="m8 11 7-8 3 3-7 8-3-3Zm0 0-2 4 5-1"/>' ),
 	sculptTool: svg( '<path d="m4 18 3-8 6-5 5 3 2 9-7 4-9-3Z"/><path d="m7 10 6 4 5-6m-5 6v7"/>' ),
 	topologyPen: svg( '<path d="M3 18V7l9-4 9 7-8 11-10-3Z"/><path d="m3 7 10 7 8-4m-8 4v7"/><circle cx="13" cy="14" r="2" fill="currentColor"/>' ),

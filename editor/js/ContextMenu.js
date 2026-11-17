@@ -1,3 +1,4 @@
+import { originActions } from './modeling/OriginActions.js';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
 import { formatCombo } from './Keymap.js';
 
@@ -74,6 +75,7 @@ function ContextMenu( editor, viewport ) {
 				button.type = 'button';
 				button.className = 'context-menu-item';
 				button.textContent = action.label;
+				button.disabled = !! action.disabled;
 				if ( title === 'Command palette' && editor.keymap.combo( action.id ) ) {
 
 					const key = document.createElement( 'span' );
@@ -123,11 +125,33 @@ function ContextMenu( editor, viewport ) {
 
 	function openObject( position ) {
 
-		const ids = [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ];
-		const actions = [ { label: 'Add…', run: () => openAdd( position ) }, ...ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean ) ];
-		actions.unshift( ...outlineActions( editor, editor.selected ) );
-		show( 'Object', actions, position );
+		const model = editor.modeling;
+		const edit = model.editMode && model.object && ! editor.viewTools.mode;
+		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selected ? [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ] : [];
+		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );
+		if ( edit ) {
 
+			actions.push( ...model.actions().map( action => ( { ...action, section: 'Mesh operations' } ) ) );
+			actions.push( { label: 'Select all', section: 'Selection', run: () => model.selectPoints( true ) },
+				{ label: 'Deselect all', section: 'Selection', run: () => model.selectPoints( false ) } );
+
+		} else if ( editor.selected?.userData.measurement ) {
+
+			actions.unshift( { label: 'Edit measurement', run: () => editor.viewTools.setWorkspaceMode( 'edit' ) } );
+
+		} else actions.unshift( { label: 'Add…', run: () => openAdd( position ) }, ...outlineActions( editor, editor.selected ) );
+		actions.push( ...originActions( editor ) );
+		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
+
+			label: 'Pivot: ' + label, section: 'Transform pivot', run: () => {
+
+				editor.config.setKey( 'settings/transformPivot', value );
+				editor.signals.transformSettingsChanged.dispatch( 'transformPivot' );
+
+			}
+
+		} );
+		show( edit ? 'Edit geometry' : editor.selected?.name || 'Scene', actions, position );
 	}
 
 	function openPalette() {
