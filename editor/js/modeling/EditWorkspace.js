@@ -1,6 +1,6 @@
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=mask-editor';
-import { editableMesh } from './ModelViewport.js?v=mesh-build';
+import { editableMesh } from './ModelViewport.js?v=blender-tools';
 import { isProjector } from '../assets/Projector.js?v=mask-editor';
 import { modelButton } from './ModelControls.js';
 import { openMaskEditor } from './MaskEditor.js?v=mesh-build';

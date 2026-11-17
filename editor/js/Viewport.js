@@ -1,4 +1,4 @@
-import { createEditWorkspace } from './modeling/EditWorkspace.js';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=root-startup';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
