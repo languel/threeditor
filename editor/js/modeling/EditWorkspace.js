@@ -1,8 +1,8 @@
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=mask-editor';
-import { editableMesh } from './ModelViewport.js?v=blender-tools';
+import { editableMesh } from './ModelViewport.js?v=tool-layout';
 import { isProjector } from '../assets/Projector.js?v=mask-editor';
-import { modelButton } from './ModelControls.js';
+import { modelButton } from './ModelControls.js?v=tool-layout';
 import { openMaskEditor } from './MaskEditor.js?v=mesh-build';
 import { openUVEditor } from './UVEditor.js?v=docked-2d';
 
@@ -12,7 +12,7 @@ export function createEditWorkspace( editor, viewport ) {
 	dock.className = 'viewport-edit-workspace';
 	dock.hidden = true;
 	const picker = document.createElement( 'details' );
-	picker.className = 'viewport-editor-picker';
+	picker.className = 'editor-picker';
 	const summary = document.createElement( 'summary' );
 	summary.textContent = '2D Editors';
 	picker.append( summary );
@@ -24,7 +24,7 @@ export function createEditWorkspace( editor, viewport ) {
 	screen.className = 'viewport-edit-content';
 	dock.append( screen );
 	picker.append( modes );
-	viewport.append( dock, picker );
+	viewport.append( dock );
 	let current;
 	const light = () => [ editor.selected, editor.viewportSource, current?.object ].find( canEditLightMask );
 	const mesh = () => [ editor.selected, current?.object ].find( object => editableMesh( object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) );
@@ -91,6 +91,7 @@ export function createEditWorkspace( editor, viewport ) {
 	} );
 	refresh();
 	return {
+		picker,
 		get mode() { return current?.mode; },
 		close,
 		mount( mode, object, content, dispose ) {

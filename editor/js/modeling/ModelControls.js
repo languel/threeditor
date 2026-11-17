@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=edit-modes';
+import { icon } from '../Glyphs.js?v=tool-layout';
 
 function labelContent( node, label, glyph ) {
 

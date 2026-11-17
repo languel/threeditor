@@ -1,7 +1,7 @@
 import { UITabbedPanel, UISpan } from './libs/ui.js';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=timeline-keying';
-import { SidebarProperties } from './Sidebar.Properties.js?v=surface-tools';
+import { SidebarProperties } from './Sidebar.Properties.js?v=tool-layout';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js';
 import { SidebarStreams } from './Sidebar.Streams.js';

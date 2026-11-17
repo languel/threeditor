@@ -6,7 +6,7 @@ import { openMaskEditor } from './modeling/MaskEditor.js?v=mesh-build';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline } from './modeling/ModelGeometry.js?v=top-toolbar';
 import { editableMesh } from './modeling/ModelViewport.js?v=surface-tools';
-import { modelButton, modelField } from './modeling/ModelControls.js';
+import { modelButton, modelField } from './modeling/ModelControls.js?v=tool-layout';
 
 function element( tag, text, parent ) {
 

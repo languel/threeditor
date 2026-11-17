@@ -10,7 +10,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=surface-tools">
+		<link rel="stylesheet" href="css/main.css?v=tool-layout">
 
 		<script type="importmap">
 			{
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=root-startup';
+			import { startEditor } from './js/EditorApp.js?v=tool-layout';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

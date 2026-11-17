@@ -35,6 +35,7 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 	toggles.setAttribute( 'role', 'group' );
 	toggles.setAttribute( 'aria-label', 'Workspace controls' );
 	container.dom.appendChild( toggles );
+	toggles.prepend( editor.editWorkspace.picker );
 
 	function iconButton( label, path ) {
 

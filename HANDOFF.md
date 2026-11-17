@@ -28,11 +28,17 @@ Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open
 - `SculptBrush.js` applies weighted movement and adjacency for Grab, Push, Smooth, Relax, Pinch, and Twist. The standard keymap exposes Surface Paint, Edit, Sculpt, Topology Pen, Weld, and brush size. Hold Shift for temporary Smooth.
 - Smoke-test one paint stroke across two receivers and undo once. Also paint an unlocked point cloud and a bundled Gaussian scan. On an authored mesh, click an edge to split it, pull a boundary edge, and Ctrl-click a face. On a dense mesh, switch from Push to Pinch and undo a stroke.
 
+### Mode and tool layout
+
+The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. An explicit active-tool label accompanies the pressed tool button. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.
+
+The topology pen turns on when a mesh profile closes. Subsequent empty-space clicks collect a new face draft in the same object, reusing existing vertices when picked. Clicking the first corner or pressing F closes the face. Escape discards the draft. An uncommitted face stays outside serialized geometry.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.
 - `ModelGeometry.js` adapts ThreeGrease’s sheet underside and boundary strip behavior. It keeps the ordered face loops for editing, triangulates render geometry, and maps hit triangles back to their authored faces. Extruding a curve makes a separate editable mesh from its sampled outline.
-- In a narrow viewport, use the **2D Editors** menu at the top right to enter Mask, Image and Vector, UV, or Warp. The menu stays anchored as the workspace changes. Drawing actions live in vertical tool strips, while view and transform settings stay horizontal. The Ground plane placement uses a down-arrow over a plane glyph.
+- In a narrow viewport, use the **2D Editors** menu in the app’s top bar to enter Mask, Image and Vector, UV, or Warp. The menu stays anchored as the workspace changes. Drawing actions live in vertical tool strips, while view and transform settings stay horizontal. The Ground plane placement uses a down-arrow over a plane glyph.
 - Smoke-test by closing a polygon from **Build mesh**, previewing and canceling a pull, entering an exact signed extrusion distance, and undoing. Close and extrude a smooth path. Check the workspace menu at desktop and narrow widths.
 
 ### Docked 2D editing

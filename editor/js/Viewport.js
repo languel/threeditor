@@ -1,4 +1,4 @@
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=root-startup';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=tool-layout';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
@@ -28,9 +28,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=surface-tools';
+import { ViewportTools } from './modeling/ViewportTools.js?v=tool-layout';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=blender-tools';
+import { ModelViewport } from './modeling/ModelViewport.js?v=tool-layout';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

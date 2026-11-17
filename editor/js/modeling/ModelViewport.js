@@ -86,6 +86,7 @@ export class ModelViewport {
 		signals.geometryChanged.add( object => {
 
 			if ( this.object !== object ) return;
+			this.penChain = null;
 			const wasProfile = this.data?.profile;
 			this.data = this.read( object );
 			if ( this.data.profile && ! wasProfile ) this.adding = true;
@@ -105,6 +106,15 @@ export class ModelViewport {
 
 			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
+			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
+
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				if ( event.key === 'Escape' ) { this.penChain = null; this.changed(); this.render(); }
+				else editor.viewTools.run( () => this.finishPenFace() );
+				return;
+
+			}
 			if ( event.key === 'Escape' && ( this.gesture || this.drag ) ) {
 
 				event.preventDefault();
@@ -226,6 +236,7 @@ export class ModelViewport {
 		this.adding = Boolean( this.data?.profile );
 		this.pen = this.editMode && Boolean( this.pen );
 		this.penHover = null;
+		this.penChain = null;
 		if ( ! this.editMode ) this.brush = '';
 		this.overlay.hidden = ! this.object;
 		this.changed();
@@ -262,7 +273,7 @@ export class ModelViewport {
 		this.editor.execute( new AddObjectCommand( this.editor, object ) );
 		this.start( object );
 		this.adding = empty && ! freehand;
-		this.pen = false;
+		this.pen = kind === 'mesh';
 		this.brush = freehand ? 'freehand' : '';
 		this.changed();
 		this.render();
@@ -275,11 +286,12 @@ export class ModelViewport {
 		const { data, indices } = this;
 		const actions = [];
 		const add = ( label, glyph, run, disabled = false, pressed ) => actions.push( { label, glyph, run, disabled, pressed } );
-		if ( data.points.length ) add( 'Sculpt brushes', 'brush', () => this.setBrush( this.brush && this.brush !== 'freehand' ? '' : 'grab' ), false, Boolean( this.brush && this.brush !== 'freehand' ) );
+		if ( data.points.length ) add( 'Sculpt brushes', 'sculptTool', () => this.setBrush( this.brush && this.brush !== 'freehand' ? '' : 'grab' ), false, Boolean( this.brush && this.brush !== 'freehand' ) );
 		if ( data.kind === 'vertices' ) return actions;
 		add( this.adding ? 'Stop adding' : 'Add points', 'add', () => {
 
 			this.brush = '';
+			this.pen = false;
 			this.adding = ! this.adding;
 			this.changed();
 			this.render();
@@ -296,20 +308,20 @@ export class ModelViewport {
 		} ), ! data.points.length );
 		if ( data.kind === 'mesh' ) {
 
-			add( 'Topology pen', 'editMode', () => this.togglePen(), ! data.faces.length, this.pen );
-			add( 'Weld selected vertices', 'snapMidpoint', () => this.weld(), indices.length < 2 || Boolean( data.profile ) );
+			add( 'Topology pen', 'topologyPen', () => this.togglePen(), false, this.pen );
+			add( 'Weld selected vertices', 'weldTool', () => this.weld(), indices.length < 2 || Boolean( data.profile ) );
 			const face = this.selectedFace();
 			const adjacent = indices.length === 2 && data.faces.some( face => face.some( ( point, index ) =>
 				indices.includes( point ) && indices.includes( face[ ( index + 1 ) % face.length ] ) ) );
-			add( 'Fill face', 'snapFace', () => this.fillFace(), ( ! data.profile || data.points.length < 3 ) && ( indices.length < 3 || face >= 0 ) );
-			add( 'Split edge', 'snapMidpoint', () => this.edit( 'Split mesh edge', next => [ splitEdge( next, ...indices ) ] ), ! adjacent );
+			add( 'Fill face', 'fillTool', () => this.fillFace(), ( ! data.profile || data.points.length < 3 ) && ( indices.length < 3 || face >= 0 ) );
+			add( 'Split edge', 'splitTool', () => this.edit( 'Split mesh edge', next => [ splitEdge( next, ...indices ) ] ), ! adjacent );
 			add( 'Delete face', 'deleteFace', () => this.edit( 'Delete mesh face', next => { next.faces.splice( face, 1 ); } ), face < 0 );
 			const extrusion = this.extrusionSelection();
 			add( extrusion?.edge ? 'Extrude edge' : 'Extrude face', 'extrude', () => this.startExtrusion(), ! extrusion );
 
 		} else {
 
-			add( 'Close outline', 'toolMask', () => this.closeProfile(), ! this.canCloseProfile() );
+			add( 'Close outline', 'closeTool', () => this.closeProfile(), ! this.canCloseProfile() );
 			add( 'Extrude outline', 'extrude', () => this.startExtrusion(), ! this.extrusionSelection() );
 			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
 
@@ -345,6 +357,7 @@ export class ModelViewport {
 		this.brush = '';
 		this.adding = false;
 		this.penHover = null;
+		this.penChain = null;
 		this.changed();
 		this.render();
 
@@ -804,7 +817,7 @@ export class ModelViewport {
 		ctx.rect( 0, 0, width, height );
 		ctx.clip();
 		const state = this.gesture || this.drag;
-		const data = state?.draft || this.data;
+		const data = this.penChain?.data || state?.draft || this.data;
 		const handles = data.points.map( point => this.project( point, width, height ) );
 		this.handles = handles;
 		ctx.lineWidth = 1.5;
@@ -847,6 +860,12 @@ export class ModelViewport {
 
 			const points = outlinePoints( THREE, data );
 			stroke( points.map( point => this.project( point.toArray(), width, height ) ), isClosedOutline( data ) );
+
+		}
+		if ( this.penChain ) {
+
+			ctx.strokeStyle = '#ffba62';
+			stroke( this.penChain.indices.map( index => handles[ index ] ), false );
 
 		}
 		if ( this.indices.length > 1 ) {
@@ -1085,6 +1104,7 @@ export class ModelViewport {
 		addFace( THREE, data, indices );
 		delete data.profile;
 		this.adding = false;
+		this.pen = true;
 		this.commit( 'Fill mesh face', data, indices );
 
 	}
@@ -1114,6 +1134,41 @@ export class ModelViewport {
 	pickFace( event ) {
 
 		return this.faceHit( event )?.face;
+
+	}
+
+	addPenPoint( event, hit ) {
+
+		if ( this.penChain && hit === this.penChain.indices[ 0 ] && this.penChain.indices.length >= 3 ) {
+
+			this.finishPenFace();
+			return;
+
+		}
+		const origin = hit >= 0 ? this.object.localToWorld( new THREE.Vector3( ...( this.penChain?.data || this.data ).points[ hit ] ) ) : this.object.getWorldPosition( new THREE.Vector3() );
+		const plane = this.penChain?.plane || new THREE.Plane().setFromNormalAndCoplanarPoint(
+			this.frame.camera.getWorldDirection( new THREE.Vector3() ), origin );
+		const chain = this.penChain ||= { data: structuredClone( this.data ), indices: [], plane };
+		if ( hit < 0 ) {
+
+			const point = this.pointerWorld( event.clientX, event.clientY, plane );
+			if ( ! point ) return;
+			const snapped = this.snapPoint( point, origin, event, this.snapAxes( plane ), {} );
+			hit = chain.data.points.push( this.object.worldToLocal( snapped ).toArray() ) - 1;
+
+		}
+		if ( ! chain.indices.includes( hit ) ) chain.indices.push( hit );
+		this.draw();
+
+	}
+
+	finishPenFace() {
+
+		const chain = this.penChain;
+		if ( ! chain || chain.indices.length < 3 ) throw new Error( 'Place at least three corners, then click the first or press F.' );
+		addFace( THREE, chain.data, chain.indices );
+		this.penChain = null;
+		this.commit( 'Build mesh face', chain.data, chain.indices );
 
 	}
 
@@ -1363,12 +1418,26 @@ export class ModelViewport {
 		if ( ! this.pen && ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
-		if ( this.pen && this.data.faces?.length && hit < 0 && ! event.shiftKey ) {
+		if ( this.penChain && ! event.shiftKey ) {
+
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.editor.viewTools.run( () => this.addPenPoint( event, hit ) );
+			return;
+
+		}
+		if ( this.pen && ! this.adding && hit < 0 && ! event.shiftKey ) {
 
 			if ( this.beginPen( event ) ) {
 
 				event.preventDefault();
 				event.stopImmediatePropagation();
+
+			} else {
+
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				this.editor.viewTools.run( () => this.addPenPoint( event, -1 ) );
 
 			}
 			return;
@@ -1417,7 +1486,7 @@ export class ModelViewport {
 		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
 		const world = this.pointerWorld( event.clientX, event.clientY, plane );
 		if ( ! world ) { this.changed(); this.draw(); return; }
-		this.drag = { target: event.target, id: event.pointerId, start: world, origin, plane };
+		this.drag = { target: event.target, id: event.pointerId, start: world, origin, plane, penVertex: this.pen && ! event.shiftKey ? hit : undefined };
 		event.target.setPointerCapture( event.pointerId );
 		this.changed();
 		this.draw();
@@ -1522,7 +1591,7 @@ export class ModelViewport {
 		const drag = this.drag;
 		if ( ! drag ) {
 
-			if ( this.pen && this.canEdit() && this.data.faces?.length && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
+			if ( this.pen && this.canEdit() && this.data.faces?.length && ! this.penChain && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
 
 				this.penHover = this.penHit( event ).edge;
 				this.draw();
@@ -1584,6 +1653,12 @@ export class ModelViewport {
 		event.stopImmediatePropagation();
 		const drag = this.releaseDrag( true );
 		if ( drag.pen ) { this.finishPen( drag, cancel ); return; }
+		if ( drag.penVertex !== undefined && ! cancel && ! drag.draft ) {
+
+			this.addPenPoint( event, drag.penVertex );
+			return;
+
+		}
 		const changed = drag.brush === 'freehand' ? drag.draft?.points.length >= 2 : drag.brush ? drag.draft?.points.some( ( point, index ) =>
 			point.some( ( value, axis ) => value !== this.data.points[ index ]?.[ axis ] ) ) : drag.draft && this.pointsChanged( drag );
 		if ( ! cancel && drag.geometry && this.canEdit() && changed ) {

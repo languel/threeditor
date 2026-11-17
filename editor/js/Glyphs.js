@@ -6,6 +6,19 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	surfaceBrush: svg( '<path d="m3 16 8-4 10 4-8 5-10-5Z"/><path d="m8 11 7-8 3 3-7 8-3-3Zm0 0-2 4 5-1"/>' ),
+	sculptTool: svg( '<path d="m4 18 3-8 6-5 5 3 2 9-7 4-9-3Z"/><path d="m7 10 6 4 5-6m-5 6v7"/>' ),
+	topologyPen: svg( '<path d="M3 18V7l9-4 9 7-8 11-10-3Z"/><path d="m3 7 10 7 8-4m-8 4v7"/><circle cx="13" cy="14" r="2" fill="currentColor"/>' ),
+	pathDraw: svg( '<path d="M3 18c8 0 1-12 10-12"/><circle cx="3" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><path d="m16 9 5-5 2 2-5 5-3 1 1-3Z"/>' ),
+	shapeDraw: svg( '<path d="M3 17 5 5l12-2 4 12-10 6-8-4Z"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/>' ),
+	meshBuild: svg( '<path d="m3 7 9-4 9 4v11l-9 3-9-4V7Zm0 0 9 5 9-5m-9 5v9"/><path d="M17 13h6m-3-3v6"/>' ),
+	freehandDraw: svg( '<path d="M2 19c7-10 7 8 12-2M4 10c1-6 8-6 8-1"/><path d="m13 11 7-8 3 3-7 8-5 2 2-5Z"/>' ),
+	weldTool: svg( '<circle cx="4" cy="5" r="2"/><circle cx="20" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="m5 8 6 8m8-8-6 8m-5-5 3 1-1-3m6 2-3 1 1-3"/>' ),
+	splitTool: svg( '<path d="M3 18 21 6"/><circle cx="3" cy="18" r="2"/><circle cx="21" cy="6" r="2"/><rect x="9" y="9" width="6" height="6" fill="currentColor"/>' ),
+	fillTool: svg( '<path d="m3 17 3-12 14 3-3 13-14-4Z" fill="currentColor" fill-opacity=".25"/><path d="m7 13 4 4 6-7"/>' ),
+	closeTool: svg( '<path d="M4 7v12h15V7H12" stroke-dasharray="2 2"/><path d="M10 3 6 7l4 4m-4-4h10"/>' ),
+	toolActions: svg( '<circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/>' ),
+
 	// Viewport tools and transform settings, adapted from ThreeGrease and AMS.
 	toolSelect: svg( '<path d="m4.5 4.5 6.05 15.15a.563.563 0 0 0 1.048.014l1.902-4.735a.563.563 0 0 1 .315-.315l4.735-1.902a.563.563 0 0 0-.014-1.048L4.5 4.5Z"/>' ),
 	toolMask: svg( '<path d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9Z"/>' ),
