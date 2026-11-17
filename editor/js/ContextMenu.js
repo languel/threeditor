@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
-import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
-import { formatCombo } from './Keymap.js?v=workspace-tabs';
+import { outlineActions } from './modeling/OutlineActions.js?v=contour-editing';
+import { formatCombo } from './Keymap.js?v=contour-editing';
 
 function ContextMenu( editor, viewport ) {
 

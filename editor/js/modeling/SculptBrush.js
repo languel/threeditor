@@ -1,3 +1,5 @@
+import { contourClosed, contourEdgeCount } from './Contour.js';
+
 // Screen-space falloff and topology-aware smoothing adapted from the ThreeGrease and AMS brushes.
 export const meshBrushes = [
 	[ 'grab', 'Grab', 'sculptGrab' ], [ 'push', 'Push', 'sculptPush' ], [ 'smooth', 'Smooth', 'sculptSmooth' ],
@@ -58,8 +60,7 @@ export function sculptNeighbors( data, geometry ) {
 
 	} else if ( ! data.vertices ) {
 
-		for ( let i = 1; i < data.points.length; i ++ ) link( i - 1, i );
-		if ( data.closed || data.kind === 'shape' && data.closed !== false ) link( 0, data.points.length - 1 );
+		for ( let i = 0, count = contourEdgeCount( data.points, contourClosed( data ) ); i < count; i ++ ) link( i, ( i + 1 ) % data.points.length );
 
 	} else {
 

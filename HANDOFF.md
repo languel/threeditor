@@ -55,6 +55,8 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 - In a narrow viewport, use the **2D Editors** menu in the app’s top bar to enter Mask, Image and Vector, UV, or Warp. The menu stays anchored as the workspace changes. Drawing actions live in vertical tool strips, while view and transform settings stay horizontal. The Ground plane placement uses a down-arrow over a plane glyph.
 - Smoke-test by closing a polygon from **Build mesh**, previewing and canceling a pull, entering an exact signed extrusion distance, and undoing. Close and extrude a smooth path. Check the workspace menu at desktop and narrow widths.
 
+3D paths and shapes, 2D vectors, and projector masks use the same contour segment hit test and point insertion. `modeling/Contour.js` keeps the closing edge implicit. The 3D editor picks against rendered curve samples, preserves local coordinates, and commits through geometry history. The 2D editor applies its draft through its existing command, and projection and mask compositing retain their normalized image coordinates.
+
 ### Docked 2D editing
 
 - `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp. UV and Image & Vector default to a resizable split with the live 3D view when the available workspace is at least 640 pixels wide. All four can use the split through its header button. The 3D camera and any existing 3D split are retained on exit. UV follows another selected mesh after the current draft is applied. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.

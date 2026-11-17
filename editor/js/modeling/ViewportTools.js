@@ -2,7 +2,7 @@ import { icon } from '../Glyphs.js?v=mode-shelves';
 import { splatStrokeCommands } from './SplatPaint.js';
 import { TexturePaintStroke } from './TexturePaint.js';
 import { formatCombo } from '../Keymap.js';
-import { meshBrushes } from './SculptBrush.js?v=mode-shelves';
+import { meshBrushes } from './SculptBrush.js?v=contour-editing';
 import { modelButton, modelField } from './ModelControls.js?v=mode-shelves';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
@@ -11,10 +11,10 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js?v=surface-tool
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=brush-shortcuts';
+import { openMaskEditor } from './MaskEditor.js?v=contour-editing';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
-import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
+import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=contour-editing';
 
 function element( tag, parent, text ) {
 

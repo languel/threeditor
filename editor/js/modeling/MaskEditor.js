@@ -5,10 +5,11 @@ import * as THREE from 'three';
 import { modelButton } from './ModelControls.js';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
-import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
+import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
+import { sculptMask } from './MaskSculpt.js?v=contour-editing';
+import { insertContourPoint, interpolatePoint, nearestContourEdge } from './Contour.js';
 
 export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
 
@@ -474,7 +475,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			const hit = shape.points.findIndex( p => distance( pixel( p ), point ) < 8 );
 			if ( hit >= 0 ) return [ i, hit ];
 			trace( shape.points, true );
-			if ( ctx.isPointInPath( ...point, 'evenodd' ) || ctx.isPointInStroke( ...point ) ) return [ i, -1 ];
+			if ( ctx.isPointInPath( ...point, 'evenodd' ) ||
+				nearestContourEdge( shape.points.map( pixel ), true, point, 12 ) ) return [ i, -1 ];
 
 		}
 		return [ -1, -1 ];
@@ -558,19 +560,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		if ( tool === 'polygon' && draft.length > 2 && distance( pixel( draft[ 0 ] ), pointer( event ) ) < 9 ) { closeDraft(); return; }
 		if ( tool !== 'edit' || vertex >= 0 || ! shapes[ active ] ) return;
-		const point = pointer( event ), points = shapes[ active ].points;
-		let best, threshold = 12;
-		points.forEach( ( p, i ) => {
-
-			const a = pixel( p ), b = pixel( points[ ( i + 1 ) % points.length ] );
-			const ab = b.map( ( value, axis ) => value - a[ axis ] );
-			const t = Math.max( 0, Math.min( 1, ( ( point[ 0 ] - a[ 0 ] ) * ab[ 0 ] + ( point[ 1 ] - a[ 1 ] ) * ab[ 1 ] ) / ( ab[ 0 ] ** 2 + ab[ 1 ] ** 2 || 1 ) ) );
-			const q = a.map( ( value, axis ) => value + t * ab[ axis ] );
-			const d = distance( q, point );
-			if ( d < threshold ) { threshold = d; best = [ i + 1, uv( q ) ]; }
-
-		} );
-		if ( best ) change( () => { points.splice( best[ 0 ], 0, best[ 1 ] ); vertex = best[ 0 ]; } );
+		const points = shapes[ active ].points;
+		const hit = nearestContourEdge( points.map( pixel ), true, pointer( event ), 12 );
+		if ( ! hit || hit.fraction <= 0 || hit.fraction >= 1 ) return;
+		change( () => { vertex = insertContourPoint( points, hit.index, interpolatePoint( points[ hit.index ], points[ hit.next ], hit.fraction ) ); } );
 
 	};
 	workspacePanel.onkeydown = event => {

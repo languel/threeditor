@@ -155,6 +155,8 @@ Press **Tab** or click **Edit mode**. The single-column Edit shelf holds drawing
 
 **Add → Mesh** also offers editable objects with starter points. Shift-click point handles to extend the selection, or enter coordinates in **Modeling**. In split view use the Director pane. Press **Tab** to return to Object mode. Extrusion and placement commit together as one undo step.
 
+In Edit Mode, double-click a path or shape edge to insert a point. The same gesture works in the Image & Vector and Mask editors with the point editing tool. In the 3D view, **F3 → Insert outline point** inserts after the selected point, and **F3 → Toggle outline smoothing** switches between straight segments and a smooth curve. These edits can be undone.
+
 Right-click with an outline selected to close it, convert a planar path to a shape, or convert a shape back to a path. Conversion creates a separate object. **Fit outline to mask** normalizes the outline for the chosen projector or spotlight. Look through a light and choose **Project outline as mask** to use the outline’s actual position in the light frame.
 
 ### Topology pen and sculpting

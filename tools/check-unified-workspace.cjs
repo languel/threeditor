@@ -43,6 +43,7 @@ async function check() {
 		await page.mouse.down();
 		await page.mouse.move( ...end, { steps: 5 } );
 		await page.mouse.up();
+		await page.mouse.dblclick( ( start[ 0 ] + end[ 0 ] ) / 2, start[ 1 ] );
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
 		const contour = await page.evaluate( () => {
@@ -53,9 +54,51 @@ async function check() {
 
 		} );
 		assert.deepEqual( contour.actual, contour.expected );
+		assert.equal( contour.actual.length, 5 );
 		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		await page.locator( '#viewport' ).hover();
+		const edgePoint = await page.evaluate( () => {
+
+			const path = editor.scene.getObjectByName( 'Contour 1' );
+			editor.select( path );
+			editor.viewTools.setWorkspaceMode( 'edit' );
+			editor.camera.position.set( 0, 0, 3 );
+			editor.camera.up.set( 0, 1, 0 );
+			editor.camera.lookAt( 0, 0, 0 );
+			editor.signals.cameraChanged.dispatch( editor.camera );
+			const model = editor.modeling;
+			const { width, height, left, top } = model.rect();
+			const last = model.data.points.length - 1;
+			const a = model.project( model.data.points[ last ], width, height );
+			const b = model.project( model.data.points[ 0 ], width, height );
+			return [ left + ( a[ 0 ] + b[ 0 ] ) / 2, top + ( a[ 1 ] + b[ 1 ] ) / 2 ];
+
+		} );
+		await page.mouse.dblclick( ...edgePoint );
+		const outlinePoints = () => page.evaluate( () => editor.modeling.data.points.length );
+		assert.equal( await outlinePoints(), 6 );
+		await page.evaluate( () => editor.undo() );
+		assert.equal( await outlinePoints(), 5 );
+		await page.evaluate( () => editor.redo() );
+		assert.equal( await outlinePoints(), 6 );
+		await page.keyboard.press( 'F3' );
+		const contourPalette = page.getByRole( 'dialog', { name: 'Command palette' } );
+		await contourPalette.getByRole( 'searchbox' ).fill( 'Toggle outline smoothing' );
+		await page.keyboard.press( 'Enter' );
+		const onCurve = await page.evaluate( () => {
+
+			const model = editor.modeling;
+			const curve = new THREE.CatmullRomCurve3( model.data.points.map( point => new THREE.Vector3( ...point ) ), true );
+			const { left, top, width, height } = model.rect();
+			const [ x, y ] = model.project( curve.getPoint( 0.24 ).toArray(), width, height );
+			return [ left + x, top + y ];
+
+		} );
+		assert.equal( await page.evaluate( () => editor.modeling.data.smooth ), true );
+		await page.mouse.dblclick( ...onCurve );
+		assert.equal( await outlinePoints(), 7 );
+		await page.evaluate( () => editor.viewTools.setWorkspaceMode( 'object' ) );
 		await page.evaluate( () => {
 
 			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );

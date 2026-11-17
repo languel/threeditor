@@ -8,6 +8,28 @@ import { sculptNeighbors, sculptPoints } from '../editor/js/modeling/SculptBrush
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
+import { contourClosed, insertContourPoint, interpolatePoint, nearestContourEdge } from '../editor/js/modeling/Contour.js';
+
+test( 'Contour editing inserts on the closing seam without duplicating the first point', () => {
+
+	const shape = { kind: 'shape', points: [ [ 0, 0, 0 ], [ 8, 0, 0 ], [ 8, 8, 0 ], [ 0, 8, 0 ] ] };
+	const cursor = [ -.5, 5 ];
+	assert.equal( contourClosed( shape ), true, 'Legacy shapes close implicitly' );
+	assert.equal( nearestContourEdge( shape.points, false, cursor, 1 ), undefined );
+	const hit = nearestContourEdge( shape.points, true, cursor, 1 );
+	assert.deepEqual( hit, { index: 3, next: 0, fraction: .375 } );
+	assert.equal( insertContourPoint( shape.points, hit.index, interpolatePoint( shape.points[ hit.index ], shape.points[ hit.next ], hit.fraction ) ), 4 );
+	const model = modelObject( THREE, shape, 'Legacy shape' );
+	const restored = new THREE.ObjectLoader().parse( model.toJSON() ).geometry.userData.modeling;
+	assert.deepEqual( restored.points.at( -1 ), [ 0, 5, 0 ] );
+	removePoints( restored, [ 0, 1, 2 ] );
+	assert.equal( contourClosed( restored ), false );
+
+	const path = { kind: 'path', closed: true, points: [ [ 0, 0, 0 ], [ 1, 0, 0 ], [ 1, 1, 0 ] ] };
+	removePoints( path, [ 2 ] );
+	assert.equal( modelGeometry( THREE, path ).userData.modeling.closed, false );
+
+} );
 
 test( 'Authored polygon topology persists through split, extrusion, serialization and deletion', () => {
 

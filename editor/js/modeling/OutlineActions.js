@@ -4,7 +4,7 @@ import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask, addLightMaskShape } from './LightMask.js?v=mask-editor';
 import { lightViewCamera } from './LightView.js';
-import { isClosedOutline, modelGeometry, modelObject, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
+import { isClosedOutline, modelGeometry, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
 import { maskFromOutline } from './ProjectionMask.js';
 
 export function outlineActions( editor, object ) {

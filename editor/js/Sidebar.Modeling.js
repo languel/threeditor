@@ -2,10 +2,10 @@ import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';
-import { openMaskEditor } from './modeling/MaskEditor.js?v=brush-shortcuts';
+import { openMaskEditor } from './modeling/MaskEditor.js?v=contour-editing';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline } from './modeling/ModelGeometry.js?v=top-toolbar';
-import { editableMesh } from './modeling/ModelViewport.js?v=surface-tools';
+import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';
 import { modelButton, modelField } from './modeling/ModelControls.js?v=tool-layout';
 
 function element( tag, text, parent ) {

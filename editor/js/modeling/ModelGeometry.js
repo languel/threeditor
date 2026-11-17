@@ -1,14 +1,12 @@
+import { contourClosed as isClosedOutline } from './Contour.js';
+
+export { isClosedOutline };
+
 export function modelData( kind ) {
 
 	if ( kind === 'path' ) return { kind, points: [ [ -1.5, -.5, 0 ], [ -.6, .6, 0 ], [ .5, .2, 0 ], [ 1.5, .7, 0 ] ], smooth: true, closed: false, planar: true };
 	const points = [ [ -1.4, -.8, 0 ], [ 1.4, -.8, 0 ], [ 1.4, .8, 0 ], [ -1.4, .8, 0 ] ];
 	return kind === 'shape' ? { kind, points, smooth: false, depth: 0 } : { kind, points, faces: [ [ 0, 1, 2, 3 ] ] };
-
-}
-
-export function isClosedOutline( data ) {
-
-	return data.kind === 'shape' ? data.closed !== false : data.closed === true;
 
 }
 
@@ -142,6 +140,7 @@ export function removePoints( data, indices ) {
 
 	} );
 	if ( data.faces ) data.faces = data.faces.map( face => face.filter( index => remap.has( index ) ).map( index => remap.get( index ) ) ).filter( face => face.length >= 3 );
+	else if ( data.points.length < 3 && isClosedOutline( data ) ) data.closed = false;
 
 }
 

@@ -1,7 +1,7 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
 import { selectionCandidates, applySelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
-import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=mode-shelves';
+import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=contour-editing';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
@@ -11,8 +11,9 @@ import { meshHit } from './SurfacePicking.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=contour-editing';
 
+import { contourEdgeCount, insertContourPoint, interpolatePoint, nearestContourEdge } from './Contour.js';
 
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
 
@@ -65,7 +66,7 @@ export class ModelViewport {
 		viewport.addEventListener( 'pointerup', event => this.pointerEnd( event ), true );
 		viewport.addEventListener( 'pointercancel', event => this.pointerEnd( event, true ), true );
 		viewport.addEventListener( 'lostpointercapture', event => this.pointerEnd( event, true ), true );
-		viewport.addEventListener( 'dblclick', event => this.closeOnFirstPoint( event ), true );
+		viewport.addEventListener( 'dblclick', event => this.editContourAtPointer( event ), true );
 		for ( const type of [ 'mousedown', 'mouseup', 'dblclick', 'touchstart', 'touchend' ] ) viewport.addEventListener( type, event => {
 
 			if ( this.object && ! editor.viewTools?.mode && event.target === editor.renderer?.domElement ) event.stopImmediatePropagation();
@@ -369,17 +370,8 @@ export class ModelViewport {
 
 			add( 'Close outline', 'closeTool', () => this.closeProfile(), ! this.canCloseProfile() );
 			add( 'Extrude outline', 'extrude', () => this.startExtrusion(), ! this.extrusionSelection() );
-			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
-
-				const i = indices[ 0 ];
-				const following = isClosedOutline( data ) ? ( i + 1 ) % next.points.length : i + 1;
-				const other = next.points[ following ] || next.points[ i - 1 ];
-				const sign = next.points[ following ] ? 1 : - 1;
-				const point = next.points[ i ].map( ( value, axis ) => other ? value + sign * ( other[ axis ] - value ) * 0.5 : value + ( axis === 0 ? 0.5 : 0 ) );
-				next.points.splice( i + 1, 0, point );
-				return [ i + 1 ];
-
-			} ), indices.length !== 1 );
+			add( 'Insert outline point', 'snapMidpoint', () => this.insertAfterSelectedPoint(), ! this.editingOutline || indices.length !== 1 );
+			add( 'Smooth outline', 'sculptSmooth', () => this.toggleOutlineSmoothing(), ! this.editingOutline || data.points.length < 3, !! data.smooth );
 			if ( data.kind === 'path' ) add( 'Create shape from path', 'snapFace', () => {
 
 				const object = this.object;
@@ -1376,6 +1368,40 @@ export class ModelViewport {
 
 	}
 
+	get editingOutline() {
+
+		return this.canEdit() && [ 'path', 'shape' ].includes( this.data?.kind ) &&
+			! this.brush && ! this.pen && ! this.knife && ! this.drag && ! this.gesture;
+
+	}
+
+	insertOutlinePoint( after, point ) {
+
+		this.edit( 'Insert outline point', data => [ insertContourPoint( data.points, after, point ) ] );
+
+	}
+
+	insertAfterSelectedPoint() {
+
+		if ( ! this.editingOutline || this.indices.length !== 1 ) return;
+		const { points } = this.data;
+		const index = this.indices[ 0 ];
+		const point = points[ index ];
+		const following = isClosedOutline( this.data ) ? points[ ( index + 1 ) % points.length ] : points[ index + 1 ];
+		let next = [ point[ 0 ] + .5, ...point.slice( 1 ) ];
+		if ( following ) next = interpolatePoint( point, following, .5 );
+		else if ( points[ index - 1 ] ) next = interpolatePoint( point, points[ index - 1 ], -.5 );
+		this.insertOutlinePoint( index, next );
+
+	}
+
+	toggleOutlineSmoothing() {
+
+		if ( ! this.editingOutline || this.data.points.length < 3 ) return;
+		this.edit( this.data.smooth ? 'Straighten outline segments' : 'Smooth outline', data => { data.smooth = ! data.smooth; } );
+
+	}
+
 	selectedFace() {
 
 		return this.data.faces?.findIndex( face => face.length === this.indices.length && face.every( index => this.indices.includes( index ) ) ) ?? -1;
@@ -1718,16 +1744,43 @@ export class ModelViewport {
 
 	}
 
-	closeOnFirstPoint( event ) {
+	editContourAtPointer( event ) {
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || this.gesture ||
+		if ( ! this.canEdit() || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
+			this.editor.viewTools?.mode || this.editor.editWorkspace?.exclusive || this.drag || this.gesture ||
 			event.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.editor.viewLayout.navigation ) return;
-		if ( ! this.canCloseProfile() ) return;
-		const { left, top } = this.rect();
-		if ( this.pointUnder( event.clientX - left, event.clientY - top ) !== 0 ) return;
+		const { left, top, width, height } = this.rect();
+		const cursor = [ event.clientX - left, event.clientY - top ];
+		const handle = this.pointUnder( ...cursor );
+		if ( handle === 0 && this.canCloseProfile() ) {
+
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.editor.viewTools.run( () => this.closeProfile() );
+			return;
+
+		}
+		if ( handle >= 0 || this.adding || ! this.editingOutline ) return;
+		const closed = isClosedOutline( this.data );
+		const samples = outlinePoints( THREE, this.data );
+		const hit = nearestContourEdge( samples.map( point => this.project( point.toArray(), width, height ) ), closed, cursor, 10 );
+		if ( ! hit ) return;
+		const a = samples[ hit.index ], b = samples[ hit.next ];
+		let fraction = hit.fraction;
+		const camera = this.frame.camera;
+		if ( camera.isPerspectiveCamera ) {
+
+			const toCamera = new THREE.Matrix4().multiplyMatrices( camera.matrixWorldInverse, this.object.matrixWorld );
+			const aDepth = - a.clone().applyMatrix4( toCamera ).z, bDepth = - b.clone().applyMatrix4( toCamera ).z;
+			fraction = fraction * aDepth / ( ( 1 - fraction ) * bDepth + fraction * aDepth );
+
+		}
+		const edgeCount = contourEdgeCount( this.data.points, closed );
+		const parameter = ( hit.index + fraction ) / contourEdgeCount( samples, closed ) * edgeCount;
+		if ( Math.abs( parameter - Math.round( parameter ) ) < 1e-6 ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
-		this.editor.viewTools.run( () => this.closeProfile() );
+		this.editor.viewTools.run( () => this.insertOutlinePoint( Math.floor( parameter ), interpolatePoint( a.toArray(), b.toArray(), fraction ) ) );
 
 	}
 

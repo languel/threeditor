@@ -7,7 +7,7 @@ import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
-import { meshBrushes } from './modeling/SculptBrush.js?v=mode-shelves';
+import { meshBrushes } from './modeling/SculptBrush.js?v=contour-editing';
 
 const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl+alt+numpad0' : 'mod+alt+numpad0';
 
@@ -16,6 +16,8 @@ const definitions = [
  ['save','Save project','File','mod+s','mod+s'],
  ['meshExtrude','Extrude selection','Modeling','e','e'],
  ['meshFill','Fill face or close outline','Modeling','f','f'],
+ ['outlineInsert','Insert outline point','Modeling','',''],
+ ['outlineSmooth','Toggle outline smoothing','Modeling','',''],
  ['translate','Move / grab','Transform','w','g'], ['rotate','Rotate','Transform','e','r'], ['scale','Scale','Transform','r','s'],
  ['addMenu','Open Add menu','Workspace','','shift+a'], ['contextMenu','Open object context menu','Workspace','',''],
  ['palette','Open command palette','Workspace','f3','f3'], ['paletteAlternate','Open command palette (alternate)','Workspace','mod+k','mod+k'],
@@ -155,6 +157,10 @@ class Keymap {
   const action=this.actions.find(action=>action.id===id);
   if(action?.available&&!action.available())return false;
   if(area!=='viewport'&&(viewportCategories.has(action?.category)||viewportActions.has(id)||action?.viewportOnly))return false;
+  if(id==='outlineInsert'||id==='outlineSmooth'){
+   return mode==='edit'&&!e.viewTools.mode&&m.editingOutline&&
+    (id==='outlineInsert'?m.indices.length===1:m.data.points.length>=3);
+  }
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
   const meshAction = meshActions.includes(id);
@@ -201,6 +207,8 @@ class Keymap {
    case 'knife':e.modeling.toggleKnife();break;
    case 'invertElements':e.modeling.invertElementSelection();break;
    case 'meshFill':e.viewTools.run(()=>e.modeling.canCloseProfile()?e.modeling.closeProfile():e.modeling.fillFace());break;
+   case 'outlineInsert':e.viewTools.run(()=>e.modeling.insertAfterSelectedPoint());break;
+   case 'outlineSmooth':e.viewTools.run(()=>e.modeling.toggleOutlineSmoothing());break;
    case 'meshExtrude':e.viewTools.run(()=>e.modeling.startExtrusion());break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
