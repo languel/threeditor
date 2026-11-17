@@ -42,3 +42,10 @@ Baseline is the local annotated tag `pre-unified-workspace` at `4a5ab83`. All 76
 - Initial texture support assumes usable UVs. Initial surface attachments follow rigid object transforms. Deforming topology and scan reimport need explicit remapping rules before they can preserve attachments.
 - Blender bindings can collide with browser and operating-system shortcuts. Test the actual focus and platform combinations and provide visible alternatives.
 - Treat projector aperture previews, live media and existing script parameters as compatibility checks during each slice. A layout pass alone can break their event routing.
+
+
+## Latest checkpoint
+
+The remote workspace commit added an interaction-mode selector, the Blender shading pie, three paint outputs, and an authoring walkthrough. The next input pass added the Ctrl+Tab mode pie and made Box, Lasso, Circle, Knife, Invert, Fill, and Extrude searchable through the same command registry that handles their bindings. The walkthrough now exercises the mode pie and keyboard selection through F3 before testing modeling, painting, scripting, and standalone publishing.
+
+Full Blender UI parity remains open. Continue with area-specific input ownership and mode-specific shelves, then verify the projection and legacy scene workflows. The engine phase remains part of the active goal.

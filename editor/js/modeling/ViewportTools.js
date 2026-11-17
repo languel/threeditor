@@ -286,11 +286,12 @@ export class ViewportTools {
 
 		const model = this.editor.modeling;
 		const edit = model.editMode;
-		this.selectionTools.hidden = ! edit || !! this.mode;
+		const sculpt = model.brush && model.brush !== 'freehand';
+		this.selectionTools.hidden = ! edit || !! this.mode || !! sculpt;
 		for ( const [ tool, button ] of this.selectionButtons ) button.setAttribute( 'aria-pressed', String( ! model.pen && ! model.knife && ! model.brush && ! model.adding && tool === model.selectionTool ) );
 		this.selectionOp.title = 'Selection operation: ' + model.selectionOperation + ' (click to cycle)';
 		this.selectionOp.setAttribute( 'aria-label', 'Selection operation: ' + model.selectionOperation );
-		this.elementModes.hidden = ! edit || ! model.object || !! this.mode;
+		this.elementModes.hidden = ! edit || ! model.object || !! this.mode || !! sculpt;
 		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
 		this.modeSelect.value = this.mode === 'paint' ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
 		this.modeSelect.querySelector( 'option[value="sculpt"]' ).disabled = ! model.canEditTarget( this.editor.selected );
@@ -301,10 +302,9 @@ export class ViewportTools {
 
 		}
 		this.creation.hidden = this.primary.hidden = ! edit || !! this.mode;
-		this.actionMenu.hidden = ! edit || !! this.mode || ! model.object;
+		this.actionMenu.hidden = ! edit || !! this.mode || ! model.object || !! sculpt;
 		this.modelOptions.replaceChildren();
 		this.brushSettings.replaceChildren();
-		const sculpt = model.brush && model.brush !== 'freehand';
 		const pen = model.pen && ! model.adding;
 		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
 		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );

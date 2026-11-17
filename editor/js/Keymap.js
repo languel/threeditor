@@ -13,6 +13,8 @@ const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl
 // A single registry drives both shortcut execution and the settings list.
 const definitions = [
  ['save','Save project','File','mod+s','mod+s'],
+ ['meshExtrude','Extrude selection','Modeling','e','e'],
+ ['meshFill','Fill face or close outline','Modeling','f','f'],
  ['translate','Move / grab','Transform','w','g'], ['rotate','Rotate','Transform','e','r'], ['scale','Scale','Transform','r','s'],
  ['addMenu','Open Add menu','Workspace','','shift+a'], ['contextMenu','Open object context menu','Workspace','',''],
  ['palette','Open command palette','Workspace','f3','f3'], ['paletteAlternate','Open command palette (alternate)','Workspace','mod+k','mod+k'],
@@ -30,6 +32,11 @@ const definitions = [
  ['play','Start / stop player','Playback','alt+p','alt+p'], ['presentation','Presentation mode','Playback','mod+alt+p','mod+alt+p'],
  ['code','Toggle code panel','Workspace','',''], ['sidebar','Toggle sidebar','Workspace','','n'], ['timeline','Toggle timeline','Workspace','',''],
  ['workspaceMode','Switch Object / Edit mode','Modeling','tab','tab'],
+ ['modePie','Interaction mode menu','Modeling','','ctrl+tab'],
+ ['objectMode','Object Mode','Modeling','',''],
+ ['boxSelect','Box select','Modeling','b','b'], ['lassoSelect','Lasso select','Modeling','',''],
+ ['circleSelect','Circle select','Modeling','c','c'], ['knife','Knife','Modeling','k','k'],
+ ['invertElements','Invert element selection','Modeling','mod+i','mod+i'],
  ['selectVertex','Vertex select','Modeling','1','1'], ['selectEdge','Edge select','Modeling','2','2'], ['selectFace','Face select','Modeling','3','3'],
  ['surfacePaintMode','Surface paint','Modeling','1',''], ['meshEditMode','Enter mesh edit mode','Modeling','2',''],
  ['meshSculptMode','Sculpt selected geometry','Modeling','3',''], ['topologyPen','Toggle topology pen','Modeling','6','6'],
@@ -56,6 +63,7 @@ function comboFromEvent( event ) {
  else if ( event.code === 'Comma' ) key = ',';
  else if ( event.altKey && event.code?.startsWith( 'Key' ) ) key = event.code.slice( 3 ).toLowerCase();
  else if ( key === ' ' ) key = 'space';
+ if ( event.code === 'Tab' && event.ctrlKey && ! event.metaKey && ! event.altKey && ! event.shiftKey ) return 'ctrl+tab';
  const mod = /Mac|iPhone|iPad/.test( navigator.platform ) ? event.metaKey : event.ctrlKey;
  const other = /Mac|iPhone|iPad/.test( navigator.platform ) ? event.ctrlKey : event.metaKey;
  return [ mod && 'mod', other && ( mod ? 'other' : ( event.metaKey ? 'meta' : 'ctrl' ) ), event.altKey && 'alt', event.shiftKey && event.code !== 'Backquote' && 'shift', key ].filter( Boolean ).join( '+' );
@@ -94,9 +102,20 @@ class Keymap {
  actionAvailable(id){
   const e=this.editor,m=e.modeling;
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
-  if(!elementSelect&&!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
+  const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
+  const meshAction = meshActions.includes(id);
+  if(!elementSelect&&!meshAction&&!['modePie','objectMode','surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
   if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
-  if(elementSelect)return m.editMode&&m.canEdit()&&!e.viewTools.mode;
+  if ( id === 'meshSculptMode' ) return m.canEditTarget( e.selected );
+  if ( id === 'modePie' || id === 'objectMode' ) return true;
+  if ( elementSelect || meshAction ) {
+   if ( ! m.editMode || ! m.canEdit() || e.viewTools.mode || m.brush && m.brush !== 'freehand' ) return false;
+   if ( id === 'knife' ) return !!m.data.faces?.length && !m.data.profile;
+   if ( id === 'meshFill' ) return m.canCloseProfile() || m.canFillSelection();
+   if ( id === 'meshExtrude' ) return Boolean(m.extrusionSelection());
+   if ( ['boxSelect','lassoSelect','circleSelect'].includes(id) ) return !m.pen && !m.adding && !m.brush && !m.knife;
+   return true;
+  }
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
@@ -119,11 +138,18 @@ class Keymap {
  }
  run(id){const e=this.editor,s=e.signals;
   switch(id){
+   case 'modePie':e.openTransformPie?.('mode');break;
+   case 'objectMode':e.viewTools.setWorkspaceMode('object');break;
+   case 'boxSelect':case 'lassoSelect':case 'circleSelect':e.modeling.setSelectionTool(id.slice(0,-6));break;
+   case 'knife':e.modeling.toggleKnife();break;
+   case 'invertElements':e.modeling.invertElementSelection();break;
+   case 'meshFill':e.viewTools.run(()=>e.modeling.canCloseProfile()?e.modeling.closeProfile():e.modeling.fillFace());break;
+   case 'meshExtrude':e.viewTools.run(()=>e.modeling.startExtrusion());break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
-   case 'meshSculptMode':if(!e.modeling.canEdit()||e.viewTools.mode)e.modeling.start(e.selected);e.modeling.setBrush('grab');break;
+   case 'meshSculptMode':e.viewTools.setWorkspaceMode('sculpt');break;
    case 'topologyPen':e.modeling.togglePen();break;case 'weldPoints':e.modeling.weld();break;
    case 'brushWeaker':case 'brushStronger':e.viewTools.adjustBrushStrength(id==='brushWeaker'?-.05:.05);break;
    case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;

@@ -21,6 +21,15 @@ export function addTransformSettings( editor, toolbar ) {
 	}, { passive: true } );
 
 	const configs = {
+		mode: {
+			label: 'Interaction mode',
+			choices: () => {
+				const tools = editor.viewTools;
+				const glyphs = { object: 'objectMode', edit: 'editMode', sculpt: 'sculptTool', paint: 'surfaceBrush' };
+				return [ ...tools.modeSelect.options ].filter( option => ! option.disabled ).map( option =>
+					[ option.textContent, glyphs[ option.value ], () => tools.setWorkspaceMode( option.value ), tools.modeSelect.value === option.value ] );
+			}
+		},
 		shading: {
 			label: 'Viewport shading',
 			choices: () => shadingModes.slice( 0, 4 ).map( ( [ mode, label, glyph ] ) =>
@@ -244,7 +253,7 @@ export function addTransformSettings( editor, toolbar ) {
 
 	for ( const [ kind, definition ] of Object.entries( configs ) ) {
 
-		if ( kind === 'shading' ) continue; // The viewport header owns the shading control.
+		if ( kind === 'shading' || kind === 'mode' ) continue; // The viewport header owns the shading control.
 
 		const button = document.createElement( 'button' );
 		button.type = 'button';

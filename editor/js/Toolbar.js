@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=poly-context';
+import { addTransformSettings } from './TransformSettings.js?v=workspace-modes';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

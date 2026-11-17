@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
-import { formatCombo } from './Keymap.js';
+import { formatCombo } from './Keymap.js?v=workspace-modes';
 
 function ContextMenu( editor, viewport ) {
 
@@ -107,12 +107,16 @@ function ContextMenu( editor, viewport ) {
 
 		if ( event.key === 'Escape' ) { event.preventDefault(); event.stopPropagation(); close(); return; }
 		if ( ! [ 'ArrowDown', 'ArrowUp', 'Enter' ].includes( event.key ) ) return;
-		const buttons = [ ...menu.querySelectorAll( '.context-menu-item' ) ];
+		const buttons = [ ...menu.querySelectorAll( '.context-menu-item:not(:disabled)' ) ];
 		if ( ! buttons.length ) return;
 		if ( event.key === 'Enter' && event.target.matches( 'input' ) ) { event.preventDefault(); buttons[ 0 ].click(); return; }
 		if ( event.key === 'Enter' ) return;
 		event.preventDefault();
 		const index = buttons.indexOf( document.activeElement );
+		if ( index < 0 ) {
+			buttons[ event.key === 'ArrowDown' ? 0 : buttons.length - 1 ].focus();
+			return;
+		}
 		buttons[ ( index + ( event.key === 'ArrowDown' ? 1 : buttons.length - 1 ) ) % buttons.length ].focus();
 
 	}
@@ -131,6 +135,9 @@ function ContextMenu( editor, viewport ) {
 		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );
 		if ( edit ) {
 
+			const tools = [ 'selectVertex', 'selectEdge', 'selectFace', 'boxSelect', 'lassoSelect', 'circleSelect', 'invertElements' ];
+			actions.push( ...editor.keymap.actions.filter( action => tools.includes( action.id ) && editor.keymap.actionAvailable( action.id ) )
+				.map( action => ( { ...action, section: 'Selection' } ) ) );
 			actions.push( ...model.actions().map( action => ( { ...action, section: 'Mesh operations' } ) ) );
 			actions.push( { label: 'Select all', section: 'Selection', run: () => model.selectPoints( true ) },
 				{ label: 'Deselect all', section: 'Selection', run: () => model.selectPoints( false ) } );

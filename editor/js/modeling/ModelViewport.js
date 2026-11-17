@@ -145,11 +145,6 @@ export class ModelViewport {
 
 			}
 			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
-			if ( ! editingField && this.data.faces?.length && ! event.ctrlKey && ! event.metaKey && event.key.toLowerCase() === 'k' ) {
-
-				event.preventDefault(); event.stopImmediatePropagation(); this.toggleKnife(); return;
-
-			}
 			if ( ! editingField && this.pen && ( this.penChain || this.drag ) && ! event.ctrlKey && ! event.metaKey && [ 'x', 'y', 'z' ].includes( event.key.toLowerCase() ) ) {
 
 				event.preventDefault(); event.stopImmediatePropagation();
@@ -157,38 +152,13 @@ export class ModelViewport {
 				state.axis = state.axis === axis ? '' : axis; state.planeLock = event.shiftKey; return;
 
 			}
-			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && [ 'b', 'c' ].includes( event.key.toLowerCase() ) && ! this.pen && ! this.adding ) {
+			if ( ! editingField && ! event.repeat && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) &&
+				event.key === 'Enter' && this.adding && this.canCloseProfile() ) {
 
-				event.preventDefault(); event.stopImmediatePropagation();
-				this.setSelectionTool( event.key.toLowerCase() === 'b' ? 'box' : 'circle' ); return;
-
-			}
-			if ( ! editingField && ( event.ctrlKey || event.metaKey ) && event.key.toLowerCase() === 'i' ) {
-
-				event.preventDefault(); event.stopImmediatePropagation();
-				this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' ); return;
-
-			}
-			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
-
-				const key = event.key.toLowerCase();
-				const close = ( this.adding && key === 'enter' || key === 'f' ) && this.canCloseProfile();
-				const fill = key === 'f' && this.data.kind === 'mesh' && this.indices.length >= 3 && this.selectedFace() < 0;
-				const extrude = key === 'e' && this.extrusionSelection();
-				if ( close || fill || extrude ) {
-
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					editor.viewTools.run( () => {
-
-						if ( close ) this.closeProfile();
-						else if ( fill ) this.fillFace();
-						else this.startExtrusion();
-
-					} );
-					return;
-
-				}
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				editor.viewTools.run( () => this.closeProfile() );
+				return;
 
 			}
 			if ( editingField ) return;
@@ -894,7 +864,12 @@ export class ModelViewport {
 		if ( ! this.editor.viewLayout.navigation ) return;
 		const rect = this.rect();
 		if ( ! rect.width || ! rect.height ) return;
-		this.lastPointer ||= { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+		const pointer = this.lastPointer;
+		if ( pointer?.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( pointer.clientX, pointer.clientY ) !== this.frame ) {
+
+			this.lastPointer = { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+
+		}
 		if ( ! this.beginTransform( mode, true ) ) return;
 		this.editor.controls.enabled = false;
 		this.onSelectionChange?.();
@@ -1358,6 +1333,18 @@ export class ModelViewport {
 			new SetPositionCommand( this.editor, object, position ),
 			new SetRotationCommand( this.editor, object, rotation ), update
 		] ), 'Place modeling outline' );
+
+	}
+
+	invertElementSelection() {
+
+		this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' );
+
+	}
+
+	canFillSelection() {
+
+		return this.data.kind === 'mesh' && this.indices.length >= 3 && this.selectedFace() < 0;
 
 	}
 
