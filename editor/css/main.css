@@ -2344,20 +2344,6 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 	align-items: center;
 	pointer-events: none;
 }
-.viewport-tool-strip { display: none; gap: 3px; }
-body[data-ui-style="compact"] .viewport-tool-strip { display: flex; }
-body[data-ui-style="compact"] .viewport-tool-select,
-body[data-ui-style="compact"] .viewport-tool-mask-text { display: none; }
-.viewport-tool-strip button {
-	display: grid;
-	place-items: center;
-	width: 25px;
-	height: 25px;
-	padding: 0;
-	border-radius: 4px;
-}
-
-.viewport-tool-strip button:disabled { opacity: .4; }
 .viewport-tool-panel select, .viewport-tool-panel input, .viewport-tool-panel button { pointer-events: auto; }
 .viewport-tool-panel select, .viewport-tool-panel button, .viewport-split-button {
 	color: var(--theme-text);
@@ -2835,11 +2821,12 @@ body .model-action-menu .Button.model-control-button {
 	pointer-events: auto;
 }
 .viewport-geometry-tools[hidden] { display: none; }
-.viewport-geometry-tools :is(.viewport-creation, .viewport-primary-tools, .viewport-tool-strip) {
+.viewport-geometry-tools :is(.viewport-creation, .viewport-primary-tools, .viewport-tool-strip, .viewport-sculpt-tools) {
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
 }
+.viewport-geometry-tools .viewport-tool-strip:not(:has(button:not([hidden]))) { display: none; }
 .viewport-geometry-tools :is(.viewport-creation, .viewport-primary-tools) {
 	border-top: 1px solid var(--theme-surface);
 	padding-top: 5px;

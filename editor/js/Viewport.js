@@ -29,9 +29,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=area-shortcuts';
+import { ViewportTools } from './modeling/ViewportTools.js?v=mode-shelves';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=area-shortcuts';
+import { ModelViewport } from './modeling/ModelViewport.js?v=mode-shelves';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

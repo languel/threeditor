@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
-import { formatCombo } from './Keymap.js?v=area-shortcuts';
+import { formatCombo } from './Keymap.js?v=mode-shelves';
 
 function ContextMenu( editor, viewport ) {
 
@@ -130,6 +130,13 @@ function ContextMenu( editor, viewport ) {
 	function openObject( position ) {
 
 		const model = editor.modeling;
+		if ( editor.viewTools.workspaceMode === 'sculpt' ) {
+
+			const actions = editor.keymap.actions.filter( action => action.category === 'Sculpt' && editor.keymap.actionAvailable( action.id ) );
+			show( 'Sculpt brushes', actions, position );
+			return;
+
+		}
 		const edit = model.editMode && model.object && ! editor.viewTools.mode;
 		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selected ? [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ] : [];
 		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );

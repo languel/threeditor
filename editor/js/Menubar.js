@@ -3,7 +3,7 @@ import { UIPanel } from './libs/ui.js';
 import { MenubarAdd } from './Menubar.Add.js?v=mask-editor';
 import { MenubarEdit } from './Menubar.Edit.js?v=area-shortcuts';
 import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
-import { MenubarView } from './Menubar.View.js?v=viewport-tools';
+import { MenubarView } from './Menubar.View.js?v=mode-shelves';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
 

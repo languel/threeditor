@@ -7,6 +7,7 @@ import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+import { meshBrushes } from './modeling/SculptBrush.js?v=mode-shelves';
 
 const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl+alt+numpad0' : 'mod+alt+numpad0';
 
@@ -42,7 +43,8 @@ const definitions = [
  ['meshSculptMode','Sculpt selected geometry','Modeling','3',''], ['topologyPen','Toggle topology pen','Modeling','6','6'],
  ['weldPoints','Weld modeling vertices','Modeling','m','m'], ['brushSmaller','Decrease brush radius','Modeling','[','['], ['brushLarger','Increase brush radius','Modeling',']',']'],
  ['brushWeaker','Decrease brush strength','Modeling','shift+[','shift+['], ['brushStronger','Increase brush strength','Modeling','shift+]','shift+]'],
- ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
+ ['toolShelf','Toggle tool shelf','View','','t'],
+ ['toolbar','Toggle transform toolbar','Workspace','',''], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
  ['toggleSnap','Toggle magnet snapping','Transform','shift+tab','shift+tab'], ['orientationPie','Open orientation menu','Transform',',',','],
@@ -93,6 +95,10 @@ class Keymap {
    this.overrides={...this.overrides,basic}; editor.config.setKey('settings/keymapOverrides',this.overrides,'settings/keymapMigrated',true);
   }
   for(const [id,label,category,basic,blender] of definitions) this.register({id,label,category,defaults:{basic,blender},run:()=>this.run(id)});
+  for(const [id,label] of meshBrushes) this.register({
+   id:'sculpt.'+id,label:label+' brush',category:'Sculpt',defaults:{},
+   run:()=>editor.modeling.setBrush(id)
+  });
   const trackPointer = event => { this.pointer = [event.clientX,event.clientY]; };
   document.addEventListener('pointermove',trackPointer,true);
   document.addEventListener('pointerdown',trackPointer,true);
@@ -139,8 +145,10 @@ class Keymap {
  }
  actionAvailable(id,area='viewport'){
   const e=this.editor,m=e.modeling;
+  const mode=e.viewTools?.workspaceMode;
+  if(id.startsWith('sculpt.'))return area==='viewport'&&mode==='sculpt'&&!e.viewTools.mode&&!m.gesture&&!m.drag;
   if(timelineSelection.has(id))return area==='animation'&&e.timeline?.canEditSelection();
-  if(sceneSelection.has(id))return area==='viewport'||area==='outliner'&&!m?.editMode;
+  if(sceneSelection.has(id))return area==='viewport'&&(id==='clearSelection'||mode!=='sculpt'&&mode!=='paint')||area==='outliner'&&!m?.editMode;
   if(id==='focus'&&area==='outliner')return true;
   if(id==='timelineInsertKey')return ['viewport','sidebar','animation'].includes(area);
   if(['animationPlay','animationPause','animationStop'].includes(id))return area==='viewport'||area==='animation';
@@ -151,7 +159,7 @@ class Keymap {
   const meshAction = meshActions.includes(id);
   if(!elementSelect&&!meshAction&&!['modePie','objectMode','surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
   if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
-  if ( id === 'meshSculptMode' ) return m.canEditTarget( e.selected );
+  if ( id === 'meshSculptMode' ) return m.canSculptTarget( e.selected );
   if ( id === 'modePie' || id === 'objectMode' ) return true;
   if ( elementSelect || meshAction ) {
    if ( ! m.editMode || ! m.canEdit() || e.viewTools.mode || m.brush && m.brush !== 'freehand' ) return false;
@@ -161,8 +169,8 @@ class Keymap {
    if ( ['boxSelect','lassoSelect','circleSelect'].includes(id) ) return !m.pen && !m.adding && !m.brush && !m.knife;
    return true;
   }
-  if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
-  if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
+  if(id==='topologyPen')return mode==='edit'&&!e.viewTools.mode&&m.canEdit()&&!!m.data.faces?.length;
+  if(id==='weldPoints')return mode==='edit'&&!e.viewTools.mode&&m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
   if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
   return true;
@@ -195,7 +203,7 @@ class Keymap {
    case 'meshExtrude':e.viewTools.run(()=>e.modeling.startExtrusion());break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
-   case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
+   case 'surfacePaintMode':e.viewTools.setWorkspaceMode('paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
    case 'meshSculptMode':e.viewTools.setWorkspaceMode('sculpt');break;
    case 'topologyPen':e.modeling.togglePen();break;case 'weldPoints':e.modeling.weld();break;
@@ -271,6 +279,7 @@ class Keymap {
    case 'duplicate':if(!e.modeling?.editMode)e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
+   case 'toolShelf':e.viewTools.toggleShelf();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
    case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':e.toggleTransformGrid?.();break;

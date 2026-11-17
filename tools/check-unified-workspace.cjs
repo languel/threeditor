@@ -63,6 +63,26 @@ async function check() {
 		await page.keyboard.press( 'ArrowDown' );
 		await page.keyboard.press( 'Enter' );
 		assert.equal( await page.evaluate( () => editor.modeling.selectionTool ), 'box' );
+		const shelf = page.getByRole( 'group', { name: 'Tool shelf', exact: true } );
+		const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
+		assert.deepEqual( await mode.locator( 'option' ).allTextContents(), [ 'Object Mode', 'Edit Mode', 'Sculpt Mode', 'Paint Mode' ] );
+		await mode.selectOption( 'sculpt' );
+		await shelf.getByRole( 'button', { name: 'Smooth', exact: true } ).click();
+		assert.equal( await shelf.getByRole( 'button', { name: 'Smooth', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
+		assert.equal( await shelf.getByRole( 'button', { name: 'Draw path', exact: true } ).count(), 0 );
+		assert.equal( await shelf.getByRole( 'button', { pressed: true } ).count(), 1 );
+		await mode.selectOption( 'object' );
+		assert.equal( await shelf.getByRole( 'button', { name: 'Smooth', exact: true } ).count(), 0 );
+		await mode.selectOption( 'sculpt' );
+		assert.equal( await page.evaluate( () => editor.modeling.brush ), 'smooth' );
+		await mode.selectOption( 'edit' );
+		assert.equal( await shelf.getByRole( 'button', { name: 'Box select (B)', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
+		await page.locator( '#viewport' ).hover();
+		await page.keyboard.press( 't' );
+		assert.equal( await shelf.isVisible(), false );
+		assert.equal( await page.locator( '#toolbar' ).isVisible(), true );
+		await page.keyboard.press( 't' );
+		assert.equal( await shelf.isVisible(), true );
 		await page.keyboard.press( '1' );
 		assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'vertex' );
 		await page.getByRole( 'button', { name: 'Box select (B)', exact: true } ).focus();
@@ -92,8 +112,8 @@ async function check() {
 		assert.ok( Math.max( ...edited ) > .65, 'Edit-mode transform changed mesh coordinates' );
 		await page.evaluate( () => document.activeElement.blur() );
 		await page.keyboard.press( 'Tab' );
-		const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 		await mode.selectOption( 'paint' );
+		assert.equal( await shelf.getByRole( 'button', { name: 'Surface paint brush', exact: true, pressed: true } ).count(), 1 );
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'materials' );
 		const center = await page.evaluate( () => {
 

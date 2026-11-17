@@ -1,7 +1,7 @@
 // Screen-space falloff and topology-aware smoothing adapted from the ThreeGrease and AMS brushes.
 export const meshBrushes = [
-	[ 'grab', 'Grab', 'move' ], [ 'push', 'Push', 'toolPaint' ], [ 'smooth', 'Smooth', 'toolPath' ],
-	[ 'relax', 'Relax', 'snapEdge' ], [ 'pinch', 'Pinch', 'snapMidpoint' ], [ 'twist', 'Twist', 'rotate' ]
+	[ 'grab', 'Grab', 'sculptGrab' ], [ 'push', 'Push', 'sculptPush' ], [ 'smooth', 'Smooth', 'sculptSmooth' ],
+	[ 'relax', 'Relax', 'sculptRelax' ], [ 'pinch', 'Pinch', 'sculptPinch' ], [ 'twist', 'Twist', 'sculptTwist' ]
 ];
 
 export function sculptPoints( points, pixels, cursor, radius, strength, { tool, move, neighbors, normals } ) {

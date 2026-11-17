@@ -1,7 +1,7 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
 import { selectionCandidates, applySelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
-import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=mode-shelves';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
@@ -162,6 +162,7 @@ export class ModelViewport {
 
 			}
 			const deleting = [ 'Delete', 'Backspace' ].includes( event.key );
+			if ( deleting && editor.viewTools.workspaceMode === 'sculpt' ) return;
 			if ( event.key !== 'Escape' && ! deleting ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
@@ -252,6 +253,14 @@ export class ModelViewport {
 
 	}
 
+	canSculptTarget( object ) {
+
+		if ( ! this.canEditTarget( object ) ) return false;
+		const source = modifierSource( object );
+		return ( source.userData.modeling?.points?.length ?? source.attributes.position.count ) > 0;
+
+	}
+
 	setTarget( object ) {
 
 		this.releaseDrag();
@@ -263,10 +272,12 @@ export class ModelViewport {
 		this.indices = [];
 		this.elements = new Map();
 		this.adding = Boolean( this.data?.profile );
-		this.pen = this.editMode && Boolean( this.pen );
+		const hasFaces = this.data?.kind !== 'vertices' && Boolean( this.data?.faces?.length );
+		this.pen = this.editMode && this.pen && hasFaces;
+		this.knife = this.editMode && this.knife && hasFaces && ! this.data.profile;
 		this.penHover = null;
 		this.penChain = null;
-		if ( ! this.editMode ) this.brush = '';
+		if ( ! this.editMode || this.brush !== 'freehand' && ! this.data?.points?.length ) this.brush = '';
 		this.overlay.hidden = ! this.object;
 		this.changed();
 		this.render();
@@ -315,7 +326,8 @@ export class ModelViewport {
 		const { data, indices } = this;
 		const actions = [];
 		const add = ( label, glyph, run, disabled = false, pressed ) => actions.push( { label, glyph, run, disabled, pressed } );
-		if ( data.points.length ) add( 'Sculpt brushes', 'sculptTool', () => this.setBrush( this.brush && this.brush !== 'freehand' ? '' : 'grab' ), false, Boolean( this.brush && this.brush !== 'freehand' ) );
+		const sculpt = this.editor.viewTools.workspaceMode === 'sculpt';
+		if ( data.points.length ) add( 'Sculpt brushes', 'sculptTool', () => this.editor.viewTools.setWorkspaceMode( sculpt ? 'edit' : 'sculpt' ), false, sculpt );
 		if ( data.faces?.length && ! data.profile ) add( 'Knife (K)', 'knifeTool', () => this.toggleKnife(), false, !! this.knife );
 		if ( data.kind === 'vertices' ) {
 
@@ -584,6 +596,8 @@ export class ModelViewport {
 
 		if ( ! this.canEdit() || this.drag || this.gesture || brush && ( ! this.data.points.length || ! meshBrushes.some( ( [ id ] ) => id === brush ) ) ) return;
 		this.pen = false;
+		this.penChain = null;
+		this.knife = false;
 		this.brush = brush;
 		this.adding = false;
 		this.changed();
