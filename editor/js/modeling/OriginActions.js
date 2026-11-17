@@ -35,6 +35,14 @@ export function originActions( editor ) {
 		object.userData.measurement || object.userData.assetObject || hasRestriction( object, 'locked' ) || ! ( object.geometry || object.children.length ) ) return [];
 	const center = () => new THREE.Box3().setFromObject( object, true ).getCenter( new THREE.Vector3() );
 	const actions = [
+		{ label: 'Origin to bounds bottom center', section: 'Set origin', run: () => {
+
+			const box = new THREE.Box3().setFromObject( object, true );
+			const point = box.getCenter( new THREE.Vector3() );
+			point.y = box.min.y;
+			setObjectOrigin( editor, object, point );
+
+		} },
 		{ label: 'Origin to geometry', section: 'Set origin', run: () => setObjectOrigin( editor, object, center() ) },
 		{ label: 'Origin to world origin', section: 'Set origin', run: () => setObjectOrigin( editor, object, new THREE.Vector3() ) }
 	];

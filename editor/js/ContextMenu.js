@@ -1,4 +1,4 @@
-import { originActions } from './modeling/OriginActions.js';
+import { originActions } from './modeling/OriginActions.js?v=bottom-pivot';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
 import { formatCombo } from './Keymap.js';
 
@@ -141,7 +141,7 @@ function ContextMenu( editor, viewport ) {
 
 		} else actions.unshift( { label: 'Add…', run: () => openAdd( position ) }, ...outlineActions( editor, editor.selected ) );
 		actions.push( ...originActions( editor ) );
-		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
+		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
 
 			label: 'Pivot: ' + label, section: 'Transform pivot', run: () => {
 

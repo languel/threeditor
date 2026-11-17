@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=mesh-build';
+import { addTransformSettings } from './TransformSettings.js?v=bottom-pivot';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

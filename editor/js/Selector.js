@@ -191,8 +191,9 @@ class Selector {
 
 			const object = this.selection[ i ];
 
-			target.expandByObject( object, true );
-			target.expandByPoint( object.getWorldPosition( _vector ) ); // objects without geometry (e.g. lights)
+			const bounds = new THREE.Box3().setFromObject( object, true );
+			if ( bounds.isEmpty() ) target.expandByPoint( object.getWorldPosition( _vector ) );
+			else target.union( bounds );
 
 		}
 
@@ -262,7 +263,7 @@ class Selector {
 		if ( ! this.selection.length ) return false;
 		if ( this.selection.length > 1 ) return true;
 		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
-		return pivot === 'bounds' || pivot === 'origin';
+		return pivot === 'bounds' || pivot === 'bottom' || pivot === 'origin';
 
 	}
 
@@ -297,6 +298,7 @@ class Selector {
 		} else {
 
 			this.getSelectionBox( _box ).getCenter( group.position );
+			if ( pivot === 'bottom' && ! _box.isEmpty() ) group.position.y = _box.min.y;
 
 		}
 		group.quaternion.identity();

@@ -6,6 +6,7 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	pivotBottom: svg( '<rect x="5" y="3" width="14" height="16" stroke-dasharray="3 2"/><path d="M3 21h18m-9-9v7"/><circle cx="12" cy="19" r="2" fill="currentColor"/>' ),
 	vertexSelect: svg( '<path d="M5 19V5h14"/><circle cx="5" cy="5" r="3" fill="currentColor"/>' ),
 	edgeSelect: svg( '<path d="M5 19V5h14"/><path d="m5 19 14-14" stroke-width="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/>' ),
 	faceSelect: svg( '<path d="M4 5h16v14H4z" fill="currentColor" fill-opacity=".4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>' ),

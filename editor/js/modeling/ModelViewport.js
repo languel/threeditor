@@ -592,7 +592,13 @@ export class ModelViewport {
 		const config = this.editor.config;
 		const pivot = config.getKey( 'settings/transformPivot' );
 		const center = this.proxy.position.set( 0, 0, 0 );
-		if ( pivot === 'bounds' ) new THREE.Box3().setFromPoints( points ).getCenter( center );
+		if ( pivot === 'bounds' || pivot === 'bottom' ) {
+
+			const box = new THREE.Box3().setFromPoints( points );
+			box.getCenter( center );
+			if ( pivot === 'bottom' ) center.y = box.min.y;
+
+		}
 		else if ( pivot === 'active' ) center.copy( points.at( -1 ) );
 		else if ( pivot !== 'origin' ) {
 

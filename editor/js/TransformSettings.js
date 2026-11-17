@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js?v=mesh-build';
+import { icon } from './Glyphs.js?v=bottom-pivot';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 
@@ -61,7 +61,7 @@ export function addTransformSettings( editor, toolbar ) {
 		pivot: {
 			label: 'Transform pivot', glyph: 'pivotBox',
 			choices: () => [
-				[ 'auto', 'Default', 'toolSelect' ], [ 'bounds', 'Bounds center', 'pivotBox' ],
+				[ 'auto', 'Default', 'toolSelect' ], [ 'bounds', 'Bounds center', 'pivotBox' ], [ 'bottom', 'Bounds bottom center', 'pivotBottom' ],
 				[ 'median', editor.modeling?.object ? 'Median point' : 'Median origins', 'pivotMedian' ], [ 'active', editor.modeling?.object ? 'Active point' : 'Active origin', 'pivotActive' ],
 				[ 'origin', 'World origin', 'pivotOrigin' ]
 			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'transformPivot', value ), config.getKey( 'settings/transformPivot' ) === value ] )
