@@ -30,7 +30,7 @@ Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open
 
 ### Mode and tool layout
 
-The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. An explicit active-tool label accompanies the pressed tool button. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.
+The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. The pressed tool button identifies the active tool without an extra label. Mode controls stay top-left, transform/grid controls center, and view controls top-right; a ResizeObserver puts transforms on a separate centered row when the viewport is narrow. Operation menus align glyphs and labels on one left-aligned row. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.
 
 The topology pen turns on when a mesh profile closes. Subsequent empty-space clicks collect a new face draft in the same object, reusing existing vertices when picked. Clicking the first corner or pressing F closes the face. Escape discards the draft. An uncommitted face stays outside serialized geometry.
 

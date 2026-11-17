@@ -73,9 +73,6 @@ export class ViewportTools {
 		this.selector.onchange = () => this.setMode( this.selector.value );
 		this.editMask = modelButton( this.panel, 'Edit mask', 'toolMask', () => this.setMode( 'mask' ) );
 		this.editMask.className = 'viewport-tool-mask-text';
-		this.activeTool = element( 'output', this.panel );
-		this.activeTool.className = 'active-tool-name';
-		this.activeTool.setAttribute( 'aria-label', 'Active tool' );
 		const strip = element( 'div', this.panel );
 		strip.className = 'viewport-tool-strip';
 		strip.setAttribute( 'role', 'group' );
@@ -232,8 +229,7 @@ export class ViewportTools {
 			sculpt ? 'Sculpt · ' + ( meshBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : 'Select';
-		this.activeTool.textContent = name;
-		this.activeTool.title = 'Active tool · ' + name;
+		this.panel.setAttribute( 'aria-label', 'Viewport tools · ' + name );
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode ? this.mode === mode : ! this.mode && name === 'Select' ) );
 		for ( const [ kind, control ] of this.creationButtons ) control.setAttribute( 'aria-pressed', String( ! this.mode && model.adding && model.data?.kind === kind ) );
 		this.freehandButton.setAttribute( 'aria-pressed', String( ! this.mode && model.brush === 'freehand' ) );

@@ -28,7 +28,7 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=tool-layout';
+import { ViewportTools } from './modeling/ViewportTools.js?v=toolbar-alignment';
 import { ViewLayout } from './modeling/ViewLayout.js';
 import { ModelViewport } from './modeling/ModelViewport.js?v=tool-layout';
 import { PostProcessingHost } from './PostProcessing.js';
@@ -44,6 +44,12 @@ function Viewport( editor ) {
 
 	const header = document.createElement( 'div' );
 	header.className = 'viewport-header';
+	// Use the available viewport width, including when side panels are resized.
+	new ResizeObserver( ( [ entry ] ) => {
+
+		header.classList.toggle( 'narrow', entry.contentRect.width < 760 );
+
+	} ).observe( header );
 	const toolbarRow = document.createElement( 'div' );
 	toolbarRow.className = 'viewport-toolbar-row';
 	toolbarRow.append( new ViewportControls( editor ).dom );
