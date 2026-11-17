@@ -14,6 +14,10 @@ Open `http://127.0.0.1:5300/` with the trailing slash. The hosted editor runs as
 
 Try the [Fox woodland demo](demos/fox-follow/) for an animated character with a Third Person follow camera. Its **Edit scene** link opens the saved project in the editor.
 
+In the 3D viewport, open the command palette with **F3**. **Vertical Split** places two areas side by side. **Horizontal Split** stacks them. Drag the divider to resize the areas, or focus it and use the arrow keys. Hover the area you want to remove and run **Close Area**. The other area fills the viewport.
+
+Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
+
 ## Examples, lessons, and saved projects
 
 Open **File → Examples** for a searchable folder tree:
@@ -122,7 +126,7 @@ Use **Enter** to apply a mask or save a ruler or path. **Esc** cancels an active
 
 ## Paths, shapes, and meshes
 
-Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view; projector outputs, Preview and Play remain clean. The WebGPU renderer falls back to bounds.
+Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view and its split companion. Projector outputs, Preview and Play stay clean. The WebGPU renderer falls back to bounds.
 
 Press **Tab** or click **Edit mode**. The single-column left tool shelf holds drawing tools, **Polybuild (6)**, **Knife (K)**, and **Sculpt brushes**. The active tool has an accent highlight and a tooltip. Mode controls stay at the top-left, transforms and grid settings are centered, and view controls stay at the top-right. Narrow viewports move transforms onto their own centered row. Open the **Mesh and point operations** menu (three dots) for fill, split, weld, extrusion, and deletion. The top toolbar holds transforms, snapping, placement, view, and the **2D Editors** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
 

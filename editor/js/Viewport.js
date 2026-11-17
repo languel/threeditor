@@ -12,7 +12,7 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=edit-pointer-routing';
 
 import { ViewportLabels } from './Viewport.Labels.js';
-import { ViewportControls } from './Viewport.Controls.js?v=top-toolbar';
+import { ViewportControls } from './Viewport.Controls.js?v=area-splits';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
@@ -30,8 +30,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=brush-shortcuts';
-import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=shape-selection';
+import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
+import { ModelViewport } from './modeling/ModelViewport.js?v=area-splits';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -80,6 +80,21 @@ function Viewport( editor ) {
 
 	let renderer = null;
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
+	// Route shortcuts and pointer tools to the Director area under the mouse
+	// before the modeling and transform controls process the event.
+	for ( const type of [ 'pointerdown', 'pointermove', 'wheel' ] ) container.dom.addEventListener( type, event => {
+
+		if ( ! editor.viewportSplit || event.target !== renderer?.domElement || editor.modeling.drag ||
+			editor.modeling.gesture || editor.modalTransform?.active || editor.viewTools.pointer || ( type === 'pointermove' && event.buttons ) ) return;
+		const frame = layout.at( event.clientX, event.clientY );
+		if ( frame?.director && frame.key !== layout.activeKey ) {
+
+			layout.activeKey = frame.key;
+			render();
+
+		}
+
+	}, true );
 	const labels = new ViewportLabels( editor, container.dom );
 	signals.viewportLabelsChanged.add( render );
 	signals.selectionAppearanceChanged.add( render );
@@ -386,8 +401,9 @@ function Viewport( editor ) {
 			const camera = editor.cameras[ uuid ];
 
 			const width = container.dom.offsetWidth;
-			const split = editor.viewportSplit && ( editor.viewportSource || editor.viewportCamera !== editor.camera );
-			const aspect = ( split ? Math.floor( width / 2 ) : width ) / Math.max( 1, container.dom.offsetHeight );
+			const areas = layout.areas( width, container.dom.offsetHeight );
+			const area = camera === editor.camera ? areas[ 0 ] : areas.at( -1 );
+			const aspect = Math.max( 1, area.width ) / Math.max( 1, area.height );
 
 			if ( camera.isPerspectiveCamera ) {
 
@@ -471,10 +487,16 @@ function Viewport( editor ) {
 	function onDoubleClick( event ) {
 
 		const view = layout.at( event.clientX, event.clientY );
-		if ( ! view || view !== layout.navigation ) return;
+		if ( ! view ) return;
 		onDoubleClickPosition.fromArray( pointerPosition( view, event.clientX, event.clientY ) );
 		const intersects = selector.getPointerIntersects( onDoubleClickPosition, view.camera );
-		if ( intersects.length ) signals.objectFocused.dispatch( intersects[ 0 ].object );
+		if ( intersects.length ) {
+
+			const object = intersects[ 0 ].object.userData.object || intersects[ 0 ].object;
+			editor.select( object );
+			signals.objectFocused.dispatch( object );
+
+		}
 
 	}
 
@@ -492,7 +514,7 @@ function Viewport( editor ) {
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
 
-		const active = layout.navigation?.camera || editor.camera;
+		const active = editor.viewportSplit ? editor.camera : editor.viewportCamera;
 		if ( active !== editor.camera ) signals.objectChanged.dispatch( active );
 		signals.cameraChanged.dispatch( active );
 		signals.refreshSidebarObject3D.dispatch( active );
@@ -1221,12 +1243,12 @@ function Viewport( editor ) {
 
 	}
 
-	function drawSelection( view ) {
+	function drawSelection( view, show = view === camera, host = splatHost ) {
 
-		if ( model.editMode && model.object || view !== camera || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
+		if ( ! show || model.editMode && model.object || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
 			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
-		selectionOutline.draw( renderer, scene, view, roots, () => splatHost.render( renderer, scene,
+		selectionOutline.draw( renderer, scene, view, roots, () => host.render( renderer, scene,
 			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () => renderer.render( scene, view ) ) ), queueSplatRender ) );
 
 	}
@@ -1306,8 +1328,16 @@ function Viewport( editor ) {
 			const view = frame.camera;
 			const gizmo = transformControls.getHelper();
 			const showModelGizmo = frame === nav && transformControls.object === model.proxy;
-			if ( view !== camera || editor.viewportShading === 'preview' ) {
+			drawSelection( view, frame.director || frames.length > 1, frame.key === 'source' && secondarySplats ? secondarySplats : splatHost );
+			if ( ! frame.director || editor.viewportShading === 'preview' ) {
 
+				if ( frames.length > 1 && editor.viewportShading !== 'preview' && sceneHelpers.visible &&
+					! ( model.editMode && model.object ) && selectionBox.visible ) {
+
+					renderer.autoClear = false;
+					renderer.render( selectionBox, view );
+
+				}
 				if ( showModelGizmo ) {
 
 					renderer.autoClear = false;
@@ -1317,14 +1347,12 @@ function Viewport( editor ) {
 				return;
 
 			}
-			// Only the director's editing pane gets selection feedback.
-			drawSelection( view );
 			renderer.autoClear = false;
 			if ( grid.visible ) renderer.render( grid, view );
 			if ( sceneHelpers.visible ) {
 
 				const visible = gizmo.visible;
-				if ( model.object && ! showModelGizmo || editor.viewTools.mode ) gizmo.visible = false;
+				if ( frame !== nav || editor.viewTools.mode ) gizmo.visible = false;
 				renderer.render( sceneHelpers, view );
 				gizmo.visible = visible;
 
@@ -1358,6 +1386,7 @@ function Viewport( editor ) {
 				for ( const frame of frames ) {
 
 					const { rect, camera: view, key } = frame;
+					if ( ! rect.width || ! rect.height ) continue;
 
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );

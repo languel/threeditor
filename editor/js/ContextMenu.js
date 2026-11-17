@@ -158,6 +158,17 @@ function ContextMenu( editor, viewport ) {
 
 		const rect = viewport.getBoundingClientRect();
 		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) ).map( action => ( { ...action, section: action.section || action.category } ) );
+		if ( ! editor.editWorkspace.mode ) {
+
+			const areaPointer = pointer;
+			const section = 'Viewport areas';
+			actions.push(
+				{ label: 'Vertical Split', section, run: () => editor.setViewportSplit( true, 'vertical' ) },
+				{ label: 'Horizontal Split', section, run: () => editor.setViewportSplit( true, 'horizontal' ) }
+			);
+			if ( editor.viewportSplit ) actions.push( { label: 'Close Area', section, run: () => editor.viewLayout.closeArea( areaPointer ) } );
+
+		}
 		show( 'Command palette', actions, { x: rect.left + rect.width / 2 - 115, y: rect.top + Math.min( 90, rect.height / 4 ) } );
 
 	}

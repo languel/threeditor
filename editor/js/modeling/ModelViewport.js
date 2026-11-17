@@ -1022,9 +1022,7 @@ export class ModelViewport {
 
 	}
 
-	project( point, width, height ) {
-
-		const camera = this.frame.camera;
+	project( point, width, height, camera = this.frame.camera ) {
 		const projection = new THREE.Vector3( ...point ).applyMatrix4( this.object.matrixWorld );
 		const depth = projection.clone().applyMatrix4( camera.matrixWorldInverse ).z;
 		projection.project( camera );
@@ -1036,9 +1034,7 @@ export class ModelViewport {
 	draw() {
 
 		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
-		const { width, height, x, y } = this.rect();
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
-		if ( ! width || ! height ) return;
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
 		const w = Math.round( bounds.width * ratio ), h = Math.round( bounds.height * ratio );
 		if ( this.overlay.width !== w || this.overlay.height !== h ) {
@@ -1051,6 +1047,18 @@ export class ModelViewport {
 		const ctx = this.context;
 		ctx.setTransform( ratio, 0, 0, ratio, 0, 0 );
 		ctx.clearRect( 0, 0, bounds.width, bounds.height );
+		const frames = this.editor.viewLayout.frames;
+		for ( const frame of frames ) {
+			this.drawFrame( ctx, frame, frame === this.frame );
+		}
+
+	}
+
+	drawFrame( ctx, frame, interactive ) {
+
+		const { width, height, x, y } = frame.rect;
+		if ( ! width || ! height ) return;
+		const project = point => this.project( point, width, height, frame.camera );
 		ctx.save();
 		ctx.translate( x, y );
 		ctx.beginPath();
@@ -1058,8 +1066,8 @@ export class ModelViewport {
 		ctx.clip();
 		const state = this.gesture || this.drag;
 		const data = this.penChain?.data || state?.draft || this.data;
-		const handles = data.points.map( point => this.project( point, width, height ) );
-		this.handles = handles;
+		const handles = data.points.map( point => project( point ) );
+		if ( interactive ) this.handles = handles;
 		ctx.lineWidth = 1.5;
 		ctx.strokeStyle = '#6cd4f2';
 		const stroke = ( points, closed ) => {
@@ -1083,7 +1091,7 @@ export class ModelViewport {
 			if ( data.profile ) {
 
 				stroke( handles, false );
-				if ( this.adding && handles.at( -1 ) && this.lastPointer?.target === this.editor.renderer.domElement ) {
+				if ( interactive && this.adding && handles.at( -1 ) && this.lastPointer?.target === this.editor.renderer.domElement ) {
 
 					const pointer = this.lastPointer;
 					const { top, left } = this.rect();
@@ -1099,7 +1107,7 @@ export class ModelViewport {
 		} else if ( data.kind !== 'vertices' ) {
 
 			const points = outlinePoints( THREE, data );
-			stroke( points.map( point => this.project( point.toArray(), width, height ) ), isClosedOutline( data ) );
+			stroke( points.map( point => project( point.toArray() ) ), isClosedOutline( data ) );
 
 		}
 		if ( this.penChain ) {
@@ -1126,7 +1134,7 @@ export class ModelViewport {
 			stroke( this.indices.map( index => handles[ index ] ), false );
 
 		}
-		if ( this.pen && this.penHover && ! this.drag ) {
+		if ( interactive && this.pen && this.penHover && ! this.drag ) {
 
 			ctx.strokeStyle = '#ffd481';
 			ctx.lineWidth = 3;
@@ -1152,7 +1160,7 @@ export class ModelViewport {
 		const snap = state?.snap || this.placementSnap;
 		if ( snap ) {
 
-			const point = this.project( this.object.worldToLocal( snap.clone() ).toArray(), width, height );
+			const point = project( this.object.worldToLocal( snap.clone() ).toArray() );
 			if ( point ) {
 
 				ctx.beginPath();
@@ -1164,7 +1172,7 @@ export class ModelViewport {
 			}
 
 		}
-		if ( this.brush && this.brush !== 'freehand' && this.lastPointer ) {
+		if ( interactive && this.brush && this.brush !== 'freehand' && this.lastPointer ) {
 
 			const { left, top } = this.rect();
 			ctx.beginPath();
@@ -1181,16 +1189,16 @@ export class ModelViewport {
 			const origin = constraint.origin || this.object.localToWorld( new THREE.Vector3( ...( this.penChain?.data.points[ this.penChain.indices.at( -1 ) ] || [ 0, 0, 0 ] ) ) );
 			const local = world => this.object.worldToLocal( world ).toArray();
 			ctx.strokeStyle = { X: '#ff6060', Y: '#92d760', Z: '#628fff' }[ constraint.axis ]; ctx.setLineDash( [ 5, 4 ] );
-			stroke( [ this.project( local( origin.clone().addScaledVector( axis, -100 ) ), width, height ), this.project( local( origin.clone().addScaledVector( axis, 100 ) ), width, height ) ], false );
+			stroke( [ project( local( origin.clone().addScaledVector( axis, -100 ) ) ), project( local( origin.clone().addScaledVector( axis, 100 ) ) ) ], false );
 			ctx.setLineDash( [] );
 
 		}
-		if ( state?.knife ) {
+		if ( interactive && state?.knife ) {
 
 			ctx.strokeStyle = '#ff725e'; ctx.lineWidth = 2; stroke( [ state.start, state.end ], false );
 
 		}
-		if ( state?.selection ) {
+		if ( interactive && state?.selection ) {
 
 			ctx.strokeStyle = '#ffba62'; ctx.fillStyle = '#ffba6218'; ctx.lineWidth = 1;
 			ctx.beginPath();

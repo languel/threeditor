@@ -2275,18 +2275,31 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 
 .viewport-split-divider {
 	position: absolute;
-	top: 0;
-	bottom: 0;
-	width: 1px;
-	z-index: 2;
-	background: color-mix(in srgb, var(--theme-text) 30%, transparent);
-	pointer-events: none;
+	z-index: 4;
+	touch-action: none;
 }
+.viewport-split-divider::before {
+	content: '';
+	position: absolute;
+	background: color-mix(in srgb, var(--theme-text) 35%, transparent);
+}
+.viewport-split-divider[data-axis="vertical"] {
+	inset: 0 auto 0 calc(var(--split-edge) - 3px);
+	width: 7px;
+	cursor: col-resize;
+}
+.viewport-split-divider[data-axis="vertical"]::before { inset: 0 auto 0 3px; width: 1px; }
+.viewport-split-divider[data-axis="horizontal"] {
+	inset: calc(var(--split-edge) - 3px) 0 auto;
+	height: 7px;
+	cursor: row-resize;
+}
+.viewport-split-divider[data-axis="horizontal"]::before { inset: 3px 0 auto; height: 1px; }
+.viewport-split-divider:is(:hover, :focus-visible)::before { background: var(--theme-text); }
 
 .viewport-pane-name {
 	position: absolute;
 	left: 12px;
-	bottom: 44px;
 	z-index: 2;
 	color: #fff;
 	text-shadow: 0 1px 4px #000;

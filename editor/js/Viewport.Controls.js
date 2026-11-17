@@ -47,7 +47,6 @@ function ViewportControls( editor ) {
 
 			if ( hasLightView( editor.selected ) ) editor.setViewportSource( editor.selected );
 			else if ( editor.activeSceneCamera ) editor.setViewportCamera( editor.activeSceneCamera.uuid );
-			else return;
 
 		}
 		editor.setViewportSplit( ! editor.viewportSplit );

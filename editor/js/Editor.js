@@ -164,6 +164,8 @@ function Editor( portable = false ) {
 	this.viewportCamera = this.camera;
 	this.viewportSource = null;
 	this.viewportSplit = false;
+	this.viewportSplitAxis = 'vertical';
+	this.viewportSplitRatio = .5;
 	this.activeSceneCameraUuid = null;
 	this.viewportShading = 'solid';
 	this.viewportColor = new THREE.Color();
@@ -676,7 +678,6 @@ Editor.prototype = {
 		const requested = this.cameras[ uuid ];
 		this.viewportCamera = requested && ! hasRestriction( requested, 'disabled' ) ? requested : this.camera;
 		if ( this.viewportCamera !== this.camera ) this.activeSceneCameraUuid = this.viewportCamera.uuid;
-		else this.viewportSplit = false;
 		this.signals.viewportCameraChanged.dispatch();
 
 	},
@@ -690,9 +691,11 @@ Editor.prototype = {
 
 	},
 
-	setViewportSplit: function ( enabled ) {
+	setViewportSplit: function ( enabled, axis = this.viewportSplitAxis, ratio = this.viewportSplitRatio ) {
 
 		this.viewportSplit = Boolean( enabled );
+		this.viewportSplitAxis = axis === 'horizontal' ? 'horizontal' : 'vertical';
+		this.viewportSplitRatio = Number.isFinite( ratio ) ? THREE.MathUtils.clamp( ratio, .15, .85 ) : .5;
 		this.signals.viewportCameraChanged.dispatch();
 
 	},
@@ -913,12 +916,11 @@ Editor.prototype = {
 			const legacy = this.cameras[ uuid ] || ( json.mainCamera && this.scene.getObjectByProperty( 'uuid', uuid ) );
 			this.scene.userData.mainCamera = legacy && legacy !== this.camera && ( legacy.isCamera || isProjector( legacy ) ) ? legacy.uuid : null;
 		}
-		this.viewportSplit = Boolean( json.viewportSplit );
+		this.setViewportSplit( json.viewportSplit, json.viewportSplitAxis || 'vertical', json.viewportSplitRatio ?? .5 );
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
 		const viewportSource = this.objectByUuid( json.viewportSource );
 		if ( hasLightView( viewportSource ) && ! hasRestriction( viewportSource, 'disabled' ) ) {
 
-			this.viewportSplit = Boolean( json.viewportSplit );
 			this.setViewportSource( viewportSource );
 
 		}
@@ -974,6 +976,8 @@ Editor.prototype = {
 			viewportCamera: this.viewportCamera.uuid,
 			viewportSource: this.viewportSource?.uuid,
 			viewportSplit: this.viewportSplit,
+			viewportSplitAxis: this.viewportSplitAxis,
+			viewportSplitRatio: this.viewportSplitRatio,
 			mainCamera: mainCameraSource.uuid,
 			mainCameraOutput: this.mainCameraOutput,
 			mainCameraTarget: mainCameraSource.isCamera ? ( this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,

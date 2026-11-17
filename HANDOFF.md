@@ -36,7 +36,7 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 ### Selection feedback
 
-`Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass only runs alongside Director editing guides, never in the projector pane, Preview, Play or exported output. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.
+`Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass runs in the Director editing view and its split companion. Preview, Play and exported output omit the selection overlay. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.
 
 ### Profile building and extrusion
 
@@ -266,3 +266,8 @@ A reported orbit-on-selection failure was reproduced on an Editable shape: `penH
 ### Outliner code toggle
 
 The outliner script button calls `CodePanel.toggleScript(object, script)` before changing selection. It closes when the same target is already visible and opens/switches otherwise, including the generated Scene script. A same-target reveal skips regenerating/following so unsaved or invalid draft text and cursor positions survive the toggle. Other `editScript` callers retain their open-editor behavior. Browser verification covers open/close/reopen, switching between object scripts, generated Scene code, and an invalid unsaved draft with its cursor retained.
+
+
+### Viewport areas
+
+The command palette can split the 3D viewport vertically or horizontally and close the area last hovered. ViewLayout owns pane rectangles, divider resizing, and pointer routing to an editable Director pane. Two Director panes share a pose and use separate aspect ratios. A scene camera or optical source keeps its own view and displays the shared selection. Selection outlines and edit components draw in both areas. The transform gizmo and pointer previews belong to the active Director pane. Project JSON stores the split direction and ratio with defaults for older projects. Verify both palette commands, resize with the pointer or arrow keys, select and frame from either pane, edit a face in the second Director pane, and close either side of a Director and camera split.

@@ -9,10 +9,32 @@ export class ViewLayout {
 		this.viewport = viewport;
 		this.cameras = new WeakMap();
 		this.frames = [];
+		this.activeKey = 'director';
+		this.directorCopy = null;
 		this.divider = document.createElement( 'div' );
 		this.divider.className = 'viewport-split-divider';
 		this.divider.hidden = true;
 		viewport.append( this.divider );
+		this.divider.tabIndex = 0;
+		this.divider.setAttribute( 'role', 'separator' );
+		this.divider.setAttribute( 'aria-label', 'Resize viewport areas' );
+		this.divider.addEventListener( 'pointerdown', event => {
+			if ( event.button === 0 ) this.divider.setPointerCapture( event.pointerId );
+		} );
+		this.divider.addEventListener( 'pointermove', event => {
+			if ( ! this.divider.hasPointerCapture( event.pointerId ) ) return;
+			const rect = viewport.getBoundingClientRect();
+			const fraction = editor.viewportSplitAxis === 'horizontal' ?
+				( event.clientY - rect.top ) / rect.height : ( event.clientX - rect.left ) / rect.width;
+			this.resizeSplit( fraction );
+		} );
+		this.divider.addEventListener( 'keydown', event => {
+			const step = ( editor.viewportSplitAxis === 'horizontal' ? { ArrowUp: -.05, ArrowDown: .05 } : { ArrowLeft: -.05, ArrowRight: .05 } )[ event.key ];
+			if ( step === undefined ) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.resizeSplit( editor.viewportSplitRatio + step );
+		} );
 		this.directorName = document.createElement( 'span' );
 		this.directorName.className = 'viewport-pane-name';
 		this.directorName.textContent = 'Director';
@@ -25,39 +47,108 @@ export class ViewLayout {
 
 	}
 
+	resizeSplit( fraction ) {
+
+		this.editor.setViewportSplit( true, this.editor.viewportSplitAxis, fraction );
+
+	}
+
+	closeArea( pointer ) {
+
+		const editor = this.editor;
+		if ( ! editor.viewportSplit ) return;
+		const closing = pointer && this.at( pointer.x, pointer.y, 'area' );
+		if ( closing?.key !== 'director' ) editor.setViewportCamera( editor.camera.uuid );
+		this.activeKey = 'director';
+		editor.setViewportSplit( false );
+
+	}
+
+	areas( width, height ) {
+
+		const whole = { x: 0, y: 0, width, height };
+		if ( ! this.editor.viewportSplit ) return [ whole ];
+		const ratio = this.editor.viewportSplitRatio;
+		if ( this.editor.viewportSplitAxis === 'horizontal' ) {
+
+			const edge = Math.max( 1, Math.floor( height * ratio ) );
+			return [ { ...whole, height: edge }, { ...whole, y: edge, height: height - edge } ];
+
+		}
+		const edge = Math.max( 1, Math.floor( width * ratio ) );
+		return [ { ...whole, width: edge }, { ...whole, x: edge, width: width - edge } ];
+
+	}
+
 	update( width, height ) {
 
 		const editor = this.editor;
 		const source = editor.viewportSource;
-		const split = editor.viewportSplit && ( source || editor.viewportCamera !== editor.camera );
-		const edge = split ? Math.floor( width / 2 ) : 0;
-		const region = { x: edge, y: 0, width: width - edge, height };
-		let camera = editor.viewportCamera, rect = region;
+		const areas = this.areas( width, height );
+		const split = areas.length > 1;
+		const area = areas.at( - 1 );
+		let camera = editor.viewportCamera, rect = area;
+		const director = ! source && camera === editor.camera;
 		if ( source ) {
 
 			camera = lightViewCamera( THREE, source, this.cameras.get( source ) );
 			this.cameras.set( source, camera );
 			const aspect = camera.isOrthographicCamera ? ( camera.right - camera.left ) / ( camera.top - camera.bottom ) : camera.aspect;
-			rect = fitView( region, aspect );
+			rect = fitView( area, aspect );
+
+		} else if ( split && director ) {
+
+			// Both Director areas share the editor camera pose. The second has
+			// its own projection, so dragging the divider cannot stretch it.
+			if ( this.directorCopy?.type !== camera.type ) this.directorCopy = camera.clone( false );
+			this.directorCopy.copy( camera, false );
+			camera = this.directorCopy;
+			const aspect = area.width / Math.max( 1, area.height );
+			if ( camera.isPerspectiveCamera ) camera.aspect = aspect;
+			else {
+				const height = camera.top - camera.bottom;
+				camera.left = - height * aspect / 2;
+				camera.right = height * aspect / 2;
+			}
+			camera.updateProjectionMatrix();
+			camera.updateMatrixWorld( true );
 
 		}
-		this.frames = [ { key: 'source', camera, source, rect } ];
-		if ( split ) this.frames.unshift( { key: 'director', camera: editor.camera, rect: { x: 0, y: 0, width: edge, height } } );
+
+		this.frames = [ { key: 'source', camera, source, rect, area, director } ];
+		if ( split ) this.frames.unshift( { key: 'director', camera: editor.camera, rect: areas[ 0 ], area: areas[ 0 ], director: true } );
 		this.divider.hidden = this.directorName.hidden = this.sourceName.hidden = ! split;
-		this.divider.style.left = edge + 'px';
-		this.directorName.textContent = editor.camera.name || 'Director';
-		this.sourceName.style.left = edge + 12 + 'px';
-		this.sourceName.textContent = source?.name || camera.name || 'Camera';
+		if ( split ) {
+
+			const horizontal = editor.viewportSplitAxis === 'horizontal';
+			this.divider.dataset.axis = editor.viewportSplitAxis;
+			this.divider.style.setProperty( '--split-edge', ( horizontal ? area.y : area.x ) + 'px' );
+			this.divider.setAttribute( 'aria-orientation', horizontal ? 'horizontal' : 'vertical' );
+			this.divider.setAttribute( 'aria-valuemin', '15' );
+			this.divider.setAttribute( 'aria-valuemax', '85' );
+			this.divider.setAttribute( 'aria-valuenow', String( Math.round( editor.viewportSplitRatio * 100 ) ) );
+			this.label( this.directorName, this.frames[ 0 ], editor.camera.name || 'Director' );
+			this.label( this.sourceName, this.frames[ 1 ], source?.name || camera.name || 'Camera' );
+
+		}
 		return this.frames;
 
 	}
 
-	at( x, y ) {
+	label( element, frame, name ) {
+
+		element.style.left = frame.area.x + 12 + 'px';
+		element.style.top = frame.area.y + frame.area.height - 36 + 'px';
+		element.textContent = name;
+
+	}
+
+	at( x, y, region = 'rect' ) {
 
 		const bounds = this.editor.renderer?.domElement.getBoundingClientRect();
 		if ( ! bounds ) return;
 		const localX = x - bounds.left, localY = y - bounds.top;
-		return this.frames.find( ( { rect } ) => localX >= rect.x && localX < rect.x + rect.width && localY >= rect.y && localY < rect.y + rect.height );
+		return this.frames.find( ( { [ region ]: rect } ) => localX >= rect.x && localX < rect.x + rect.width && localY >= rect.y && localY < rect.y + rect.height );
 
 	}
 
@@ -71,7 +162,8 @@ export class ViewLayout {
 
 	get navigation() {
 
-		return this.frames.find( frame => ! frame.source && ( frame.key === 'director' || this.frames.length === 1 ) );
+		if ( this.frames.length === 1 ) return this.frames[ 0 ].source ? undefined : this.frames[ 0 ];
+		return this.frames.find( frame => frame.key === this.activeKey && frame.director ) || this.frames[ 0 ];
 
 	}
 
