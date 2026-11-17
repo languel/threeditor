@@ -27,6 +27,9 @@ const definitions = [
  ['play','Start / stop player','Playback','alt+p','alt+p'], ['presentation','Presentation mode','Playback','mod+alt+p','mod+alt+p'],
  ['code','Toggle code panel','Workspace','',''], ['sidebar','Toggle sidebar','Workspace','','n'], ['timeline','Toggle timeline','Workspace','',''],
  ['workspaceMode','Switch Object / Edit mode','Modeling','tab','tab'],
+ ['surfacePaintMode','Surface paint','Modeling','1','1'], ['meshEditMode','Enter mesh edit mode','Modeling','2','2'],
+ ['meshSculptMode','Sculpt selected geometry','Modeling','3','3'], ['topologyPen','Toggle topology pen','Modeling','6','6'],
+ ['weldPoints','Weld modeling vertices','Modeling','m','m'], ['brushSmaller','Decrease brush radius','Modeling','[','['], ['brushLarger','Increase brush radius','Modeling',']',']'],
  ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
@@ -77,10 +80,20 @@ class Keymap {
  onKey(e){
   if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
-  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo);if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
-  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))))return;
+  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo && this.actionAvailable(a.id));if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
+  if(t?.closest?.('button') && !(t.closest('#toolbar') && (action.category==='Transform'||action.id.endsWith('Pie'))) && !(t.closest('#viewport')&&action.category==='Modeling'))return;
   e.preventDefault();action.run();
  }
+ actionAvailable(id){
+  const e=this.editor,m=e.modeling;
+  if(!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger'].includes(id))return true;
+  if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
+  if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
+  if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
+  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
+  return true;
+ }
+
  registerMenu(menu){
   for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu')].entries()){
    const category=group.querySelector(':scope > .title')?.textContent.trim();if(!category)continue;
@@ -96,6 +109,11 @@ class Keymap {
  }
  run(id){const e=this.editor,s=e.signals;
   switch(id){
+   case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
+   case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
+   case 'meshSculptMode':if(!e.modeling.canEdit()||e.viewTools.mode)e.modeling.start(e.selected);e.modeling.setBrush('grab');break;
+   case 'topologyPen':e.modeling.togglePen();break;case 'weldPoints':e.modeling.weld();break;
+   case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;
    case 'save':e.saveProject?.();break;
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
    case 'translate':case 'rotate':case 'scale': s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;

@@ -8,9 +8,10 @@ class AddObjectCommand extends Command {
 	 * @param {Editor} editor
 	 * @param {THREE.Object3D|null} [object=null]
 	 * @param {THREE.Object3D|null} [parent=null]
+	 * @param {boolean} [selectOnAdd=true]
 	 * @constructor
 	 */
-	constructor( editor, object = null, parent = null ) {
+	constructor( editor, object = null, parent = null, selectOnAdd = true ) {
 
 		super( editor );
 
@@ -18,6 +19,7 @@ class AddObjectCommand extends Command {
 
 		this.object = object;
 		this.parent = parent;
+		this.selectOnAdd = selectOnAdd;
 
 		if ( object !== null ) {
 
@@ -31,14 +33,14 @@ class AddObjectCommand extends Command {
 
 		if ( this.parent ) this.editor.addObject( this.object, this.parent, this.parent.children.length );
 		else this.editor.addObject( this.object );
-		this.editor.select( this.object );
+		if ( this.selectOnAdd ) this.editor.select( this.object );
 
 	}
 
 	undo() {
 
 		this.editor.removeObject( this.object );
-		this.editor.deselect();
+		if ( this.selectOnAdd || this.editor.selected === this.object ) this.editor.deselect();
 
 	}
 
@@ -46,6 +48,7 @@ class AddObjectCommand extends Command {
 
 		const output = super.toJSON( this );
 
+		if ( ! this.selectOnAdd ) output.selectOnAdd = false;
 		if ( this.parent ) output.parentUuid = this.parent.uuid;
 		output.object = withoutRuntimeChildren( this.object, () => this.object.toJSON() );
 
@@ -56,6 +59,7 @@ class AddObjectCommand extends Command {
 	fromJSON( json ) {
 
 		super.fromJSON( json );
+		this.selectOnAdd = json.selectOnAdd !== false;
 
 		this.object = this.editor.objectByUuid( json.object.object.uuid );
 		this.parent = json.parentUuid ? this.editor.objectByUuid( json.parentUuid ) : null;

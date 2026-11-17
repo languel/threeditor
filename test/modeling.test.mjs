@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from '../editor/js/modeling/ModelGeometry.js';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
+import { sculptNeighbors, sculptPoints } from '../editor/js/modeling/SculptBrush.js';
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
@@ -238,5 +239,46 @@ test( 'A boundary edge extrudes as a connected strip with a selectable new edge'
 	assert.equal( data.faces.length, 2 );
 	assert.equal( boundaryEdge( data, ...edge ), null );
 	assert.ok( boundaryEdge( data, ...cap ) );
+
+} );
+
+
+test( 'Topology pen splits at the specified edge fraction and welds a split boundary', () => {
+
+	const data = modelData( 'mesh' );
+	const split = splitEdge( data, 0, 1, .25 );
+	assert.ok( Math.abs( data.points[ split ][ 0 ] + .7 ) < 1e-8 );
+	assert.deepEqual( data.faces[ 0 ], [ 0, split, 1, 2, 3 ] );
+	assert.deepEqual( weldPoints( data, [ split, 0 ] ), [ 3 ] );
+	assert.equal( data.points.length, 4 );
+	assert.equal( new Set( data.faces[ 0 ] ).size, 4 );
+	assert.ok( data.faces[ 0 ].every( index => index < data.points.length ) );
+
+} );
+
+test( 'Inserting a point into a triangulated face preserves the other triangles', () => {
+
+	const data = { kind: 'mesh', points: [ [ 0, 0, 0 ], [ 1, 0, 0 ], [ 0, 1, 0 ] ], faces: [ [ 0, 1, 2 ] ] };
+	const result = pokeFace( THREE, data, 0, 0, new THREE.Vector3( .2, .2, 0 ) );
+	assert.deepEqual( result, [ 3 ] );
+	assert.equal( data.faces.length, 3 );
+	assert.ok( data.faces.every( face => face.includes( 3 ) ) );
+	assert.equal( modelGeometry( THREE, data ).attributes.position.count, 9 );
+
+} );
+
+test( 'Relax keeps smoothing tangential and preserves open path endpoints', () => {
+
+	const points = [ [ -1, 0, 0 ], [ .2, 0, 1 ], [ 1, 0, 0 ] ];
+	const pixels = points.map( point => point.slice( 0, 2 ) );
+	const neighbors = sculptNeighbors( { kind: 'path', points }, null );
+	const normals = points.map( () => new THREE.Vector3( 0, 0, 1 ) );
+	const smooth = sculptPoints( points, pixels, pixels[ 1 ], 3, .5, { tool: 'smooth', neighbors, normals } );
+	const relax = sculptPoints( points, pixels, pixels[ 1 ], 3, .5, { tool: 'relax', neighbors, normals } );
+	assert.equal( smooth[ 1 ][ 2 ], .5 );
+	assert.equal( relax[ 1 ][ 2 ], 1 );
+	assert.ok( Math.abs( relax[ 1 ][ 0 ] - .1 ) < 1e-8 );
+	assert.equal( relax[ 0 ], points[ 0 ] );
+	assert.equal( relax[ 2 ], points[ 2 ] );
 
 } );

@@ -112,11 +112,11 @@ Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projec
 
 ### Measure and draw on receivers
 
-Use the **Object mode** and **Edit mode** buttons at the upper left of the viewport, or press **Tab**. Object mode is for selecting and moving objects. Edit mode adds **Surface path**, **Surface paint**, and geometry creation and editing. Measure and light masks are available in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
+Use the **Object mode** and **Edit mode** buttons at the upper left of the viewport, or press **Tab**. Object mode is for selecting and moving objects. Edit mode adds **Surface path** and geometry tools. **Surface Paint**, **Measure**, and light masks work in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
 
 - **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Double-click the first point after placing at least three points to close the ruler. Closed rulers also show area. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
 - **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Double-click the first point to close the loop before saving. Saved paths can be edited in **Modeling**.
-- **Surface paint** makes colored marks by raycasting the brush onto a mesh. Each stroke becomes an undoable mesh child. The marks move with the receiver.
+- **Surface Paint** (**1**) follows the visible surface under the brush. One stroke can cross several unlocked meshes, point clouds, or Gaussian scans, and undoes as a single action. Mesh dabs are clipped against the receiver. Scan dabs use the visible point depth to place a small view-facing mark. The marks follow the receiver’s object transform. Pen pressure changes brush width. Use **[** and **]** to change brush size.
 
 Use **Enter** to apply a mask or save a ruler or path, and **Esc** to exit a viewport tool.
 
@@ -132,7 +132,11 @@ Press **Tab** or click **Edit mode**. The left tool strip holds **Build mesh**, 
 
 Right-click with an outline selected to close it, convert a planar path to a shape, or convert a shape back to a path. Conversion creates a separate object. **Fit outline to mask** normalizes the outline for the chosen projector or spotlight. Look through a light and choose **Project outline as mask** to use the outline’s actual position in the light frame.
 
-In Edit mode, **Draw freehand** samples a drag into an editable path using the current Placement setting. Select an editable mesh and choose **Sculpt grab** or **Sculpt smooth**. Radius is measured in viewport pixels. The brushes move existing vertices, so dense geometry gives finer detail. Each completed stroke is undoable.
+### Topology pen and sculpting
+
+Select an authored mesh and press **2** to enter Edit mode. Switch on **Topology pen** with **6**. Click an edge to insert a point at the cursor. Drag a boundary edge to pull out a connected quad, or drag an interior edge or face to move it. **Ctrl-click** a face to insert a vertex. Shift-click vertices to extend the selection and press **M** to weld them. **Esc** cancels the active drag or exits the tool.
+
+**Draw freehand** samples a drag into an editable path using the current Placement setting. Press **3** or choose **Sculpt brushes** to sculpt an editable mesh, path, or shape. Pick **Grab**, **Push**, **Smooth**, **Relax**, **Pinch**, or **Twist**. Hold **Shift** to smooth during another brush stroke, and **Ctrl** to reverse Pinch and Twist. Relax slides points along the local surface or path to even out spacing. Use **[** and **]** to change the brush radius. Sculpting moves existing points, so denser geometry gives finer detail. Each stroke commits one undo step.
 
 - **Paths** can use straight segments or smooth curves, with open or closed ends. Uncheck **Constrain to local XY** for a spatial curve. Close a planar path to turn it into a filled shape.
 - **Shapes** can stay flat or use **Extrusion depth** to become solid projection surfaces.

@@ -1,15 +1,17 @@
 import { icon } from '../Glyphs.js?v=edit-modes';
+import { meshBrushes } from './SculptBrush.js?v=surface-tools';
 import { modelButton, modelField } from './ModelControls.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
-import { AddObjectCommand } from '../commands/AddObjectCommand.js';
+import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
+import { AddObjectCommand } from '../commands/AddObjectCommand.js?v=surface-tools';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { openMaskEditor } from './MaskEditor.js?v=mesh-build';
-import { rayToView, meshHit } from './SurfacePicking.js';
+import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
-import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=top-toolbar';
+import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
 
 function element( tag, parent, text ) {
 
@@ -40,6 +42,7 @@ export class ViewportTools {
 	constructor( editor, viewport, layout, render ) {
 
 		Object.assign( this, { editor, viewport, layout, render } );
+		viewport.addEventListener( 'pointerleave', () => { if ( this.brushCursor ) { this.brushCursor = null; this.draw(); } } );
 		this.mode = '';
 		this.points = [];
 		this.brush = { color: '#47cdea', diameter: 14, opacity: 1 };
@@ -194,7 +197,7 @@ export class ViewportTools {
 		const model = this.editor.modeling;
 		const edit = model.editMode;
 		for ( const [ mode, button ] of this.modeButtons ) button.setAttribute( 'aria-pressed', String( mode === ( edit ? 'edit' : 'object' ) ) );
-		for ( const mode of [ 'path', 'paint' ] ) {
+		for ( const mode of [ 'path' ] ) {
 
 			this.toolButtons.get( mode ).hidden = ! edit;
 			this.selector.querySelector( 'option[value="' + mode + '"]' ).hidden = ! edit;
@@ -210,7 +213,11 @@ export class ViewportTools {
 			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
 
 		}
-		if ( model.brush === 'grab' || model.brush === 'smooth' ) {
+		if ( model.brush && model.brush !== 'freehand' ) {
+
+			const choose = select( options, 'Sculpt brush', meshBrushes.map( ( [ id, label ] ) => [ id, label ] ) );
+			choose.value = model.brush;
+			choose.onchange = () => model.setBrush( choose.value );
 
 			const radius = modelField( options, 'Brush radius (px)', 'brushWidth', 'number', model.brushRadius );
 			radius.onchange = () => { model.brushRadius = THREE.MathUtils.clamp( radius.valueAsNumber || 50, 5, 250 ); radius.value = model.brushRadius; };
@@ -240,7 +247,7 @@ export class ViewportTools {
 		this.selected = - 1;
 		this.status.textContent = '';
 		this.readout.textContent = '';
-		if ( ( mode === 'path' || mode === 'paint' ) && ! this.editor.modeling.editMode ) {
+		if ( mode === 'path' && ! this.editor.modeling.editMode ) {
 
 			this.mode = '';
 			this.editor.modeling.start( this.editor.selected );
@@ -374,6 +381,25 @@ export class ViewportTools {
 		}
 		if ( this.mode !== 'paint' ) this.removeButton = modelButton( parent, 'Remove point', 'remove', () => this.removePoint() );
 		modelButton( parent, 'Done', 'exitTool', () => this.setMode( '' ) );
+
+	}
+
+	resizeBrush( factor ) {
+
+		const model = this.editor.modeling;
+		if ( this.mode === 'paint' ) {
+
+			this.brush.diameter = THREE.MathUtils.clamp( Math.round( this.brush.diameter * factor ), 2, 100 );
+			this.buildOptions();
+
+		} else if ( model.brush && model.brush !== 'freehand' ) {
+
+			model.brushRadius = THREE.MathUtils.clamp( Math.round( model.brushRadius * factor ), 5, 250 );
+			this.refreshWorkspace();
+
+		}
+		this.draw();
+		model.draw();
 
 	}
 
@@ -586,16 +612,16 @@ export class ViewportTools {
 
 		} else {
 
-			rayToView( this.ray, this.layout, frame, x, y );
-			const hit = meshHit( this.ray, this.editor.scene );
-			if ( ! hit || hasRestriction( hit.object, 'locked' ) ) {
-
-				this.status.textContent = 'Start on a visible, unlocked mesh.';
-				return;
-
-			}
 			if ( this.mode === 'path' ) {
 
+				rayToView( this.ray, this.layout, frame, x, y );
+				const hit = meshHit( this.ray, this.editor.scene );
+				if ( ! hit || hasRestriction( hit.object, 'locked' ) ) {
+
+					this.status.textContent = 'Start on a visible, unlocked mesh.';
+					return;
+
+				}
 				if ( this.target && this.target !== hit.object ) { this.status.textContent = 'Save this path before drawing on another mesh.'; return; }
 				this.target = hit.object;
 				this.pathView = frame.key;
@@ -609,9 +635,10 @@ export class ViewportTools {
 
 			} else {
 
-				this.target = hit.object;
-				this.stroke = { positions: [], trail: [], x, y, color: this.brush.color, opacity: this.brush.opacity };
-				this.paintDab( frame, x, y );
+				this.pointerType = event.pointerType;
+				this.stroke = { marks: new Map(), surfaces: paintSurfaces( this.editor.scene ), x, y, color: this.brush.color, opacity: this.brush.opacity };
+				this.paintDab( frame, x, y, event.pressure );
+				this.refreshPaintPreview();
 
 			}
 
@@ -625,6 +652,14 @@ export class ViewportTools {
 	pointerMove( event ) {
 
 		const pointer = this.pointer;
+		if ( ! pointer && this.mode === 'paint' ) {
+
+			const frame = this.layout.at( event.clientX, event.clientY );
+			this.brushCursor = event.target === this.editor.renderer?.domElement && frame ? { x: event.clientX, y: event.clientY, frame } : null;
+			this.draw();
+			return;
+
+		}
 		if ( ! pointer || pointer.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const { clientX: x, clientY: y } = event;
@@ -651,7 +686,8 @@ export class ViewportTools {
 
 			const stroke = this.stroke;
 			const dx = x - stroke.x, dy = y - stroke.y;
-			const step = Math.max( 2, this.brush.diameter * .28 );
+			this.brushCursor = samePane ? { x, y, frame } : null;
+			const step = Math.max( 2, this.brush.diameter * .25 );
 			const distance = Math.hypot( dx, dy );
 			if ( distance >= step ) {
 
@@ -659,11 +695,12 @@ export class ViewportTools {
 				for ( let i = 1; i <= count; i ++ ) {
 
 					const px = stroke.x + dx * i / count, py = stroke.y + dy * i / count;
-					if ( this.layout.at( px, py ) === frame ) this.paintDab( frame, px, py );
+					if ( this.layout.at( px, py ) === frame ) this.paintDab( frame, px, py, event.pressure );
 
 				}
 				stroke.x = x;
 				stroke.y = y;
+				this.refreshPaintPreview();
 
 			}
 
@@ -672,33 +709,88 @@ export class ViewportTools {
 
 	}
 
-	paintDab( frame, x, y ) {
+	paintDab( frame, x, y, pressure ) {
 
-		rayToView( this.ray, this.layout, frame, x, y );
-		const hit = meshHit( this.ray, this.editor.scene );
-		if ( hit?.object !== this.target ) return;
-		const center = localSurfacePoint( hit, this.ray );
-		const radius = this.brush.diameter / 2;
-		const points = [];
-		for ( let side = 0; side < 8; side ++ ) {
+		const { triangles, scans, receivers } = this.stroke.surfaces;
+		const sample = ( px, py, includeScans = false ) => {
 
-			const angle = side * Math.PI / 4;
-			const px = x + Math.cos( angle ) * radius, py = y + Math.sin( angle ) * radius;
-			if ( this.layout.at( px, py ) !== frame ) { points.push( null ); continue; }
+			if ( this.layout.at( px, py ) !== frame ) return;
 			rayToView( this.ray, this.layout, frame, px, py );
-			const corner = meshHit( this.ray, this.editor.scene );
-			const sameSurface = corner?.object === this.target && Math.abs( corner.distance - hit.distance ) < Math.max( .02, hit.distance * .12 );
-			points.push( sameSurface ? localSurfacePoint( corner, this.ray ) : null );
+			let hit = this.ray.intersectObjects( triangles, false ).find( hit => hit.face && isVisible( hit.object ) );
+			if ( includeScans && scans.length ) {
+
+				const camera = frame.camera;
+				const reference = hit?.distance ?? camera.position.distanceTo( this.editor.controls.getCenter( camera ) );
+				const visibleHeight = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / camera.zoom :
+					2 * Math.max( reference, camera.near ) * Math.tan( THREE.MathUtils.degToRad( camera.getEffectiveFOV() / 2 ) );
+				this.ray.params.Points.threshold = visibleHeight * Math.max( 4, this.brush.diameter / 3 ) / frame.rect.height;
+				const scan = this.ray.intersectObjects( scans, false ).find( sample => isVisible( sample.object ) );
+				if ( scan && ( ! hit || scan.distance < hit.distance ) ) hit = scan;
+
+			}
+			const object = hit && receivers.get( hit.object );
+			if ( ! object || ! object.parent || hasRestriction( object, 'locked' ) ) return;
+			return { object, hit, point: localSurfacePoint( hit, this.ray, object ) };
+
+		};
+		this.editor.scene.updateMatrixWorld( true );
+		const center = sample( x, y, true );
+		if ( ! center ) return;
+		const radius = this.brush.diameter / 2 * ( this.pointerType === 'pen' ? Math.max( .12, pressure || .5 ) : 1 );
+		const scanPlane = ! center.hit.face && new THREE.Plane().setFromNormalAndCoplanarPoint(
+			frame.camera.getWorldDirection( new THREE.Vector3() ), center.object.localToWorld( new THREE.Vector3( ...center.point ) ) );
+		const ring = Array.from( { length: 8 }, ( _, i ) => {
+
+			const angle = i * Math.PI / 4;
+			const dx = Math.cos( angle ) * radius, dy = Math.sin( angle ) * radius;
+			if ( scanPlane && this.layout.at( x + dx, y + dy ) === frame ) {
+
+				rayToView( this.ray, this.layout, frame, x + dx, y + dy );
+				const point = this.ray.ray.intersectPlane( scanPlane, new THREE.Vector3() );
+				return point && center.object.worldToLocal( point ).toArray();
+
+			}
+			for ( const t of [ 1, .66, .33, .14 ] ) {
+
+				const sampleHit = sample( x + dx * t, y + dy * t );
+				if ( sampleHit?.object === center.object && sampleHit.hit.instanceId === center.hit.instanceId &&
+					Math.abs( sampleHit.hit.distance - center.hit.distance ) < Math.max( .005, center.hit.distance * .06 ) ) return sampleHit.point;
+
+			}
+
+		} );
+		const marks = this.stroke.marks;
+		const mark = marks.get( center.object ) || { positions: [], uploaded: 0 };
+		for ( let i = 0; i < ring.length; i ++ ) {
+
+			const a = ring[ i ], b = ring[ ( i + 1 ) % ring.length ];
+			if ( a && b ) mark.positions.push( ...center.point, ...a, ...b );
 
 		}
-		const start = this.stroke.positions.length;
-		for ( let side = 0; side < points.length; side ++ ) {
+		if ( mark.positions.length ) marks.set( center.object, mark );
 
-			const next = points[ ( side + 1 ) % points.length ];
-			if ( points[ side ] && next ) this.stroke.positions.push( ...center, ...points[ side ], ...next );
+	}
+
+	refreshPaintPreview() {
+
+		const { marks, color, opacity } = this.stroke;
+		for ( const [ receiver, mark ] of marks ) {
+
+			if ( mark.positions.length === mark.uploaded ) continue;
+			if ( ! mark.preview ) {
+
+				mark.preview = surfacePaint( [], color, opacity );
+				mark.preview.userData.runtimeOnly = true;
+				receiver.add( mark.preview );
+
+			}
+			mark.preview.geometry.dispose();
+			mark.preview.geometry = new THREE.BufferGeometry();
+			mark.preview.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( mark.positions, 3 ) );
+			mark.uploaded = mark.positions.length;
 
 		}
-		if ( this.stroke.positions.length > start ) this.stroke.trail.push( center );
+		this.render();
 
 	}
 
@@ -707,14 +799,20 @@ export class ViewportTools {
 		if ( this.pointer?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const stroke = this.stroke;
-		const target = this.target;
 		this.release();
-		if ( event.type === 'pointerup' && stroke?.positions.length && target && ! hasRestriction( target, 'locked' ) ) {
+		if ( event.type === 'pointerup' && stroke ) {
 
-			const paint = surfacePaint( stroke.positions, stroke.color, stroke.opacity );
-			this.editor.execute( new AddObjectCommand( this.editor, paint, target ) );
+			const commands = [];
+			for ( const [ receiver, mark ] of stroke.marks ) {
+
+				if ( ! receiver.parent || ! isVisible( receiver ) || hasRestriction( receiver, 'locked' ) ) continue;
+				commands.push( new AddObjectCommand( this.editor, surfacePaint( mark.positions, stroke.color, stroke.opacity ), receiver, false ) );
+
+			}
+			if ( commands.length ) this.editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( this.editor, commands ), 'Paint surface stroke' );
 
 		}
+		if ( stroke ) this.render();
 		this.draw();
 
 	}
@@ -723,7 +821,15 @@ export class ViewportTools {
 
 		const pointer = this.pointer;
 		this.pointer = null;
+		if ( this.stroke ) for ( const { preview } of this.stroke.marks.values() ) {
+
+			preview?.removeFromParent();
+			preview?.geometry.dispose();
+			preview?.material.dispose();
+
+		}
 		this.stroke = null;
+		this.brushCursor = null;
 		if ( pointer?.target.hasPointerCapture( pointer.id ) ) pointer.target.releasePointerCapture( pointer.id );
 
 	}
@@ -768,18 +874,14 @@ export class ViewportTools {
 				this.strokePixels( ctx, this.points.map( point => this.visiblePoint( frame, point ) ), true, true );
 
 			}
-			if ( this.stroke && this.target ) {
+			if ( this.mode === 'paint' && this.brushCursor?.frame.key === frame.key ) {
 
-				ctx.fillStyle = this.stroke.color;
-				for ( const point of this.stroke.trail ) {
-
-					const pixel = this.visiblePoint( frame, point );
-					if ( ! pixel ) continue;
-					ctx.beginPath();
-					ctx.arc( ...pixel, frame.key === this.pointer?.key ? this.brush.diameter / 2 : 2, 0, Math.PI * 2 );
-					ctx.fill();
-
-				}
+				const bounds = this.layout.clientRect( frame );
+				ctx.beginPath();
+				ctx.arc( rect.x + this.brushCursor.x - bounds.left, rect.y + this.brushCursor.y - bounds.top, this.brush.diameter / 2, 0, 2 * Math.PI );
+				ctx.strokeStyle = this.brush.color;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
 
 			}
 			ctx.restore();

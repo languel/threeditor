@@ -67,7 +67,7 @@ export function addFace( THREE, data, indices ) {
 
 }
 
-export function splitEdge( data, a, b ) {
+export function splitEdge( data, a, b, fraction = .5 ) {
 
 	const faces = data.faces.filter( face => face.some( ( vertex, index ) => {
 
@@ -77,7 +77,7 @@ export function splitEdge( data, a, b ) {
 	} ) );
 	if ( ! faces.length ) throw new Error( 'Select the two ends of an existing edge.' );
 	const middle = data.points.length;
-	data.points.push( data.points[ a ].map( ( value, axis ) => ( value + data.points[ b ][ axis ] ) * .5 ) );
+	data.points.push( data.points[ a ].map( ( value, axis ) => value + ( data.points[ b ][ axis ] - value ) * fraction ) );
 	for ( const face of faces ) {
 
 		const index = face.findIndex( ( vertex, i ) => {
@@ -90,6 +90,43 @@ export function splitEdge( data, a, b ) {
 
 	}
 	return middle;
+
+}
+
+export function pokeFace( THREE, data, faceIndex, triangleIndex, point ) {
+
+	const face = data.faces[ faceIndex ];
+	const projection = faceProjection( THREE, face.map( index => data.points[ index ] ) );
+	if ( ! projection ) throw new Error( 'Select a face with area.' );
+	const triangles = THREE.ShapeUtils.triangulateShape( projection.outline, [] ).map( triangle => triangle.map( i => face[ i ] ) );
+	const triangle = triangles[ triangleIndex ];
+	if ( ! triangle ) throw new Error( 'Click inside a face.' );
+	const center = data.points.push( point.toArray() ) - 1;
+	const split = triangle.map( ( vertex, i ) => [ vertex, triangle[ ( i + 1 ) % 3 ], center ] );
+	if ( split.some( part => ! faceNormal( THREE, data, part ) ) ) throw new Error( 'Click inside the face, away from its edges.' );
+	triangles.splice( triangleIndex, 1, ...split );
+	data.faces.splice( faceIndex, 1, ...triangles );
+	return [ center ];
+
+}
+
+export function weldPoints( data, indices ) {
+
+	const [ keep, ...merged ] = indices;
+	const points = new Set( indices );
+	data.points[ keep ] = data.points[ keep ].map( ( _, axis ) => indices.reduce( ( sum, index ) => sum + data.points[ index ][ axis ], 0 ) / indices.length );
+	data.faces = data.faces.map( face => [ ...new Set( face.map( index => points.has( index ) ? keep : index ) ) ] );
+	removePoints( data, merged );
+	const seen = new Set();
+	data.faces = data.faces.filter( face => {
+
+		const key = face.slice().sort( ( a, b ) => a - b ).join( ',' );
+		if ( seen.has( key ) ) return false;
+		seen.add( key );
+		return true;
+
+	} );
+	return [ keep - merged.filter( index => index < keep ).length ];
 
 }
 

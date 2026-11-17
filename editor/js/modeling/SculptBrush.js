@@ -1,5 +1,10 @@
 // Screen-space falloff and topology-aware smoothing adapted from the ThreeGrease and AMS brushes.
-export function sculptPoints( points, pixels, cursor, radius, strength, delta, neighbors ) {
+export const meshBrushes = [
+	[ 'grab', 'Grab', 'move' ], [ 'push', 'Push', 'toolPaint' ], [ 'smooth', 'Smooth', 'toolPath' ],
+	[ 'relax', 'Relax', 'snapEdge' ], [ 'pinch', 'Pinch', 'snapMidpoint' ], [ 'twist', 'Twist', 'rotate' ]
+];
+
+export function sculptPoints( points, pixels, cursor, radius, strength, { tool, move, neighbors, normals } ) {
 
 	return points.map( ( point, index ) => {
 
@@ -8,16 +13,30 @@ export function sculptPoints( points, pixels, cursor, radius, strength, delta, n
 		const t = Math.max( 0, 1 - Math.hypot( cursor[ 0 ] - pixel[ 0 ], cursor[ 1 ] - pixel[ 1 ] ) / radius );
 		const weight = strength * t * t * ( 3 - 2 * t );
 		if ( ! weight ) return point;
-		const adjacent = neighbors?.[ index ];
-		if ( ! delta && !( adjacent?.size >= 2 ) ) return point;
-		return point.map( ( value, axis ) => {
+		if ( move ) return move( point, pixel, weight );
+		const adjacent = neighbors[ index ];
+		if ( adjacent.size < 2 ) return point;
+		const delta = [ 0, 0, 0 ];
+		for ( const neighbor of adjacent ) points[ neighbor ].forEach( ( value, axis ) => { delta[ axis ] += ( value - point[ axis ] ) / adjacent.size; } );
+		if ( tool === 'relax' ) {
 
-			if ( delta ) return value + delta[ axis ] * weight;
-			let sum = 0;
-			for ( const neighbor of adjacent ) sum += points[ neighbor ][ axis ];
-			return value + ( sum / adjacent.size - value ) * weight;
+			const normal = normals?.[ index ];
+			if ( normal?.lengthSq() ) {
 
-		} );
+				const alongNormal = normal.toArray().reduce( ( dot, value, axis ) => dot + value * delta[ axis ], 0 );
+				normal.toArray().forEach( ( value, axis ) => { delta[ axis ] -= alongNormal * value; } );
+
+			} else if ( adjacent.size === 2 ) {
+
+				const [ a, b ] = [ ...adjacent ].map( index => points[ index ] );
+				const chord = b.map( ( value, axis ) => value - a[ axis ] );
+				const scale = chord.reduce( ( dot, value, axis ) => dot + value * delta[ axis ], 0 ) / ( Math.hypot( ...chord ) ** 2 || 1 );
+				chord.forEach( ( value, axis ) => { delta[ axis ] = value * scale; } );
+
+			}
+
+		}
+		return point.map( ( value, axis ) => value + delta[ axis ] * weight );
 
 	} );
 
@@ -28,7 +47,7 @@ export function sculptNeighbors( data, geometry ) {
 	const neighbors = data.points.map( () => new Set() );
 	function link( a, b ) {
 
-		if ( a === b || a === undefined || b === undefined ) return;
+		if ( a === b || ! neighbors[ a ] || ! neighbors[ b ] ) return;
 		neighbors[ a ].add( b );
 		neighbors[ b ].add( a );
 
@@ -36,6 +55,11 @@ export function sculptNeighbors( data, geometry ) {
 	if ( data.faces ) {
 
 		for ( const face of data.faces ) face.forEach( ( index, i ) => link( index, face[ ( i + 1 ) % face.length ] ) );
+
+	} else if ( ! data.vertices ) {
+
+		for ( let i = 1; i < data.points.length; i ++ ) link( i - 1, i );
+		if ( data.closed || data.kind === 'shape' && data.closed !== false ) link( 0, data.points.length - 1 );
 
 	} else {
 

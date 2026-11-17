@@ -21,6 +21,13 @@ threeditor started as the `editor-experiment/` folder in `languel/threejslessons
 
 Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open **File → Examples → Projection mapping**. Move a ridge vertex in **Yosemite relief** and undo it, apply an inverted mask in **Canyon aperture**, then enter Play in **Gallop triptych** and confirm that the video advances across the three panels. The [example notes](editor/examples/projection/README.md) describe the scenes and their sources.
 
+### ThreeGrease surface and topology interactions
+
+- Surface Paint collects eligible scene receivers once per stroke. The brush uses a visible hit from `SurfacePicking.js`, and triangle receivers also get perimeter rays to clip the dab. Point clouds and Gaussian splats use point-depth dabs. Scan marks attach to the persistent scan rig so that changing scan display mode preserves them. Preview meshes are runtime-only. One paint stroke commits the receiver-local meshes without changing selection and undoes as a group.
+- Topology Pen adapts ThreeGrease’s context-sensitive mesh operations to ordered face loops. `ModelViewport.js` distinguishes edge clicks, edge and face drags, and Ctrl-click insertion. `ModelGeometry.js` holds the split, poke, and weld mutations. Each drag previews transient geometry and commits only on pointer-up.
+- `SculptBrush.js` applies weighted movement and adjacency for Grab, Push, Smooth, Relax, Pinch, and Twist. The standard keymap exposes Surface Paint, Edit, Sculpt, Topology Pen, Weld, and brush size. Hold Shift for temporary Smooth.
+- Smoke-test one paint stroke across two receivers and undo once. Also paint an unlocked point cloud and a bundled Gaussian scan. On an authored mesh, click an edge to split it, pull a boundary edge, and Ctrl-click a face. On a dense mesh, switch from Push to Pinch and undo a stroke.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.

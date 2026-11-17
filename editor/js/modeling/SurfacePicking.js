@@ -22,3 +22,32 @@ export function meshHit( ray, scene, exclude ) {
 	} );
 
 }
+
+
+export function paintSurfaces( scene ) {
+
+	const triangles = [], scans = [], receivers = new Map();
+	scene.traverseVisible( object => {
+
+		if ( object.userData.surfaceMark || ! isVisible( object ) ) return;
+		if ( ! object.userData.runtimeOnly && object.isMesh ) {
+
+			triangles.push( object );
+			receivers.set( object, object );
+
+		} else if ( object.isPoints || object.splats && object.isInitialized ) {
+
+			const receiver = object.userData.runtimeOnly ? object.parent : object;
+			if ( receiver && ( receiver === object || receiver.userData.assetObject?.type === 'gaussian-splat' ) ) {
+
+				scans.push( object );
+				receivers.set( object, receiver );
+
+			}
+
+		}
+
+	} );
+	return { triangles, scans, receivers };
+
+}

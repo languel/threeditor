@@ -1,12 +1,25 @@
 import * as THREE from 'three';
 import { modelObject } from './ModelGeometry.js?v=top-toolbar';
 
-export function localSurfacePoint( hit, ray ) {
+export function localSurfacePoint( hit, ray, receiver = hit.object ) {
 
-	const normal = ( hit.normal || hit.face.normal ).clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
+	const normal = ray.ray.direction.clone().negate();
+	if ( hit.face ) {
+
+		const matrix = hit.object.matrixWorld;
+		const surfaceMatrix = hit.instanceId === undefined ? matrix : new THREE.Matrix4();
+		if ( hit.instanceId !== undefined ) {
+
+			hit.object.getMatrixAt( hit.instanceId, surfaceMatrix );
+			surfaceMatrix.premultiply( matrix );
+
+		}
+		normal.copy( hit.normal || hit.face.normal ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( surfaceMatrix ) );
+
+	}
 	if ( normal.dot( ray.ray.direction ) > 0 ) normal.negate();
 	const offset = Math.max( .00015, hit.distance * .00008 );
-	return hit.object.worldToLocal( hit.point.clone().addScaledVector( normal, offset ) ).toArray();
+	return receiver.worldToLocal( hit.point.clone().addScaledVector( normal, offset ) ).toArray();
 
 }
 

@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=mask-editor';
-import { Keymap } from './Keymap.js?v=top-toolbar';
+import { Keymap } from './Keymap.js?v=surface-tools';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=mesh-build';
+import { Viewport } from './Viewport.js?v=surface-tools';
 import { Toolbar } from './Toolbar.js?v=mesh-build';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=mesh-build';
+import { Sidebar } from './Sidebar.js?v=surface-tools';
 import { Menubar } from './Menubar.js?v=mask-editor';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=mask-editor';
