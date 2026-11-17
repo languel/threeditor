@@ -11,7 +11,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=modifiers">
+		<link rel="stylesheet" href="css/main.css?v=mesh-selection">
 
 		<script type="importmap">
 			{
@@ -68,7 +68,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=modifiers';
+			import { startEditor } from './js/EditorApp.js?v=mesh-selection';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

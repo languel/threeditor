@@ -7,7 +7,7 @@ import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=modifiers';
+import { Viewport } from './Viewport.js?v=mesh-selection';
 import { Toolbar } from './Toolbar.js?v=bottom-pivot';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=modifiers';

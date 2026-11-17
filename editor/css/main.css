@@ -2912,3 +2912,7 @@ body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 .modifier-actions { display: flex; gap: 4px; align-items: center; margin-bottom: 7px; }
 .modifier-param { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
 .modifier-param input[type=number] { width: 80px; min-width: 0; }
+
+.viewport-selection-tools { display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--theme-surface); padding-top: 5px; }
+.viewport-selection-tools[hidden] { display: none; }
+.viewport-element-modes { display: flex; align-items: center; gap: 3px; }

@@ -1,3 +1,4 @@
+import { selectionCandidates, applySelection, edgeLoop, pointInPolygon } from './MeshSelection.js';
 import { modifierSource, setModifierStack } from './Modifiers.js';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import * as THREE from 'three';
@@ -31,6 +32,8 @@ export class ModelViewport {
 		this.indices = [];
 		this.editMode = false;
 		this.selectionMode ||= 'vertex';
+		this.selectionTool = 'select';
+		this.selectionOperation = 'set';
 		this.brushRadius = 50;
 		this.brushStrength = 0.5;
 		this.proxy = new THREE.Object3D();
@@ -106,7 +109,7 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) ) return;
+			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
 
@@ -129,6 +132,18 @@ export class ModelViewport {
 
 			}
 			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
+			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && [ 'b', 'c' ].includes( event.key.toLowerCase() ) && ! this.pen && ! this.adding ) {
+
+				event.preventDefault(); event.stopImmediatePropagation();
+				this.setSelectionTool( event.key.toLowerCase() === 'b' ? 'box' : 'circle' ); return;
+
+			}
+			if ( ! editingField && ( event.ctrlKey || event.metaKey ) && event.key.toLowerCase() === 'i' ) {
+
+				event.preventDefault(); event.stopImmediatePropagation();
+				this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' ); return;
+
+			}
 			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && ! event.shiftKey && [ '1', '2', '3' ].includes( event.key ) ) {
 
 				event.preventDefault();
@@ -165,7 +180,8 @@ export class ModelViewport {
 			event.stopImmediatePropagation();
 			if ( event.key === 'Escape' ) {
 
-				if ( this.pen ) this.togglePen();
+				if ( this.selectionTool !== 'select' ) this.setSelectionTool( 'select' );
+				else if ( this.pen ) this.togglePen();
 				else if ( this.brush ) this.setBrush( '' );
 				else this.stop();
 
@@ -407,22 +423,61 @@ export class ModelViewport {
 
 	}
 
+	setSelectionTool( tool ) {
+
+		this.pen = false; this.penChain = null; this.brush = ''; this.adding = false;
+		this.selectionTool = tool;
+		this.changed(); this.render();
+
+	}
+
+	applyElementSelection( hits, operation ) {
+
+		const current = this.selectionMode === 'vertex' ? new Map( this.indices.map( i => [ String( i ), [ i ] ] ) ) : this.elements || new Map();
+		this.elements = applySelection( current, hits, operation );
+		this.indices = [ ...new Set( [ ...this.elements.values() ].flat() ) ];
+		this.changed(); this.render();
+
+	}
+
 	selectElement( event ) {
 
-		const hit = this.selectionMode === 'face' ? this.faceHit( event )?.face :
-			( ( edge ) => edge && [ edge.a, edge.b ] )( this.penHit( event ).edge );
-		if ( ! event.shiftKey ) this.elements = new Map();
-		this.elements ||= new Map();
-		if ( hit ) {
+		const edge = this.selectionMode === 'edge' ? this.penHit( event ).edge : null;
+		const rect = this.rect();
+		const vertex = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) : -1;
+		const hit = this.selectionMode === 'face' ? this.faceHit( event )?.face : edge ? [ edge.a, edge.b ] : vertex >= 0 ? [ vertex ] : null;
+		const hits = edge && event.altKey ? edgeLoop( this.data, hit, event.ctrlKey ) : hit ? [ hit ] : [];
+		this.applyElementSelection( hits, event.shiftKey ? 'toggle' : event.ctrlKey && ! event.altKey ? 'subtract' : this.selectionOperation );
 
-			const key = hit.slice().sort( ( a, b ) => a - b ).join( ':' );
-			if ( event.shiftKey && this.elements.has( key ) ) this.elements.delete( key );
-			else this.elements.set( key, hit );
+	}
+
+	beginSelection( event ) {
+
+		const rect = this.rect();
+		const point = [ event.clientX - rect.left, event.clientY - rect.top ];
+		this.drag = { selection: true, tool: this.selectionTool, start: point, end: point, polygon: [ point ],
+			operation: event.ctrlKey ? 'subtract' : event.shiftKey ? 'extend' : this.selectionOperation,
+			initial: this.selectionMode === 'vertex' ? new Map( this.indices.map( i => [ String( i ), [ i ] ] ) ) : new Map( this.elements ),
+			target: event.target, id: event.pointerId, event };
+		event.target.setPointerCapture( event.pointerId );
+		this.draw();
+
+	}
+
+	finishSelection( drag, cancel ) {
+
+		if ( cancel ) { this.applyElementSelection( [ ...drag.initial.values() ], 'set' ); return; }
+		if ( Math.hypot( drag.end[ 0 ] - drag.start[ 0 ], drag.end[ 1 ] - drag.start[ 1 ] ) < 4 && drag.tool === 'select' ) {
+
+			this.selectElement( drag.event ); return;
 
 		}
-		this.indices = [ ...new Set( [ ...this.elements.values() ].flat() ) ];
-		this.changed();
-		this.render();
+		const { width, height } = this.rect();
+		const pixels = this.data.points.map( point => this.project( point, width, height ) );
+		const inside = point => point && ( drag.tool === 'circle' ? drag.polygon.some( center => Math.hypot( point[ 0 ] - center[ 0 ], point[ 1 ] - center[ 1 ] ) <= this.brushRadius ) :
+			drag.tool === 'lasso' ? pointInPolygon( point, drag.polygon ) : point[ 0 ] >= Math.min( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 0 ] <= Math.max( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 1 ] >= Math.min( drag.start[ 1 ], drag.end[ 1 ] ) && point[ 1 ] <= Math.max( drag.start[ 1 ], drag.end[ 1 ] ) );
+		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => ids.every( i => inside( pixels[ i ] ) ) );
+		this.applyElementSelection( hits, drag.operation );
 
 	}
 
@@ -1025,6 +1080,16 @@ export class ModelViewport {
 			ctx.stroke();
 
 		}
+		if ( state?.selection ) {
+
+			ctx.strokeStyle = '#ffba62'; ctx.fillStyle = '#ffba6218'; ctx.lineWidth = 1;
+			ctx.beginPath();
+			if ( state.tool === 'circle' ) ctx.arc( ...state.end, this.brushRadius, 0, Math.PI * 2 );
+			else if ( state.tool === 'lasso' ) { state.polygon.forEach( ( p, i ) => i ? ctx.lineTo( ...p ) : ctx.moveTo( ...p ) ); ctx.closePath(); }
+			else ctx.rect( state.start[ 0 ], state.start[ 1 ], state.end[ 0 ] - state.start[ 0 ], state.end[ 1 ] - state.start[ 1 ] );
+			ctx.fill(); ctx.stroke();
+
+		}
 		ctx.restore();
 
 	}
@@ -1513,7 +1578,7 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ( this.pen || this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
 		if ( this.brush && ( this.brush !== 'freehand' || this.data.kind === 'path' ) ) {
@@ -1522,7 +1587,17 @@ export class ModelViewport {
 			return;
 
 		}
-		if ( ! this.pen && ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
+		if ( ! this.pen && ! this.adding && ! this.brush ) {
+
+			// Geometry picks take precedence over large transform gizmo planes.
+			const rect = this.rect();
+			const onGeometry = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) >= 0 : this.selectionMode === 'edge' ? !! this.penHit( event ).edge : !! this.faceHit( event );
+			if ( ! onGeometry && ! event.shiftKey && this.selectionTool === 'select' && this.gizmoUnderPointer?.( event ) ) return;
+			event.preventDefault(); event.stopImmediatePropagation();
+			if ( event.altKey ) { this.editor.suppressContextMenuUntil = performance.now() + 500; this.selectElement( event ); return; }
+			this.beginSelection( event ); return;
+
+		}
 		if ( ! this.pen && ! this.adding && this.data.faces && this.selectionMode !== 'vertex' ) {
 
 			event.preventDefault();
@@ -1705,6 +1780,13 @@ export class ModelViewport {
 	pointerMove( event ) {
 
 		const drag = this.drag;
+		if ( drag?.selection ) {
+
+			const rect = this.rect();
+			drag.end = [ event.clientX - rect.left, event.clientY - rect.top ]; drag.polygon.push( drag.end );
+			this.draw(); return;
+
+		}
 		if ( ! drag ) {
 
 			if ( this.pen && this.canEdit() && this.data.faces?.length && ! this.penChain && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
@@ -1768,6 +1850,7 @@ export class ModelViewport {
 		if ( this.drag?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const drag = this.releaseDrag( true );
+		if ( drag.selection ) { this.finishSelection( drag, cancel ); return; }
 		if ( drag.pen ) { this.finishPen( drag, cancel ); return; }
 		if ( drag.penVertex !== undefined && ! cancel && ! drag.draft ) {
 

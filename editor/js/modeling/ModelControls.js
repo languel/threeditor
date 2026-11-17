@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=modifiers';
+import { icon } from '../Glyphs.js?v=mesh-selection';
 
 function labelContent( node, label, glyph ) {
 

@@ -29,9 +29,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=modifiers';
+import { ViewportTools } from './modeling/ViewportTools.js?v=mesh-selection';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=modifiers';
+import { ModelViewport } from './modeling/ModelViewport.js?v=mesh-selection';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -1222,7 +1222,7 @@ function Viewport( editor ) {
 
 	function drawSelection( view ) {
 
-		if ( view !== camera || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
+		if ( model.editMode && model.object || view !== camera || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
 			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
 		selectionOutline.draw( renderer, scene, view, roots, () => splatHost.render( renderer, scene,
