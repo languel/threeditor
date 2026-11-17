@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js?v=bottom-pivot';
+import { icon } from './Glyphs.js?v=poly-context';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 
@@ -24,7 +24,7 @@ export function addTransformSettings( editor, toolbar ) {
 			label: 'Placement', glyph: 'placePlane',
 			choices: () => [
 				[ 'object', 'Object plane', 'placePlane' ], [ 'view', 'View plane', 'preview' ],
-				[ 'ground', 'Ground plane', 'groundPlane' ], [ 'surface', 'Mesh surface', 'snapFace' ]
+				[ 'ground', 'Ground plane', 'groundPlane' ], [ 'surface', 'Mesh surface', 'snapFace' ], [ 'surfacePerpendicular', 'Surface perpendicular', 'surfacePerpendicular' ]
 			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'modelPlacement', value ),
 				( config.getKey( 'settings/modelPlacement' ) || 'object' ) === value ] )
 		},

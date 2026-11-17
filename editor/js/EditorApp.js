@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=bottom-pivot';
-import { Keymap } from './Keymap.js?v=blender-tools';
+import { Keymap } from './Keymap.js?v=poly-context';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=mesh-selection';
-import { Toolbar } from './Toolbar.js?v=bottom-pivot';
+import { Viewport } from './Viewport.js?v=poly-context';
+import { Toolbar } from './Toolbar.js?v=poly-context';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=modifiers';
 import { Menubar } from './Menubar.js?v=tool-layout';

@@ -62,8 +62,9 @@ function combine( copies, mesh ) {
 
 		const array = new Float32Array( parts.reduce( ( n, g ) => n + g.attributes[ name ].array.length, 0 ) );
 		let offset = 0;
-		for ( const part of parts ) { array.set( part.attributes[ name ].array, offset ); offset += part.attributes[ name ].array.length; }
-		result.setAttribute( name, new THREE.BufferAttribute( array, attribute.itemSize, attribute.normalized ) );
+		for ( const part of parts ) { const attr = part.attributes[ name ];
+			for ( let i = 0; i < attr.count; i ++ ) for ( let c = 0; c < attr.itemSize; c ++ ) array[ offset ++ ] = attr.getComponent( i, c ); }
+		result.setAttribute( name, new THREE.BufferAttribute( array, attribute.itemSize ) );
 
 	}
 	let offset = 0;
@@ -161,6 +162,9 @@ export function evaluateModifiers( source, stack, mesh = true ) {
 			if ( Object.values( p ).some( v => typeof v === 'number' && ! Number.isFinite( v ) ) ) throw new Error( 'Modifier values must be finite.' );
 			if ( mod.type === 'ARRAY' || mod.type === 'MIRROR' ) {
 
+				const copiesCount = mod.type === 'ARRAY' ? THREE.MathUtils.clamp( Math.round( p.count ), 1, 50 ) : 1 + [ p.axisX, p.axisY, p.axisZ ].filter( Boolean ).length;
+				const size = geometry.index?.count ?? geometry.attributes.position.count;
+				if ( size * copiesCount > 1000000 ) throw new Error( 'Modifier stack exceeds one million vertices.' );
 				const copies = [ geometry ];
 				if ( mod.type === 'ARRAY' ) for ( let i = 1; i < THREE.MathUtils.clamp( Math.round( p.count ), 1, 50 ); i ++ ) copies.push( geometry.clone().translate( p.offsetX * i, p.offsetY * i, p.offsetZ * i ) );
 				else for ( const [ axis, enabled ] of [ p.axisX, p.axisY, p.axisZ ].entries() ) if ( enabled ) {
@@ -196,7 +200,7 @@ export function evaluateModifiers( source, stack, mesh = true ) {
 
 			} else if ( mod.type === 'SIMPLIFY' ) {
 
-				const position = geometry.attributes.position, kept = [ 0 ];
+				const position = geometry.attributes.position, kept = position.count ? [ 0 ] : [];
 				let last = new THREE.Vector3().fromBufferAttribute( position, 0 );
 				for ( let i = 1; i < position.count - 1; i ++ ) { const point = new THREE.Vector3().fromBufferAttribute( position, i ); if ( point.distanceTo( last ) >= Math.max( 0, p.factor ) ) { kept.push( i ); last = point; } }
 				if ( position.count > 1 ) kept.push( position.count - 1 );

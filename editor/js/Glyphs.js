@@ -6,6 +6,8 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	knifeTool: svg( '<path d="m4 20 7-7m0 0L19 3l2 2-6 12-4-4Z"/><path d="M3 7h7m6 13h5" stroke-dasharray="2 2"/>' ),
+	surfacePerpendicular: svg( '<path d="m3 16 8-4 10 4-10 5-8-5Zm8-4V3m-3 3 3-3 3 3"/>' ),
 	selectBox: svg( '<rect x="4" y="4" width="16" height="16" stroke-dasharray="3 3"/><path d="m9 9 7 3-4 1-1 4-2-8Z"/>' ),
 	selectLasso: svg( '<path d="M6 18c-8-11 1-18 12-12 10 8-6 15-12 10-4-4 7-3 5 2-1 3-5 4-7 2"/>' ),
 	selectCircle: svg( '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8m-4-4v8"/>' ),

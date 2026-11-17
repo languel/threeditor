@@ -90,7 +90,7 @@ class Keymap {
   if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
-  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
+  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
   return true;
  }
 

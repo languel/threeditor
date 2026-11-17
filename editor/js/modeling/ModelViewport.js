@@ -1,3 +1,4 @@
+import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
 import { selectionCandidates, applySelection, edgeLoop, pointInPolygon } from './MeshSelection.js';
 import { modifierSource, setModifierStack } from './Modifiers.js';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
@@ -94,6 +95,7 @@ export class ModelViewport {
 			this.penChain = null;
 			const wasProfile = this.data?.profile;
 			this.data = this.read( object );
+			if ( this.data.kind === 'vertices' ) { this.pen = false; this.knife = false; }
 			if ( this.data.profile && ! wasProfile ) this.adding = true;
 			this.indices = this.indices.filter( index => index < this.data.points.length );
 			this.changed();
@@ -104,7 +106,18 @@ export class ModelViewport {
 			if ( this.editMode && object !== this.object ) this.setTarget( object );
 
 		} );
-		signals.objectChanged.add( () => { if ( this.object && ! this.canEdit() ) this.setTarget( null ); } );
+		signals.objectChanged.add( ( object, property ) => {
+
+			if ( this.object && ! this.canEdit() ) { this.setTarget( null ); return; }
+			if ( object === this.object && property === 'userData' && ! this.drag && ! this.gesture ) {
+
+				this.data = this.read( object );
+				this.indices = this.indices.filter( i => i < this.data.points.length );
+				this.changed(); this.render();
+
+			}
+
+		} );
 		signals.startPlayer.add( () => this.stop() );
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
@@ -132,6 +145,18 @@ export class ModelViewport {
 
 			}
 			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
+			if ( ! editingField && this.data.faces?.length && ! event.ctrlKey && ! event.metaKey && event.key.toLowerCase() === 'k' ) {
+
+				event.preventDefault(); event.stopImmediatePropagation(); this.toggleKnife(); return;
+
+			}
+			if ( ! editingField && this.pen && ( this.penChain || this.drag ) && ! event.ctrlKey && ! event.metaKey && [ 'x', 'y', 'z' ].includes( event.key.toLowerCase() ) ) {
+
+				event.preventDefault(); event.stopImmediatePropagation();
+				const state = this.drag || this.penChain, axis = event.key.toUpperCase();
+				state.axis = state.axis === axis ? '' : axis; state.planeLock = event.shiftKey; return;
+
+			}
 			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && [ 'b', 'c' ].includes( event.key.toLowerCase() ) && ! this.pen && ! this.adding ) {
 
 				event.preventDefault(); event.stopImmediatePropagation();
@@ -180,7 +205,8 @@ export class ModelViewport {
 			event.stopImmediatePropagation();
 			if ( event.key === 'Escape' ) {
 
-				if ( this.selectionTool !== 'select' ) this.setSelectionTool( 'select' );
+				if ( this.knife ) { this.knife = false; this.changed(); this.render(); }
+				else if ( this.selectionTool !== 'select' ) this.setSelectionTool( 'select' );
 				else if ( this.pen ) this.togglePen();
 				else if ( this.brush ) this.setBrush( '' );
 				else this.stop();
@@ -264,9 +290,10 @@ export class ModelViewport {
 		this.releaseDrag();
 		if ( this.gesture?.modal ) this.finishTransform( false );
 		else if ( this.gesture ) this.cancelGizmo?.();
-		const data = object?.geometry?.userData.modeling;
+		const sourceGeometry = object?.geometry ? modifierSource( object ) : null;
+		const data = sourceGeometry?.userData.modeling;
 		const editable = object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
-			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || object.geometry.attributes.position.count <= 20000 );
+			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || sourceGeometry.attributes.position.count <= 20000 );
 		this.object = editable ? object : null;
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
@@ -325,7 +352,12 @@ export class ModelViewport {
 		const actions = [];
 		const add = ( label, glyph, run, disabled = false, pressed ) => actions.push( { label, glyph, run, disabled, pressed } );
 		if ( data.points.length ) add( 'Sculpt brushes', 'sculptTool', () => this.setBrush( this.brush && this.brush !== 'freehand' ? '' : 'grab' ), false, Boolean( this.brush && this.brush !== 'freehand' ) );
-		if ( data.kind === 'vertices' ) return actions;
+		if ( data.faces?.length && ! data.profile ) add( 'Knife (K)', 'knifeTool', () => this.toggleKnife(), false, !! this.knife );
+		if ( data.kind === 'vertices' ) {
+
+			add( 'Polybuild (6)', 'topologyPen', () => this.togglePen() ); return actions;
+
+		}
 		add( this.adding ? 'Stop adding' : 'Add points', 'add', () => {
 
 			this.brush = '';
@@ -390,7 +422,14 @@ export class ModelViewport {
 
 	togglePen() {
 
-		if ( ! this.canEdit() || this.data.kind !== 'mesh' || ! this.data.faces?.length || this.gesture || this.drag ) return;
+		if ( ! this.canEdit() || ! this.data.faces?.length || this.gesture || this.drag ) return;
+		if ( this.data.kind === 'vertices' ) {
+
+			const data = { kind: 'mesh', points: structuredClone( this.data.points ), faces: structuredClone( this.data.faces ) };
+			this.commit( 'Convert to editable polygon mesh', data, [] );
+
+		}
+		this.knife = false;
 		this.pen = ! this.pen;
 		this.brush = '';
 		this.adding = false;
@@ -398,6 +437,62 @@ export class ModelViewport {
 		this.penChain = null;
 		this.changed();
 		this.render();
+
+	}
+
+	toggleKnife() {
+
+		if ( ! this.canEdit() || ! this.data.faces?.length || this.data.profile ) return;
+		if ( this.data.kind === 'vertices' ) this.commit( 'Convert to editable polygon mesh', { kind: 'mesh', points: structuredClone( this.data.points ), faces: structuredClone( this.data.faces ) }, [] );
+		this.knife = ! this.knife; this.pen = false; this.penChain = null; this.brush = ''; this.adding = false;
+		this.changed(); this.render();
+
+	}
+
+	beginKnife( event, pending = false ) {
+
+		const rect = this.rect(), start = [ event.clientX - rect.left, event.clientY - rect.top ];
+		this.drag = { knife: ! pending, penEmpty: pending, start, end: start, downAt: performance.now(), event, target: event.target, id: event.pointerId };
+		event.preventDefault(); event.stopImmediatePropagation(); event.target.setPointerCapture( event.pointerId ); this.draw();
+
+	}
+
+	finishKnife( drag, cancel ) {
+
+		if ( cancel ) { this.draw(); return; }
+		if ( drag.penEmpty && ! drag.knife ) { this.addPenPoint( drag.event, -1 ); return; }
+		const data = structuredClone( this.data ), rect = this.rect(), camera = this.frame.camera;
+		const project = point => this.project( point, rect.width, rect.height );
+		const fraction = ( edge, t ) => {
+
+			if ( ! camera.isPerspectiveCamera ) return t;
+			const depth = i => - this.object.localToWorld( new THREE.Vector3( ...data.points[ i ] ) ).applyMatrix4( camera.matrixWorldInverse ).z;
+			const a = depth( edge[ 0 ] ), b = depth( edge[ 1 ] );
+			return ( t / b ) / ( ( 1 - t ) / a + t / b );
+
+		};
+		const ids = cutAcrossMesh( data, drag.start, drag.end, project, fraction );
+		if ( ids.length ) this.commit( 'Knife cut', data, ids );
+		else this.draw();
+
+	}
+
+	penPlacement( event, origin, plane, state ) {
+
+		let point = this.pointerWorld( event.clientX, event.clientY, plane );
+		if ( this.placement === 'surface' && ! state.axis ) {
+
+			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			if ( hit ) point = hit.point;
+
+		}
+		if ( ! point ) return null;
+		const axes = state.axis ? state.planeLock ? worldAxes.filter( ( _, i ) => i !== 'XYZ'.indexOf( state.axis ) ) : [ worldAxes[ 'XYZ'.indexOf( state.axis ) ] ] : this.placement === 'ground' || this.placement === 'surfacePerpendicular' ? this.snapAxes( plane ) : worldAxes;
+		const snap = this.snapPoint( point, origin, event, axes, state );
+		if ( ! state.axis ) return snap;
+		const delta = snap.clone().sub( origin ), constrained = origin.clone();
+		for ( const axis of axes ) constrained.addScaledVector( axis, delta.dot( axis ) );
+		return constrained;
 
 	}
 
@@ -411,6 +506,7 @@ export class ModelViewport {
 	setSelectionMode( mode ) {
 
 		this.selectionMode = mode;
+		this.knife = false;
 		this.pen = false;
 		this.penChain = null;
 		this.brush = '';
@@ -427,6 +523,7 @@ export class ModelViewport {
 
 		this.pen = false; this.penChain = null; this.brush = ''; this.adding = false;
 		this.selectionTool = tool;
+		this.knife = false;
 		this.changed(); this.render();
 
 	}
@@ -941,7 +1038,7 @@ export class ModelViewport {
 
 	draw() {
 
-		if ( ! this.canEdit() || ! this.editor.renderer || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
+		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
 		const { width, height, x, y } = this.rect();
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		if ( ! width || ! height ) return;
@@ -1080,6 +1177,22 @@ export class ModelViewport {
 			ctx.stroke();
 
 		}
+		const constraint = this.penChain || state;
+		if ( constraint?.axis ) {
+
+			const axis = worldAxes[ 'XYZ'.indexOf( constraint.axis ) ];
+			const origin = constraint.origin || this.object.localToWorld( new THREE.Vector3( ...( this.penChain?.data.points[ this.penChain.indices.at( -1 ) ] || [ 0, 0, 0 ] ) ) );
+			const local = world => this.object.worldToLocal( world ).toArray();
+			ctx.strokeStyle = { X: '#ff6060', Y: '#92d760', Z: '#628fff' }[ constraint.axis ]; ctx.setLineDash( [ 5, 4 ] );
+			stroke( [ this.project( local( origin.clone().addScaledVector( axis, -100 ) ), width, height ), this.project( local( origin.clone().addScaledVector( axis, 100 ) ), width, height ) ], false );
+			ctx.setLineDash( [] );
+
+		}
+		if ( state?.knife ) {
+
+			ctx.strokeStyle = '#ff725e'; ctx.lineWidth = 2; stroke( [ state.start, state.end ], false );
+
+		}
 		if ( state?.selection ) {
 
 			ctx.strokeStyle = '#ffba62'; ctx.fillStyle = '#ffba6218'; ctx.lineWidth = 1;
@@ -1121,6 +1234,7 @@ export class ModelViewport {
 	snapPoint( point, reference, event, axes, state ) {
 
 		const config = this.editor.config;
+		if ( this.pen && event.ctrlKey ) { state.snap = null; return point; }
 		const mode = modelSnapMode( config, event.ctrlKey );
 		if ( ! mode ) { state.snap = null; return point; }
 		if ( mode === 'grid' || mode === 'increment' || Number.isFinite( mode ) ) {
@@ -1311,25 +1425,52 @@ export class ModelViewport {
 
 	addPenPoint( event, hit ) {
 
-		if ( this.penChain && hit === this.penChain.indices[ 0 ] && this.penChain.indices.length >= 3 ) {
+		const data = this.penChain?.data || this.data;
+		if ( this.penChain && this.penChain.indices.length >= 3 && ( hit === this.penChain.indices[ 0 ] || hit === this.penChain.indices.at( -1 ) ) ) { this.finishPenFace(); return; }
+		const previous = this.penChain?.indices.at( -1 );
+		const origin = previous !== undefined ? this.object.localToWorld( new THREE.Vector3( ...data.points[ previous ] ) ) : hit >= 0 ? this.object.localToWorld( new THREE.Vector3( ...data.points[ hit ] ) ) : this.object.getWorldPosition( new THREE.Vector3() );
+		const normal = this.placement === 'ground' ? new THREE.Vector3( 0, 1, 0 ) : this.placement === 'object' ? new THREE.Vector3( 0, 0, 1 ).transformDirection( this.object.matrixWorld ) : this.frame.camera.getWorldDirection( new THREE.Vector3() );
+		if ( this.placement === 'ground' ) origin.y = 0;
+		if ( ! this.penChain && this.placement === 'surfacePerpendicular' ) {
 
-			this.finishPenFace();
-			return;
+			this.pointerWorld( event.clientX, event.clientY, new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin ) );
+			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			if ( hit ) {
+
+				origin.copy( hit.point );
+				const n = hit.face.normal.clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
+				const view = this.frame.camera.getWorldDirection( new THREE.Vector3() );
+				normal.copy( view ).addScaledVector( n, - view.dot( n ) );
+				if ( normal.lengthSq() < 1e-6 ) normal.copy( view );
+				normal.normalize();
+
+			}
 
 		}
-		const origin = hit >= 0 ? this.object.localToWorld( new THREE.Vector3( ...( this.penChain?.data || this.data ).points[ hit ] ) ) : this.object.getWorldPosition( new THREE.Vector3() );
-		const plane = this.penChain?.plane || new THREE.Plane().setFromNormalAndCoplanarPoint(
-			this.frame.camera.getWorldDirection( new THREE.Vector3() ), origin );
+		const plane = this.penChain?.plane || new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
 		const chain = this.penChain ||= { data: structuredClone( this.data ), indices: [], plane };
 		if ( hit < 0 ) {
 
-			const point = this.pointerWorld( event.clientX, event.clientY, plane );
-			if ( ! point ) return;
-			const snapped = this.snapPoint( point, origin, event, this.snapAxes( plane ), {} );
-			hit = chain.data.points.push( this.object.worldToLocal( snapped ).toArray() ) - 1;
+			const edge = this.penHit( event ).edge;
+			if ( edge && ! event.ctrlKey ) hit = edge.t < .12 ? edge.a : edge.t > .88 ? edge.b : splitEdge( chain.data, edge.a, edge.b, edge.t );
+			else {
+
+				const point = this.penPlacement( event, origin, plane, chain ); if ( ! point ) return;
+				hit = chain.data.points.push( this.object.worldToLocal( point ).toArray() ) - 1;
+
+			}
 
 		}
 		if ( ! chain.indices.includes( hit ) ) chain.indices.push( hit );
+		// A line joining two existing vertices cuts the faces between them,
+		// instead of leaving a chord that only looks connected.
+		if ( chain.indices.length === 2 && chain.indices.every( i => i < this.data.points.length ) ) {
+
+			const rect = this.rect(), project = point => this.project( point, rect.width, rect.height );
+			const ids = cutAcrossMesh( chain.data, project( chain.data.points[ chain.indices[ 0 ] ] ), project( chain.data.points[ hit ] ), project, undefined, chain.indices );
+			if ( ids.length ) { this.penChain = null; this.commit( 'Connect mesh vertices', chain.data, ids ); return; }
+
+		}
 		this.draw();
 
 	}
@@ -1347,15 +1488,16 @@ export class ModelViewport {
 	penHit( event ) {
 
 		const { left, top, width, height } = this.rect();
+		const data = this.penChain?.data || this.data;
 		const x = event.clientX - left, y = event.clientY - top;
 		const face = this.faceHit( event );
-		const handles = this.data.points.map( point => this.project( point, width, height ) );
+		const handles = data.points.map( point => this.project( point, width, height ) );
 		const camera = this.frame.camera;
 		const localToView = new THREE.Matrix4().multiplyMatrices( camera.matrixWorldInverse, this.object.matrixWorld );
 		const hitZ = face?.hit.point.clone().applyMatrix4( camera.matrixWorldInverse ).z;
 		const seen = new Set();
 		let edge, best = 9;
-		for ( const loop of this.data.faces ) for ( let i = 0; i < loop.length; i ++ ) {
+		for ( const loop of data.faces ) for ( let i = 0; i < loop.length; i ++ ) {
 
 			const a = loop[ i ], b = loop[ ( i + 1 ) % loop.length ];
 			const key = Math.min( a, b ) + ':' + Math.max( a, b );
@@ -1368,8 +1510,8 @@ export class ModelViewport {
 			if ( t < .05 || t > .95 || ! Number.isFinite( t ) ) continue;
 			const distance = Math.hypot( x - p[ 0 ] - dx * t, y - p[ 1 ] - dy * t );
 			if ( distance >= best ) continue;
-			const start = new THREE.Vector3( ...this.data.points[ a ] );
-			const end = new THREE.Vector3( ...this.data.points[ b ] );
+			const start = new THREE.Vector3( ...data.points[ a ] );
+			const end = new THREE.Vector3( ...data.points[ b ] );
 			const depthA = - start.clone().applyMatrix4( localToView ).z, depthB = - end.clone().applyMatrix4( localToView ).z;
 			const fraction = camera.isPerspectiveCamera ? ( t / depthB ) / ( ( 1 - t ) / depthA + t / depthB ) : t;
 			const along = start.lerp( end, fraction );
@@ -1400,7 +1542,7 @@ export class ModelViewport {
 		const start = this.pointerWorld( event.clientX, event.clientY, plane );
 		if ( ! start ) return false;
 		this.indices = indices;
-		this.drag = { pen: true, edge, boundary: edge && boundaryEdge( this.data, ...indices ), start, origin, plane,
+		this.drag = { pen: true, event, downAt: performance.now(), edge, boundary: edge && boundaryEdge( this.data, ...indices ), start, origin, plane,
 			x: event.clientX, y: event.clientY, id: event.pointerId, target: event.target };
 		event.target.setPointerCapture( event.pointerId );
 		this.changed();
@@ -1413,9 +1555,8 @@ export class ModelViewport {
 
 		if ( Math.hypot( event.clientX - drag.x, event.clientY - drag.y ) < 5 && ! drag.moved ) return;
 		drag.moved = true;
-		const world = this.pointerWorld( event.clientX, event.clientY, drag.plane );
-		if ( ! world ) return;
-		const snapped = this.snapPoint( world.sub( drag.start ).add( drag.origin ), drag.origin, event, this.snapAxes( drag.plane ), drag );
+		const snapped = this.penPlacement( event, drag.origin, drag.plane, drag );
+		if ( ! snapped ) return;
 		const offset = this.object.worldToLocal( snapped.clone() ).sub( this.object.worldToLocal( drag.origin.clone() ) );
 		if ( offset.lengthSq() < 1e-12 ) {
 
@@ -1426,6 +1567,13 @@ export class ModelViewport {
 
 		}
 		const data = structuredClone( this.data );
+		if ( drag.edge && ! drag.boundary && ( performance.now() - drag.downAt > 450 || drag.edge.t >= .35 && drag.edge.t <= .65 ) ) {
+
+			drag.cap = loopCut( data, [ drag.edge.a, drag.edge.b ], drag.edge.t );
+			if ( ! drag.cap.length ) return;
+			drag.geometry?.dispose(); drag.draft = data; drag.geometry = this.buildGeometry( data ); this.render(); return;
+
+		}
 		if ( drag.boundary ) drag.cap = extrudeEdge( THREE, data, drag.boundary, offset );
 		else for ( const index of this.indices ) data.points[ index ] = new THREE.Vector3( ...data.points[ index ] ).add( offset ).toArray();
 		drag.geometry?.dispose();
@@ -1447,16 +1595,21 @@ export class ModelViewport {
 			}
 			if ( drag.edge && ! drag.moved ) {
 
-				const { a, b, t } = drag.edge;
-				this.edit( 'Split mesh edge', data => [ splitEdge( data, a, b, t ) ] );
+				if ( performance.now() - drag.downAt > 450 ) this.edit( 'Dissolve mesh edge', data => { if ( ! dissolveEdge( data, [ drag.edge.a, drag.edge.b ] ) ) data.faces = data.faces.filter( face => ! face.includes( drag.edge.a ) || ! face.includes( drag.edge.b ) ); return []; } );
+				else this.addPenPoint( drag.event, -1 );
 				return;
 
 			}
 
+			if ( ! drag.edge && ! drag.moved && drag.event ) {
+
+				if ( performance.now() - drag.downAt > 450 ) this.edit( 'Delete mesh face', data => { const face = this.faceHit( drag.event ); if ( face ) data.faces.splice( face.index, 1 ); return []; } );
+				else { const face = this.faceHit( drag.event ); if ( face ) this.edit( 'Insert mesh face vertex', data => pokeFace( THREE, data, face.index, face.triangle, this.object.worldToLocal( face.hit.point.clone() ) ) ); }
+				return;
+
+			}
 		}
-		drag.geometry?.dispose();
-		this.changed();
-		this.render();
+		drag.geometry?.dispose(); this.changed(); this.render();
 
 	}
 
@@ -1578,9 +1731,35 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ( this.pen || this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey || event.target !== this.editor.renderer?.domElement ) return;
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
+		if ( this.knife ) { this.beginKnife( event ); return; }
+		if ( this.pen && event.altKey ) {
+
+			event.preventDefault(); event.stopImmediatePropagation();
+			const rect = this.rect(), data = structuredClone( this.data );
+			if ( autoQuad( THREE, data, [ event.clientX - rect.left, event.clientY - rect.top ], point => this.project( point, rect.width, rect.height ), addFace ) ) this.commit( 'AutoQuad', data, data.faces.at( -1 ) );
+			return;
+
+		}
+		if ( this.pen && event.metaKey ) {
+
+			event.preventDefault(); event.stopImmediatePropagation();
+			const rect = this.rect(), vertex = this.pointUnder( event.clientX - rect.left, event.clientY - rect.top );
+			if ( vertex >= 0 ) this.indices = this.indices.includes( vertex ) ? this.indices.filter( i => i !== vertex ) : [ ...this.indices, vertex ];
+			else { const { edge, face } = this.penHit( event ); const ids = edge ? [ edge.a, edge.b ] : face?.face || []; this.indices = ids.every( i => this.indices.includes( i ) ) ? this.indices.filter( i => ! ids.includes( i ) ) : [ ...new Set( [ ...this.indices, ...ids ] ) ]; }
+			this.changed(); this.render(); return;
+
+		}
+		if ( this.pen && event.shiftKey ) {
+
+			event.preventDefault(); event.stopImmediatePropagation();
+			const rect = this.rect();
+			this.drag = { penDelete: true, event, x: event.clientX, y: event.clientY, hit: this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ), ...this.penHit( event ), id: event.pointerId, target: event.target };
+			event.target.setPointerCapture( event.pointerId ); return;
+
+		}
 		if ( this.brush && ( this.brush !== 'freehand' || this.data.kind === 'path' ) ) {
 
 			this.beginBrush( event );
@@ -1627,7 +1806,7 @@ export class ModelViewport {
 
 				event.preventDefault();
 				event.stopImmediatePropagation();
-				this.editor.viewTools.run( () => this.addPenPoint( event, -1 ) );
+				this.beginKnife( event, true );
 
 			}
 			return;
@@ -1677,7 +1856,7 @@ export class ModelViewport {
 		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
 		const world = this.pointerWorld( event.clientX, event.clientY, plane );
 		if ( ! world ) { this.changed(); this.draw(); return; }
-		this.drag = { target: event.target, id: event.pointerId, start: world, origin, plane, penVertex: this.pen && ! event.shiftKey ? hit : undefined };
+		this.drag = { target: event.target, id: event.pointerId, start: world, origin, plane, downAt: performance.now(), penVertex: this.pen && ! event.shiftKey ? hit : undefined };
 		event.target.setPointerCapture( event.pointerId );
 		this.changed();
 		this.draw();
@@ -1780,6 +1959,21 @@ export class ModelViewport {
 	pointerMove( event ) {
 
 		const drag = this.drag;
+		if ( drag?.penDelete ) {
+
+			if ( Math.hypot( event.clientX - drag.x, event.clientY - drag.y ) < 5 ) return;
+			const brush = this.brush; this.brush = 'relax'; this.beginBrush( drag.event ); this.brush = brush;
+			if ( this.drag?.brush ) this.moveBrush( event, this.drag ); return;
+
+		}
+		if ( drag?.knife || drag?.penEmpty ) {
+
+			if ( this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
+			const rect = this.rect(); drag.end = [ event.clientX - rect.left, event.clientY - rect.top ];
+			if ( drag.penEmpty && performance.now() - drag.downAt > 450 && Math.hypot( drag.end[ 0 ] - drag.start[ 0 ], drag.end[ 1 ] - drag.start[ 1 ] ) > 5 ) drag.knife = true;
+			this.draw(); return;
+
+		}
 		if ( drag?.selection ) {
 
 			const rect = this.rect();
@@ -1789,6 +1983,13 @@ export class ModelViewport {
 		}
 		if ( ! drag ) {
 
+			if ( this.penChain && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
+
+				const chain = this.penChain;
+				const origin = this.object.localToWorld( new THREE.Vector3( ...chain.data.points[ chain.indices.at( -1 ) ] ) );
+				this.placementSnap = this.penPlacement( event, origin, chain.plane, chain ); this.draw();
+
+			}
 			if ( this.pen && this.canEdit() && this.data.faces?.length && ! this.penChain && event.target === this.editor.renderer?.domElement && this.editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) {
 
 				this.penHover = this.penHit( event ).edge;
@@ -1820,7 +2021,8 @@ export class ModelViewport {
 		if ( ! point ) return;
 		const target = point.sub( drag.start ).add( drag.origin );
 		const axes = this.planar ? this.snapAxes( drag.plane ) : worldAxes;
-		const snapped = this.snapPoint( target, drag.origin, event, axes, drag );
+		const snapped = drag.penVertex !== undefined ? this.penPlacement( event, drag.origin, drag.plane, drag ) : this.snapPoint( target, drag.origin, event, axes, drag );
+		if ( ! snapped ) return;
 		const delta = this.object.worldToLocal( snapped.clone() ).sub( this.object.worldToLocal( drag.origin.clone() ) );
 		const points = this.data.points.slice();
 		for ( const index of this.indices ) {
@@ -1850,9 +2052,25 @@ export class ModelViewport {
 		if ( this.drag?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const drag = this.releaseDrag( true );
+		if ( drag.penDelete ) {
+
+			if ( ! cancel ) this.edit( 'Delete mesh element', data => {
+
+				if ( drag.hit >= 0 ) removePoints( data, [ drag.hit ] );
+				else if ( drag.edge ) data.faces = data.faces.filter( face => ! face.some( ( a, i ) => [ a, face[ ( i + 1 ) % face.length ] ].includes( drag.edge.a ) && [ a, face[ ( i + 1 ) % face.length ] ].includes( drag.edge.b ) ) );
+				else if ( drag.face ) data.faces.splice( drag.face.index, 1 );
+				return [];
+
+			} );
+			this.draw(); return;
+
+		}
+		if ( drag.knife || drag.penEmpty ) { this.finishKnife( drag, cancel ); return; }
 		if ( drag.selection ) { this.finishSelection( drag, cancel ); return; }
 		if ( drag.pen ) { this.finishPen( drag, cancel ); return; }
 		if ( drag.penVertex !== undefined && ! cancel && ! drag.draft ) {
+
+			if ( performance.now() - drag.downAt > 450 ) { this.edit( 'Delete mesh vertex', data => { removePoints( data, [ drag.penVertex ] ); return []; } ); return; }
 
 			this.addPenPoint( event, drag.penVertex );
 			return;
@@ -1872,6 +2090,26 @@ export class ModelViewport {
 				drag.geometry.dispose();
 				this.editor.execute( new AddObjectCommand( this.editor, object, source.parent ), 'Draw freehand path' );
 				return;
+
+			}
+			if ( drag.penVertex !== undefined && this.data.kind === 'mesh' ) {
+
+				const rect = this.rect(); let nearest = 14, target = -1;
+				this.data.points.forEach( ( point, i ) => {
+
+					if ( this.indices.includes( i ) ) return;
+					const pixel = this.project( point, rect.width, rect.height ); if ( ! pixel ) return;
+					const distance = Math.hypot( pixel[ 0 ] + rect.left - event.clientX, pixel[ 1 ] + rect.top - event.clientY );
+					if ( distance < nearest ) { target = i; nearest = distance; }
+
+				} );
+				if ( target >= 0 && ! event.ctrlKey ) {
+
+					drag.draft.points[ drag.penVertex ] = drag.draft.points[ target ].slice();
+					const ids = weldPoints( drag.draft, [ target, drag.penVertex ] );
+					drag.geometry.dispose(); this.commit( 'Attach mesh vertex', drag.draft, ids ); return;
+
+				}
 
 			}
 			this.commit( drag.brush === 'freehand' ? 'Draw freehand path' : drag.brush ? 'Sculpt mesh' : 'Move modeling points',

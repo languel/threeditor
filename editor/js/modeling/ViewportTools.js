@@ -1,6 +1,6 @@
-import { icon } from '../Glyphs.js?v=mesh-selection';
+import { icon } from '../Glyphs.js?v=poly-context';
 import { meshBrushes } from './SculptBrush.js?v=surface-tools';
-import { modelButton, modelField } from './ModelControls.js?v=mesh-selection';
+import { modelButton, modelField } from './ModelControls.js?v=poly-context';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
@@ -116,6 +116,7 @@ export class ViewportTools {
 		this.primary = element( 'div', this.geometryTools );
 		this.primary.className = 'viewport-primary-tools';
 		this.penButton = modelButton( this.primary, 'Polybuild (6)', 'topologyPen', () => this.run( () => editor.modeling.togglePen() ) );
+		this.knifeButton = modelButton( this.primary, 'Knife (K)', 'knifeTool', () => this.run( () => editor.modeling.toggleKnife() ) );
 		this.penButton.title = 'Polybuild / Topology pen (6)';
 		this.sculptButton = modelButton( this.primary, 'Sculpt brushes', 'sculptTool', () => this.run( () => editor.modeling.setBrush( editor.modeling.brush && editor.modeling.brush !== 'freehand' ? '' : 'grab' ) ) );
 		this.actionMenu = element( 'details', this.panel );
@@ -243,11 +244,11 @@ export class ViewportTools {
 		const model = this.editor.modeling;
 		const edit = model.editMode;
 		this.selectionTools.hidden = ! edit || !! this.mode;
-		for ( const [ tool, button ] of this.selectionButtons ) button.setAttribute( 'aria-pressed', String( ! model.pen && ! model.brush && ! model.adding && tool === model.selectionTool ) );
+		for ( const [ tool, button ] of this.selectionButtons ) button.setAttribute( 'aria-pressed', String( ! model.pen && ! model.knife && ! model.brush && ! model.adding && tool === model.selectionTool ) );
 		this.selectionOp.title = 'Selection operation: ' + model.selectionOperation + ' (click to cycle)';
 		this.selectionOp.setAttribute( 'aria-label', 'Selection operation: ' + model.selectionOperation );
 		this.elementModes.hidden = ! edit || ! model.object || !! this.mode;
-		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.brush ) );
+		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
 		for ( const [ mode, button ] of this.modeButtons ) button.setAttribute( 'aria-pressed', String( mode === ( edit ? 'edit' : 'object' ) ) );
 		for ( const mode of [ 'path' ] ) {
 
@@ -261,9 +262,11 @@ export class ViewportTools {
 		this.brushSettings.replaceChildren();
 		const sculpt = model.brush && model.brush !== 'freehand';
 		const pen = model.pen && ! model.adding;
+		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
+		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );
 		const name = this.mode ? { mask: 'Light mask', measure: 'Measure', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( meshBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
-			pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
+			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
 		this.panel.setAttribute( 'aria-label', 'Viewport tools · ' + name );
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode ? this.mode === mode : ! this.mode && name === 'Select' ) );
@@ -271,12 +274,12 @@ export class ViewportTools {
 		this.freehandButton.setAttribute( 'aria-pressed', String( ! this.mode && model.brush === 'freehand' ) );
 		this.penButton.setAttribute( 'aria-pressed', String( ! this.mode && pen ) );
 		this.sculptButton.setAttribute( 'aria-pressed', String( ! this.mode && Boolean( sculpt ) ) );
-		this.penButton.disabled = ! model.canEdit() || model.data?.kind !== 'mesh' || ! model.data?.faces;
+		this.penButton.disabled = ! model.canEdit() || ! model.data?.faces?.length;
 		this.sculptButton.disabled = ! model.canEdit() || ! model.data?.points.length;
 		if ( ! edit || this.mode ) return;
 		for ( const { label, glyph, run, disabled, pressed } of model.actions() ) {
 
-			if ( [ 'Topology pen', 'Sculpt brushes' ].includes( label ) ) continue;
+			if ( [ 'Topology pen', 'Polybuild (6)', 'Knife (K)', 'Sculpt brushes' ].includes( label ) ) continue;
 			const control = modelButton( this.modelOptions, label, glyph, () => { this.actionMenu.open = false; this.run( run ); } , disabled );
 			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
 
@@ -311,6 +314,7 @@ export class ViewportTools {
 
 			const model = this.editor.modeling;
 			model.selectionTool = 'select';
+			model.knife = false;
 			model.pen = false;
 			model.penChain = null;
 			model.brush = '';
@@ -469,7 +473,7 @@ export class ViewportTools {
 			this.brush.diameter = THREE.MathUtils.clamp( Math.round( this.brush.diameter * factor ), 2, 100 );
 			this.buildOptions();
 
-		} else if ( model.brush && model.brush !== 'freehand' ) {
+		} else if ( ( model.brush && model.brush !== 'freehand' || model.selectionTool === 'circle' ) ) {
 
 			model.brushRadius = THREE.MathUtils.clamp( Math.round( model.brushRadius * factor ), 5, 250 );
 			this.refreshWorkspace();

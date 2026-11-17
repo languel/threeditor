@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=mesh-selection';
+import { icon } from '../Glyphs.js?v=poly-context';
 
 function labelContent( node, label, glyph ) {
 
