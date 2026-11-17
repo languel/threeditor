@@ -26,3 +26,17 @@ test( 'Quad edge rings walk opposite edges across a strip and stop at boundaries
 	assert.ok( ! loop.includes( '1:2' ) );
 
 } );
+
+test( 'Shapes and paths expose selectable outline edges without mesh face data', async () => {
+
+	const { selectionCandidates } = await import( '../editor/js/modeling/MeshSelection.js' );
+	const shape = { kind: 'shape', points: [ [ 0, 0, 0 ], [ 1, 0, 0 ], [ 1, 1, 0 ], [ 0, 1, 0 ] ], closed: true };
+	assert.equal( meshEdges( shape ).length, 4 );
+	assert.deepEqual( selectionCandidates( shape, 'face' ), [ [ 0, 1, 2, 3 ] ] );
+	const path = { ...shape, kind: 'path', closed: false };
+	assert.equal( meshEdges( path ).length, 3 );
+	assert.deepEqual( selectionCandidates( path, 'face' ), [] );
+	assert.equal( meshEdges( { ...path, closed: true } ).length, 4 );
+	assert.equal( meshEdges( { kind: 'mesh', profile: true, points: shape.points, faces: [] } ).length, 3 );
+
+} );

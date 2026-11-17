@@ -9,7 +9,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { UIPanel } from './libs/ui.js';
 
-import { EditorControls } from './EditorControls.js?v=camera-playback';
+import { EditorControls } from './EditorControls.js?v=edit-pointer-routing';
 
 import { ViewportLabels } from './Viewport.Labels.js';
 import { ViewportControls } from './Viewport.Controls.js?v=top-toolbar';
@@ -31,7 +31,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=brush-shortcuts';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=brush-shortcuts';
+import { ModelViewport } from './modeling/ModelViewport.js?v=shape-selection';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -488,6 +488,7 @@ function Viewport( editor ) {
 	const controls = new EditorControls( camera );
 	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'basic';
 	controls.canNavigate = () => !! layout.navigation && ! hasRestriction( layout.navigation.camera, 'locked' );
+	controls.canStartNavigation = event => event.pointerType === 'touch' || event.button !== 0 || event.altKey || ! ( model.editMode || editor.viewTools.mode );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
 	controls.addEventListener( 'change', function () {
 

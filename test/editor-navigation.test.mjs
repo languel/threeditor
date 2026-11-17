@@ -74,3 +74,24 @@ test( 'Blender mouse mode retains middle-drag and emulated Alt-drag', () => {
 	}
 
 } );
+
+test( 'Edit tools can reserve the left button without blocking explicit camera navigation', () => {
+
+	const { camera, controls, drag, wheel } = setup();
+	controls.canStartNavigation = event => event.button !== 0 || event.altKey;
+	const start = camera.position.clone();
+	drag();
+	assert.deepEqual( camera.position.toArray(), start.toArray() );
+	drag( { shiftKey: true } );
+	assert.deepEqual( camera.position.toArray(), start.toArray() );
+	drag( { altKey: true } );
+	assert.ok( camera.position.distanceTo( start ) > .1 );
+	const beforeWheel = camera.position.clone();
+	wheel();
+	assert.ok( camera.position.distanceTo( beforeWheel ) > .01 );
+	const beforeMiddle = camera.position.clone();
+	controls.navigationMode = () => 'blender';
+	drag( { button: 1 } );
+	assert.ok( camera.position.distanceTo( beforeMiddle ) > .01 );
+
+} );

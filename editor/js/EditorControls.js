@@ -16,6 +16,7 @@ class EditorControls extends THREE.EventDispatcher {
 		this.navigationMode = () => 'basic';
 		this.emulateThreeButton = () => false;
 		this.canNavigate = () => true;
+		this.canStartNavigation = () => true;
 
 		// internals
 
@@ -183,7 +184,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 		function onPointerDown( event ) {
 
-			if ( scope.enabled === false || ! scope.canNavigate() ) return;
+			if ( scope.enabled === false || ! scope.canNavigate() || ! scope.canStartNavigation( event ) ) return;
 			const emulatedMiddle = scope.navigationMode() === 'blender' && scope.emulateThreeButton() && event.button === 0 && event.altKey;
 			if ( event.pointerType !== 'touch' && scope.navigationMode() === 'blender' && event.button !== 1 && ! emulatedMiddle ) return;
 			if ( event.pointerType !== 'touch' && event.button === 1 ) event.preventDefault();

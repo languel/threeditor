@@ -1,5 +1,5 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
-import { selectionCandidates, applySelection, edgeLoop, pointInPolygon } from './MeshSelection.js';
+import { selectionCandidates, applySelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import * as THREE from 'three';
@@ -1390,7 +1390,7 @@ export class ModelViewport {
 
 	faceHit( event ) {
 
-		if ( ! this.data.faces?.length ) return;
+		if ( ! this.data.faces?.length && ! ( this.data.kind === 'shape' && this.data.closed !== false && this.data.points.length >= 3 ) ) return;
 		const rect = this.rect();
 		this.ray.setFromCamera( new THREE.Vector2( ( event.clientX - rect.left ) * 2 / rect.width - 1,
 			1 - ( event.clientY - rect.top ) * 2 / rect.height ), this.frame.camera );
@@ -1400,6 +1400,7 @@ export class ModelViewport {
 		try { hit = this.ray.intersectObject( this.object, false )[ 0 ]; }
 		finally { this.object.geometry = original; }
 		if ( ! hit ) return;
+		if ( this.data.kind === 'shape' ) return { hit, index: 0, triangle: hit.faceIndex, face: this.data.points.map( ( _, i ) => i ) };
 		let mapping = this.data.kind === 'vertices' ? this.data.faces.map( ( _, i ) => i ) : this.object.geometry.userData.triangleFaces;
 		if ( ! mapping ) {
 
@@ -1494,9 +1495,7 @@ export class ModelViewport {
 		const hitZ = face?.hit.point.clone().applyMatrix4( camera.matrixWorldInverse ).z;
 		const seen = new Set();
 		let edge, best = 9;
-		for ( const loop of data.faces ) for ( let i = 0; i < loop.length; i ++ ) {
-
-			const a = loop[ i ], b = loop[ ( i + 1 ) % loop.length ];
+		for ( const [ a, b ] of meshEdges( data ) ) {
 			const key = Math.min( a, b ) + ':' + Math.max( a, b );
 			if ( seen.has( key ) ) continue;
 			seen.add( key );
@@ -1727,6 +1726,22 @@ export class ModelViewport {
 	}
 
 	pointerDown( event ) {
+
+		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.mode &&
+			event.button === 0 && ! event.altKey && event.target === this.editor.renderer?.domElement ) {
+
+			event.preventDefault(); event.stopImmediatePropagation();
+			const frame = this.editor.viewLayout.at( event.clientX, event.clientY );
+			if ( ! frame || frame !== this.editor.viewLayout.navigation ) return;
+			const rect = this.editor.viewLayout.clientRect( frame );
+			const hits = this.editor.selector.getPointerIntersects( { x: ( event.clientX - rect.left ) / rect.width, y: ( event.clientY - rect.top ) / rect.height }, frame.camera );
+			const target = hits.map( hit => hit.object.userData.object || hit.object ).find( object =>
+				( object.geometry?.userData.modeling || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) );
+			if ( target ) { this.editor.select( target ); if ( this.object !== target ) this.setTarget( target ); }
+			else this.editor.viewTools.status.textContent = 'Select an unlocked mesh, shape or path to edit.';
+			return;
+
+		}
 
 		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;

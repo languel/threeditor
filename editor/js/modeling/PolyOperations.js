@@ -1,5 +1,5 @@
 import { splitEdge, faceNormal } from './ModelGeometry.js?v=surface-tools';
-import { meshEdges, elementKey, edgeLoop } from './MeshSelection.js';
+import { meshEdges, elementKey, edgeLoop } from './MeshSelection.js?v=shape-selection';
 
 // Ordered-face adaptation of ThreeGrease polytool.cutAcrossMesh. Existing
 // vertices near the cut are seeds; each crossed shared edge is split once.

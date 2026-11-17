@@ -10,12 +10,23 @@ export function meshEdges( data ) {
 		edges.set( elementKey( edge ), edge );
 
 	}
+	if ( ! data.faces || data.profile ) {
+
+		const closed = data.kind === 'shape' ? data.closed !== false : data.closed === true;
+		for ( let i = 0, count = closed ? data.points.length : data.points.length - 1; i < count; i ++ ) {
+
+			const edge = [ i, ( i + 1 ) % data.points.length ];
+			edges.set( elementKey( edge ), edge );
+
+		}
+
+	}
 	return [ ...edges.values() ];
 
 }
 export function selectionCandidates( data, mode ) {
 
-	return mode === 'vertex' ? data.points.map( ( _, i ) => [ i ] ) : mode === 'edge' ? meshEdges( data ) : data.faces || [];
+	return mode === 'vertex' ? data.points.map( ( _, i ) => [ i ] ) : mode === 'edge' ? meshEdges( data ) : data.faces || ( data.kind === 'shape' && data.closed !== false && data.points.length >= 3 ? [ data.points.map( ( _, i ) => i ) ] : [] );
 
 }
 export function applySelection( current, hits, operation = 'set' ) {
