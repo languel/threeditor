@@ -508,7 +508,7 @@ function Viewport( editor ) {
 	// otherwise controls.enabled doesn't work.
 
 	const controls = new EditorControls( camera );
-	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'basic';
+	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'blender';
 	controls.canNavigate = () => !! layout.navigation && ! hasRestriction( layout.navigation.camera, 'locked' );
 	controls.canStartNavigation = event => event.pointerType === 'touch' || event.button !== 0 || event.altKey || ! ( model.editMode || editor.viewTools.mode );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );

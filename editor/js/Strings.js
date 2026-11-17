@@ -593,7 +593,7 @@ function Strings( config ) {
 			'sidebar/properties/object': 'Object',
 			'sidebar/properties/geometry': 'Geometry',
 			'sidebar/properties/material': 'Material',
-			'sidebar/properties/script': 'Script',
+			'sidebar/properties/script': 'Components',
 
 			'sidebar/object/type': 'Type',
 			'sidebar/object/new': 'New',
@@ -827,7 +827,7 @@ function Strings( config ) {
 			'sidebar/material/userdata': 'User data',
 			'sidebar/material/export': 'Export JSON',
 
-			'sidebar/script/new': 'New',
+			'sidebar/script/new': 'Add Script',
 			'sidebar/script/new-p5': 'New p5 sketch',
 			'sidebar/script/edit': 'Edit',
 			'sidebar/script/remove': 'Remove',

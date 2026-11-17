@@ -1,4 +1,5 @@
 const presets = {
+	studio: { name: 'Blender Studio', mode: 'dark', colors: { background: '#303030', surface: '#232323', text: '#dddddd', accent: '#77a8dd', viewport: '#414141', keyword: '#ddb0dc', string: '#a9c893' } },
 	light: { name: 'Light', mode: 'light', colors: { background: '#eeeeee', surface: '#ffffff', text: '#555555', accent: '#0088ff', viewport: '#aaaaaa', keyword: '#a626a4', string: '#50a14f' } },
 	dark: { name: 'Dark', mode: 'dark', colors: { background: '#1b1b1b', surface: '#262626', text: '#c2c2c2', accent: '#ececec', viewport: '#373737', keyword: '#ffc9e3', string: '#c9eec9' } },
 	github: { name: 'Github', mode: 'dark', colors: { background: '#111111', surface: '#222222', text: '#aaaaaa', accent: '#0088ff', viewport: '#333333', keyword: '#c792ea', string: '#98c379' } },

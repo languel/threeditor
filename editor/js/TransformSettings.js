@@ -1,3 +1,4 @@
+import { shadingModes } from './ViewportShading.js';
 import { icon } from './Glyphs.js?v=poly-context';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
@@ -20,6 +21,11 @@ export function addTransformSettings( editor, toolbar ) {
 	}, { passive: true } );
 
 	const configs = {
+		shading: {
+			label: 'Viewport shading',
+			choices: () => shadingModes.slice( 0, 4 ).map( ( [ mode, label, glyph ] ) =>
+				[ label, glyph, () => editor.setViewportShading( mode ), editor.viewportShading === mode ] )
+		},
 		placement: {
 			label: 'Placement', glyph: 'placePlane',
 			choices: () => [
@@ -149,7 +155,7 @@ export function addTransformSettings( editor, toolbar ) {
 		previousFocus = document.activeElement;
 		const definition = configs[ kind ];
 		opener = buttons.get( kind );
-		opener.setAttribute( 'aria-expanded', 'true' );
+		opener?.setAttribute( 'aria-expanded', 'true' );
 		dialog.replaceChildren();
 		dialog.classList.toggle( 'transform-dropdown', dropdown );
 		dialog.classList.toggle( 'transform-snap-pie', ! dropdown && kind === 'snap' );
@@ -237,6 +243,8 @@ export function addTransformSettings( editor, toolbar ) {
 	}
 
 	for ( const [ kind, definition ] of Object.entries( configs ) ) {
+
+		if ( kind === 'shading' ) continue; // The viewport header owns the shading control.
 
 		const button = document.createElement( 'button' );
 		button.type = 'button';

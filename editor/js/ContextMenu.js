@@ -157,7 +157,7 @@ function ContextMenu( editor, viewport ) {
 	function openPalette() {
 
 		const rect = viewport.getBoundingClientRect();
-		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) ).map( action => ( { ...action, section: action.section || action.category } ) );
+		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) ).map( action => ( { ...action, section: action.section || action.category } ) );
 		if ( ! editor.editWorkspace.mode ) {
 
 			const areaPointer = pointer;

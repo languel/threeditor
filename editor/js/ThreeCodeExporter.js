@@ -166,7 +166,13 @@ function generateThreeCode( editor ) {
 			texLines.push( `${ v }.magFilter = ${ tex.magFilter };` );
 
 		}
-		if ( tex.wrapS === 1000 || tex.wrapT === 1000 ) texLines.push( `${ v }.wrapS = ${ v }.wrapT = THREE.RepeatWrapping;` );
+		if ( tex.wrapS !== 1001 ) texLines.push( `${ v }.wrapS = ${ tex.wrapS };` );
+		if ( tex.wrapT !== 1001 ) texLines.push( `${ v }.wrapT = ${ tex.wrapT };` );
+		if ( tex.channel ) texLines.push( `${ v }.channel = ${ tex.channel };` );
+		if ( tex.offset.x || tex.offset.y ) texLines.push( `${ v }.offset.set(${ n( tex.offset.x ) }, ${ n( tex.offset.y ) });` );
+		if ( tex.center.x || tex.center.y ) texLines.push( `${ v }.center.set(${ n( tex.center.x ) }, ${ n( tex.center.y ) });` );
+		if ( tex.rotation ) texLines.push( `${ v }.rotation = ${ n( tex.rotation ) };` );
+		if ( ! tex.matrixAutoUpdate ) texLines.push( `${ v }.matrixAutoUpdate = false; ${ v }.matrix.fromArray(${ q( tex.matrix.toArray() ) });` );
 		if ( tex.repeat.x !== 1 || tex.repeat.y !== 1 ) texLines.push( `${ v }.repeat.set(${ n( tex.repeat.x ) }, ${ n( tex.repeat.y ) });` );
 		if ( tex.flipY === false ) texLines.push( `${ v }.flipY = false;` );
 		return v;
@@ -312,6 +318,16 @@ function generateThreeCode( editor ) {
 		if ( o.userData.assetObject?.stripPresentation ) out( `{const discard=[]; ${ name }.traverse(node=>{if(node.isCamera||node.isLight||node.isHelper)discard.push(node);}); for(const node of discard)node.removeFromParent();}` );
 		function emitModelChildOverrides( node, reference ) {
 
+			const slots = Array.isArray( node.material ) ? node.material : [ node.material ];
+			for ( const [ index, slot ] of slots.entries() ) {
+
+				if ( ! slot?.map?.userData.surfacePaint ) continue;
+				const texture = textureRef( slot.map, 'map' );
+				const select = Array.isArray( node.material ) ? `obj.material[${ index }]` : 'obj.material';
+				const referenceGuard = reference.replaceAll( '.children[', '?.children[' );
+				out( `{ const obj = ${ referenceGuard }; if (obj?.material) { if (Array.isArray(obj.material)) obj.material = obj.material.slice(); const painted = ${ select }.clone(); painted.map = ${ texture }; painted.color.setHex(${ hex( slot.color ) }); ${ select } = painted; } }` );
+
+			}
 			node.children.forEach( ( child, index ) => {
 
 				const childReference = `${ reference }.children[${ index }]`;

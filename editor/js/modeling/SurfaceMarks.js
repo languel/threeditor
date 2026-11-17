@@ -23,10 +23,12 @@ export function localSurfacePoint( hit, ray, receiver = hit.object ) {
 
 }
 
-export function surfacePath( points, color, closed = false ) {
+export function surfacePath( points, color, closed = false, opacity = 1 ) {
 
 	const line = modelObject( THREE, { kind: 'path', points, smooth: false, closed, planar: false }, 'Surface path' );
 	line.material.color.set( color );
+	line.material.opacity = opacity;
+	line.material.transparent = opacity < 1;
 	line.userData.surfaceMark = true;
 	return line;
 

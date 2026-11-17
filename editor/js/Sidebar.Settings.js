@@ -94,7 +94,7 @@ function SidebarSettings( editor ) {
 	const mouseNavigation = new UISelect().setOptions( { basic: 'Standard', blender: 'Blender' } );
 	mouseNavigation.dom.setAttribute( 'aria-label', 'Mouse navigation' );
 	mouseNavigation.dom.title = 'Independent of keyboard shortcuts. Standard: drag to orbit, Shift-drag or right-drag to pan, scroll to zoom.';
-	mouseNavigation.setValue( config.getKey( 'settings/mouseNavigation' ) || 'basic' );
+	mouseNavigation.setValue( config.getKey( 'settings/mouseNavigation' ) || 'blender' );
 	mouseNavigation.onChange( function () {
 
 		config.setKey( 'settings/mouseNavigation', this.getValue() );

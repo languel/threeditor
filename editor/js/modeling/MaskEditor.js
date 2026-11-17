@@ -1,10 +1,11 @@
 import { icon } from '../Glyphs.js?v=poly-context';
+import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { modelButton } from './ModelControls.js';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
-import { isClosedOutline, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
+import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
@@ -66,7 +67,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	toolbar.className = 'editor-2d-tools';
 	workspace.append( toolbar );
 	const canvas = node( 'canvas', workspace );
-	canvas.setAttribute( 'aria-label', 'Projection frame' );
+	canvas.setAttribute( 'aria-label', vectorMode ? 'Vector drawing canvas' : 'Projection frame' );
 	canvas.tabIndex = 0;
 	canvas.width = 760;
 	canvas.height = 490;
@@ -103,6 +104,18 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	} ) );
 	const duplicate = modelButton( layerActions, 'Duplicate shape', 'add', () => addShape( structuredClone( shapes[ active ] ) ) );
 	const deletePoint = modelButton( layerActions, 'Delete point', 'remove', removeVertex );
+	const createCurve = vectorMode && modelButton( layerActions, 'Create scene curve', 'toolPath', () => {
+
+		const shape = shapes[ active ];
+		const points = shape.points.map( ( [ u, v ] ) => [ 2 * u - 1, 1 - 2 * v, 0 ] );
+		const object = modelObject( THREE, { kind: 'path', points, closed: true, planar: true, smooth: false }, shape.name );
+		object.material.color.set( color( shape ) );
+		editor.execute( new AddObjectCommand( editor, object ), 'Create curve from vector contour' );
+		available.push( [ object, object.name ] );
+		filter();
+		status.textContent = 'Created ' + object.name + ' in the 3D view.';
+
+	} );
 	const picker = node( 'details', panel );
 	picker.open = showPicker;
 	node( 'summary', picker, 'Pick scene outline' );
@@ -234,7 +247,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		change( () => {
 
-			shapes.push( { mode: 'inside', ...shape, name: shape.name || 'Mask ' + ( shapes.length + 1 ) } );
+			shapes.push( { mode: 'inside', ...shape, name: shape.name || ( vectorMode ? 'Contour ' : 'Mask ' ) + ( shapes.length + 1 ) } );
 			active = shapes.length - 1;
 			vertex = -1;
 			draft = [];
@@ -286,6 +299,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		name.disabled = mode.disabled = remove.disabled = duplicate.disabled = ! shape;
 		if ( fill ) {
 
+			if ( createCurve ) createCurve.disabled = ! shape;
 			fill.value = color( shape );
 			fill.disabled = ! shape || shape.mode === 'cutout';
 
@@ -513,7 +527,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		else {
 
 			const step = point.map( ( value, i ) => value - gesture.last[ i ] );
-			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), tool, Number( strength.value ) ).map( uv );
+			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), event.shiftKey ? 'smooth' : tool, Number( strength.value ) * ( event.pointerType === 'pen' ? event.pressure || .5 : 1 ) ).map( uv );
 
 		}
 		gesture.last = point;
@@ -574,7 +588,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
 		if ( key === 'enter' && draft.length ) { event.preventDefault(); closeDraft(); }
-		if ( key === 'delete' || key === 'backspace' ) { event.preventDefault(); removeVertex(); }
+		if ( key === 'delete' || key === 'backspace' || key === 'x' && ! ( event.ctrlKey || event.metaKey || event.altKey ) ) { event.preventDefault(); removeVertex(); }
 		if ( key === 'z' && ( event.metaKey || event.ctrlKey ) ) {
 
 			event.preventDefault();
@@ -586,10 +600,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	const abortDraft = event => {
 
-		if ( event.key !== 'Escape' || ! draft.length ) return;
+		if ( event.key !== 'Escape' || ( ! draft.length && ! gesture ) ) return;
 		event.preventDefault();
-		draft = [];
-		draw();
+		canvas.onpointercancel();
 
 	};
 	workspacePanel.addEventListener( 'keydown', abortDraft );

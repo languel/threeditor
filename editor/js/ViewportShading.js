@@ -1,5 +1,14 @@
 import { MeshBasicMaterial, MeshMatcapMaterial, MeshNormalMaterial } from 'three';
 
+export const shadingModes = [
+	[ 'realistic', 'Rendered', 'shadingRendered' ],
+	[ 'solid', 'Solid', 'shadingSolid' ],
+	[ 'materials', 'Material Preview', 'shadingMaterial' ],
+	[ 'wireframe', 'Wireframe', 'shadingWire' ],
+	[ 'normals', 'Normals', 'shadingNormals' ],
+	[ 'preview', 'Clean Preview', 'preview' ]
+];
+
 const factories = {
 	solid: () => new MeshMatcapMaterial( { color: 0xaaaaaa, toneMapped: false } ),
 	normals: () => new MeshNormalMaterial(),

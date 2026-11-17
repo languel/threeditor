@@ -169,14 +169,6 @@ export class ModelViewport {
 				this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' ); return;
 
 			}
-			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && ! event.shiftKey && [ '1', '2', '3' ].includes( event.key ) ) {
-
-				event.preventDefault();
-				event.stopImmediatePropagation();
-				this.setSelectionMode( [ 'vertex', 'edge', 'face' ][ Number( event.key ) - 1 ] );
-				return;
-
-			}
 			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
 
 				const key = event.key.toLowerCase();
@@ -282,15 +274,21 @@ export class ModelViewport {
 
 	}
 
+	canEditTarget( object ) {
+
+		const sourceGeometry = object?.geometry ? modifierSource( object ) : null;
+		const data = sourceGeometry?.userData.modeling;
+		return object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
+			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || sourceGeometry.attributes.position.count <= 20000 );
+
+	}
+
 	setTarget( object ) {
 
 		this.releaseDrag();
 		if ( this.gesture?.modal ) this.finishTransform( false );
 		else if ( this.gesture ) this.cancelGizmo?.();
-		const sourceGeometry = object?.geometry ? modifierSource( object ) : null;
-		const data = sourceGeometry?.userData.modeling;
-		const editable = object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
-			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || sourceGeometry.attributes.position.count <= 20000 );
+		const editable = this.canEditTarget( object );
 		this.object = editable ? object : null;
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];

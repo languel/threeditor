@@ -1,3 +1,4 @@
+import { shadingModes } from './ViewportShading.js';
 import { hoveredTimelineProperty } from './animation/TimelineKeyControl.js';
 import { hasLightView } from './modeling/LightView.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
@@ -24,12 +25,14 @@ const definitions = [
  ['alignActiveCamera','Align active camera to view','View',alignCameraShortcut,alignCameraShortcut],
  ['orbitLeft','Orbit left','Navigation','','numpad4'], ['orbitRight','Orbit right','Navigation','','numpad6'], ['orbitUp','Orbit up','Navigation','','numpad8'], ['orbitDown','Orbit down','Navigation','','numpad2'], ['flipView','Opposite view','Navigation','','numpad9'],
  ['panLeft','Pan left','Navigation','','mod+numpad4'], ['panRight','Pan right','Navigation','','mod+numpad6'], ['panUp','Pan up','Navigation','','mod+numpad8'], ['panDown','Pan down','Navigation','','mod+numpad2'], ['zoomIn','Zoom in','Navigation','','numpadadd'], ['zoomOut','Zoom out','Navigation','','numpadsubtract'],
- ['fly','Fly active camera','View','backquote','backquote'], ['shading','Cycle viewport shading','View','z','z'], ['shadingBack','Cycle viewport shading backward','View','shift+z','shift+z'],
+ ['shadingPie','Viewport shading menu','View','','z'], ['toggleWireframe','Toggle wireframe','View','','shift+z'],
+ ['fly','Fly active camera','View','backquote','backquote'], ['shading','Cycle viewport shading','View','z',''], ['shadingBack','Cycle viewport shading backward','View','shift+z',''],
  ['play','Start / stop player','Playback','alt+p','alt+p'], ['presentation','Presentation mode','Playback','mod+alt+p','mod+alt+p'],
  ['code','Toggle code panel','Workspace','',''], ['sidebar','Toggle sidebar','Workspace','','n'], ['timeline','Toggle timeline','Workspace','',''],
  ['workspaceMode','Switch Object / Edit mode','Modeling','tab','tab'],
- ['surfacePaintMode','Surface paint','Modeling','1','1'], ['meshEditMode','Enter mesh edit mode','Modeling','2','2'],
- ['meshSculptMode','Sculpt selected geometry','Modeling','3','3'], ['topologyPen','Toggle topology pen','Modeling','6','6'],
+ ['selectVertex','Vertex select','Modeling','1','1'], ['selectEdge','Edge select','Modeling','2','2'], ['selectFace','Face select','Modeling','3','3'],
+ ['surfacePaintMode','Surface paint','Modeling','1',''], ['meshEditMode','Enter mesh edit mode','Modeling','2',''],
+ ['meshSculptMode','Sculpt selected geometry','Modeling','3',''], ['topologyPen','Toggle topology pen','Modeling','6','6'],
  ['weldPoints','Weld modeling vertices','Modeling','m','m'], ['brushSmaller','Decrease brush radius','Modeling','[','['], ['brushLarger','Increase brush radius','Modeling',']',']'],
  ['brushWeaker','Decrease brush strength','Modeling','shift+[','shift+['], ['brushStronger','Increase brush strength','Modeling','shift+]','shift+]'],
  ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
@@ -90,8 +93,10 @@ class Keymap {
  }
  actionAvailable(id){
   const e=this.editor,m=e.modeling;
-  if(!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
+  const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
+  if(!elementSelect&&!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
   if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
+  if(elementSelect)return m.editMode&&m.canEdit()&&!e.viewTools.mode;
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
@@ -114,6 +119,7 @@ class Keymap {
  }
  run(id){const e=this.editor,s=e.signals;
   switch(id){
+   case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
@@ -176,7 +182,15 @@ class Keymap {
    case 'panLeft':case 'panRight':case 'panUp':case 'panDown':e.controls.pan(new THREE.Vector3(id==='panLeft'?-35:id==='panRight'?35:0,id==='panUp'?35:id==='panDown'?-35:0,0));break;
    case 'zoomIn':case 'zoomOut':e.controls.zoom(new THREE.Vector3(0,0,id==='zoomIn'?-1:1));break;
    case 'fly':e.flyControls?.start();break;
-   case 'shading':case 'shadingBack':{const modes=['solid','wireframe','normals','materials','preview'];const n=Math.max(0,modes.indexOf(e.viewportShading));e.setViewportShading(modes[(n+(id==='shading'?1:3))%4]);break;}
+   case 'toggleWireframe':
+    if(e.viewportShading==='wireframe')e.setViewportShading(this.previousShading||'solid');
+    else {this.previousShading=e.viewportShading;e.setViewportShading('wireframe');}
+    break;
+   case 'shading':case 'shadingBack':{
+    const modes=shadingModes.map(([value])=>value);
+    const index=modes.indexOf(e.viewportShading);
+    e.setViewportShading(modes[(index+(id==='shading'?1:-1)+modes.length)%modes.length]);break;
+   }
    case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;
    case 'presentation':e.player?.present();break;
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
@@ -184,7 +198,7 @@ class Keymap {
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
-   case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
+   case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':e.toggleTransformGrid?.();break;
    case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;

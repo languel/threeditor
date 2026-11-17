@@ -1,10 +1,4 @@
-// Adapted from Artist–Model Studio's src/process/sculpt.js for closed, 2D contours.
-function falloff( distance, radius ) {
-
-	const t = Math.max( 0, 1 - distance / radius );
-	return t * t * ( 3 - 2 * t );
-
-}
+import { sculptNeighbors, sculptPoints } from './SculptBrush.js';
 
 export function sculptMask( points, cursor, delta, radius, tool, strength = 1 ) {
 
@@ -18,12 +12,10 @@ export function sculptMask( points, cursor, delta, radius, tool, strength = 1 ) 
 		return [ a, ...Array.from( { length: Math.max( 0, splits - 1 ) }, ( _, k ) => [ a[ 0 ] + dx * ( k + 1 ) / splits, a[ 1 ] + dy * ( k + 1 ) / splits ] ) ];
 
 	} );
-	return refined.map( ( point, i ) => {
-
-		const w = Math.max( 0, Math.min( 1, strength ) ) * falloff( Math.hypot( point[ 0 ] - cursor[ 0 ], point[ 1 ] - cursor[ 1 ] ), radius );
-		const a = refined[ ( i + refined.length - 1 ) % refined.length ], b = refined[ ( i + 1 ) % refined.length ];
-		return point.map( ( value, axis ) => value + w * ( tool === 'smooth' ? .5 * ( ( a[ axis ] + b[ axis ] ) / 2 - value ) : delta[ axis ] ) );
-
-	} );
+	const smooth = tool === 'smooth';
+	const neighbors = smooth ? sculptNeighbors( { points: refined, closed: true } ) : null;
+	const move = smooth ? null : ( point, pixel, weight ) => point.map( ( value, axis ) => value + delta[ axis ] * weight );
+	return sculptPoints( refined, refined, cursor, radius, Math.max( 0, Math.min( 1, strength ) ) * ( smooth ? .5 : 1 ),
+		{ tool, neighbors, move } );
 
 }

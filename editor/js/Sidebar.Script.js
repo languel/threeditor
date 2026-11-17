@@ -1,5 +1,5 @@
 import { addTimelineKey } from './animation/TimelineKeyControl.js';
-import { UIPanel, UIBreak, UIButton, UIRow, UIInput, UICheckbox, UIText } from './libs/ui.js';
+import { UIPanel, UIButton, UIRow, UIInput, UICheckbox, UIText } from './libs/ui.js';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
@@ -16,12 +16,12 @@ function SidebarScript( editor ) {
 
 	const container = new UIPanel();
 	container.setBorderTop( '0' );
-	container.setPaddingTop( '20px' );
+	container.addClass( 'script-components' );
 	container.setDisplay( 'none' );
 
 	//
 
-	const scriptsContainer = new UIRow();
+	const scriptsContainer = new UIPanel();
 	let parameterControls = [];
 	let trackingStatus;
 	container.add( scriptsContainer );
@@ -29,8 +29,10 @@ function SidebarScript( editor ) {
 	const newScript = new UIButton( strings.getKey( 'sidebar/script/new' ) );
 	newScript.onClick( function () {
 
-		const script = { name: '', source: 'function update( event ) {}', enabled: true };
-		editor.execute( new AddScriptCommand( editor, editor.selected, script ) );
+		const object = editor.selected;
+		const script = { name: 'Script', source: 'function update( event ) {\n\n}', enabled: true };
+		editor.execute( new AddScriptCommand( editor, object, script ) );
+		signals.editScript.dispatch( object, script );
 
 	} );
 	container.add( newScript );
@@ -77,14 +79,20 @@ function SidebarScript( editor ) {
 
 				( function ( object, script ) {
 
+					const component = new UIPanel().addClass( 'script-component' );
+					component.dom.setAttribute( 'role', 'group' );
+					component.dom.setAttribute( 'aria-label', script.name || 'Script ' + ( i + 1 ) );
+					const header = new UIRow().addClass( 'script-component-header' );
+					component.add( header );
+					scriptsContainer.add( component );
 					const name = new UIInput( script.name ).setWidth( '130px' ).setFontSize( '12px' );
+					name.dom.setAttribute( 'aria-label', 'Component name' );
 					if ( script.generated ) name.dom.disabled = true;
 					name.onChange( function () {
 
 						editor.execute( new SetScriptValueCommand( editor, editor.selected, script, 'name', this.getValue() ) );
 
 					} );
-					scriptsContainer.add( name );
 
 					if ( ! script.generated ) {
 
@@ -98,10 +106,11 @@ function SidebarScript( editor ) {
 							editor.execute( command );
 
 						} );
-						scriptsContainer.add( enabled );
+						header.add( enabled );
 
 					}
 
+					header.add( name );
 					const edit = new UIButton( strings.getKey( 'sidebar/script/edit' ) );
 					edit.setMarginLeft( '4px' );
 					edit.onClick( function () {
@@ -109,7 +118,7 @@ function SidebarScript( editor ) {
 						signals.editScript.dispatch( object, script );
 
 					} );
-					scriptsContainer.add( edit );
+					header.add( edit );
 
 					const remove = new UIButton( strings.getKey( 'sidebar/script/remove' ) );
 					remove.setMarginLeft( '4px' );
@@ -122,7 +131,7 @@ function SidebarScript( editor ) {
 						}
 
 					} );
-					if ( ! script.generated ) scriptsContainer.add( remove );
+					if ( ! script.generated ) header.add( remove );
 
 					if ( script.type === 'p5' && ! script.generated ) {
 
@@ -137,7 +146,7 @@ function SidebarScript( editor ) {
 							editor.execute( command );
 
 						} );
-						scriptsContainer.add( preview );
+						component.add( preview );
 
 						const pause = new UIButton( script.paused === true ? strings.getKey( 'sidebar/script/resume' ) : strings.getKey( 'sidebar/script/pause' ) );
 						pause.setMarginLeft( '4px' );
@@ -148,11 +157,9 @@ function SidebarScript( editor ) {
 							editor.execute( command );
 
 						} );
-						scriptsContainer.add( pause );
+						component.add( pause );
 
 					}
-
-					scriptsContainer.add( new UIBreak() );
 
 					if ( ! script.generated ) for ( const field of scriptParams( script.source ) ) {
 
@@ -175,11 +182,11 @@ function SidebarScript( editor ) {
 						const caption = new UIText( field.label || field.name ).setClass( 'Label' );
 						caption.dom.title = caption.dom.textContent;
 						parameterControls.push( { script, field, control } );
-						scriptsContainer.add( new UIRow().addClass( 'script-parameter-row' ).add( favorite, caption, control ) );
+						component.add( new UIRow().addClass( 'script-parameter-row' ).add( favorite, caption, control ) );
 						if ( script.assetBehavior === 'projector' && field.name === 'liveTracking' ) {
 
 							trackingStatus = new UIText().setDisplay( 'none' );
-							scriptsContainer.add( new UIRow().add( trackingStatus ) );
+							component.add( new UIRow().add( trackingStatus ) );
 
 						}
 						if ( ! field.initializer ) addTimelineKey( editor, caption, field.label || field.name, () => ( {

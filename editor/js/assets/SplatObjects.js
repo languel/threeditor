@@ -93,6 +93,25 @@ function setParameters( next ) {
 
 export function splatScript( source, fileType = splatFileType( source ) ) {
 
+	const decodeRecords = bytes => `const fileBytes = (${ splatBytesToPLY.toString() })( ${ bytes } );
+  const input = { fileBytes, fileType: 'ply' };`;
+	let loadInput;
+	if ( source === null ) {
+
+		loadInput = `const bytes = Uint8Array.from( atob( this.userData.assetObject.splatData ), ch => ch.charCodeAt( 0 ) );
+  ${ decodeRecords( 'bytes.buffer' ) }`;
+
+	} else {
+
+		const decode = fileType === 'splat' ? decodeRecords( 'await response.arrayBuffer()' ) :
+			`const file = new File( [ await response.blob() ], 'scan.${ fileType }' );
+  const input = { file, fileType: ${ JSON.stringify( fileType ) } };`;
+		loadInput = `const response = await fetch( ${ JSON.stringify( source ) }, { signal: request.signal } );
+  if ( ! response.ok ) throw new Error( 'Request failed (' + response.status + ')' );
+  ${ decode }`;
+
+	}
+
 	return {
 		name: 'Gaussian Splat',
 		assetBehavior: 'splat',
@@ -125,13 +144,7 @@ function init() {
  request = new AbortController();
  import( 'gaussian-splat-lite' ).then( async ( { SplatMesh } ) => {
   if ( ! active ) return;
-  const response = await fetch( ${ JSON.stringify( source ) }, { signal: request.signal } );
-  if ( ! response.ok ) throw new Error( 'Request failed (' + response.status + ')' );
-  ${ fileType === 'splat'
-		? `const fileBytes = (${ splatBytesToPLY.toString() })( await response.arrayBuffer() );
-  const input = { fileBytes, fileType: 'ply' };`
-		: `const file = new File( [ await response.blob() ], 'scan.${ fileType }' );
-  const input = { file, fileType: ${ JSON.stringify( fileType ) } };` }
+  ${ loadInput }
   if ( ! active ) return;
   ${ splatMeshSetup }
   mesh.name = 'SplatMesh';

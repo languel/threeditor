@@ -2929,3 +2929,44 @@ body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 .viewport-selection-tools { display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--theme-surface); padding-top: 5px; }
 .viewport-selection-tools[hidden] { display: none; }
 .viewport-element-modes { display: flex; align-items: center; gap: 3px; }
+
+/* Keep viewport header controls together while the tool shelf floats below. */
+.viewport-header {
+	inset: 0 0 auto;
+	align-items: center;
+	row-gap: 2px;
+	isolation: isolate;
+}
+.viewport-header::before {
+	content: '';
+	grid-area: 1 / 1 / 2 / -1;
+	align-self: stretch;
+	z-index: -1;
+	background: var(--theme-background);
+	border-bottom: 1px solid color-mix(in srgb, var(--theme-text) 15%, var(--theme-background));
+}
+.viewport-header.narrow::before { grid-row-end: 3; }
+.viewport-header > .viewport-tool-panel { background: transparent; }
+.viewport-header .viewport-controls { margin-inline-end: 4px; }
+.viewport-header > .viewport-geometry-tools { margin: 4px; }
+.viewport-header #toolbar { border-radius: 3px; }
+@media (max-width: 600px) {
+	body[data-ui-style="compact"]:not(.menubar-auto-hide) { --menubar-height: 64px; }
+	body[data-ui-style="compact"] .panel-toggles { top: 32px; }
+	body[data-ui-style="compact"] #menubar .menu > .title { padding-inline: 5px; }
+}
+
+#properties .script-components { padding: 8px; }
+#properties .script-component {
+	background: var(--theme-surface);
+	border: 1px solid color-mix(in srgb, var(--theme-text) 16%, var(--theme-surface));
+	border-radius: 4px;
+	margin-bottom: 8px;
+	padding: 4px;
+}
+#properties .script-component-header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+#properties .script-component-header input[type="text"] { flex: 1; min-width: 0; }

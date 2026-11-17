@@ -1,3 +1,4 @@
+import { shadingModes } from './ViewportShading.js';
 import { icon } from './Glyphs.js?v=viewport-tools';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';
@@ -82,7 +83,7 @@ function ViewportControls( editor ) {
 
 	const shadingSelect = new UISelect();
 	shadingSelect.dom.setAttribute( 'aria-label', 'Viewport shading' );
-	shadingSelect.setOptions( { 'realistic': 'realistic', 'preview': 'preview', 'materials': 'materials', 'solid': 'solid', 'normals': 'normals', 'wireframe': 'wireframe' } );
+	shadingSelect.setOptions( Object.fromEntries( shadingModes.map( ( [ value, label ] ) => [ value, label ] ) ) );
 	shadingSelect.setValue( 'solid' );
 	shadingSelect.onChange( function () {
 
@@ -97,7 +98,7 @@ function ViewportControls( editor ) {
 
 		const mode = editor.viewportShading;
 		shadingSelect.setValue( mode );
-		const glyph = { realistic: 'environment', preview: 'preview', materials: 'color', solid: 'shadingSolid', normals: 'shadingNormals', wireframe: 'shadingWire' }[ mode ];
+		const glyph = shadingModes.find( ( [ value ] ) => value === mode )?.[ 2 ];
 		syncShadingGlyph( glyph );
 
 	}
