@@ -199,17 +199,14 @@ export class ModelViewport {
 				}
 
 			}
+			if ( editingField ) return;
 			const deleting = [ 'Delete', 'Backspace' ].includes( event.key ) && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' );
 			if ( event.key !== 'Escape' && ! deleting ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.key === 'Escape' ) {
 
-				if ( this.knife ) { this.knife = false; this.changed(); this.render(); }
-				else if ( this.selectionTool !== 'select' ) this.setSelectionTool( 'select' );
-				else if ( this.pen ) this.togglePen();
-				else if ( this.brush ) this.setBrush( '' );
-				else this.stop();
+				this.selectPoints( false );
 
 			}
 			else this.removeSelection();

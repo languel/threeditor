@@ -17,6 +17,7 @@ const definitions = [
  ['palette','Open command palette','Workspace','f3','f3'], ['paletteAlternate','Open command palette (alternate)','Workspace','mod+k','mod+k'],
  ['undo','Undo','Edit','mod+z','mod+z'], ['redo','Redo','Edit','mod+shift+z','mod+shift+z'],
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
+ ['clearSelection','Clear selection','Selection','escape','escape'],
  ['selectAll','Select all / deselect','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
  ['focus','Frame selection','View','f','numpaddecimal'], ['frameAll','Frame all','View','','home'], ['perspective','Perspective camera','View','p',''], ['orthographic','Orthographic camera','View','o',''], ['projection','Toggle perspective / orthographic','View','','numpad5'],
  ['viewFront','Front view','View','','numpad1'], ['viewBack','Back view','View','','mod+numpad1'], ['viewRight','Right view','View','','numpad3'], ['viewLeft','Left view','View','','mod+numpad3'], ['viewTop','Top view','View','','numpad7'], ['viewBottom','Bottom view','View','','mod+numpad7'], ['viewCamera','Toggle active camera view','View','numpad0','numpad0'],
@@ -30,6 +31,7 @@ const definitions = [
  ['surfacePaintMode','Surface paint','Modeling','1','1'], ['meshEditMode','Enter mesh edit mode','Modeling','2','2'],
  ['meshSculptMode','Sculpt selected geometry','Modeling','3','3'], ['topologyPen','Toggle topology pen','Modeling','6','6'],
  ['weldPoints','Weld modeling vertices','Modeling','m','m'], ['brushSmaller','Decrease brush radius','Modeling','[','['], ['brushLarger','Increase brush radius','Modeling',']',']'],
+ ['brushWeaker','Decrease brush strength','Modeling','shift+[','shift+['], ['brushStronger','Increase brush strength','Modeling','shift+]','shift+]'],
  ['toolbar','Toggle transform toolbar','Workspace','','t'], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
@@ -46,6 +48,8 @@ function comboFromEvent( event ) {
  let key = event.key.toLowerCase();
  if ( event.code === 'Backquote' ) key = 'backquote';
  else if ( event.code?.startsWith( 'Numpad' ) ) key = event.code.toLowerCase();
+ else if ( event.code === 'BracketLeft' ) key = '[';
+ else if ( event.code === 'BracketRight' ) key = ']';
  else if ( event.code === 'Comma' ) key = ',';
  else if ( event.altKey && event.code?.startsWith( 'Key' ) ) key = event.code.slice( 3 ).toLowerCase();
  else if ( key === ' ' ) key = 'space';
@@ -86,10 +90,11 @@ class Keymap {
  }
  actionAvailable(id){
   const e=this.editor,m=e.modeling;
-  if(!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger'].includes(id))return true;
+  if(!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
   if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
+  if(id==='brushWeaker'||id==='brushStronger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
   if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
   return true;
  }
@@ -109,10 +114,12 @@ class Keymap {
  }
  run(id){const e=this.editor,s=e.signals;
   switch(id){
+   case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
    case 'meshSculptMode':if(!e.modeling.canEdit()||e.viewTools.mode)e.modeling.start(e.selected);e.modeling.setBrush('grab');break;
    case 'topologyPen':e.modeling.togglePen();break;case 'weldPoints':e.modeling.weld();break;
+   case 'brushWeaker':case 'brushStronger':e.viewTools.adjustBrushStrength(id==='brushWeaker'?-.05:.05);break;
    case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;
    case 'save':e.saveProject?.();break;
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;

@@ -6,7 +6,7 @@ function falloff( distance, radius ) {
 
 }
 
-export function sculptMask( points, cursor, delta, radius, tool ) {
+export function sculptMask( points, cursor, delta, radius, tool, strength = 1 ) {
 
 	const refined = points.flatMap( ( a, i ) => {
 
@@ -20,7 +20,7 @@ export function sculptMask( points, cursor, delta, radius, tool ) {
 	} );
 	return refined.map( ( point, i ) => {
 
-		const w = falloff( Math.hypot( point[ 0 ] - cursor[ 0 ], point[ 1 ] - cursor[ 1 ] ), radius );
+		const w = Math.max( 0, Math.min( 1, strength ) ) * falloff( Math.hypot( point[ 0 ] - cursor[ 0 ], point[ 1 ] - cursor[ 1 ] ), radius );
 		const a = refined[ ( i + refined.length - 1 ) % refined.length ], b = refined[ ( i + 1 ) % refined.length ];
 		return point.map( ( value, axis ) => value + w * ( tool === 'smooth' ? .5 * ( ( a[ axis ] + b[ axis ] ) / 2 - value ) : delta[ axis ] ) );
 

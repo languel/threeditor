@@ -1,3 +1,4 @@
+import { icon } from '../Glyphs.js?v=poly-context';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { modelButton } from './ModelControls.js';
@@ -6,7 +7,7 @@ import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { isClosedOutline, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { sculptMask } from './MaskSculpt.js';
+import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
 
 export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
 
@@ -53,6 +54,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const radius = node( 'input', radiusLabel );
 	Object.assign( radius, { type: 'range', min: 12, max: 130, value: 46 } );
 	radius.oninput = () => draw();
+	radius.setAttribute( 'aria-label', 'Mask brush radius' );
+	const strengthLabel = node( 'label', toolbar ); strengthLabel.innerHTML = icon( 'opacity' ); strengthLabel.title = 'Brush strength (Shift+[ / Shift+])';
+	const strength = node( 'input', strengthLabel );
+	Object.assign( strength, { type: 'range', min: .05, max: 1, step: .05, value: 1 } );
+	strength.setAttribute( 'aria-label', 'Mask brush strength' );
+	strength.oninput = () => draw();
 	modelButton( toolbar, 'Undo mask edit', 'undo', () => restore( undo, redo ) );
 	modelButton( toolbar, 'Redo mask edit', 'redo', () => restore( redo, undo ) );
 	const workspace = node( 'section', workspacePanel );
@@ -426,7 +433,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		ctx.restore();
 		ctx.strokeStyle = '#68778a';
 		ctx.strokeRect( x, y, width, height );
-		radiusLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
+		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
 		deletePoint.disabled = vertex < 0 || shapes[ active ]?.points.length < 4;
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
 
@@ -506,7 +513,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		else {
 
 			const step = point.map( ( value, i ) => value - gesture.last[ i ] );
-			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), tool ).map( uv );
+			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), tool, Number( strength.value ) ).map( uv );
 
 		}
 		gesture.last = point;
@@ -554,6 +561,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	workspacePanel.onkeydown = event => {
 
+		if ( ! [ 'INPUT', 'SELECT', 'TEXTAREA' ].includes( event.target.tagName ) && [ 'push', 'smooth' ].includes( tool ) && ! event.metaKey && ! event.ctrlKey && ! event.altKey &&
+			( [ 'BracketLeft', 'BracketRight' ].includes( event.code ) || [ '[', ']', '{', '}' ].includes( event.key ) ) ) {
+
+			event.preventDefault(); event.stopPropagation();
+			const smaller = event.code === 'BracketLeft' || [ '[', '{' ].includes( event.key );
+			if ( event.shiftKey ) strength.value = Math.max( .05, Math.min( 1, Number( strength.value ) + ( smaller ? -.05 : .05 ) ) );
+			else radius.value = Math.max( 12, Math.min( 130, Math.round( Number( radius.value ) * ( smaller ? 1 / 1.2 : 1.2 ) ) ) );
+			draw(); return;
+
+		}
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
 		if ( key === 'enter' && draft.length ) { event.preventDefault(); closeDraft(); }

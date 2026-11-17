@@ -1,16 +1,17 @@
+import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=bottom-pivot';
-import { Keymap } from './Keymap.js?v=poly-context';
+import { Keymap } from './Keymap.js?v=brush-shortcuts';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=context-tools';
+import { Viewport } from './Viewport.js?v=brush-shortcuts';
 import { Toolbar } from './Toolbar.js?v=poly-context';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=poly-context';
+import { Sidebar } from './Sidebar.js?v=brush-shortcuts';
 import { Menubar } from './Menubar.js?v=tool-layout';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=poly-context';
@@ -24,6 +25,8 @@ import { Animation } from './Animation.js?v=timeline-autokey';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
 async function startEditor( portable = null ) {
+
+	installNumericScrubbing();
 
 	window.URL = window.URL || window.webkitURL;
 	window.BlobBuilder = window.BlobBuilder || window.WebKitBlobBuilder || window.MozBlobBuilder;

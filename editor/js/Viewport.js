@@ -1,5 +1,5 @@
 import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=element-select';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=brush-shortcuts';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
@@ -29,9 +29,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=poly-context';
+import { ViewportTools } from './modeling/ViewportTools.js?v=brush-shortcuts';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=context-tools';
+import { ModelViewport } from './modeling/ModelViewport.js?v=brush-shortcuts';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

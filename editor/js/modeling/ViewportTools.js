@@ -8,7 +8,7 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js?v=surface-tool
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=mesh-build';
+import { openMaskEditor } from './MaskEditor.js?v=brush-shortcuts';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -162,7 +162,12 @@ export class ViewportTools {
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			if ( event.key === 'Escape' ) this.setMode( '' );
+			if ( event.key === 'Escape' ) {
+
+				this.points = []; this.selected = -1;
+				this.editor.select( null ); this.draw();
+
+			}
 			else if ( event.key === 'Enter' ) this.run( () => this.finish() );
 			else this.removePoint();
 
@@ -481,6 +486,24 @@ export class ViewportTools {
 		}
 		this.draw();
 		model.draw();
+
+	}
+
+	adjustBrushStrength( delta ) {
+
+		const model = this.editor.modeling;
+		if ( this.mode === 'paint' ) {
+
+			this.brush.opacity = Math.round( THREE.MathUtils.clamp( this.brush.opacity + delta, .01, 1 ) * 100 ) / 100;
+			this.buildOptions();
+
+		} else if ( model.brush && model.brush !== 'freehand' ) {
+
+			model.brushStrength = Math.round( THREE.MathUtils.clamp( model.brushStrength + delta, .01, 1 ) * 100 ) / 100;
+			this.refreshWorkspace();
+
+		}
+		this.draw(); model.draw();
 
 	}
 
