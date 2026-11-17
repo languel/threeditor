@@ -82,8 +82,7 @@ function SidebarScene( editor ) {
 			const scripts = editor.scripts[ object.uuid ] || [];
 			const script = scripts.find( item => ! item.generated ) || scripts[ 0 ];
 			if ( ! script ) return;
-			editor.select( object );
-			signals.editScript.dispatch( object, script );
+			editor.codePanel.toggleScript( object, script );
 
 		} );
 
@@ -242,7 +241,7 @@ function SidebarScene( editor ) {
 
 		if ( editor.scripts[ uuid ].length === 0 ) return '';
 
-		return ` <button type="button" class="type Script" aria-label="Open script" title="Open script">${ glyph( 'Script' ) }</button>`;
+		return ` <button type="button" class="type Script" aria-label="Toggle script" title="Toggle script editor" aria-controls="code-panel">${ glyph( 'Script' ) }</button>`;
 
 	}
 

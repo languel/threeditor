@@ -183,7 +183,7 @@ For example, `await threeditor.call('threeditor_object_create', { type: 'box', n
 
 ## Code, scripts, and animation
 
-Open **Code** to see the generated scene. Scene changes regenerate the code. Edit the section between `// @key Scene contents` and `// @/key`, then choose **Apply**, press **Ctrl/Cmd+Enter**, or enable **auto** to apply after a pause. Auto is off by default. The Code panel also opens object scripts and material shader editors.
+Open **Code** to see the generated scene. Scene changes regenerate the code. Edit the section between `// @key Scene contents` and `// @/key`, then choose **Apply**, press **Ctrl/Cmd+Enter**, or enable **auto** to apply after a pause. Auto is off by default. The Code panel also opens object scripts and material shader editors. In the outliner, an object’s `<>` glyph toggles its script editor; clicking another object’s glyph switches to that script. Closing and reopening the same glyph preserves the current draft and cursor.
 
 Use `@param` comments in an object script to expose controls under that script in Properties. Numbers can include a range for sliders and dragging. Click and type to enter a value outside that range. Shift-drag makes finer adjustments, and Shift-double-click restores the declared default. Booleans and double-quoted strings are also supported. Read the values from `params` in Play or a playable export.
 

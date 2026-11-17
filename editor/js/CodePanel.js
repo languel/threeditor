@@ -82,6 +82,7 @@ function CodePanel( editor ) {
 	let ranges = {};
 	let focusMark = null;
 	let saveTimer = 0;
+	let preserveOnReveal = false;
 	const textarea = document.createElement( 'textarea' );
 	textarea.id = 'code-text';
 	textarea.spellcheck = false;
@@ -891,6 +892,24 @@ function CodePanel( editor ) {
 
 	} );
 
+	function toggleScript( object, script ) {
+
+		const sameTarget = editor.selected === object && ( script.generated ? target.kind === 'scene' :
+			target.kind === 'script' && target.object === object && target.script === script );
+		if ( sameTarget ) {
+
+			// Keep the current text and cursor when reopening the same glyph,
+			// including drafts that have not passed validation yet.
+			preserveOnReveal = ! isOpen();
+			dock.toggle( ! isOpen() );
+			return;
+
+		}
+		editor.select( object );
+		signals.editScript.dispatch( object, script );
+
+	}
+
 	signals.editScript.add( ( object, script, materialSlot ) => {
 
 		dock.toggle( true );
@@ -966,6 +985,7 @@ function CodePanel( editor ) {
 
 	const dock = new PanelDock( editor, dom, handle, 'left', false, () => {
 
+		if ( preserveOnReveal ) { preserveOnReveal = false; refreshHead(); return; }
 		regenerate( false );
 		follow( editor.selected, true );
 
@@ -1003,7 +1023,7 @@ function CodePanel( editor ) {
 
 	}
 
-	return { dom, dock, getPublishInputs, toggle: dock.toggle, apply, applySceneSource, regenerate, isOpen, getSceneSource: sceneCode };
+	return { dom, dock, getPublishInputs, toggle: dock.toggle, toggleScript, apply, applySceneSource, regenerate, isOpen, getSceneSource: sceneCode };
 
 }
 

@@ -11,14 +11,14 @@ import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=shape-selection';
 import { Toolbar } from './Toolbar.js?v=poly-context';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=brush-shortcuts';
+import { Sidebar } from './Sidebar.js?v=code-toggle';
 import { Menubar } from './Menubar.js?v=tool-layout';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=poly-context';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
-import { CodePanel } from './CodePanel.js?v=look-controls';
+import { CodePanel } from './CodePanel.js?v=code-toggle';
 import { AnimationResizer } from './AnimationResizer.js';
 import { Animation } from './Animation.js?v=timeline-autokey';
 
