@@ -2842,8 +2842,8 @@ body[data-ui-style="compact"] .viewport-geometry-tools button {
 	place-items: center;
 }
 .viewport-geometry-tools button { border-radius: 4px; }
-.viewport-geometry-tools button[aria-pressed="true"],
-.viewport-tool-panel .model-control-button[aria-pressed="true"] {
+body .viewport-geometry-tools .Button[aria-pressed="true"],
+body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 	background: color-mix(in srgb, var(--theme-accent), transparent 85%);
 	color: var(--theme-text);
 }
