@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { addFace, extrudeFace, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from '../editor/js/modeling/ModelGeometry.js';
-import { applyProjectionMask, maskFromOutline } from '../editor/js/modeling/ProjectionMask.js';
+import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
+import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 
@@ -180,5 +181,31 @@ test( 'Projector UV layout uses the lens and preserves the source mesh', () => {
 	assert.equal( source.getY( 0 ), 1 );
 	mesh.position.z = 1;
 	assert.throws( () => layoutUV( THREE, mesh, projector.uuid, projector ), /in front/ );
+
+} );
+
+
+test( 'Adding a mask shape preserves legacy apertures and their saved coordinates', () => {
+
+	const points = [ [ .1, .1 ], [ .3, .1 ], [ .2, .5 ] ];
+	const legacy = { mode: 'inside', points };
+	const result = appendMaskShape( legacy, { mode: 'cutout', name: 'Hole', points } );
+	assert.deepEqual( result.shapes.map( shape => [ shape.name, shape.mode ] ), [ [ 'Mask 1', 'inside' ], [ 'Hole', 'cutout' ] ] );
+	maskShapes( result )[ 0 ].points[ 0 ][ 0 ] = 1;
+	assert.equal( result.shapes[ 0 ].points[ 0 ][ 0 ], .1 );
+	assert.equal( legacy.points[ 0 ][ 0 ], .1 );
+
+} );
+
+test( 'Mask sculpt subdivides and changes the contour locally near the brush', () => {
+
+	const square = [ [ 0, 0 ], [ 100, 0 ], [ 100, 100 ], [ 0, 100 ] ];
+	const push = sculptMask( square, [ 50, 0 ], [ 0, -8 ], 25, 'push' );
+	assert.ok( push.length > square.length );
+	assert.ok( push.some( ( [ , y ] ) => y < -5 ) );
+	assert.deepEqual( push.filter( ( [ , y ] ) => y === 100 ), square.slice( 2 ) );
+	const smooth = sculptMask( square, [ 0, 0 ], [ 0, 0 ], 25, 'smooth' );
+	assert.ok( smooth[ 0 ].every( coordinate => coordinate > 0 ) );
+	assert.deepEqual( square[ 0 ], [ 0, 0 ] );
 
 } );

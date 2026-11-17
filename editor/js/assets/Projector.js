@@ -1,5 +1,5 @@
 import { drawTargetAperture, warpProjection } from '../modeling/ProjectorMapping.js';
-import { applyProjectionMask } from '../modeling/ProjectionMask.js';
+import { applyProjectionMask } from '../modeling/ProjectionMask.js?v=mask-editor';
 
 // The group is the editable rig. Its script owns the temporary light and media.
 export function isProjector( object ) {
@@ -111,7 +111,7 @@ function projectorRuntime( THREE, root, player ) {
 
 		}
 		applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );
-		root.projectorOutput = { canvas, warpSource: root.userData.projectorWarp && warpScratch, x, y, width: w, height: h, tracking: media?.dataset.tracking,
+		root.projectorOutput = { canvas, source: settings.grid ? null : media, warpSource: root.userData.projectorWarp && warpScratch, x, y, width: w, height: h, tracking: media?.dataset.tracking,
 			trackingHeads: Number( media?.dataset.trackingHeads || 0 ), trackingHands: Number( media?.dataset.trackingHands || 0 ) };
 		texture.needsUpdate = true;
 
@@ -256,6 +256,15 @@ export function upgradeProjectorScript( script ) {
 			script.source = script.source.replace( 'if ( current.grid ) return;\n feed.update', 'if ( ! current.grid ) feed.update' );
 
 		}
+
+	}
+
+	script.source = script.source.replace( 'root.projectorOutput = { canvas, warpSource:', 'root.projectorOutput = { canvas, source: settings.grid ? null : media, warpSource:' );
+	const maskStart = script.source.indexOf( 'function applyProjectionMask(' );
+	const maskEnd = script.source.indexOf( '\n}', maskStart );
+	if ( maskStart >= 0 && maskEnd > maskStart && ! script.source.includes( 'ctx.projectionMaskScratch' ) ) {
+
+		script.source = script.source.slice( 0, maskStart ) + applyProjectionMask.toString() + script.source.slice( maskEnd + 2 );
 
 	}
 

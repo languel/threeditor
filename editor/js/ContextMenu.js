@@ -1,4 +1,4 @@
-import { outlineActions } from './modeling/OutlineActions.js';
+import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
 import { formatCombo } from './Keymap.js';
 
 function ContextMenu( editor, viewport ) {

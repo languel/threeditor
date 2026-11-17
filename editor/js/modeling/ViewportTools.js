@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
-import { canEditLightMask, setLightMask } from './LightMask.js';
+import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
+import { maskShapes } from './ProjectionMask.js?v=mask-editor';
+import { openMaskEditor } from './MaskEditor.js';
 import { rayToView, meshHit } from './SurfacePicking.js';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=top-toolbar';
@@ -253,6 +255,7 @@ export class ViewportTools {
 		if ( mode === 'mask' ) {
 
 			this.maskSource = this.editor.viewportSource;
+			this.maskIndex = undefined;
 			this.readMask();
 
 		} else {
@@ -278,7 +281,15 @@ export class ViewportTools {
 
 	readMask() {
 
-		const mask = this.maskSource?.userData.projectionMask;
+		const shapes = maskShapes( this.maskSource?.userData.projectionMask );
+		this.maskIndex = Math.min( this.maskIndex ?? ( shapes.length ? 0 : -1 ), shapes.length - 1 );
+		if ( this.maskLayers ) {
+
+			this.maskLayers.replaceChildren( ...shapes.map( ( shape, i ) => new Option( shape.name, i ) ), new Option( 'New outline', -1 ) );
+			this.maskLayers.value = this.maskIndex;
+
+		}
+		const mask = shapes[ this.maskIndex ];
 		this.points = structuredClone( mask?.points || [] );
 		this.maskMode = mask?.mode || 'inside';
 		this.selected = - 1;
@@ -298,7 +309,7 @@ export class ViewportTools {
 
 		const parent = this.controls;
 		parent.replaceChildren();
-		this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
+		this.maskLayers = this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
 		if ( ! this.mode ) return;
 		if ( this.mode === 'mask' ) {
 
@@ -314,11 +325,17 @@ export class ViewportTools {
 			} );
 			this.syncMaskMode();
 			this.maskSelect.onchange = () => { this.maskMode = this.maskSelect.value; this.syncMaskMode(); this.draw(); };
-			modelButton( parent, 'New outline', 'add', () => { this.points = []; this.selected = - 1; this.draw(); } );
-			modelButton( parent, 'Clear mask', 'delete', () => this.run( () => {
+			this.maskLayers = select( parent, 'Mask shape', [] );
+			this.maskLayers.onchange = () => { this.maskIndex = Number( this.maskLayers.value ); this.readMask(); this.draw(); };
+			this.readMask();
+			modelButton( parent, 'New outline', 'add', () => { this.maskIndex = -1; this.readMask(); this.draw(); } );
+			modelButton( parent, 'Open 2D mask editor', 'editMode', () => openMaskEditor( this.editor, this.maskSource ) );
+			modelButton( parent, 'Delete mask shape', 'delete', () => this.run( () => {
 
-				setLightMask( this.editor, this.maskSource, null );
-				this.readMask();
+				if ( this.maskIndex < 0 ) return;
+				const shapes = maskShapes( this.maskSource.userData.projectionMask );
+				shapes.splice( this.maskIndex, 1 );
+				setLightMask( this.editor, this.maskSource, shapes.length ? { shapes } : null );
 				this.render();
 
 			} ) );
@@ -387,7 +404,11 @@ export class ViewportTools {
 		const editor = this.editor;
 		if ( this.mode === 'mask' ) {
 
-			setLightMask( editor, this.maskSource, { mode: this.maskMode, points: structuredClone( this.points ) } );
+			const shapes = maskShapes( this.maskSource.userData.projectionMask );
+			const index = this.maskIndex < 0 ? shapes.length : this.maskIndex;
+			shapes[ index ] = { name: shapes[ index ]?.name || 'Mask ' + ( index + 1 ), mode: this.maskMode, points: structuredClone( this.points ) };
+			this.maskIndex = index;
+			setLightMask( editor, this.maskSource, { shapes } );
 			this.render();
 
 		} else if ( this.mode === 'measure' ) {

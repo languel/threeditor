@@ -3,8 +3,8 @@ import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { isProjector, upgradeProjectorScript } from '../assets/Projector.js';
-import { applyProjectionMask } from './ProjectionMask.js';
+import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=mask-editor';
+import { applyProjectionMask, appendMaskShape } from './ProjectionMask.js?v=mask-editor';
 
 export function canMaskLight( object ) {
 
@@ -66,6 +66,12 @@ function stop() {
 
 }
 
+export function addLightMaskShape( editor, object, shape ) {
+
+	setLightMask( editor, object, appendMaskShape( object.userData.projectionMask, shape ) );
+
+}
+
 export function setLightMask( editor, object, mask ) {
 
 	if ( ! canEditLightMask( object ) ) throw new Error( 'Select an enabled, unlocked projector or spotlight.' );
@@ -85,9 +91,19 @@ export function setLightMask( editor, object, mask ) {
 			if ( ! upgraded.source.includes( 'applyProjectionMask( ctx,' ) ) throw new Error( 'This projector behavior does not support editable masks.' );
 			if ( upgraded.source !== script.source ) commands.push( new SetScriptValueCommand( editor, object, script, 'source', upgraded.source ) );
 
-		} else if ( ! scripts.some( script => script.assetBehavior === 'light-mask' ) ) {
+		} else {
 
-			commands.push( new AddScriptCommand( editor, object, spotMaskScript() ) );
+			const script = scripts.find( item => item.assetBehavior === 'light-mask' );
+			if ( ! script ) commands.push( new AddScriptCommand( editor, object, spotMaskScript() ) );
+			else if ( ! script.source.includes( 'ctx.projectionMaskScratch' ) ) {
+
+				const start = script.source.indexOf( 'function applyProjectionMask(' );
+				const end = script.source.indexOf( '\n}', start );
+				if ( start < 0 || end < 0 ) throw new Error( 'This spotlight behavior does not support editable masks.' );
+				const source = script.source.slice( 0, start ) + applyProjectionMask.toString() + script.source.slice( end + 2 );
+				commands.push( new SetScriptValueCommand( editor, object, script, 'source', source ) );
+
+			}
 
 		}
 

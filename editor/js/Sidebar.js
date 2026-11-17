@@ -1,11 +1,11 @@
 import { UITabbedPanel, UISpan } from './libs/ui.js';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=timeline-keying';
-import { SidebarProperties } from './Sidebar.Properties.js?v=projector-mapping';
+import { SidebarProperties } from './Sidebar.Properties.js?v=mask-editor';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js';
 import { SidebarStreams } from './Sidebar.Streams.js';
-import { SidebarAssets } from './Sidebar.Assets.js?v=scene-timeline';
+import { SidebarAssets } from './Sidebar.Assets.js?v=mask-editor';
 
 function Sidebar( editor ) {
 

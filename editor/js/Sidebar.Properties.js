@@ -1,11 +1,12 @@
 import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UITabbedPanel } from './libs/ui.js';
 
-import { SidebarObject } from './Sidebar.Object.js?v=timeline-keying';
+import { SidebarObject } from './Sidebar.Object.js?v=mask-editor';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=projector-mapping';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=mask-editor';
 import { editableMesh } from './modeling/ModelViewport.js?v=outline-brushes';
+import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=dda-cinema';
 
@@ -59,7 +60,7 @@ function SidebarProperties( editor ) {
 		animationsTab.setHidden( ! object.animations.length );
 		if ( container.selected === 'animationsTab' && animationsTab.isHidden() ) container.select( 'objectTab' );
 
-		modelingTab.setHidden( ! object.geometry?.userData.modeling && ! editableMesh( object ) && ! isProjector( object ) );
+		modelingTab.setHidden( ! object.geometry?.userData.modeling && ! editableMesh( object ) && ! canMaskLight( object ) );
 
 		// set active tab
 

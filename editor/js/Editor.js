@@ -1,6 +1,6 @@
 import { hasLightView, lightViewCamera } from './modeling/LightView.js';
 import { StreamRouter } from './streams/StreamRouter.js?v=drivers';
-import { isProjector, upgradeProjectorScript } from './assets/Projector.js?v=projector-mapping';
+import { isProjector, upgradeProjectorScript } from './assets/Projector.js?v=mask-editor';
 import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';

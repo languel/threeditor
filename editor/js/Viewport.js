@@ -27,7 +27,7 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=outline-brushes';
+import { ViewportTools } from './modeling/ViewportTools.js?v=mask-editor';
 import { ViewLayout } from './modeling/ViewLayout.js';
 import { ModelViewport } from './modeling/ModelViewport.js?v=outline-brushes';
 import { PostProcessingHost } from './PostProcessing.js';

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
-import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=projector-mapping';
+import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=mask-editor';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { canEditLightMask, setLightMask } from './LightMask.js';
+import { canEditLightMask, addLightMaskShape } from './LightMask.js?v=mask-editor';
 import { lightViewCamera } from './LightView.js';
 import { isClosedOutline, modelGeometry, modelObject, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
 import { maskFromOutline } from './ProjectionMask.js';
@@ -52,7 +52,7 @@ export function outlineActions( editor, object ) {
 					return [ ( point.x + 1 ) / 2, ( 1 - point.y ) / 2 ];
 
 				} );
-				setLightMask( editor, active, { mode: active.userData.projectionMask?.mode || 'inside', points } );
+				addLightMaskShape( editor, active, { name: object.name, mode: 'inside', points } );
 
 			} );
 
@@ -60,8 +60,7 @@ export function outlineActions( editor, object ) {
 		for ( const light of lights ) add( 'Fit outline to mask · ' + ( light.name || light.type ), () => {
 
 			const mask = maskFromOutline( outlinePoints( THREE, data ).map( point => point.toArray() ) );
-			mask.mode = light.userData.projectionMask?.mode || 'inside';
-			setLightMask( editor, light, mask );
+			addLightMaskShape( editor, light, { ...mask, name: object.name } );
 
 		} );
 

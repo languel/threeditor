@@ -2245,16 +2245,6 @@ input[type="range"]:focus-visible { outline: 1px solid var(--theme-accent); outl
 	width: 62px;
 }
 
-.projection-mask-canvas {
-	display: block;
-	width: 100%;
-	max-width: 400px;
-	height: auto;
-	margin-bottom: 8px;
-	cursor: crosshair;
-	touch-action: none;
-}
-
 .viewport-glyph-select { position: relative; display: inline-flex; vertical-align: middle; }
 .viewport-select-symbol { display: none; }
 body[data-ui-style="compact"] .viewport-select-symbol { display: inline-grid; place-items: center; }
@@ -2711,4 +2701,47 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 .mapping-editor output {
 	display: block;
 	color: #ffc9a5;
+}
+
+.mask-editor {
+	width: min(1040px, calc(100vw - 54px));
+}
+
+.mask-editor h3 {
+	font-size: 14px;
+	margin: 0 0 10px;
+}
+
+.mask-editor section {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
+	align-items: start;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+
+.mask-editor aside {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+.mask-editor aside select,
+.mask-editor aside input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.mask-editor aside details > * {
+	margin-bottom: 5px;
+}
+
+.mask-editor button[aria-pressed="true"] {
+	background: #7099c442;
+}
+
+@media (max-width: 620px) {
+	.mask-editor section {
+		grid-template-columns: 1fr;
+	}
 }

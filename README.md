@@ -88,6 +88,14 @@ Click **Split view** to keep the **Director** camera on the left and the selecte
 
 Select an unlocked projector or spotlight and choose **Object → Edit mask in view**. When looking through the light, use the **Edit light mask** icon in Compact mode or **Edit mask** beside the viewport tool menu in other styles. Draw over the receiver in the light pane, drag the handles, choose **Light inside** or **Block inside**, then apply. In a split view you can check the result from the director at the same time.
 
+### Multi-shape mask editor
+
+Select a projector or spotlight and open **Modeling → Open 2D mask editor**. The editor also opens from the **Edit light mask** viewport toolbar. Draw separate polygons, freehand outlines, rectangles, or ellipses. Double-click the first point or press **Enter** to close a polygon. Drag a vertex to reshape the contour, drag inside a shape to move it, or double-click an edge to insert a point. Use the Push and Smooth brushes to reshape the selected contour. The shape list lets you rename, duplicate, or delete individual shapes.
+
+**Light inside** shapes combine into one aperture. **Block inside** shapes cut holes out of that aperture. A light with only cutouts starts with its full frame. Click **Apply masks** to save the set in one undoable change.
+
+Use **Modeling → Pick scene outline** to search for existing closed Shape and Path objects. **Fit outline to frame** scales a copy into the mask frame. **Project outline in place** uses the current light camera and the outline's scene transform. Both add a shape to the current set.
+
 ### Target silhouettes, warp, and UVs
 
 - Select a projector and choose a receiver mesh under **Modeling → Auto-mask target**. The mask follows the silhouette as you move the projector, adjust the lens, or edit the target. A hand-drawn polygon can further trim the result. The mask also applies to **Masked texture** output.

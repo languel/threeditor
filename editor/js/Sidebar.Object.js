@@ -1,7 +1,7 @@
 import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { openProjectorOutput } from './modeling/ProjectorOutput.js';
 import { hasLightView } from './modeling/LightView.js';
-import { canEditLightMask, canMaskLight } from './modeling/LightMask.js';
+import { canEditLightMask, canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import * as THREE from 'three';
 
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';

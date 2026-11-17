@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { UIPanel, UIRow } from './libs/ui.js';
 
-import { projectorScript } from './assets/Projector.js?v=projector-mapping';
+import { projectorScript } from './assets/Projector.js?v=mask-editor';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
