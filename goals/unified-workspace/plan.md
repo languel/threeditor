@@ -48,4 +48,4 @@ Baseline is the local annotated tag `pre-unified-workspace` at `4a5ab83`. All 76
 
 The remote workspace commit added an interaction-mode selector, the Blender shading pie, three paint outputs, and an authoring walkthrough. The next input pass added the Ctrl+Tab mode pie and made Box, Lasso, Circle, Knife, Invert, Fill, and Extrude searchable through the same command registry that handles their bindings. The walkthrough now exercises the mode pie and keyboard selection through F3 before testing modeling, painting, scripting, and standalone publishing.
 
-Full Blender UI parity remains open. Continue with area-specific input ownership and mode-specific shelves, then verify the projection and legacy scene workflows. The engine phase remains part of the active goal.
+Shortcut and palette routing now follows the active area. Mesh editing keeps its selection when using the Outliner or Timeline, while the Timeline supports deleting its own selection through the same commands as its inspector. Continue with mode-specific shelves, then verify the projection and legacy scene workflows before the engine phase.

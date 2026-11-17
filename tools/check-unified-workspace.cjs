@@ -40,6 +40,7 @@ async function check() {
 		assert.deepEqual( contour.actual, contour.expected );
 		await page.getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
+		await page.locator( '#viewport' ).hover();
 		await page.evaluate( () => {
 
 			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
@@ -66,6 +67,18 @@ async function check() {
 		assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'vertex' );
 		await page.getByRole( 'button', { name: 'Box select (B)', exact: true } ).focus();
 		await page.keyboard.press( 'a' );
+		const elements = await page.evaluate( () => editor.modeling.indices.length );
+		assert.ok( elements > 0 );
+		await page.locator( '#outliner' ).hover();
+		await page.keyboard.press( 'Delete' );
+		await page.keyboard.press( 'Escape' );
+		await page.keyboard.press( '2' );
+		assert.deepEqual( await page.evaluate( () => [ editor.modeling.indices.length, editor.modeling.selectionMode ] ), [ elements, 'vertex' ] );
+		await page.keyboard.press( 'F3' );
+		await palette.getByRole( 'searchbox' ).fill( 'Box select' );
+		assert.equal( await palette.getByRole( 'button', { name: /Box select/ } ).count(), 0 );
+		await page.keyboard.press( 'Escape' );
+		await page.locator( '#viewport' ).hover();
 		await page.keyboard.press( 'g' );
 		await page.waitForFunction( () => editor.modeling.gesture?.modal );
 		await page.keyboard.press( 'x' );
@@ -116,16 +129,31 @@ async function check() {
 		await page.evaluate( source => {
 
 			const cm = document.querySelector( '#code-panel .CodeMirror' )?.CodeMirror;
-			if ( cm ) cm.setValue( source );
+			if ( cm ) {
+
+				cm.setValue( source );
+				cm.setCursor( cm.lastLine(), 1 );
+				cm.focus();
+
+			}
 			else {
 
 				const input = document.querySelector( '#code-text' );
 				input.value = source;
 				input.dispatchEvent( new Event( 'input' ) );
+				input.focus();
+				input.setSelectionRange( source.length, source.length );
 
 			}
 
 		}, source );
+		await page.locator( '#viewport' ).hover();
+		await page.keyboard.press( 'Enter' );
+		await page.keyboard.type( '// g1' );
+		await page.keyboard.press( 'Backspace' );
+		const typed = await page.evaluate( () => document.querySelector( '#code-panel .CodeMirror' )?.CodeMirror.getValue() ?? document.querySelector( '#code-text' ).value );
+		assert.equal( typed, source + '\n// g' );
+		assert.equal( await page.evaluate( () => editor.selected?.name ), 'Receiver' );
 		const tilt = page.locator( '.script-component' ).getByLabel( 'tilt', { exact: true } );
 		await tilt.fill( '0.5' );
 		await tilt.press( 'Enter' );
@@ -142,6 +170,19 @@ async function check() {
 		await frame.fill( '30' );
 		await frame.press( 'Enter' );
 		await keyPosition( 1 );
+		await page.evaluate( () => document.activeElement.blur() );
+		const keyCount = () => page.evaluate( () => editor.scene.userData.timeline.clips[ 0 ].tracks[ 0 ].keys.length );
+		await page.getByRole( 'button', { name: 'Keyframe 30', exact: true } ).click();
+		await page.keyboard.press( 'Escape' );
+		await page.keyboard.press( 'Delete' );
+		assert.equal( await keyCount(), 2 );
+		assert.equal( await page.evaluate( () => editor.selected?.name ), 'Receiver' );
+		await page.locator( '.scene-timeline-clip' ).first().click();
+		await page.getByRole( 'button', { name: 'Keyframe 30', exact: true } ).click();
+		await page.keyboard.press( 'Delete' );
+		assert.equal( await keyCount(), 1 );
+		await page.evaluate( () => editor.undo() );
+		assert.equal( await keyCount(), 2 );
 		await page.evaluate( async () => {
 
 			editor.animationCommands.animationStop();

@@ -50,8 +50,19 @@ const definitions = [
  ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
  ['grid','Toggle grid','Transform','alt+g','alt+g'], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
  ['timelineInsertKey','Insert timeline keyframe','Animation','i','i'],
+ ['timelineDelete','Delete selected timeline keyframe or clip','Animation','delete','x'],
+ ['timelineDeleteBack','Delete selected timeline keyframe or clip (Backspace)','Animation','backspace','delete'],
+ ['timelineDeselect','Clear timeline selection','Animation','escape','escape'],
  ['animationPlay','Play animation','Animation','','space'], ['animationPause','Pause animation','Animation','',''], ['animationStop','Stop animation','Animation','','']
 ];
+
+const areaSelector = '#viewport, #outliner, #sidebar, #animation, #code-panel, #menubar';
+const textControls = 'input, textarea, select, .CodeMirror, [contenteditable]:not([contenteditable="false"])';
+const sceneSelection = new Set( ['clearSelection','selectAll','selectNone','delete','deleteBack','duplicate'] );
+const viewportCategories = new Set( ['Modeling','Transform','Navigation','View','Selection'] );
+const viewportActions = new Set( ['addMenu','contextMenu','toolbar','sidebar'] );
+const timelineSelection = new Set( ['timelineDelete','timelineDeleteBack','timelineDeselect'] );
+const areaOf = target => target?.closest?.( areaSelector )?.id;
 
 function comboFromEvent( event ) {
  if ( ['Shift','Control','Alt','Meta'].includes( event.key ) ) return '';
@@ -82,29 +93,59 @@ class Keymap {
    this.overrides={...this.overrides,basic}; editor.config.setKey('settings/keymapOverrides',this.overrides,'settings/keymapMigrated',true);
   }
   for(const [id,label,category,basic,blender] of definitions) this.register({id,label,category,defaults:{basic,blender},run:()=>this.run(id)});
+  const trackPointer = event => { this.pointer = [event.clientX,event.clientY]; };
+  document.addEventListener('pointermove',trackPointer,true);
+  document.addEventListener('pointerdown',trackPointer,true);
+  document.addEventListener('focusin',event=>{
+   if(areaOf(event.target)&&event.target.matches(':focus-visible')&&!event.target.closest(textControls))this.pointer=null;
+  });
   window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
   document.addEventListener('keydown',e=>this.onKey(e));
  }
  register(action){if(!this.actions.some(a=>a.id===action.id))this.actions.push(action);}
  combo(id){const overrides=this.overrides[this.preset]||{};return Object.hasOwn(overrides,id)?overrides[id]:(this.actions.find(a=>a.id===id)?.defaults[this.preset]||'');}
  setPreset(preset){this.preset=preset;this.editor.config.setKey('settings/keymapPreset',preset);this.changed();}
- rebind(id,combo){const map={...(this.overrides[this.preset]||{})};for(const a of this.actions)if(a.id!==id && combo && this.combo(a.id)===combo)map[a.id]='';map[id]=combo;this.overrides={...this.overrides,[this.preset]:map};this.save();}
+ rebind(id,combo){
+  const map={...(this.overrides[this.preset]||{})};
+  for(const action of this.actions){
+   if(action.id===id||!combo||this.combo(action.id)!==combo)continue;
+   const separateAreas=timelineSelection.has(action.id)&&sceneSelection.has(id)||sceneSelection.has(action.id)&&timelineSelection.has(id);
+   if(!separateAreas)map[action.id]='';
+  }
+  map[id]=combo;
+  this.overrides={...this.overrides,[this.preset]:map};
+  this.save();
+ }
  reset(){this.overrides={...this.overrides,[this.preset]:{}};this.save();}
  save(){this.editor.config.setKey('settings/keymapOverrides',this.overrides);this.changed();}
  changed(){for(const fn of this.listeners)fn();}
+ get area(){
+  const focused=document.activeElement;
+  const pointed=this.pointer&&document.elementFromPoint(...this.pointer);
+  const area=(focused?.closest(textControls)&&areaOf(focused)) || areaOf(pointed) || areaOf(focused) || 'viewport';
+  return area==='viewport'&&this.editor.editWorkspace?.mode?'2d':area;
+ }
+ allowsViewportInput(event){
+  return this.area==='viewport'&&!this.recording&&!event.defaultPrevented&&!event.isComposing&&
+   !event.target?.closest?.(textControls+', dialog[open], .context-menu, [role="separator"]')&&!document.querySelector('dialog[open]');
+ }
  onKey(e){
-  if(this.recording||e.defaultPrevented||e.isComposing||e.repeat)return;
-  const t=e.target;if(t?.isContentEditable||t?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], dialog[open]'))return;
-  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo && this.actionAvailable(a.id));if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
-  if ( t?.closest?.('button') ) {
-   // Viewport tool buttons may retain focus after pointer or palette use.
-   // Keep their native keyboard activation and normal tab traversal.
-   if ( !t.closest('#viewport') || ['Enter',' ','Tab'].includes(e.key) && !e.ctrlKey && !e.metaKey ) return;
-  }
+  if(this.recording||e.defaultPrevented||e.isComposing||e.repeat||document.querySelector('dialog[open]'))return;
+  const t=e.target;if(t?.isContentEditable||t?.closest?.(textControls+', .context-menu, [role="separator"]'))return;
+  if(t?.closest?.('button')&&['Enter',' ','Tab'].includes(e.key)&&!e.ctrlKey&&!e.metaKey)return;
+  const area=this.area;
+  const combo=comboFromEvent(e);const action=this.actions.find(a=>combo && this.combo(a.id)===combo && this.actionAvailable(a.id,area));if(!action||(document.body.classList.contains('presenting') && !['presentation','favoriteScriptParameters'].includes(action.id)))return;
   e.preventDefault();action.run();
  }
- actionAvailable(id){
+ actionAvailable(id,area='viewport'){
   const e=this.editor,m=e.modeling;
+  if(timelineSelection.has(id))return area==='animation'&&e.timeline?.canEditSelection();
+  if(sceneSelection.has(id))return area==='viewport'||area==='outliner'&&!m?.editMode;
+  if(id==='focus'&&area==='outliner')return true;
+  if(id==='timelineInsertKey')return ['viewport','sidebar','animation'].includes(area);
+  if(['animationPlay','animationPause','animationStop'].includes(id))return area==='viewport'||area==='animation';
+  const action=this.actions.find(action=>action.id===id);
+  if(area!=='viewport'&&(viewportCategories.has(action?.category)||viewportActions.has(id)||action?.viewportOnly))return false;
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
   const meshAction = meshActions.includes(id);
@@ -129,13 +170,16 @@ class Keymap {
 
  registerMenu(menu){
   for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu')].entries()){
-   const category=group.querySelector(':scope > .title')?.textContent.trim();if(!category)continue;
+   const title=group.querySelector(':scope > .title');
+   const category=title?.textContent.trim();if(!category)continue;
+   const menuKey=title.dataset.glyphKey;
    let i=0;
    for(const el of group.querySelectorAll('.options .option, .options .inactive')){
     if(el.classList.contains('submenu-title'))continue;
     const label=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent.trim()).join(' ').trim();if(!label)continue;
     const parent=el.parentElement?.closest('.submenu-title');const section=parent?[...parent.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent.trim()).join(' ').trim():category;
-    const id=`menu.${mi}.${i++}`;this.register({id,label,section,category:'Menu · '+category,defaults:{basic:'',blender:''},run:()=>{if(!el.classList.contains('inactive'))el.click();}});
+    const viewportOnly=['menubar/add','menubar/view','menubar/edit'].includes(menuKey)&&el.dataset.shortcutScope!=='global';
+    const id=`menu.${mi}.${i++}`;this.register({id,label,section,category:'Menu · '+category,viewportOnly,defaults:{basic:'',blender:''},run:()=>{if(!el.classList.contains('inactive'))el.click();}});
    }
   }
   this.changed();
@@ -232,6 +276,8 @@ class Keymap {
    case 'grid':e.toggleTransformGrid?.();break;
    case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;
+   case 'timelineDelete':case 'timelineDeleteBack':e.timeline?.deleteSelection();break;
+   case 'timelineDeselect':e.timeline?.clearSelection();break;
    case 'animationPlay':case 'animationPause':case 'animationStop':e.animationCommands?.[id]?.();break;
   }
  }

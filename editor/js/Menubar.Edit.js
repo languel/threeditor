@@ -31,6 +31,7 @@ function MenubarEdit( editor ) {
 	// Undo
 
 	const undo = new UIRow();
+	undo.dom.dataset.shortcutScope = 'global';
 	undo.setClass( 'option' );
 	undo.setTextContent( strings.getKey( 'menubar/edit/undo' ) );
 	undo.add( new UIText( 'CTRL+Z' ).setClass( 'key' ) );
@@ -44,6 +45,7 @@ function MenubarEdit( editor ) {
 	// Redo
 
 	const redo = new UIRow();
+	redo.dom.dataset.shortcutScope = 'global';
 	redo.setClass( 'option' );
 	redo.setTextContent( strings.getKey( 'menubar/edit/redo' ) );
 	redo.add( new UIText( 'CTRL+SHIFT+Z' ).setClass( 'key' ) );

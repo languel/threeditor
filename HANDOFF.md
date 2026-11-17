@@ -34,6 +34,8 @@ The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportT
 
 The topology pen turns on when a mesh profile closes. Subsequent empty-space clicks collect a new face draft in the same object, reusing existing vertices when picked. Clicking the first corner or pressing F closes the face. Escape discards the draft. An uncommitted face stays outside serialized geometry.
 
+`Keymap.js` resolves the active area from the pointer or keyboard focus. The mesh and viewport tool handlers use the same routing as F3. Active transforms retain their confirmation and cancellation keys. `Animation.js` shares timeline delete commands between the inspector buttons and shortcuts. The unified workspace check exercises Outliner hover during mesh editing, area-specific F3 results, and timeline key deletion and undo.
+
 ### Selection feedback
 
 `Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass runs in the Director editing view and its split companion. Preview, Play and exported output omit the selection overlay. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.

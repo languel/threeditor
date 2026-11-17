@@ -177,6 +177,45 @@ function Animation( editor ) {
 
 	}
 
+	function clearSelection() {
+
+		if ( recording ) return;
+		selectClip();
+		refresh();
+
+	}
+
+	function deleteSelection( kind ) {
+
+		const entry = clip();
+		if ( ! entry || recording ) return;
+		const track = entry.tracks.find( track => targetId( track.target ) === channel );
+		const key = track?.keys.find( key => key.time === keyTime );
+		if ( kind !== 'clip' && key ) {
+
+			modify( 'Delete keyframe', doc => {
+
+				const item = doc.clips.find( clip => clip.id === entry.id );
+				const lane = item.tracks.find( track => targetId( track.target ) === channel );
+				lane.keys = lane.keys.filter( item => item.time !== key.time );
+				if ( ! lane.keys.length ) item.tracks.splice( item.tracks.indexOf( lane ), 1 );
+				keyTime = undefined;
+
+			} );
+
+		} else if ( kind !== 'key' ) {
+
+			modify( 'Delete timeline clip', doc => {
+
+				doc.clips = doc.clips.filter( clip => clip.id !== entry.id );
+				selectClip();
+
+			} );
+
+		}
+
+	}
+
 	function snapTime( value ) {
 
 		const fps = data().fps;
@@ -709,12 +748,7 @@ function Animation( editor ) {
 				item.duration = Math.max( 1 / data().fps, snapTime( value ), ...item.tracks.flatMap( track => track.keys.map( key => key.time ) ) );
 
 			} ), 'any', 'toolMeasure' );
-			button( inspector, 'Delete clip', () => modify( 'Delete timeline clip', doc => {
-
-				doc.clips = doc.clips.filter( clip => clip.id !== entry.id );
-				selectClip();
-
-			} ), 'delete' );
+			button( inspector, 'Delete clip', () => deleteSelection( 'clip' ), 'delete' );
 			const selected = entry.tracks.find( track => targetId( track.target ) === channel )?.keys.find( key => key.time === keyTime );
 			if ( selected ) {
 
@@ -755,14 +789,7 @@ function Animation( editor ) {
 				interpolation.replaceChildren( new Option( 'Linear', 'linear' ), new Option( 'Ease in/out', 'ease' ), new Option( 'Hold', 'hold' ) );
 				interpolation.value = selected.interpolation;
 				interpolation.onchange = () => edit( 'Set keyframe interpolation', item => find( item ).interpolation = interpolation.value );
-				button( inspector, 'Delete keyframe', () => edit( 'Delete keyframe', item => {
-
-					const lane = track( item );
-					lane.keys = lane.keys.filter( key => key.time !== keyTime );
-					if ( ! lane.keys.length ) item.tracks.splice( item.tracks.indexOf( lane ), 1 );
-					keyTime = undefined;
-
-				} ), 'delete' );
+				button( inspector, 'Delete keyframe', () => deleteSelection( 'key' ), 'delete' );
 
 			}
 
@@ -825,6 +852,7 @@ function Animation( editor ) {
 	signals.startPlayer.add( stop );
 	editor.timeline = {
 		tick, insertKey, toggleKey, autoKeyCommand, keyState: inspectorKeyState, toggleArmed,
+		canEditSelection: () => ! recording && Boolean( clip() ), clearSelection, deleteSelection,
 		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,

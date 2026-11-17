@@ -124,15 +124,6 @@ export class ModelViewport {
 
 			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
-			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
-
-				event.preventDefault();
-				event.stopImmediatePropagation();
-				if ( event.key === 'Escape' ) { this.penChain = null; this.changed(); this.render(); }
-				else editor.viewTools.run( () => this.finishPenFace() );
-				return;
-
-			}
 			if ( event.key === 'Escape' && ( this.gesture || this.drag ) ) {
 
 				event.preventDefault();
@@ -144,15 +135,24 @@ export class ModelViewport {
 				return;
 
 			}
-			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
-			if ( ! editingField && this.pen && ( this.penChain || this.drag ) && ! event.ctrlKey && ! event.metaKey && [ 'x', 'y', 'z' ].includes( event.key.toLowerCase() ) ) {
+			if ( ! editor.keymap.allowsViewportInput( event ) ) return;
+			if ( this.penChain && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
+
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				if ( event.key === 'Escape' ) { this.penChain = null; this.changed(); this.render(); }
+				else editor.viewTools.run( () => this.finishPenFace() );
+				return;
+
+			}
+			if ( this.pen && ( this.penChain || this.drag ) && ! event.ctrlKey && ! event.metaKey && [ 'x', 'y', 'z' ].includes( event.key.toLowerCase() ) ) {
 
 				event.preventDefault(); event.stopImmediatePropagation();
 				const state = this.drag || this.penChain, axis = event.key.toUpperCase();
 				state.axis = state.axis === axis ? '' : axis; state.planeLock = event.shiftKey; return;
 
 			}
-			if ( ! editingField && ! event.repeat && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) &&
+			if ( ! event.repeat && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) &&
 				event.key === 'Enter' && this.adding && this.canCloseProfile() ) {
 
 				event.preventDefault();
@@ -161,8 +161,7 @@ export class ModelViewport {
 				return;
 
 			}
-			if ( editingField ) return;
-			const deleting = [ 'Delete', 'Backspace' ].includes( event.key ) && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' );
+			const deleting = [ 'Delete', 'Backspace' ].includes( event.key );
 			if ( event.key !== 'Escape' && ! deleting ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();

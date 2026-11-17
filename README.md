@@ -173,7 +173,9 @@ In **Settings → Shortcuts**, choose **Blender** (the default) or **Basic (Maya
 
 In the Blender preset, **Shift+A** opens a searchable Add menu at the last viewport pointer position. Right-click the viewport for object actions and Add. Both use the same commands as the main menus, so added objects use their usual positions and can be undone. Search, use arrow keys or click an item; Escape closes the menu.
 
-Press **F3** or **Cmd/Ctrl+K** to open the command palette. Search editor actions and menu commands, then press Enter or use the arrow keys. Both palette bindings can be reassigned in Shortcuts.
+Hover an area to use its shortcuts. The viewport owns modeling and navigation keys. The Outliner can frame the selected object, and object selection shortcuts work there in Object Mode. In the Timeline, **X** or **Delete** deletes the selected keyframe or clip, **Escape** clears the timeline selection, and **Space** toggles animation playback. Text fields retain keyboard input while you type.
+
+Press **F3** or **Cmd/Ctrl+K** to open the command palette for the current area. Search editor actions and menu commands, then press Enter or use the arrow keys. Both palette bindings can be reassigned in Shortcuts.
 
 With the Blender preset, **G**, **R**, and **S** start a mouse-driven grab, rotate, or scale; **X/Y/Z** constrains an axis, **Shift+X/Y/Z** constrains the perpendicular plane, and typing a number sets an exact amount. Click or Enter accepts; right-click or Escape cancels. While modeling, these shortcuts transform the selected points and each confirmed transform is one undo step. Numpad 1/3/7 set front/right/top views (Ctrl or Cmd for their opposites), Numpad 5 toggles projection, Numpad 0 toggles a scene camera, and Numpad decimal frames the selection.
 

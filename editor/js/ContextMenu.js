@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
-import { formatCombo } from './Keymap.js?v=viewport-commands';
+import { formatCombo } from './Keymap.js?v=area-shortcuts';
 
 function ContextMenu( editor, viewport ) {
 
@@ -164,8 +164,9 @@ function ContextMenu( editor, viewport ) {
 	function openPalette() {
 
 		const rect = viewport.getBoundingClientRect();
-		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) ).map( action => ( { ...action, section: action.section || action.category } ) );
-		if ( ! editor.editWorkspace.mode ) {
+		const area = editor.keymap.area;
+		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id, area ) ).map( action => ( { ...action, section: action.section || action.category } ) );
+		if ( area === 'viewport' ) {
 
 			const areaPointer = pointer;
 			const section = 'Viewport areas';
