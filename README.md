@@ -18,6 +18,12 @@ In the 3D viewport, open the command palette with **F3**. **Vertical Split** pla
 
 Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
 
+## Workspaces
+
+The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens Code, and **Projection** opens a split light view when a projector or spotlight is selected. Small windows use workspace glyphs with tooltips.
+
+Use the viewport mode picker for **Object**, **Edit**, **Sculpt**, and **Paint**. Workspace tabs arrange tools and editors for a task.
+
 ## Examples, lessons, and saved projects
 
 Open **File → Examples** for a searchable folder tree:

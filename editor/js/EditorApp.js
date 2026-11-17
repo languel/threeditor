@@ -2,25 +2,25 @@ import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=area-splits';
-import { Keymap } from './Keymap.js?v=mixed-editor-areas';
+import { Keymap } from './Keymap.js?v=workspace-tabs';
 import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=mixed-editor-areas';
+import { Viewport } from './Viewport.js?v=workspace-tabs';
 import { Toolbar } from './Toolbar.js?v=workspace-modes';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=mixed-editor-areas';
-import { Menubar } from './Menubar.js?v=mode-shelves';
+import { Menubar } from './Menubar.js?v=workspace-tabs';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=mixed-editor-areas';
+import { ContextMenu } from './ContextMenu.js?v=workspace-tabs';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
 import { CodePanel } from './CodePanel.js?v=area-shortcuts';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=area-shortcuts';
+import { Animation } from './Animation.js?v=workspace-tabs';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

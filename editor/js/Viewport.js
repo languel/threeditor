@@ -1,5 +1,5 @@
 import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=mixed-editor-areas';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=workspace-tabs';
 import { transformSnapStep } from './TransformSettings.js?v=workspace-modes';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';

@@ -35,6 +35,7 @@ function element( tag, parent, text ) {
 function Animation( editor ) {
 
 	const { signals } = editor;
+	const compactHeight = 90;
 	const container = new UIPanel().setId( 'animation' ).setDisplay( 'flex' );
 	const panel = container.dom;
 	panel.classList.add( 'scene-timeline' );
@@ -106,7 +107,7 @@ function Animation( editor ) {
 
 	}
 	signals.animationPanelResized.add( stageHeight );
-	stageHeight( 188 );
+	stageHeight( compactHeight );
 
 	const play = button( bar, 'Play timeline', togglePlayback, 'play' );
 	button( bar, 'Stop timeline', stop, 'stop' );
@@ -853,6 +854,7 @@ function Animation( editor ) {
 	editor.timeline = {
 		tick, insertKey, toggleKey, autoKeyCommand, keyState: inspectorKeyState, toggleArmed,
 		canEditSelection: () => ! recording && Boolean( clip() ), clearSelection, deleteSelection,
+		compact: () => stageHeight( compactHeight ),
 		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,

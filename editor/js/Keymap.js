@@ -153,6 +153,7 @@ class Keymap {
   if(id==='timelineInsertKey')return ['viewport','sidebar','animation'].includes(area);
   if(['animationPlay','animationPause','animationStop'].includes(id))return area==='viewport'||area==='animation';
   const action=this.actions.find(action=>action.id===id);
+  if(action?.available&&!action.available())return false;
   if(area!=='viewport'&&(viewportCategories.has(action?.category)||viewportActions.has(id)||action?.viewportOnly))return false;
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
@@ -177,7 +178,7 @@ class Keymap {
  }
 
  registerMenu(menu){
-  for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu')].entries()){
+  for(const [mi,group] of [...menu.querySelectorAll('.app-menus > .menu')].entries()){
    const title=group.querySelector(':scope > .title');
    const category=title?.textContent.trim();if(!category)continue;
    const menuKey=title.dataset.glyphKey;

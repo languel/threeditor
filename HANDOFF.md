@@ -36,6 +36,10 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 `Keymap.js` resolves the active area from the pointer or keyboard focus. The mesh and viewport tool handlers use the same routing as F3. Active transforms retain their confirmation and cancellation keys. `Animation.js` shares timeline delete commands between the inspector buttons and shortcuts. The unified workspace check exercises Outliner hover during mesh editing, area-specific F3 results, and timeline key deletion and undo.
 
+### Workspace tabs
+
+`WorkspaceTabs.js` opens the existing modes, docks, and editors from the application header or command palette. Layout starts with a short timeline, Animation expands it, and Projection can put the selected projector or spotlight alongside the Director. The header wraps onto separate rows and uses compact glyphs on phones. It shares one height with viewport positioning and top-menu auto-hide.
+
 ### Outliner and Properties
 
 `Sidebar.Scene.js` supplies the Outliner and the Scene properties content. `Sidebar.js` docks them in independent regions. Search filters names and types while keeping matching ancestors and preserving collapsed branches. The Properties tabs follow selection and support arrow-key navigation. The Timeline spans the workspace to the left of the sidebar on desktop.
@@ -65,13 +69,13 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 ### DDA Gallery projection mapping
 
-The deployed feature revision is `bac7827`. Open **File → Examples → Captured spaces → DDA Gallery · Lofts and cinema fragments**. The scene opens on **Director** with the cutaway proxy visible. Reveal the bundled **Scan · DDA Gallery Empty Dark** from the outliner. Three tapered, tilted lofts receive archival films, and three projectors feed head and hand crops onto the tilted ovoid on the floor. The crop feeds start with authored timing. Enable **Script → Live tracking** on an Orb projector to load MediaPipe models and WASM on demand.
+The deployed feature revision is `bac7827`. Open **File → Examples → Captured spaces → DDA Gallery · Lofts and cinema fragments**. The scene opens on **Director** with the cutaway proxy visible. Reveal the bundled **Scan · DDA Gallery Empty Dark** from the outliner. Three tapered, tilted lofts receive archival films, and three projectors feed head and hand crops onto the tilted ovoid on the floor. The crop feeds start with authored timing. Enable **Components → Live tracking** on an Orb projector to load MediaPipe models and WASM on demand.
 
 - `modeling/ProjectorMapping.js` supplies the functions embedded in serialized projector scripts. The silhouette raster is cached against the lens, transforms, and receiver geometry. `projectorTarget` stores the receiver UUID and `projectorWarp` stores the sampling grid in the rig's `userData`. `assets/Projector.js` upgrades older generated scripts, and `Publish.js` includes the mapping module in playable packages.
 - `modeling/UVEditor.js` exposes the target picker and warp dialog for projectors, plus the UV dialog for static meshes. `UVLayout.js` generates planar, box, or projector UVs. UV edits change the mesh material mapping. The 4 × 4 warp changes the outgoing projector image. Both edits are undoable.
 - Rebuild this scene with `node tools/build-gallery-examples.mjs ~/dev/mediatheque --cinema-only`. The generator tests sightlines against opaque gallery meshes and fails if a sampled ray is blocked before reaching its receiver. The saved arrangement checked 9,699 receiver rays across six projectors with zero blocked samples.
 
-For a smoke test, select **Plate projector · Fold · Serpentine**, turn on **Script → Calibration grid**, and enable **Split view**. Move the rig back and check that the mask follows **Fold · Serpentine**. Drag a warp handle, apply, and undo. On the loft, open **Modeling → Edit UVs**, choose the plate projector, apply **Auto layout**, and undo. Set the rig as the main camera, choose **Masked texture**, and start Play to verify the outgoing frame. The 55-test suite passed at `bac7827`. The deployed editor passed checks for these mapping controls, masked Play output, scan loading, and live tracking. See the [gallery notes](editor/examples/gallery/README.md) for scene setup and credits.
+For a smoke test, select **Plate projector · Fold · Serpentine**, turn on **Components → Calibration grid**, and enable **Split view**. Move the rig back and check that the mask follows **Fold · Serpentine**. Drag a warp handle, apply, and undo. On the loft, open **Modeling → Edit UVs**, choose the plate projector, apply **Auto layout**, and undo. Set the rig as the main camera, choose **Masked texture**, and start Play to verify the outgoing frame. The 55-test suite passed at `bac7827`. The deployed editor passed checks for these mapping controls, masked Play output, scan loading, and live tracking. See the [gallery notes](editor/examples/gallery/README.md) for scene setup and credits.
 
 ## Implementation map
 

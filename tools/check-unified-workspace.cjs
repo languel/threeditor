@@ -18,6 +18,13 @@ async function check() {
 		page.on( 'pageerror', error => errors.push( error.message ) );
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( async () => window.editor?.renderer && await editor.startupReady.then( () => true ) );
+		const workspaces = page.getByRole( 'navigation', { name: 'Workspaces' } );
+		const layoutWorkspace = workspaces.getByRole( 'button', { name: 'Layout', exact: true } );
+		assert.equal( await layoutWorkspace.getAttribute( 'aria-pressed' ), 'true' );
+		await workspaces.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+		await page.getByText( 'Select an editable mesh to view its UVs.', { exact: true } ).waitFor();
+		await layoutWorkspace.click();
+		assert.equal( await page.locator( '#editor-2d' ).isVisible(), false );
 		await page.getByLabel( '2D Editors', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Image and vector mode' } ).click();
 		const twoD = page.locator( '#editor-2d' );
@@ -46,7 +53,7 @@ async function check() {
 
 		} );
 		assert.deepEqual( contour.actual, contour.expected );
-		await page.getByLabel( 'Image & Vector', { exact: true } ).click();
+		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		await page.locator( '#viewport' ).hover();
 		await page.evaluate( () => {
@@ -232,6 +239,10 @@ async function check() {
 		const tilt = page.locator( '.script-component' ).getByLabel( 'tilt', { exact: true } );
 		await tilt.fill( '0.5' );
 		await tilt.press( 'Enter' );
+		const animationWorkspace = workspaces.getByRole( 'button', { name: 'Animation', exact: true } );
+		await animationWorkspace.click();
+		assert.equal( await animationWorkspace.getAttribute( 'aria-pressed' ), 'true' );
+		assert.ok( ( await page.locator( '#animation' ).boundingBox() ).height > 180 );
 		const keyPosition = x => page.evaluate( x => {
 
 			const mesh = editor.scene.getObjectByName( 'Receiver' );

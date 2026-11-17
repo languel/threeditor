@@ -70,6 +70,14 @@ export function createEditWorkspace( editor, viewport ) {
 	function open( mode ) {
 
 		const button = buttons[ mode ];
+		if ( mode === 'uv' && button.disabled && current?.mode !== 'uv' ) {
+
+			const hint = document.createElement( 'p' );
+			hint.textContent = 'Select an editable mesh to view its UVs.';
+			editor.editWorkspace.mount( 'uv', null, hint, () => {} );
+			return true;
+
+		}
 		if ( ! button || button.disabled ) return false;
 		button.click();
 		return true;
@@ -169,7 +177,7 @@ export function createEditWorkspace( editor, viewport ) {
 	}
 	editor.signals.objectSelected.add( object => {
 
-		if ( split && current?.mode === 'uv' && current.object !== object && mesh() === object && ! current.isDirty?.() ) {
+		if ( current?.mode === 'uv' && ( split || ! current.object ) && object && current.object !== object && mesh() === object && ! current.isDirty?.() ) {
 
 			openUVEditor( editor, object, { focus: false } );
 
