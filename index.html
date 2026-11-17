@@ -11,7 +11,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=workspace-tabs">
+		<link rel="stylesheet" href="css/main.css?v=asset-dock">
 
 		<script type="importmap">
 			{
@@ -68,7 +68,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=workspace-tabs';
+			import { startEditor } from './js/EditorApp.js?v=asset-dock';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

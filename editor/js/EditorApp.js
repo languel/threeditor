@@ -11,7 +11,7 @@ import { applyUIConsistency } from './UIConsistency.js';
 import { Viewport } from './Viewport.js?v=workspace-tabs';
 import { Toolbar } from './Toolbar.js?v=workspace-modes';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=mixed-editor-areas';
+import { Sidebar } from './Sidebar.js?v=asset-dock';
 import { Menubar } from './Menubar.js?v=workspace-tabs';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=workspace-tabs';

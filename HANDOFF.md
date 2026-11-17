@@ -42,7 +42,7 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 ### Outliner and Properties
 
-`Sidebar.Scene.js` supplies the Outliner and the Scene properties content. `Sidebar.js` docks them in independent regions. Search filters names and types while keeping matching ancestors and preserving collapsed branches. The Properties tabs follow selection and support arrow-key navigation. The Timeline spans the workspace to the left of the sidebar on desktop.
+`Sidebar.Scene.js` supplies the Outliner and the Scene properties content. `Sidebar.js` docks them in independent regions. Search filters names and types while keeping matching ancestors and preserving collapsed branches. The Properties tabs follow selection and support arrow-key navigation. The Timeline spans the workspace to the left of the sidebar on desktop. In Assets, the Add assets disclosure keeps the preview visible in shorter panes.
 
 ### Selection feedback
 

@@ -5,7 +5,7 @@ import { SidebarProperties } from './Sidebar.Properties.js?v=mixed-editor-areas'
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=selection-outline';
 import { SidebarStreams } from './Sidebar.Streams.js';
-import { SidebarAssets } from './Sidebar.Assets.js?v=mask-editor';
+import { SidebarAssets } from './Sidebar.Assets.js?v=asset-dock';
 
 function Sidebar( editor ) {
 
