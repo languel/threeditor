@@ -2,10 +2,10 @@ import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';
-import { openMaskEditor } from './modeling/MaskEditor.js?v=docked-2d';
+import { openMaskEditor } from './modeling/MaskEditor.js?v=mesh-build';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline } from './modeling/ModelGeometry.js?v=top-toolbar';
-import { editableMesh } from './modeling/ModelViewport.js?v=outline-brushes';
+import { editableMesh } from './modeling/ModelViewport.js?v=mesh-build';
 import { modelButton, modelField } from './modeling/ModelControls.js';
 
 function element( tag, text, parent ) {
@@ -81,7 +81,7 @@ export function SidebarModeling( editor ) {
 
 			const coords = element( 'div', null, body );
 			coords.className = 'modeling-coordinates';
-			for ( const [ i, axis ] of ( data.kind === 'shape' || data.planar ? [ 'X', 'Y' ] : [ 'X', 'Y', 'Z' ] ).entries() ) {
+			for ( const [ i, axis ] of ( tools.planar ? [ 'X', 'Y' ] : [ 'X', 'Y', 'Z' ] ).entries() ) {
 
 				field( axis, '', coords, 'number', Number( data.points[ indices[ 0 ] ][ i ].toFixed( 4 ) ), value => run( () => {
 
@@ -116,9 +116,6 @@ export function SidebarModeling( editor ) {
 
 			}
 		}
-		if ( data.kind === 'mesh' ) field( 'Extrusion distance', 'extrude', body, 'number', tools.extrudeDistance, value => {
-			if ( Number.isFinite( value ) ) tools.extrudeDistance = value;
-		} );
 
 	}
 

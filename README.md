@@ -90,7 +90,7 @@ Select an unlocked projector or spotlight and choose **Object → Edit mask in v
 
 ### Multi-shape mask editor
 
-Select a projector or spotlight and choose **Mask mode** in the viewport toolbar or **Modeling → Open 2D mask editor**. The mask workspace takes the place of the 3D viewport while the Outliner and properties remain available. Choose **3D View** to return. The **Edit light mask** viewport tool still supports drawing directly through the light camera. Draw separate polygons, freehand outlines, rectangles, or ellipses. Double-click the first point or press **Enter** to close a polygon. Drag a vertex to reshape the contour, drag inside a shape to move it, or double-click an edge to insert a point. Use the Push and Smooth brushes to reshape the selected contour. The shape list lets you rename, duplicate, or delete individual shapes.
+Select a projector or spotlight and choose **2D Editors → Mask mode** at the top right of the viewport or **Modeling → Open 2D mask editor**. The mask workspace takes the place of the 3D viewport while the Outliner and properties remain available. Open the same menu and choose **3D View** to return. The **Edit light mask** viewport tool still supports drawing directly through the light camera. Draw separate polygons, freehand outlines, rectangles, or ellipses. Double-click the first point or press **Enter** to close a polygon. Drag a vertex to reshape the contour, drag inside a shape to move it, or double-click an edge to insert a point. Use the Push and Smooth brushes to reshape the selected contour. The shape list lets you rename, duplicate, or delete individual shapes.
 
 **Light inside** shapes combine into one aperture. **Block inside** shapes cut holes out of that aperture. A light with only cutouts starts with its full frame. Click **Apply masks** to save the set in one undoable change.
 
@@ -98,7 +98,7 @@ Use **Modeling → Pick scene outline** to search for existing closed Shape and 
 
 ### Image and vector editing
 
-Choose **Image and vector mode** in the viewport toolbar to draw colored shapes and cutouts with the same tools as the mask editor. **Open reference image** loads a local image for tracing or compositing, and the scene outline picker imports closed shapes. **Apply drawing** saves the vector drawing with the project. The reference image stays open for the editing session.
+Choose **2D Editors → Image and vector mode** to draw colored shapes and cutouts with the same tools as the mask editor. **Open reference image** loads a local image for tracing or compositing, and the scene outline picker imports closed shapes. **Apply drawing** saves the vector drawing with the project. The reference image stays open for the editing session.
 
 **Export SVG** saves the vector shapes. **Export PNG** renders a 1024 × 1024 image with the reference included when visible. Toggle **Show reference image** to export the drawing on a transparent background.
 
@@ -106,7 +106,7 @@ Choose **Image and vector mode** in the viewport toolbar to draw colored shapes 
 
 - Select a projector and choose a receiver mesh under **Modeling → Auto-mask target**. The mask follows the silhouette as you move the projector, adjust the lens, or edit the target. A hand-drawn polygon can further trim the result. The mask also applies to **Masked texture** output.
 - Choose **Modeling → Edit projection warp** to adjust the 4 × 4 sampling grid. Drag a handle to choose which source pixel lands at that position in the projector frame, then click **Apply**. Use the calibration grid and look through the projector to check correction on the receiver. **Clear warp** restores the original mapping.
-- To map an image onto a mesh material, select the mesh and choose **UV mode** in the viewport toolbar or **Modeling → Edit UVs**. Choose a planar or box layout, or choose a projector to initialize the UVs from its lens. Select **Auto layout**, drag points to refine the mapping, and click **Apply**. Shift-click adds points to the selection. If the material has an image map, it appears behind the UV wireframe.
+- To map an image onto a mesh material, select the mesh and choose **2D Editors → UV mode** or **Modeling → Edit UVs**. Choose a planar or box layout, or choose a projector to initialize the UVs from its lens. Select **Auto layout**, drag points to refine the mapping, and click **Apply**. Shift-click adds points to the selection. If the material has an image map, it appears behind the UV wireframe.
 
 Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projector already has a target assigned. To check the physical feed, make a projector the main camera and select **Masked texture** before starting Play. [Gallery walkthrough and sources](editor/examples/gallery/README.md)
 
@@ -122,7 +122,13 @@ Use **Enter** to apply a mask or save a ruler or path, and **Esc** to exit a vie
 
 ## Paths, shapes, and meshes
 
-Enter Edit mode and use **Draw path**, **Draw shape**, or **Build mesh** to start with an empty object and place its points in the viewport. Double-click the first point after placing at least three points to close a path or fill a shape. **Add → Mesh** also offers editable objects with starter points. Select an existing editable object and enter Edit mode to access its point and topology tools directly in the viewport. Drag handles in the viewport, Shift-click to select several, or enter exact coordinates in **Modeling**. Use the viewport toolbar to move, rotate, or scale the selection. The pivot can follow the median, selection bounds, last selected point, or world origin. The orientation can follow the world, the object, its parent, the view, or the selected geometry’s normal. In split view, edit points in the Director pane. Press **Tab** or choose **Object mode** to return to object editing. **Esc** cancels the current drag or closes the active tool first. Point and topology edits support undo and redo.
+Press **Tab** or click **Edit mode**. The left tool strip holds **Build mesh**, **Draw path**, **Draw shape**, and the point and face tools. The top toolbar holds transforms, snapping, placement, view, and the **2D Editors** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
+
+1. Choose **Build mesh** for a polygon or **Draw path** for a smooth curve. Click to place the points, then double-click the first point or press **F** to close it. A closed mesh profile becomes a selected face.
+2. Press **E** or choose **Extrude face** or **Extrude outline**. Move the pointer to pull the geometry. **N** toggles free movement and the face normal, **X/Y/Z** constrains it to a world axis, and typing a distance sets an exact amount. Click or press **Enter** to confirm, or **Esc** to cancel the whole operation.
+3. Click a mesh face to select it. Shift-click the two ends of a boundary edge and press **E** to pull a connected strip. The new cap or edge remains selected for another pull. Extruding a curve creates a separate mesh and keeps the source curve.
+
+**Add → Mesh** also offers editable objects with starter points. Shift-click point handles to extend the selection, or enter coordinates in **Modeling**. In split view use the Director pane. Press **Tab** to return to Object mode. Extrusion and placement commit together as one undo step.
 
 Right-click with an outline selected to close it, convert a planar path to a shape, or convert a shape back to a path. Conversion creates a separate object. **Fit outline to mask** normalizes the outline for the chosen projector or spotlight. Look through a light and choose **Project outline as mask** to use the outline’s actual position in the light frame.
 

@@ -12,14 +12,14 @@ export function isClosedOutline( data ) {
 
 }
 
-export function outlinePoints( THREE, data ) {
+export function outlinePoints( THREE, data, limit = 512 ) {
 
 	const points = data.points.map( point => new THREE.Vector3( ...point ) );
 	const closed = isClosedOutline( data );
 	if ( data.smooth && points.length > 2 ) {
 
 		const curve = new THREE.CatmullRomCurve3( points, closed );
-		const samples = curve.getPoints( Math.min( 512, points.length * 12 ) );
+		const samples = curve.getPoints( Math.min( limit, points.length * 12 ) );
 		if ( closed ) samples.pop();
 		return samples;
 
@@ -108,36 +108,75 @@ export function removePoints( data, indices ) {
 
 }
 
+export function faceNormal( THREE, data, indices ) {
+
+	return faceProjection( THREE, indices.map( index => data.points[ index ] ) )?.normal;
+
+}
+
+// Adapted from ThreeGrease core/polyedit.ts. Keep the underside of a standalone
+// sheet, and extend the walls of an existing solid from its selected face.
 export function extrudeFace( THREE, data, faceIndex, distance ) {
 
 	const face = data.faces[ faceIndex ];
-	const vertices = face.map( index => data.points[ index ] );
-	const normal = faceProjection( THREE, vertices )?.normal;
-	if ( ! normal || ! Number.isFinite( distance ) || distance === 0 ) throw new Error( 'Use a face with area and a nonzero distance.' );
-	const first = data.points.length;
-	const cap = face.map( ( index, i ) => {
-
-		data.points.push( vertices[ i ].map( ( value, axis ) => value + distance * normal.getComponent( axis ) ) );
-		return first + i;
-
-	} );
-	// Move the cap and connect its perimeter to the original boundary.
-	data.faces[ faceIndex ] = cap;
+	const normal = face && faceNormal( THREE, data, face );
+	const offset = typeof distance === 'number' ? normal?.clone().multiplyScalar( distance ) : distance;
+	if ( ! normal || ! offset || ! offset.toArray().every( Number.isFinite ) || offset.lengthSq() < 1e-16 ) throw new Error( 'Use a face with area and a nonzero distance.' );
+	const isolated = face.every( ( vertex, i ) => ! data.faces.some( ( other, index ) =>
+		index !== faceIndex && other.includes( vertex ) && other.includes( face[ ( i + 1 ) % face.length ] ) ) );
+	const cap = face.map( index => data.points.push( new THREE.Vector3( ...data.points[ index ] ).add( offset ).toArray() ) - 1 );
+	const reverse = isolated && normal.dot( offset ) < 0;
+	data.faces[ faceIndex ] = reverse ? cap.slice().reverse() : cap;
+	if ( isolated ) data.faces.push( reverse ? face : face.slice().reverse() );
 	for ( let i = 0; i < face.length; i ++ ) {
 
 		const j = ( i + 1 ) % face.length;
-		data.faces.push( [ face[ i ], face[ j ], cap[ j ], cap[ i ] ] );
+		const side = [ face[ i ], face[ j ], cap[ j ], cap[ i ] ];
+		data.faces.push( reverse ? side.reverse() : side );
 
 	}
 	return cap;
 
 }
 
+export function boundaryEdge( data, a, b ) {
+
+	const directions = [];
+	for ( const face of data.faces ) for ( let i = 0; i < face.length; i ++ ) {
+
+		const from = face[ i ], to = face[ ( i + 1 ) % face.length ];
+		if ( ( from === a && to === b ) || ( from === b && to === a ) ) directions.push( [ to, from ] );
+
+	}
+	return directions.length === 1 ? directions[ 0 ] : null;
+
+}
+
+export function extrudeEdge( THREE, data, edge, offset ) {
+
+	const [ a, b ] = edge;
+	const cap = edge.map( index => data.points.push( new THREE.Vector3( ...data.points[ index ] ).add( offset ).toArray() ) - 1 );
+	data.faces.push( [ a, b, cap[ 1 ], cap[ 0 ] ] );
+	return cap;
+
+}
+
+export function meshFromOutline( THREE, data ) {
+
+	if ( ! isClosedOutline( data ) && data.kind !== 'profile' ) throw new Error( 'Close the outline before extruding.' );
+	const points = outlinePoints( THREE, { ...data, closed: true }, 96 ).map( point => point.toArray() );
+	const mesh = { kind: 'mesh', points, faces: [] };
+	addFace( THREE, mesh, points.map( ( _, i ) => i ) );
+	if ( data.depth > 0 ) extrudeFace( THREE, mesh, 0, data.depth );
+	return mesh;
+
+}
+
 function polygonGeometry( THREE, data ) {
 
 	const geometry = new THREE.BufferGeometry();
-	const positions = [], normals = [], uv = [];
-	for ( const face of data.faces ) {
+	const positions = [], normals = [], uv = [], triangleFaces = [];
+	for ( const [ faceIndex, face ] of data.faces.entries() ) {
 
 		const vertices = face.map( index => data.points[ index ] );
 		const projection = faceProjection( THREE, vertices );
@@ -145,16 +184,22 @@ function polygonGeometry( THREE, data ) {
 		const { normal, outline } = projection;
 		const box = new THREE.Box2().setFromPoints( outline );
 		const size = box.getSize( new THREE.Vector2() );
-		for ( const triangle of THREE.ShapeUtils.triangulateShape( outline, [] ) ) for ( const index of triangle ) {
+		for ( const triangle of THREE.ShapeUtils.triangulateShape( outline, [] ) ) {
 
-			positions.push( ...vertices[ index ] );
-			normals.push( ...normal );
-			const point = outline[ index ];
-			uv.push( ( point.x - box.min.x ) / ( size.x || 1 ), ( point.y - box.min.y ) / ( size.y || 1 ) );
+			triangleFaces.push( faceIndex );
+			for ( const index of triangle ) {
+
+				positions.push( ...vertices[ index ] );
+				normals.push( ...normal );
+				const point = outline[ index ];
+				uv.push( ( point.x - box.min.x ) / ( size.x || 1 ), ( point.y - box.min.y ) / ( size.y || 1 ) );
+
+			}
 
 		}
 
 	}
+	geometry.userData.triangleFaces = triangleFaces;
 	geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
 	geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
 	geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );

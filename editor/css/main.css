@@ -2689,23 +2689,6 @@ body.translucent-panels #viewport .viewport-edit-workspace {
 	inset: var(--menubar-height) var(--right-dock) calc(var(--timeline-h) + var(--sidebar-bottom)) var(--left-dock);
 }
 
-.viewport-edit-modes {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 4px;
-	pointer-events: auto;
-	background: var(--theme-background);
-	border-radius: 6px;
-}
-
-.viewport-edit-workspace > .viewport-edit-modes {
-	flex-shrink: 0;
-	border-bottom: 1px solid #80808048;
-	padding: 8px 12px;
-	border-radius: 0;
-}
-
 .viewport-edit-modes button[aria-pressed="true"],
 .viewport-edit-workspace button[aria-pressed="true"] {
 	background: #7099c442;
@@ -2752,7 +2735,7 @@ body.translucent-panels #viewport .viewport-edit-workspace {
 
 .mask-editor section {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
+	grid-template-columns: max-content minmax(0, 1fr) minmax(130px, 185px);
 	align-items: start;
 	gap: 10px;
 	margin-bottom: 8px;
@@ -2774,8 +2757,95 @@ body.translucent-panels #viewport .viewport-edit-workspace {
 	margin-bottom: 5px;
 }
 
-@container (max-width: 530px) {
-	.mask-editor section {
-		grid-template-columns: 1fr;
-	}
+
+/* Keep editor selection in the same corner across 3D and 2D modes. */
+#viewport.editing-2d > .viewport-editor-picker { visibility: visible; }
+.viewport-editor-picker {
+	position: absolute;
+	inset-block-start: 10px;
+	inset-inline-end: 10px;
+	z-index: 7;
+	color: var(--theme-text);
+}
+body.translucent-panels #viewport .viewport-editor-picker {
+	inset-block-start: calc(var(--menubar-height) + 10px);
+	inset-inline-end: calc(var(--right-dock) + 10px);
+}
+.viewport-editor-picker > summary {
+	cursor: pointer;
+	list-style-position: inside;
+	padding: 6px 8px;
+	border-radius: 5px;
+	background: var(--theme-background);
+	font-size: 12px;
+	white-space: nowrap;
+}
+.viewport-editor-picker .viewport-edit-modes {
+	position: absolute;
+	inset-block-start: calc(100% + 4px);
+	inset-inline-end: 0;
+	width: max-content;
+	max-width: min(215px, 75vw);
+	display: grid;
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--theme-surface);
+	border-radius: 6px;
+	background: var(--theme-background);
+}
+.viewport-editor-picker .viewport-edit-modes button.model-control-button {
+	display: flex;
+	align-items: center;
+	text-align: start;
+	gap: 5px;
+	padding: 4px 6px;
+}
+.viewport-editor-picker .model-control-label { display: inline !important; }
+.viewport-toolbar-row { padding-inline-end: 104px; }
+.viewport-edit-content { padding-block-start: 46px; }
+
+.viewport-geometry-tools {
+	display: grid;
+	width: max-content;
+	max-width: min(210px, 55vw);
+	max-height: min(60vh, 360px);
+	overflow: auto;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 6px;
+	background: var(--theme-background);
+	pointer-events: auto;
+}
+.viewport-geometry-tools[hidden] { display: none; }
+.viewport-geometry-tools :is(.viewport-creation, .viewport-model-options) {
+	display: grid;
+	gap: 3px;
+}
+.viewport-geometry-tools .viewport-model-options:empty { display: none; }
+.viewport-geometry-tools .viewport-model-options:not(:empty) { border-top: 1px solid var(--theme-surface); padding-top: 4px; }
+.viewport-geometry-tools button { justify-content: start; text-align: start; }
+body[data-ui-style="compact"] .viewport-geometry-tools { grid-template-columns: max-content max-content; }
+body[data-ui-style="compact"] .viewport-geometry-tools .viewport-model-options:not(:empty) { border-top: 0; border-inline-start: 1px solid var(--theme-surface); padding: 0 0 0 4px; }
+body[data-ui-style="compact"] .viewport-geometry-tools .model-control-field input[type="number"] { width: 52px; }
+
+.editor-2d-tools {
+	display: grid;
+	gap: 3px;
+	align-content: start;
+}
+.editor-2d-tools .model-control-button {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+}
+.editor-2d-tools .model-control-label { display: none; }
+.editor-2d-tools .model-control-icon { display: inline-grid; }
+.editor-2d-tools label { width: 50px; font-size: 10px; }
+.editor-2d-tools input[type="range"] { width: 100%; margin: 3px 0; }
+
+@container (max-width: 540px) {
+	.mask-editor section { grid-template-columns: max-content minmax(0, 1fr); }
+	.mask-editor aside { grid-column: 2; }
 }

@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js?v=top-toolbar';
+import { icon } from './Glyphs.js?v=mesh-build';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 
@@ -24,7 +24,7 @@ export function addTransformSettings( editor, toolbar ) {
 			label: 'Placement', glyph: 'placePlane',
 			choices: () => [
 				[ 'object', 'Object plane', 'placePlane' ], [ 'view', 'View plane', 'preview' ],
-				[ 'ground', 'Ground plane', 'toolGrid' ], [ 'surface', 'Mesh surface', 'snapFace' ]
+				[ 'ground', 'Ground plane', 'groundPlane' ], [ 'surface', 'Mesh surface', 'snapFace' ]
 			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'modelPlacement', value ),
 				( config.getKey( 'settings/modelPlacement' ) || 'object' ) === value ] )
 		},

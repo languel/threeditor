@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { addFace, extrudeFace, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from '../editor/js/modeling/ModelGeometry.js';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
@@ -16,7 +16,7 @@ test( 'Authored polygon topology persists through split, extrusion, serializatio
 	assert.throws( () => addFace( THREE, data, [ 0, midpoint, 1 ] ), /area/ );
 	assert.throws( () => splitEdge( data, 0, 2 ), /existing edge/ );
 	const cap = extrudeFace( THREE, data, 0, .5 );
-	assert.equal( data.faces.length, 6 );
+	assert.equal( data.faces.length, 7 );
 	assert.equal( data.points[ cap[ 0 ] ][ 2 ], .5 );
 	const object = modelObject( THREE, data, 'Mesh' );
 	const restored = new THREE.ObjectLoader().parse( object.toJSON() );
@@ -207,5 +207,36 @@ test( 'Mask sculpt subdivides and changes the contour locally near the brush', (
 	const smooth = sculptMask( square, [ 0, 0 ], [ 0, 0 ], 25, 'smooth' );
 	assert.ok( smooth[ 0 ].every( coordinate => coordinate > 0 ) );
 	assert.deepEqual( square[ 0 ], [ 0, 0 ] );
+
+} );
+
+
+test( 'A curved profile extrudes into a capped mesh and the cap can extend again', () => {
+
+	const profile = { kind: 'path', points: [ [ -1, -1, 0 ], [ 1, -1, 0 ], [ 1, 1, 0 ], [ -1, 1, 0 ] ], smooth: true, closed: true };
+	// Detach the sampled profile from its source without changing its controls.
+	const data = meshFromOutline( THREE, profile );
+	const size = data.points.length;
+	assert.ok( size > profile.points.length );
+	const seed = data.faces[ 0 ].slice();
+	const cap = extrudeFace( THREE, data, 0, new THREE.Vector3( .2, 0, -.5 ) );
+	assert.deepEqual( data.faces[ 1 ], seed );
+	assert.equal( data.faces.length, size + 2 );
+	assert.equal( data.points[ cap[ 0 ] ][ 2 ], -.5 );
+	extrudeFace( THREE, data, 0, .3 );
+	assert.equal( data.faces.length, 2 * size + 2 );
+	assert.equal( profile.points.length, 4 );
+
+} );
+
+test( 'A boundary edge extrudes as a connected strip with a selectable new edge', () => {
+
+	const data = modelData( 'mesh' );
+	const edge = boundaryEdge( data, 0, 1 );
+	assert.deepEqual( edge, [ 1, 0 ] );
+	const cap = extrudeEdge( THREE, data, edge, new THREE.Vector3( 0, -1, 0 ) );
+	assert.equal( data.faces.length, 2 );
+	assert.equal( boundaryEdge( data, ...edge ), null );
+	assert.ok( boundaryEdge( data, ...cap ) );
 
 } );

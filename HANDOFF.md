@@ -21,6 +21,13 @@ threeditor started as the `editor-experiment/` folder in `languel/threejslessons
 
 Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open **File → Examples → Projection mapping**. Move a ridge vertex in **Yosemite relief** and undo it, apply an inverted mask in **Canyon aperture**, then enter Play in **Gallop triptych** and confirm that the video advances across the three panels. The [example notes](editor/examples/projection/README.md) describe the scenes and their sources.
 
+### Profile building and extrusion
+
+- `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.
+- `ModelGeometry.js` adapts ThreeGrease’s sheet underside and boundary strip behavior. It keeps the ordered face loops for editing, triangulates render geometry, and maps hit triangles back to their authored faces. Extruding a curve makes a separate editable mesh from its sampled outline.
+- In a narrow viewport, use the **2D Editors** menu at the top right to enter Mask, Image and Vector, UV, or Warp. The menu stays anchored as the workspace changes. Drawing actions live in vertical tool strips, while view and transform settings stay horizontal. The Ground plane placement uses a down-arrow over a plane glyph.
+- Smoke-test by closing a polygon from **Build mesh**, previewing and canceling a pull, entering an exact signed extrusion distance, and undoing. Close and extrude a smooth path. Check the workspace menu at desktop and narrow widths.
+
 ### Docked 2D editing
 
 - `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp in the viewport and retains the 3D layout on exit. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.

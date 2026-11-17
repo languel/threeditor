@@ -28,9 +28,9 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=docked-2d';
+import { ViewportTools } from './modeling/ViewportTools.js?v=mesh-build';
 import { ViewLayout } from './modeling/ViewLayout.js';
-import { ModelViewport } from './modeling/ModelViewport.js?v=outline-brushes';
+import { ModelViewport } from './modeling/ModelViewport.js?v=mesh-build';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -78,7 +78,7 @@ function Viewport( editor ) {
 	signals.timelineFrameChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
-	editor.editWorkspace = createEditWorkspace( editor, container.dom, toolbarRow );
+	editor.editWorkspace = createEditWorkspace( editor, container.dom );
 	const splatHost = new SplatHost();
 	let secondarySplats = null;
 	const postHost = new PostProcessingHost();

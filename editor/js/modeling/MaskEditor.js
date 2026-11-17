@@ -56,6 +56,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	modelButton( toolbar, 'Undo mask edit', 'undo', () => restore( undo, redo ) );
 	modelButton( toolbar, 'Redo mask edit', 'redo', () => restore( redo, undo ) );
 	const workspace = node( 'section', workspacePanel );
+	toolbar.className = 'editor-2d-tools';
+	workspace.append( toolbar );
 	const canvas = node( 'canvas', workspace );
 	canvas.setAttribute( 'aria-label', 'Projection frame' );
 	canvas.tabIndex = 0;

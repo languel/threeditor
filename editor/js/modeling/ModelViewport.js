@@ -8,7 +8,7 @@ import { meshHit } from './SurfacePicking.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { addFace, extrudeFace, isClosedOutline, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from './ModelGeometry.js?v=top-toolbar';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, removePoints, splitEdge } from './ModelGeometry.js?v=mesh-build';
 
 
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
@@ -29,7 +29,6 @@ export class ModelViewport {
 		this.render = render;
 		this.indices = [];
 		this.editMode = false;
-		this.extrudeDistance = 0.3;
 		this.brushRadius = 50;
 		this.brushStrength = 0.5;
 		this.proxy = new THREE.Object3D();
@@ -76,7 +75,8 @@ export class ModelViewport {
 		}, true );
 		window.addEventListener( 'pointerdown', event => {
 
-			if ( ! this.gesture?.modal || ! [ 0, 2 ].includes( event.button ) ) return;
+			if ( ! this.gesture?.modal || ! [ 0, 2 ].includes( event.button ) || ! viewport.contains( event.target ) ) return;
+			if ( this.gesture.extrusion && ( event.target !== editor.renderer?.domElement || editor.viewLayout.at( event.clientX, event.clientY ) !== editor.viewLayout.navigation ) ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.button === 2 ) editor.suppressContextMenuUntil = performance.now() + 500;
@@ -86,7 +86,9 @@ export class ModelViewport {
 		signals.geometryChanged.add( object => {
 
 			if ( this.object !== object ) return;
+			const wasProfile = this.data?.profile;
 			this.data = this.read( object );
+			if ( this.data.profile && ! wasProfile ) this.adding = true;
 			this.indices = this.indices.filter( index => index < this.data.points.length );
 			this.changed();
 
@@ -101,7 +103,7 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.object || editor.viewTools?.mode || document.querySelector( 'dialog[open]' ) ) return;
+			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( event.key === 'Escape' && ( this.gesture || this.drag ) ) {
 
@@ -112,6 +114,29 @@ export class ModelViewport {
 				this.changed();
 				this.render();
 				return;
+
+			}
+			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
+			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
+
+				const key = event.key.toLowerCase();
+				const close = ( this.adding && key === 'enter' || key === 'f' ) && this.canCloseProfile();
+				const fill = key === 'f' && this.data.kind === 'mesh' && this.indices.length >= 3 && this.selectedFace() < 0;
+				const extrude = key === 'e' && this.extrusionSelection();
+				if ( close || fill || extrude ) {
+
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					editor.viewTools.run( () => {
+
+						if ( close ) this.closeProfile();
+						else if ( fill ) this.fillFace();
+						else this.startExtrusion();
+
+					} );
+					return;
+
+				}
 
 			}
 			const deleting = [ 'Delete', 'Backspace' ].includes( event.key ) && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' );
@@ -170,7 +195,9 @@ export class ModelViewport {
 
 	start( object ) {
 
+		this.editor.editWorkspace?.close();
 		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
+		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.setViewportSplit( true );
 		this.editMode = true;
 		this.setTarget( object );
 
@@ -195,7 +222,7 @@ export class ModelViewport {
 		this.object = editable ? object : null;
 		this.data = editable ? this.read( object ) : null;
 		this.indices = [];
-		this.adding = false;
+		this.adding = Boolean( this.data?.profile );
 		this.brush = '';
 		this.overlay.hidden = ! this.object;
 		this.changed();
@@ -225,7 +252,7 @@ export class ModelViewport {
 
 			data.points = [];
 			if ( kind === 'shape' ) data.closed = false;
-			if ( data.faces ) data.faces = [];
+			if ( data.faces ) { data.faces = []; data.profile = true; }
 
 		}
 		const object = modelObject( THREE, data, labels[ kind ] );
@@ -274,16 +301,19 @@ export class ModelViewport {
 		} ), ! data.points.length );
 		if ( data.kind === 'mesh' ) {
 
-			const face = data.faces.findIndex( face => face.length === indices.length && face.every( index => indices.includes( index ) ) );
+			const face = this.selectedFace();
 			const adjacent = indices.length === 2 && data.faces.some( face => face.some( ( point, index ) =>
 				indices.includes( point ) && indices.includes( face[ ( index + 1 ) % face.length ] ) ) );
-			add( 'Fill face', 'snapFace', () => this.edit( 'Fill mesh face', next => addFace( THREE, next, indices ) ), indices.length < 3 || face >= 0 );
+			add( 'Fill face', 'snapFace', () => this.fillFace(), ( ! data.profile || data.points.length < 3 ) && ( indices.length < 3 || face >= 0 ) );
 			add( 'Split edge', 'snapMidpoint', () => this.edit( 'Split mesh edge', next => [ splitEdge( next, ...indices ) ] ), ! adjacent );
 			add( 'Delete face', 'deleteFace', () => this.edit( 'Delete mesh face', next => { next.faces.splice( face, 1 ); } ), face < 0 );
-			add( 'Extrude face', 'extrude', () => this.edit( 'Extrude mesh face', next => extrudeFace( THREE, next, face, this.extrudeDistance ) ), face < 0 );
+			const extrusion = this.extrusionSelection();
+			add( extrusion?.edge ? 'Extrude edge' : 'Extrude face', 'extrude', () => this.startExtrusion(), ! extrusion );
 
 		} else {
 
+			add( 'Close outline', 'toolMask', () => this.closeProfile(), ! this.canCloseProfile() );
+			add( 'Extrude outline', 'extrude', () => this.startExtrusion(), ! this.extrusionSelection() );
 			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
 
 				const i = indices[ 0 ];
@@ -394,7 +424,7 @@ export class ModelViewport {
 
 	get planar() {
 
-		return this.data?.kind === 'shape' || Boolean( this.data?.planar );
+		return this.data?.kind === 'shape' || Boolean( this.data?.planar || this.data?.profile );
 
 	}
 
@@ -499,7 +529,28 @@ export class ModelViewport {
 		this.gesture = null;
 		this.notice?.remove();
 		if ( state.modal ) this.editor.controls.enabled = true;
-		if ( accept && state.geometry && this.canEdit() && this.pointsChanged( state ) ) {
+		if ( accept && state.geometry && this.canEdit() && state.extrusion ) {
+
+			if ( this.data.kind === 'path' ) {
+
+				const object = modelObject( THREE, state.draft, this.object.name + ' mesh' );
+				object.position.copy( this.object.position );
+				object.quaternion.copy( this.object.quaternion );
+				object.scale.copy( this.object.scale );
+				state.geometry.dispose();
+				this.editor.execute( new AddObjectCommand( this.editor, object, this.object.parent ), 'Extrude curve' );
+				this.indices = state.cap;
+				this.changed();
+				this.render();
+
+			} else {
+
+				this.adding = false;
+				this.commit( 'Extrude mesh', state.draft, state.cap, state.geometry );
+
+			}
+
+		} else if ( accept && state.geometry && this.canEdit() && this.pointsChanged( state ) ) {
 
 			const verb = { translate: 'Move', rotate: 'Rotate', scale: 'Scale' }[ state.mode ];
 			this.commit( verb + ' modeling points', state.draft, this.indices, state.geometry );
@@ -539,6 +590,13 @@ export class ModelViewport {
 	labelModal() {
 
 		const { mode, axis, numeric } = this.gesture;
+		if ( this.gesture.extrusion ) {
+
+			this.notice.textContent = [ 'Extrude', axis || ( this.gesture.free ? 'Free move' : 'Face normal' ), numeric,
+				'X/Y/Z axis · N free/normal · type distance · Enter confirm · Esc cancel' ].filter( Boolean ).join( ' · ' );
+			return;
+
+		}
 		const name = { translate: 'Move points', rotate: 'Rotate points', scale: 'Scale points' }[ mode ];
 		this.notice.textContent = [ name, axis, numeric, 'X/Y/Z axis · type a value · Enter accept · Esc cancel' ].filter( Boolean ).join( ' · ' );
 
@@ -551,9 +609,10 @@ export class ModelViewport {
 		event.stopImmediatePropagation();
 		const state = this.gesture, key = event.key.toLowerCase();
 		if ( key === 'enter' || key === 'escape' ) { this.finishTransform( key === 'enter' ); return; }
-		if ( 'xyz'.includes( key ) && key.length === 1 ) {
+		if ( key === 'n' && state.extrusion ) { state.axis = ''; state.free = ! state.free; }
+		else if ( 'xyz'.includes( key ) && key.length === 1 ) {
 
-			const axis = event.shiftKey && state.mode !== 'rotate' ? 'XYZ'.replace( key.toUpperCase(), '' ) : key.toUpperCase();
+			const axis = ! state.extrusion && event.shiftKey && state.mode !== 'rotate' ? 'XYZ'.replace( key.toUpperCase(), '' ) : key.toUpperCase();
 			state.axis = state.axis === axis ? '' : axis;
 
 		} else if ( key === 'backspace' ) state.numeric = state.numeric.slice( 0, -1 );
@@ -566,6 +625,7 @@ export class ModelViewport {
 	updateModal( pointer ) {
 
 		const state = this.gesture;
+		if ( state.extrusion ) { this.updateExtrusion( pointer ); return; }
 		const start = state.pointer;
 		const dx = pointer.clientX - start.clientX;
 		const dy = start.clientY - pointer.clientY;
@@ -655,7 +715,7 @@ export class ModelViewport {
 
 	draw() {
 
-		if ( ! this.canEdit() || ! this.editor.renderer || this.editor.viewTools?.mode ) return;
+		if ( ! this.canEdit() || ! this.editor.renderer || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
 		const { width, height, x, y } = this.rect();
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		if ( ! width || ! height ) return;
@@ -700,6 +760,20 @@ export class ModelViewport {
 		};
 		if ( data.faces ) {
 
+			if ( data.profile ) {
+
+				stroke( handles, false );
+				if ( this.adding && handles.at( -1 ) && this.lastPointer?.target === this.editor.renderer.domElement ) {
+
+					const pointer = this.lastPointer;
+					const { top, left } = this.rect();
+					ctx.setLineDash( [ 4, 4 ] );
+					stroke( [ handles.at( -1 ), [ pointer.clientX - left, pointer.clientY - top ] ], false );
+					ctx.setLineDash( [] );
+
+				}
+
+			}
 			data.faces.forEach( face => stroke( face.map( index => handles[ index ] ), true ) );
 
 		} else if ( data.kind !== 'vertices' ) {
@@ -714,7 +788,7 @@ export class ModelViewport {
 			stroke( this.indices.map( index => handles[ index ] ), false );
 
 		}
-		const selected = new Set( this.indices );
+		const selected = new Set( state?.cap || this.indices );
 		for ( let i = 0; i < handles.length; i ++ ) {
 
 			const point = handles[ i ];
@@ -842,7 +916,7 @@ export class ModelViewport {
 		const origin = object.getWorldPosition( new THREE.Vector3() );
 		const normal = new THREE.Vector3( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( object.matrixWorld ) );
 		const fixed = this.planar && this.data.points.length > 0;
-		const placement = fixed ? 'object' : this.placement;
+		const placement = fixed ? 'object' : ! this.data.points.length && this.planar && this.placement === 'object' ? 'view' : this.placement;
 		let world;
 		const plane = new THREE.Plane();
 		if ( placement === 'surface' ) {
@@ -908,23 +982,171 @@ export class ModelViewport {
 
 	}
 
+	canCloseProfile() {
+
+		return this.data.points.length >= 3 && ( this.data.profile || [ 'path', 'shape' ].includes( this.data.kind ) && ! isClosedOutline( this.data ) );
+
+	}
+
+	closeProfile() {
+
+		if ( ! this.canCloseProfile() ) return;
+		if ( this.data.profile ) { this.fillFace(); return; }
+		this.adding = false;
+		this.edit( 'Close outline', data => { data.closed = true; return []; } );
+
+	}
+
+	selectedFace() {
+
+		return this.data.faces?.findIndex( face => face.length === this.indices.length && face.every( index => this.indices.includes( index ) ) ) ?? -1;
+
+	}
+
+	fillFace() {
+
+		const data = structuredClone( this.data );
+		const indices = data.profile ? data.points.map( ( _, i ) => i ) : this.indices;
+		addFace( THREE, data, indices );
+		delete data.profile;
+		this.adding = false;
+		this.commit( 'Fill mesh face', data, indices );
+
+	}
+
+	pickFace( event ) {
+
+		if ( ! this.data.faces?.length ) return;
+		const rect = this.rect();
+		this.ray.setFromCamera( new THREE.Vector2( ( event.clientX - rect.left ) * 2 / rect.width - 1,
+			1 - ( event.clientY - rect.top ) * 2 / rect.height ), this.frame.camera );
+		const hit = this.ray.intersectObject( this.object, false )[ 0 ];
+		if ( ! hit ) return;
+		let mapping = this.object.geometry.userData.triangleFaces;
+		if ( ! mapping ) {
+
+			const geometry = modelGeometry( THREE, this.data );
+			mapping = geometry.userData.triangleFaces;
+			geometry.dispose();
+
+		}
+		return this.data.faces[ mapping[ hit.faceIndex ] ];
+
+	}
+
+	extrusionSelection() {
+
+		if ( ! this.data || this.data.kind === 'vertices' ) return;
+		if ( this.data.kind !== 'mesh' ) {
+
+			if ( isClosedOutline( this.data ) && this.data.points.length >= 3 ) return { outline: true };
+
+		} else if ( this.data.profile && this.data.points.length >= 3 ) return { outline: true };
+		else {
+
+			const index = this.selectedFace();
+			if ( index >= 0 ) return { index };
+			if ( this.indices.length === 2 ) {
+
+				const edge = boundaryEdge( this.data, ...this.indices );
+				if ( edge ) return { edge };
+
+			}
+
+		}
+
+	}
+
+	startExtrusion() {
+
+		const selection = this.extrusionSelection();
+		const frame = this.editor.viewLayout.navigation;
+		if ( ! selection || ! this.canEdit() || ! frame || this.gesture || this.drag ) return;
+		const data = selection.outline ? meshFromOutline( THREE, { ...this.data, kind: this.data.profile ? 'profile' : this.data.kind } ) : this.data;
+		const index = selection.index ?? 0;
+		const indices = selection.edge || data.faces[ index ];
+		const normal = selection.edge ? null : faceNormal( THREE, data, indices );
+		if ( ! normal && ! selection.edge ) throw new Error( 'Select a face with area.' );
+		const center = new THREE.Vector3();
+		for ( const i of indices ) center.add( new THREE.Vector3( ...data.points[ i ] ) );
+		center.divideScalar( indices.length );
+		const origin = this.object.localToWorld( center.clone() );
+		const view = frame.camera.getWorldDirection( new THREE.Vector3() );
+		const worldNormal = normal ? normal.applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( this.object.matrixWorld ) ) : view.negate();
+		const pointer = this.lastPointer?.target === this.editor.renderer.domElement ? this.lastPointer : null;
+		this.gesture = { modal: true, extrusion: true, ...selection, data, index, origin, normal: worldNormal, pointer, axis: '', numeric: '', free: !! selection.edge };
+		this.editor.controls.enabled = false;
+		this.onSelectionChange?.();
+		this.notice ||= document.createElement( 'div' );
+		this.notice.className = 'navigation-notice';
+		this.viewport.append( this.notice );
+		this.labelModal();
+
+	}
+
+	updateExtrusion( pointer ) {
+
+		const state = this.gesture;
+		const frame = this.editor.viewLayout.navigation;
+		if ( ! frame ) return;
+		const rect = this.rect();
+		if ( ! pointer ) pointer = { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+		const inside = pointer.clientX >= rect.left && pointer.clientX <= rect.left + rect.width &&
+			pointer.clientY >= rect.top && pointer.clientY <= rect.top + rect.height;
+		const numeric = state.numeric && Number( state.numeric );
+		if ( ! state.pointer && inside && pointer.target === this.editor.renderer.domElement ) state.pointer = pointer;
+		const start = state.pointer || pointer;
+		if ( ! inside && ! Number.isFinite( numeric ) ) return;
+		const camera = frame.camera;
+		const axis = state.axis ? worldAxes[ 'XYZ'.indexOf( state.axis ) ] : state.free ? null : state.normal;
+		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( camera.getWorldDirection( new THREE.Vector3() ), state.origin );
+		const from = this.pointerWorld( start.clientX, start.clientY, plane );
+		const to = this.pointerWorld( pointer.clientX, pointer.clientY, plane );
+		if ( ! from || ! to ) return;
+		const delta = to.clone().sub( from );
+		if ( axis ) {
+
+			const projected = axis.clone().addScaledVector( plane.normal, - axis.dot( plane.normal ) );
+			const pixels = projected.lengthSq() > .04 ? delta.dot( projected ) / projected.lengthSq() :
+				delta.length() * Math.sign( start.clientY - pointer.clientY || pointer.clientX - start.clientX );
+			delta.copy( axis ).multiplyScalar( Number.isFinite( numeric ) ? numeric : pixels );
+
+		} else if ( Number.isFinite( numeric ) ) {
+
+			if ( ! delta.lengthSq() ) delta.setFromMatrixColumn( camera.matrixWorld, 0 );
+			delta.normalize().multiplyScalar( numeric );
+
+		}
+		if ( ! Number.isFinite( numeric ) ) {
+
+			const axes = axis ? [ axis ] : this.snapAxes( plane );
+			delta.copy( this.snapPoint( state.origin.clone().add( delta ), state.origin, pointer, axes, state ) ).sub( state.origin );
+
+		}
+		state.geometry?.dispose();
+		state.geometry = state.draft = null;
+		if ( delta.lengthSq() > 1e-12 ) {
+
+			const offset = this.object.worldToLocal( state.origin.clone().add( delta ) ).sub( this.object.worldToLocal( state.origin.clone() ) );
+			state.draft = structuredClone( state.data );
+			state.cap = state.edge ? extrudeEdge( THREE, state.draft, state.edge, offset ) : extrudeFace( THREE, state.draft, state.index, offset );
+			state.geometry = this.buildGeometry( state.draft );
+
+		}
+		this.render();
+
+	}
+
 	closeOnFirstPoint( event ) {
 
 		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || this.gesture ||
 			event.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.editor.viewLayout.navigation ) return;
-		const { kind, points } = this.data;
-		if ( ! [ 'path', 'shape' ].includes( kind ) || points.length < 3 || isClosedOutline( this.data ) ) return;
+		if ( ! this.canCloseProfile() ) return;
 		const { left, top } = this.rect();
 		if ( this.pointUnder( event.clientX - left, event.clientY - top ) !== 0 ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
-		this.adding = false;
-		this.edit( kind === 'shape' ? 'Close shape' : 'Close path', next => {
-
-			next.closed = true;
-			return [ 0 ];
-
-		} );
+		this.editor.viewTools.run( () => this.closeProfile() );
 
 	}
 
@@ -942,11 +1164,23 @@ export class ModelViewport {
 		if ( ! event.shiftKey && ! this.adding && this.gizmoUnderPointer?.( event ) ) return;
 		const { left, top } = this.rect();
 		const hit = this.pointUnder( event.clientX - left, event.clientY - top );
-		if ( hit < 0 && ! this.adding && ! event.shiftKey ) return;
+		if ( hit < 0 && ! this.adding && ! event.shiftKey ) {
+
+			const face = this.pickFace( event );
+			if ( ! face ) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.indices = face.slice();
+			this.changed();
+			this.draw();
+			return;
+
+		}
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		if ( hit >= 0 ) {
 
+			if ( this.adding && hit === 0 && this.canCloseProfile() ) return;
 			if ( event.shiftKey ) {
 
 				this.indices = this.indices.includes( hit ) ? this.indices.filter( index => index !== hit ) : [ ...this.indices, hit ];
@@ -1063,7 +1297,7 @@ export class ModelViewport {
 				this.placementPoint( event, marker );
 
 			}
-			if ( marker.snap || this.placementSnap ) {
+			if ( this.data.profile || marker.snap || this.placementSnap ) {
 
 				this.placementSnap = marker.snap;
 				this.draw();
