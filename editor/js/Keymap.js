@@ -1,4 +1,4 @@
-import { shadingModes } from './ViewportShading.js';
+import { shadingModes } from './ViewportShading.js?v=live-preview';
 import { hoveredTimelineProperty } from './animation/TimelineKeyControl.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';

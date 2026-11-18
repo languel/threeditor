@@ -40,6 +40,8 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 `WorkspaceTabs.js` opens the existing modes, docks, and editors from the application header or command palette. Layout starts with a short timeline, Animation expands it, and Projection can put the selected projector or spotlight alongside the Director. The header wraps onto separate rows as space gets tight. Compact mode uses glyphs and all appearances share the flat active-tab fill. It shares one height with viewport positioning and top-menu auto-hide.
 
+Material Preview uses authored materials and scene effects with normal editing guides. Live Preview keeps the same real-time scene rendering and hides the editing guides. The shading pie keeps Rendered, Solid, Material Preview, and Wireframe on 1–4, with Live Preview on 5. Saved shading IDs stay stable.
+
 ### Outliner and Properties
 
 `Sidebar.Scene.js` supplies the Outliner and the Scene properties content. `Sidebar.js` docks them in independent regions. Search filters names and types while keeping matching ancestors and preserving collapsed branches. The Properties tabs follow selection and support arrow-key navigation. The Timeline spans the workspace to the left of the sidebar on desktop. In Assets, the Add assets disclosure keeps the preview visible in shorter panes.

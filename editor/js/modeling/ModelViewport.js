@@ -2017,7 +2017,7 @@ export class ModelViewport {
 
 	closeOnFirstPoint( event ) {
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.drag || this.gesture ||
+		if ( this.editor.viewportShading === 'preview' || ! this.canEdit() || this.editor.viewTools?.mode || this.drag || this.gesture ||
 			event.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.editor.viewLayout.navigation ) return;
 		if ( ! this.canCloseProfile() ) return;
 		const { left, top } = this.rect();
@@ -2030,6 +2030,7 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
+		if ( this.editor.viewportShading === 'preview' ) return;
 		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.mode &&
 			event.button === 0 && ! event.altKey && event.target === this.editor.renderer?.domElement ) {
 

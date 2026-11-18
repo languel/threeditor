@@ -5,11 +5,12 @@ export const shadingModes = [
 	[ 'solid', 'Solid', 'shadingSolid' ],
 	[ 'materials', 'Material Preview', 'shadingMaterial' ],
 	[ 'wireframe', 'Wireframe', 'shadingWire' ],
-	[ 'normals', 'Normals', 'shadingNormals' ],
-	[ 'preview', 'Clean Preview', 'preview' ]
+	[ 'preview', 'Live Preview', 'preview' ],
+	[ 'normals', 'Normals', 'shadingNormals' ]
 ];
 
-export const cleanShading = mode => [ 'preview', 'materials', 'realistic' ].includes( mode );
+export const cleanShading = mode => mode === 'preview' || mode === 'realistic';
+export const usesSceneEffects = mode => mode === 'materials' || cleanShading( mode );
 
 const factories = {
 	solid: () => new MeshMatcapMaterial( { color: 0xaaaaaa, toneMapped: false } ),

@@ -1,4 +1,4 @@
-import { shadingModes } from './ViewportShading.js';
+import { shadingModes } from './ViewportShading.js?v=live-preview';
 import { icon } from './Glyphs.js?v=poly-context';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';

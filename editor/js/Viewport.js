@@ -1,7 +1,7 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=brush-shortcuts';
-import { transformSnapStep } from './TransformSettings.js?v=unified-sync';
-import { cleanShading, withViewportShading } from './ViewportShading.js';
+import { transformSnapStep } from './TransformSettings.js?v=live-preview';
+import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=live-preview';
 import { isProjector } from './assets/Projector.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -13,7 +13,7 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=unified-sync';
 
 import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
-import { ViewportControls } from './Viewport.Controls.js?v=unified-sync';
+import { ViewportControls } from './Viewport.Controls.js?v=live-preview';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
@@ -32,9 +32,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=unified-sync';
+import { ViewportTools } from './modeling/ViewportTools.js?v=live-preview';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=unified-sync';
+import { ModelViewport } from './modeling/ModelViewport.js?v=live-preview';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -206,7 +206,8 @@ function Viewport( editor ) {
 			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
 		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
 		else if ( ! candidate && transformControls.object ) transformControls.detach();
-		transformControls.enabled = ! editor.viewTools.mode && ( ! model.editMode || candidate === model.proxy && ! model.gesture?.modal );
+		transformControls.enabled = editor.viewportShading !== 'preview' && ! editor.viewTools.mode &&
+			( ! model.editMode || candidate === model.proxy && ! model.gesture?.modal );
 		transformControls.setSpace( model.object || editor.config.getKey( 'settings/transformOrientation' ) === 'local' ? 'local' : 'world' );
 		setControlSnap( false );
 
@@ -1063,6 +1064,7 @@ function Viewport( editor ) {
 
 	signals.viewportShadingChanged.add( function () {
 
+		syncTransformTarget();
 		initPT();
 		render();
 
@@ -1405,6 +1407,7 @@ function Viewport( editor ) {
 		activeSelectionBox.visible = boundGuides && ! activeSelectionBox.box.isEmpty();
 		const drawGuides = frame => {
 
+			if ( mode === 'preview' ) return;
 			const view = frame.camera;
 			const gizmo = transformControls.getHelper();
 			const showModelGizmo = frame === nav && transformControls.object === model.proxy;
@@ -1455,7 +1458,7 @@ function Viewport( editor ) {
 		if ( ! tiled ) {
 
 			const view = frames[ 0 ].camera;
-			drawScene( view, splatHost, width, height, clean );
+			drawScene( view, splatHost, width, height, usesSceneEffects( mode ) );
 			drawGuides( frames[ 0 ] );
 			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;

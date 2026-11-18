@@ -1153,15 +1153,45 @@ async function check() {
 		} );
 		await page.keyboard.press( 'z' );
 		const shading = page.getByRole( 'dialog', { name: 'Viewport shading' } );
-		for ( const label of [ 'Rendered', 'Material Preview', 'Clean Preview' ] ) {
+		for ( const [ index, label ] of [ 'Rendered', 'Solid', 'Material Preview', 'Wireframe', 'Live Preview' ].entries() ) {
 
-			assert.equal( await shading.getByRole( 'button', { name: label, exact: true } ).count(), 1 );
+			assert.equal( await shading.getByRole( 'button', { name: label, exact: true } ).locator( 'kbd' ).textContent(), String( index + 1 ) );
 
 		}
 		const overlay = page.locator( '.viewport-tool-overlay' );
-		await shading.getByRole( 'button', { name: 'Clean Preview', exact: true } ).click();
+		await shading.getByRole( 'button', { name: 'Material Preview', exact: true } ).click();
+		const passes = () => page.evaluate( () => {
+
+			const renderer = editor.renderer;
+			const original = renderer.render;
+			const observed = { grid: false, gizmo: false, material: false };
+			const mesh = editor.scene.getObjectByName( 'Receiver' );
+			const material = mesh.material;
+			renderer.render = function ( scene, camera ) {
+
+				scene.traverseVisible( object => {
+
+					observed.grid ||= object.type === 'GridHelper';
+					observed.gizmo ||= !! object.isTransformControlsRoot && !! object.controls.object;
+
+				} );
+				observed.material ||= scene === editor.scene && mesh.material === material;
+				return original.call( this, scene, camera );
+
+			};
+			try { editor.signals.cameraChanged.dispatch( editor.camera ); }
+			finally { renderer.render = original; }
+			return observed;
+
+		} );
+		assert.equal( await overlay.isVisible(), true );
+		assert.deepEqual( await passes(), { grid: true, gizmo: true, material: true } );
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
+		await page.keyboard.press( 'z' );
+		await shading.getByRole( 'button', { name: 'Live Preview', exact: true } ).click();
 		assert.equal( await overlay.isVisible(), false );
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'preview' );
+		assert.deepEqual( await passes(), { grid: false, gizmo: false, material: true } );
 		await page.evaluate( () => {
 
 			const geometry = new THREE.BufferGeometry();

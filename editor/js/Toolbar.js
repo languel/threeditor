@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=unified-sync';
+import { addTransformSettings } from './TransformSettings.js?v=live-preview';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

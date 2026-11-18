@@ -1,4 +1,4 @@
-import { shadingModes } from './ViewportShading.js';
+import { shadingModes } from './ViewportShading.js?v=live-preview';
 import { icon } from './Glyphs.js?v=viewport-tools';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';

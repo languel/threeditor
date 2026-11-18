@@ -2400,6 +2400,8 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 #viewHelper { touch-action: none; cursor: grab; }
 #viewHelper:active { cursor: grabbing; }
 #viewport[data-clean-view="true"] .viewport-labels,
+#viewport[data-shading="preview"] #info,
+#viewport[data-shading="preview"] .modeling-overlay,
 #viewport[data-overlays="false"] .modeling-overlay,
 #viewport[data-overlays="false"]:not([data-shading="realistic"]) #info,
 #viewport:is([data-shading="preview"], [data-shading="realistic"]) .viewport-tool-overlay { display: none; }

@@ -2,7 +2,7 @@ import { icon } from '../Glyphs.js?v=poly-context';
 import { splatStrokeCommands } from './SplatPaint.js';
 import { TexturePaintStroke } from './TexturePaint.js';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
-import { cleanShading } from '../ViewportShading.js';
+import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js';
 import { meshBrushes } from './SculptBrush.js?v=surface-tools';
 import { modelButton, modelField } from './ModelControls.js?v=poly-context';
@@ -394,7 +394,7 @@ export class ViewportTools {
 
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
-		if ( mode === 'paint' && this.mode !== 'paint' && [ 'solid', 'wireframe', 'normals', 'realistic' ].includes( this.editor.viewportShading ) ) {
+		if ( mode === 'paint' && this.mode !== 'paint' && this.editor.viewportShading !== 'materials' ) {
 
 			this.previousPaintShading = this.editor.viewportShading;
 			this.editor.setViewportShading( 'materials' );
