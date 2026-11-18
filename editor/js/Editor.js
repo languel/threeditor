@@ -6,13 +6,13 @@ import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
 import { ViewportVisibility } from './ViewportVisibility.js?v=local-lighting';
 import { upgradeMathScript } from './assets/MathObjects.js';
-import { upgradeSplatScript } from './assets/SplatObjects.js';
+import { upgradeSplatScript } from './assets/SplatObjects.js?v=splat-filters';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
 import { Config } from './Config.js?v=unified-sync';
-import { Loader } from './Loader.js';
+import { Loader } from './Loader.js?v=splat-filters';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';

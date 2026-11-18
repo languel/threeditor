@@ -19,7 +19,7 @@
 					"three/webgpu": "../build/three.webgpu.js",
 					"three/tsl": "../build/three.tsl.js",
 					"three/addons/": "../examples/jsm/",
-					"gaussian-splat-lite": "./js/libs/gaussian-splat-lite.module.js?v=live-sh",
+					"gaussian-splat-lite": "./js/libs/gaussian-splat-lite.module.js?v=splat-filters",
 
 					"three/examples/": "../examples/",
 					"three-gpu-pathtracer": "https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.26/build/index.module.js",
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=component-layout';
+			import { startEditor } from './js/EditorApp.js?v=splat-filters';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

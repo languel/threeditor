@@ -651,6 +651,63 @@ async function checkPaintGestures( page ) {
 
 }
 
+async function checkSplatFilters( page ) {
+
+	await page.evaluate( async () => {
+
+		const { splatScript } = await import( new URL( 'js/assets/SplatObjects.js', document.baseURI ).href );
+		const bytes = new Uint8Array( 96 );
+		const packed = new DataView( bytes.buffer );
+		for ( const [ i, [ size, opacity ] ] of [ [ .02, 250 ], [ .12, 64 ], [ .4, 250 ] ].entries() ) {
+
+			const offset = i * 32;
+			packed.setFloat32( offset, i - 1, true );
+			for ( let axis = 0; axis < 3; axis ++ ) packed.setFloat32( offset + 12 + 4 * axis, size, true );
+			bytes.set( [ 255, 255, 255, opacity, 255, 128, 128, 128 ], offset + 24 );
+
+		}
+		const object = new THREE.Group();
+		object.userData.assetObject = { type: 'splat', splatData: btoa( String.fromCharCode( ...bytes ) ) };
+		editor.addObject( object );
+		editor.addScript( object, splatScript( null ) );
+		editor.select( object );
+
+	} );
+	await page.waitForFunction( () => editor.selected.getObjectByName( 'SplatMesh' )?.isInitialized );
+	await page.locator( '.Tab#scriptTab' ).click();
+	const inspect = () => page.evaluate( () => {
+
+		const mesh = editor.selected.getObjectByName( 'SplatMesh' );
+		const opacities = [];
+		mesh.forEachSplat( ( i, center, scale, rotation, opacity ) => { opacities.push( [ center.x, opacity ] ); } );
+		return { opacities: opacities.sort( ( a, b ) => a[ 0 ] - b[ 0 ] ), points: editor.selected.getObjectByName( 'SplatPoints' )?.geometry.attributes.position.count };
+
+	} );
+	const before = await inspect();
+	const change = async ( field, value ) => {
+
+		const control = page.getByLabel( field, { exact: true } );
+		await control.fill( value );
+		await control.press( 'Enter' );
+
+	};
+	await change( 'Min. opacity (confidence proxy)', '0.5' );
+	assert.deepEqual( ( await inspect() ).opacities.map( entry => entry[ 1 ] > 0 ), [ true, false, true ] );
+	await change( 'Max. splat size (0 = off)', '0.2' );
+	assert.deepEqual( ( await inspect() ).opacities.map( entry => entry[ 1 ] > 0 ), [ true, false, false ] );
+	await page.getByRole( 'switch', { name: 'Points only', exact: true } ).click();
+	assert.equal( ( await inspect() ).points, 1 );
+	await change( 'Min. splat size (0 = off)', '0.05' );
+	assert.equal( ( await inspect() ).points, 0 );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( ( await inspect() ).points, 1 );
+	await change( 'Min. opacity (confidence proxy)', '0' );
+	await change( 'Max. splat size (0 = off)', '0' );
+	assert.deepEqual( await inspect(), { ...before, points: 3 } );
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkScriptParameterLayout( page ) {
 
 	await page.evaluate( async () => {
@@ -1438,6 +1495,7 @@ async function check() {
 		await checkPaintGestures( page );
 		await checkComponents( page );
 		await checkScriptParameterLayout( page );
+		await checkSplatFilters( page );
 		await page.evaluate( () => {
 
 			const light = new THREE.SpotLight();

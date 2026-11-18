@@ -10,7 +10,7 @@ import { LoaderUtils } from './LoaderUtils.js';
 import { isTextureAsset, storeSourceFiles } from './ProjectAssets.js';
 
 import { scanFileKind, loadScanGeometry } from './assets/ScanFiles.js';
-import { splatScript, splatFileType } from './assets/SplatObjects.js';
+import { splatScript, splatFileType } from './assets/SplatObjects.js?v=splat-filters';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { GLTFImportDialog } from './GLTFImportDialog.js';

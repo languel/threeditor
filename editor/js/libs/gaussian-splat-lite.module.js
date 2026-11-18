@@ -2443,6 +2443,7 @@ const _Splats = class _Splats {
     this.maxSplats = state.maxSplats;
     this.numSplats = state.numSplats;
     this.splatArrays = state.splatArrays;
+    this.displayOpacityWords = void 0;
     this.sortCenters = state.sortCenters;
     this.storageOrder = state.storageOrder;
     this.centerOnlyBounds = state.centerOnlyBoundingBox;
@@ -2597,6 +2598,38 @@ const _Splats = class _Splats {
         splat.color
       );
     }
+  }
+  /** Temporarily hide decoded records while retaining their encoded opacity and SH. */
+  setDisplayFilter(minOpacity, minSize, maxSize) {
+    const [first, second] = this.splatArrays;
+    if (!minOpacity && !minSize && !maxSize) {
+      if (this.displayOpacityWords) {
+        for (let i = 0; i < this.numSplats; i++)
+          first[i * 4 + 3] = this.displayOpacityWords[i];
+        this.displayOpacityWords = void 0;
+        this.needsUpdate = true;
+      }
+      return null;
+    }
+
+    const low = minSize ? Math.log(minSize) : -Infinity;
+    const high = maxSize ? Math.log(maxSize) : Infinity;
+    const mask = new Uint8Array(this.numSplats);
+    if (!this.displayOpacityWords) {
+      this.displayOpacityWords = new Uint32Array(this.numSplats);
+      for (let i = 0; i < this.numSplats; i++)
+        this.displayOpacityWords[i] = first[i * 4 + 3];
+    }
+    for (let i = 0; i < this.numSplats; i++) {
+      const row = i * 4;
+      const word = this.displayOpacityWords[i];
+      const size = Math.max(fromHalf(second[row + 1] >>> 16), fromHalf(second[row + 2] & 65535), fromHalf(second[row + 2] >>> 16));
+      const visible = word !== 0 && decodeSplatOpacity(word) >= minOpacity && size >= low && size <= high;
+      mask[i] = Number(visible);
+      first[row + 3] = visible ? word : 0;
+    }
+    this.needsUpdate = true;
+    return mask;
   }
   setTextureUniforms(uniforms) {
     var _a2;

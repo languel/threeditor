@@ -50,27 +50,7 @@ const splatDisplayParams = `// @label maxSh = "SH degree (view-dependent color)"
 // @param pointSize = 2 (1..12)
 // @label pointSize = "Point size (px)"`;
 
-const splatDisplay = `function updateDisplay() {
- if ( ! splat?.isInitialized ) return;
- if ( current.pointCloud && ! points ) {
-  const positions = new Float32Array( splat.numSplats * 3 );
-  const colors = new Float32Array( positions.length );
-  splat.forEachSplat( ( i, center, scales, rotation, opacity, color ) => {
-   center.toArray( positions, i * 3 );
-   colors[ i * 3 ] = THREE.MathUtils.clamp( color.r, 0, 1 );
-   colors[ i * 3 + 1 ] = THREE.MathUtils.clamp( color.g, 0, 1 );
-   colors[ i * 3 + 2 ] = THREE.MathUtils.clamp( color.b, 0, 1 );
-  } );
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-  geometry.setAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
-  points = new THREE.Points( geometry, new THREE.PointsMaterial( { vertexColors: true, sizeAttenuation: false } ) );
-  points.name = 'SplatPoints';
-  points.userData.runtimeOnly = true;
-  points.userData.object = this;
-  this.add( points );
- }
- splat.visible = ! current.pointCloud;
+const splatDisplaySettings = ` splat.visible = ! current.pointCloud;
  splat.opacity = current.opacity;
  splat.recolor.set( current.color );
  splat.setDisplayShDegree?.( Math.round( current.maxSh ) );
@@ -90,6 +70,77 @@ function setParameters( next ) {
  current = next;
  updateDisplay.call( this );
 }`;
+
+const legacySplatDisplay = `function updateDisplay() {
+ if ( ! splat?.isInitialized ) return;
+ if ( current.pointCloud && ! points ) {
+  const positions = new Float32Array( splat.numSplats * 3 );
+  const colors = new Float32Array( positions.length );
+  splat.forEachSplat( ( i, center, scales, rotation, opacity, color ) => {
+   center.toArray( positions, i * 3 );
+   colors[ i * 3 ] = THREE.MathUtils.clamp( color.r, 0, 1 );
+   colors[ i * 3 + 1 ] = THREE.MathUtils.clamp( color.g, 0, 1 );
+   colors[ i * 3 + 2 ] = THREE.MathUtils.clamp( color.b, 0, 1 );
+  } );
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+  geometry.setAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
+  points = new THREE.Points( geometry, new THREE.PointsMaterial( { vertexColors: true, sizeAttenuation: false } ) );
+  points.name = 'SplatPoints';
+  points.userData.runtimeOnly = true;
+  points.userData.object = this;
+  this.add( points );
+ }
+${ splatDisplaySettings }`;
+
+const splatFilterParams = `// @param minSplatOpacity = 0 (0..1)
+// @label minSplatOpacity = "Min. opacity (confidence proxy)"
+// @param minSplatSize = 0
+// @label minSplatSize = "Min. splat size (0 = off)"
+// @param maxSplatSize = 0
+// @label maxSplatSize = "Max. splat size (0 = off)"`;
+
+const splatDisplay = `let displayMask, lastSplatFilter;
+
+function updateSplatFilter() {
+ const thresholds = [ THREE.MathUtils.clamp( current.minSplatOpacity || 0, 0, 1 ),
+  Math.max( 0, current.minSplatSize || 0 ), Math.max( 0, current.maxSplatSize || 0 ) ];
+ if ( lastSplatFilter?.mesh === splat && thresholds.every( ( value, index ) => value === lastSplatFilter.thresholds[ index ] ) ) return;
+ lastSplatFilter = { mesh: splat, thresholds };
+ displayMask = splat.splats.setDisplayFilter?.( ...thresholds );
+ if ( points ) {
+  points.removeFromParent();
+  points.geometry.dispose();
+  points.material.dispose();
+  points = null;
+ }
+}
+
+function updateDisplay() {
+ if ( ! splat?.isInitialized ) return;
+ updateSplatFilter();
+ if ( current.pointCloud && ! points ) {
+  const positions = new Float32Array( ( displayMask ? displayMask.reduce( ( count, visible ) => count + visible, 0 ) : splat.numSplats ) * 3 );
+  const colors = new Float32Array( positions.length );
+  let visible = 0;
+  splat.forEachSplat( ( i, center, scales, rotation, opacity, color ) => {
+   if ( displayMask && ! displayMask[ i ] ) return;
+   const offset = visible++ * 3;
+   center.toArray( positions, offset );
+   colors[ offset ] = THREE.MathUtils.clamp( color.r, 0, 1 );
+   colors[ offset + 1 ] = THREE.MathUtils.clamp( color.g, 0, 1 );
+   colors[ offset + 2 ] = THREE.MathUtils.clamp( color.b, 0, 1 );
+  } );
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+  geometry.setAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
+  points = new THREE.Points( geometry, new THREE.PointsMaterial( { vertexColors: true, sizeAttenuation: false } ) );
+  points.name = 'SplatPoints';
+  points.userData.runtimeOnly = true;
+  points.userData.object = this;
+  this.add( points );
+ }
+${ splatDisplaySettings }`;
 
 export function splatScript( source, fileType = splatFileType( source ) ) {
 
@@ -124,6 +175,7 @@ export function splatScript( source, fileType = splatFileType( source ) ) {
 // @label color = "Tint"
 // @param maxSh = 3 (0..4)
 ${ splatDisplayParams }
+${ splatFilterParams }
 let splat, points, active = false, request, current = params;
 
 function cleanupRuntimeChildren() {
@@ -213,7 +265,7 @@ export function upgradeSplatScript( script ) {
  splat.opacity = next.opacity;
  splat.recolor.set( next.color );
  player.requestRender?.();
-}`, splatDisplay ]
+}`, legacySplatDisplay ]
 	];
 	if ( replacements.every( ( [ previous ] ) => script.source.includes( previous ) ) ) {
 
@@ -227,6 +279,15 @@ export function upgradeSplatScript( script ) {
 		script.source = script.source
 			.replace( uncheckedSh, 'splat.setDisplayShDegree?.( Math.round( current.maxSh ) );' )
 			.replace( 'const mesh = new SplatMesh( { ...input, maxSh: 4 } );', splatMeshSetup );
+
+	}
+
+	const display = script.source.includes( legacySplatDisplay ) && script.source.includes( splatDisplayParams );
+	if ( display && ! script.source.includes( 'function updateSplatFilter()' ) ) {
+
+		script.source = script.source
+			.replace( splatDisplayParams, () => splatDisplayParams + '\n' + splatFilterParams )
+			.replace( legacySplatDisplay, () => splatDisplay );
 
 	}
 

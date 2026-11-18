@@ -1,5 +1,5 @@
 import { icon } from '../Glyphs.js?v=poly-context';
-import { splatStrokeCommands } from './SplatPaint.js';
+import { splatStrokeCommands } from './SplatPaint.js?v=splat-filters';
 import { TexturePaintStroke } from './TexturePaint.js';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';

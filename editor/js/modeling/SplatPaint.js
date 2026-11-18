@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { splatScript } from '../assets/SplatObjects.js';
+import { splatScript } from '../assets/SplatObjects.js?v=splat-filters';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { AddScriptCommand } from '../commands/AddScriptCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';

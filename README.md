@@ -61,6 +61,8 @@ Regenerate the five adapted lesson projects with `node tools/build-lessons.mjs`.
 
 Select a Gaussian scan and open **Components → Gaussian Splat** to turn on **Points only** or adjust point size in pixels. This shows one colored point at each Gaussian center. In the Gaussian view, **SH degree** sets how much view-dependent color to use from the file. Degree 0 uses the base color from every angle. Higher degrees can preserve effects such as changes in reflections as you move around, up to the degree stored in the scan.
 
+Use **Min. opacity** to cut low-opacity splats as a confidence proxy. **Min. splat size** and **Max. splat size** compare the longest Gaussian standard-deviation axis in scan-local units. A zero threshold disables that filter. These reversible filters apply in both Gaussian and Points only views and leave the imported scan data intact.
+
 The outliner uses distinct icons for cameras, projectors, lights, models, groups, meshes, curves, shapes, points, and scans. Click the `<>` icon next to a scripted object to open its code.
 
 ## Stock material looks
