@@ -237,6 +237,8 @@ export class ViewportTools {
 		}, true );
 		window.addEventListener( 'keydown', event => {
 
+			if ( editor.flyControls?.active ) return;
+
 			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], #editor-2d' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
 			if ( ! this.stroke && this.editor.keymap?.overEditableViewport === false ) return;

@@ -346,6 +346,66 @@ async function checkTextureBake( page ) {
 
 }
 
+async function checkOrthographicFly( page ) {
+
+	const initial = await page.evaluate( () => {
+
+		const parent = new THREE.Group();
+		parent.position.set( 2, 1, -3 );
+		parent.rotation.y = .4;
+		const camera = new THREE.OrthographicCamera( -4, 4, 3, -3, .1, 100 );
+		camera.name = 'Orthographic fly test';
+		parent.add( camera );
+		camera.position.copy( parent.worldToLocal( new THREE.Vector3( 0, 10, 0 ) ) );
+		camera.up.set( 0, 0, -1 );
+		camera.lookAt( 0, 0, 0 );
+		editor.addObject( parent );
+		editor.setViewportCamera( camera.uuid );
+		return { position: camera.position.toArray(), zoom: camera.zoom };
+
+	} );
+	// Keep Chromium's real key events, with the same unlocked path as a browser without pointer lock.
+	await page.evaluate( () => { editor.renderer.domElement.requestPointerLock = () => Promise.reject( new Error( 'Test unlocked navigation' ) ); } );
+	const view = await page.locator( '#viewport' ).boundingBox();
+	await page.mouse.move( view.x + view.width / 2, view.y + view.height / 2 );
+	const start = () => page.keyboard.press( 'Shift+Backquote' );
+	await start();
+	await page.getByText( /Fly camera .*W\/S zoom/ ).waitFor();
+	await page.keyboard.down( 'w' );
+	await page.waitForFunction( zoom => editor.viewportCamera.zoom > zoom * 1.05, initial.zoom );
+	await page.keyboard.up( 'w' );
+	assert.deepEqual( await page.evaluate( () => editor.viewportCamera.position.toArray() ), initial.position );
+	await page.keyboard.down( 's' );
+	await page.waitForFunction( zoom => editor.viewportCamera.zoom < zoom, initial.zoom );
+	await page.keyboard.up( 's' );
+	await page.keyboard.down( 'e' );
+	await page.waitForFunction( () => editor.viewportCamera.getWorldPosition( new THREE.Vector3() ).z < -.06 );
+	await page.keyboard.up( 'e' );
+	assert.ok( Math.abs( await page.evaluate( () => editor.viewportCamera.getWorldPosition( new THREE.Vector3() ).y ) - 10 ) < 1e-8 );
+	await page.keyboard.press( 'Escape' );
+	const capture = () => page.evaluate( () => ( {
+		position: editor.viewportCamera.position.toArray(), zoom: editor.viewportCamera.zoom,
+		projection: editor.viewportCamera.projectionMatrix.elements[ 0 ]
+	} ) );
+	const canceled = await capture();
+	assert.deepEqual( canceled.position, initial.position );
+	assert.equal( canceled.zoom, initial.zoom );
+
+	await start();
+	await page.keyboard.down( 'w' );
+	await page.waitForFunction( zoom => editor.viewportCamera.zoom > zoom * 1.05, initial.zoom );
+	await page.keyboard.up( 'w' );
+	await page.keyboard.press( 'Enter' );
+	const accepted = await capture();
+	assert.ok( accepted.projection > canceled.projection );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await capture(), canceled );
+	await page.evaluate( () => editor.redo() );
+	assert.deepEqual( await capture(), accepted );
+	await page.evaluate( () => { delete editor.renderer.domElement.requestPointerLock; editor.clear(); } );
+
+}
+
 async function checkViewportControls( page ) {
 
 	await page.evaluate( () => {
@@ -1146,6 +1206,7 @@ async function check() {
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
 		await checkTextureBake( page );
+		await checkOrthographicFly( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );

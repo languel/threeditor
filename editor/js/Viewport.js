@@ -14,7 +14,7 @@ import { EditorControls } from './EditorControls.js?v=unified-sync';
 
 import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
 import { ViewportControls } from './Viewport.Controls.js?v=live-preview';
-import { FlyControls } from './FlyControls.js';
+import { FlyControls } from './FlyControls.js?v=ortho-fly';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
 import { ViewportSidebar } from './Viewport.Sidebar.js';
@@ -32,9 +32,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=texture-bake';
+import { ViewportTools } from './modeling/ViewportTools.js?v=ortho-fly';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=selection-shelf';
+import { ModelViewport } from './modeling/ModelViewport.js?v=ortho-fly';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -827,7 +827,7 @@ function Viewport( editor ) {
 
 		}
 
-		if ( object.isPerspectiveCamera ) {
+		if ( object.isPerspectiveCamera || object.isOrthographicCamera ) {
 
 			object.updateProjectionMatrix();
 

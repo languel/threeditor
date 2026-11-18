@@ -150,6 +150,8 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
+			if ( editor.flyControls?.active ) return;
+
 			if ( this.drag?.objectSelection && event.key === 'Escape' ) {
 
 				event.preventDefault();
