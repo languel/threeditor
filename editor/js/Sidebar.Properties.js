@@ -6,7 +6,7 @@ import { UITabbedPanel } from './libs/ui.js';
 import { SidebarObject } from './Sidebar.Object.js?v=unified-sync';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=unwrap-modes';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=texture-bake';
 import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';

@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=unwrap-modes';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=texture-bake';
 import { transformSnapStep } from './TransformSettings.js?v=live-preview';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=live-preview';
 import { isProjector } from './assets/Projector.js';
@@ -32,7 +32,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=pencil-layout';
+import { ViewportTools } from './modeling/ViewportTools.js?v=texture-bake';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
 import { ModelViewport } from './modeling/ModelViewport.js?v=selection-shelf';
 import { PostProcessingHost } from './PostProcessing.js';

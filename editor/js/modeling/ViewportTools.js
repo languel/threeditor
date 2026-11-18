@@ -104,8 +104,9 @@ export class ViewportTools {
 		editor.keymap.listeners.add( updateElementShortcuts );
 		updateElementShortcuts();
 		const tools = [
-			[ '', 'Select & navigate', 'toolSelect' ], [ 'cursor', '3D Cursor', 'pivotOrigin' ], [ 'mask', 'Edit light mask', 'toolMask' ],
-			[ 'measure', 'Measure', 'toolMeasure' ], [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
+			[ '', 'Select & navigate', 'toolSelect' ], [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'measure', 'Measure', 'toolMeasure' ],
+			[ 'cursor', '3D Cursor', 'pivotOrigin' ], [ 'mask', 'Edit light mask', 'toolMask' ],
+			[ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
 		];
 		this.selector = select( this.panel, 'Viewport tool', tools );
 		this.selector.className = 'viewport-tool-select';

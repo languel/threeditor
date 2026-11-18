@@ -81,8 +81,16 @@ async function checkSelectionShelf( page ) {
 	assert.equal( await buttons[ 1 ].getAttribute( 'aria-pressed' ), 'true' );
 	await buttons[ 0 ].click();
 
+	for ( const name of [ 'Pencil', 'Measure' ] ) {
+
+		const tool = await shelf.getByRole( 'button', { name, exact: true } ).boundingBox();
+		assert.ok( tool.y < positions[ 0 ].y, name + ' sits above the transform tools' );
+
+	}
 	await shelf.getByRole( 'button', { name: 'Select · Selection tools', exact: true } ).click();
-	await page.getByRole( 'group', { name: 'Selection tools', exact: true } ).getByRole( 'button', { name: 'Box select' } ).click();
+	const box = page.getByRole( 'group', { name: 'Selection tools', exact: true } ).getByRole( 'button', { name: 'Box select' } );
+	assert.equal( await box.evaluate( button => getComputedStyle( button ).display ), 'flex' );
+	await box.click();
 	const settings = page.locator( '#toolbar' );
 	const settingsY = ( await settings.boundingBox() ).y;
 	await shelf.getByRole( 'button', { name: 'Measure', exact: true } ).click();
@@ -263,6 +271,76 @@ async function checkUVUnwrap( page ) {
 		await page.evaluate( () => editor.undo() );
 
 	}
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkTextureBake( page ) {
+
+	const rigId = await page.evaluate( () => {
+
+		const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 4, 4 ), new THREE.MeshStandardMaterial() );
+		receiver.name = 'Bake Receiver';
+		receiver.receiveShadow = true;
+		editor.addObject( receiver );
+		const blocker = new THREE.Mesh( new THREE.BoxGeometry( .85, .85, .3 ), new THREE.MeshStandardMaterial() );
+		blocker.position.z = 2;
+		blocker.castShadow = true;
+		editor.addObject( blocker );
+		const light = new THREE.DirectionalLight( 0xffffff, 2 );
+		light.position.set( 0, 0, 5 );
+		light.castShadow = true;
+		editor.addObject( light );
+		editor.addObject( new THREE.AmbientLight( 0xffffff, .05 ) );
+		const rig = new THREE.Group();
+		rig.name = 'Bake projector';
+		rig.userData.assetObject = { type: 'projector' };
+		rig.position.set( 0, 0, 5 );
+		rig.projectorFrame = { width: .5, height: .5, range: 15 };
+		const canvas = document.createElement( 'canvas' );
+		canvas.width = canvas.height = 64;
+		const context = canvas.getContext( '2d' );
+		context.fillStyle = '#ff2310';
+		context.fillRect( 0, 0, 64, 64 );
+		rig.projectorOutput = { canvas, x: 0, y: 0, width: 64, height: 64 };
+		editor.addObject( rig );
+		editor.camera.position.set( 3, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.select( receiver );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		return rig.uuid;
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	await page.getByText( 'Texture Bake', { exact: true } ).click();
+	await page.getByLabel( 'Bake resolution', { exact: true } ).selectOption( '256' );
+	const bake = async ( pass, label, source ) => {
+
+		await page.getByLabel( 'Bake pass', { exact: true } ).selectOption( pass );
+		if ( source ) await page.getByLabel( 'Bake source view', { exact: true } ).selectOption( source );
+		await page.getByRole( 'button', { name: 'Bake texture', exact: true } ).click();
+		assert.match( await page.getByRole( 'region', { name: 'UV editor', exact: true } ).getByRole( 'status' ).textContent(), /Bake ready/ );
+		await page.getByRole( 'button', { name: 'Add baked guide mesh', exact: true } ).click();
+		return page.evaluate( label => {
+
+			const guide = editor.scene.getObjectByName( 'Bake Receiver · ' + label );
+			const image = guide.material.map.image;
+			const context = image.getContext( '2d' );
+			const pixel = u => [ ...context.getImageData( Math.floor( u * image.width ), image.height / 2, 1, 1 ).data ];
+			const data = [ pixel( .5 ), pixel( .77 ) ];
+			editor.undo();
+			return data;
+
+		}, label );
+
+	};
+	const [ shadow, lit ] = await bake( 'guide', 'Light and shadow guide' );
+	assert.equal( shadow[ 3 ], 255, 'The source view can see the cast shadow' );
+	assert.ok( lit[ 0 ] > shadow[ 0 ] + 60 && lit[ 3 ] === 255, 'The guide records the shadow: ' + JSON.stringify( { shadow, lit } ) );
+	const [ blocked, projected ] = await bake( 'projector', 'Masked projector frame', rigId );
+	assert.equal( blocked[ 3 ], 0, 'Occluders block the projector bake' );
+	assert.ok( projected[ 0 ] > 235 && projected[ 1 ] < 45 && projected[ 3 ] === 255, 'The bake uses the projector frame' );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -1067,6 +1145,7 @@ async function check() {
 		await checkPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
+		await checkTextureBake( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );

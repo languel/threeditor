@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
+import { bakeTexture } from './TextureBake.js';
+import { lightViewCamera } from './LightView.js';
+import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=mask-editor';
@@ -71,6 +74,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const source = () => modifierSource( object );
 	let geometry = source();
 	let selected = [], dragging, dirty = false;
+	let bake, showBake = true;
 	let original = geometry;
 	function reset() {
 
@@ -91,6 +95,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		catch ( error ) { status.textContent = error.message; }
 
 	}
+	let baking;
 	if ( ! warp ) {
 
 		const options = ( label, rows ) => {
@@ -139,6 +144,103 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			dirty = true;
 
 		} ) );
+
+		baking = document.createElement( 'details' );
+		baking.className = 'uv-bake';
+		const summary = document.createElement( 'summary' );
+		summary.textContent = 'Texture Bake';
+		baking.append( summary );
+		const controls = document.createElement( 'div' );
+		baking.append( controls );
+		const bakeMode = document.createElement( 'select' );
+		bakeMode.setAttribute( 'aria-label', 'Bake pass' );
+		bakeMode.append( new Option( 'Light and shadow guide', 'guide' ), new Option( 'Scene appearance', 'scene' ),
+			new Option( 'Masked projector frame', 'projector' ) );
+		const bakeSource = document.createElement( 'select' );
+		bakeSource.setAttribute( 'aria-label', 'Bake source view' );
+		const updateSources = () => {
+
+			const sources = bakeMode.value === 'projector' ? [] : [ new Option( 'Current 3D view', '' ) ];
+			editor.scene.traverse( candidate => {
+
+				const projector = isProjector( candidate );
+				const optical = projector || candidate.isCamera || candidate.isSpotLight || candidate.isDirectionalLight;
+				if ( ( bakeMode.value === 'projector' ? projector : optical ) && ! hasRestriction( candidate, 'disabled' ) && ! candidate.userData.runtimeOnly ) {
+
+					sources.push( new Option( candidate.name || candidate.type, candidate.uuid ) );
+
+				}
+
+			} );
+			const last = bakeSource.value;
+			bakeSource.replaceChildren( ...sources );
+			if ( sources.some( option => option.value === last ) ) bakeSource.value = last;
+
+		};
+		updateSources();
+		bakeMode.onchange = bakeSource.onfocus = updateSources;
+		const resolution = document.createElement( 'select' );
+		resolution.setAttribute( 'aria-label', 'Bake resolution' );
+		resolution.append( ...[ 256, 512, 1024 ].map( side => new Option( side + ' × ' + side, side ) ) );
+		resolution.value = '512';
+		controls.append( bakeMode, bakeSource, resolution );
+		modelButton( controls, 'Bake texture', 'regenerate', () => run( () => {
+
+			if ( object.userData.modifiers?.length ) throw new Error( 'Apply mesh modifiers before baking this UV layout.' );
+			if ( source() !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
+			if ( ! points.length ) throw new Error( 'Unwrap the mesh before baking.' );
+			const sourceObject = editor.objectByUuid( bakeSource.value );
+			const view = sourceObject?.isCamera ? sourceObject : sourceObject ? lightViewCamera( THREE, sourceObject ) : editor.modeling.frame?.camera;
+			if ( ! view ) throw new Error( 'Choose a source camera, light or projector.' );
+			const camera = view.clone( false );
+			view.updateWorldMatrix( true, false );
+			view.matrixWorld.decompose( camera.position, camera.quaternion, camera.scale );
+			camera.updateMatrixWorld( true );
+			const target = new THREE.BufferGeometry().copy( geometry );
+			const uv = target.attributes.uv;
+			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
+			try {
+
+				const image = bakeTexture( editor.renderer, editor.scene, object, target, camera, {
+					mode: bakeMode.value, size: Number( resolution.value ), output: sourceObject?.projectorOutput
+				} );
+				bake?.geometry.dispose();
+				bake = { image, geometry: target, label: bakeMode.selectedOptions[ 0 ].textContent };
+
+			} catch ( error ) { target.dispose(); throw error; }
+			showBake = true;
+			guide.disabled = download.disabled = addGuide.disabled = false;
+			guide.setAttribute( 'aria-pressed', 'true' );
+			status.textContent = 'Bake ready. Preview it here, download the PNG, or add a guide mesh.';
+
+		} ) );
+		const guide = modelButton( controls, 'Show baked UV guide', 'viewportOverlays', () => {
+
+			showBake = ! showBake;
+			guide.setAttribute( 'aria-pressed', String( showBake ) );
+			draw();
+
+		}, true );
+		const download = modelButton( controls, 'Download bake PNG', 'save', () => {
+
+			bake.image.toBlob( blob => { if ( blob ) editor.utils.save( blob, ( object.name || 'mesh' ) + ' bake.png' ); }, 'image/png' );
+
+		}, true );
+		const addGuide = modelButton( controls, 'Add baked guide mesh', 'add', () => run( () => {
+
+			const texture = new THREE.CanvasTexture( bake.image );
+			texture.colorSpace = THREE.SRGBColorSpace;
+			const material = new THREE.MeshBasicMaterial( { map: texture, side: THREE.DoubleSide, alphaTest: .02,
+				polygonOffset: true, polygonOffsetFactor: - 1, polygonOffsetUnits: - 1, toneMapped: false } );
+			const mesh = new THREE.Mesh( new THREE.BufferGeometry().copy( bake.geometry ), material );
+			mesh.name = ( object.name || 'Mesh' ) + ' · ' + bake.label;
+			mesh.position.copy( object.position );
+			mesh.quaternion.copy( object.quaternion );
+			mesh.scale.copy( object.scale );
+			editor.execute( new AddObjectCommand( editor, mesh, object.parent, false ), 'Add baked guide mesh' );
+			status.textContent = 'Guide mesh added.';
+
+		} ), true );
 
 	} else modelButton( toolbar, 'Clear warp', 'regenerate', () => run( () => {
 
@@ -191,12 +293,12 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		ctx.fillRect( 0, 0, canvas.width, canvas.height );
 		const material = Array.isArray( object.material ) ? object.material[ 0 ] : object.material;
 		const output = object.projectorOutput;
-		const source = warp ? output?.warpSource || output?.canvas : material?.map?.image;
+		const source = warp ? output?.warpSource || output?.canvas : ( showBake && bake?.image ) || material?.map?.image;
 		if ( source?.width || source?.videoWidth ) {
 
 			try {
 
-				ctx.globalAlpha = .55;
+				ctx.globalAlpha = source === bake?.image ? 1 : .55;
 				if ( warp ) ctx.drawImage( source, output.x, output.y, output.width, output.height, margin, margin, span, span );
 				else ctx.drawImage( source, margin, margin, span, span );
 
@@ -279,7 +381,9 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		draw();
 
 	};
-	workspacePanel.append( toolbar, canvas, status );
+	workspacePanel.append( toolbar );
+	if ( baking ) workspacePanel.append( baking );
+	workspacePanel.append( canvas, status );
 	const updateGeometry = changed => {
 
 		if ( warp || changed !== object || source() === original || dirty ) return;
@@ -294,6 +398,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		editor.signals.geometryChanged.remove( updateGeometry );
 		if ( ! warp && geometry !== original ) geometry.dispose();
+		bake?.geometry.dispose();
 
 	}, () => dirty );
 	if ( focus ) canvas.focus();

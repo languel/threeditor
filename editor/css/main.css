@@ -2906,6 +2906,9 @@ body.workspace-2d-split.translucent-panels #viewport #info { left: 10px !importa
 	margin-bottom: 8px;
 }
 
+.uv-bake { margin: 4px 0; }
+.uv-bake summary { width: max-content; padding: 4px; cursor: pointer; }
+.uv-bake > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; }
 .mapping-editor canvas {
 	display: block;
 	max-width: 100%;

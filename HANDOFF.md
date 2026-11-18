@@ -72,6 +72,12 @@ The unified workspace stores the 3D Cursor in the editor snapshot as `cursor`. P
 - Image & Vector reuses the drawing workspace in `MaskEditor.js`. It saves the vector contours in `scene.userData.vectorDrawing`. The local reference image is held in memory during editing. SVG exports the vectors, and PNG renders the shape and reference composite.
 - Smoke-test by opening Mask from the viewport toolbar and applying a multi-shape mask, switching to UV on a selected mesh, then loading a reference in Image & Vector. Apply a colored contour, export SVG and PNG, and reopen the mode to confirm the contour persists. Use **3D View** to return, then test the projector in Play.
 
+### UV unwrap and texture baking
+
+The UV workspace stages edits before Apply. Smart unwrap and Lightmap pack reuse the bundled `unwrapUVs` utility. Cube projection packs six directions, cylindrical projection separates flat caps, and sphere, planar, current-view and projector projections are available. Applying UVs to a mesh with a modifier stack updates its source and reevaluates the stack.
+
+`modeling/TextureBake.js` adapts ThreeGrease’s camera-to-UV bake to a WebGL source render and a depth-tested UV-space pass. The neutral lighting guide uses authored lamp and shadow flags with neutral surfaces and ambient light. The projector pass samples the current masked and warped output and tests visibility against scene geometry. The PNG and optional unlit guide mesh use the current UV draft. A bake captures one view and one instant. Use an atlas without overlaps and apply mesh modifiers before baking. The browser check measures a lit pixel, a shadowed pixel, and the alpha under a projector occluder.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.
