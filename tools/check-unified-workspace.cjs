@@ -175,6 +175,38 @@ async function checkUVSelection( page ) {
 
 }
 
+async function checkUVUnwrap( page ) {
+
+	await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+		editor.addObject( mesh );
+		editor.select( mesh );
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	const layout = page.getByRole( 'combobox', { name: 'UV layout' } );
+	for ( const mode of [ 'smart', 'lightmap', 'box', 'cylinder', 'sphere', 'view' ] ) {
+
+		await layout.selectOption( mode );
+		await page.getByRole( 'button', { name: 'Auto layout' } ).click();
+		await page.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+		assert.equal( await page.getByRole( 'region', { name: 'UV editor', exact: true } ).getByRole( 'status' ).textContent(), 'UVs applied.', mode );
+		const valid = await page.evaluate( () => {
+
+			const { index, groups, attributes: { uv, position } } = editor.selected.geometry;
+			return uv.count === position.count && uv.array.every( Number.isFinite ) && ( index?.count ?? position.count ) === 36 && groups.length === 6;
+
+		} );
+		assert.equal( valid, true, mode );
+		await page.evaluate( () => editor.undo() );
+
+	}
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkViewportControls( page ) {
 
 	await page.evaluate( () => {
@@ -972,6 +1004,7 @@ async function check() {
 		} ), [ 1, 2, 3 ] );
 		await checkSelectionShelf( page );
 		await checkUVSelection( page );
+		await checkUVUnwrap( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );

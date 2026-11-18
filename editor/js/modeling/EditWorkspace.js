@@ -5,7 +5,7 @@ import { editableMesh } from './ModelViewport.js?v=contour-editing';
 import { isProjector } from '../assets/Projector.js?v=mask-editor';
 import { modelButton } from './ModelControls.js?v=tool-layout';
 import { openMaskEditor } from './MaskEditor.js?v=contour-editing';
-import { openUVEditor } from './UVEditor.js?v=mixed-editor-areas';
+import { openUVEditor } from './UVEditor.js?v=unwrap-modes';
 
 export function createEditWorkspace( editor, viewport ) {
 

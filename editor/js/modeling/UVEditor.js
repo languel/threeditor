@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js';
+import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=mask-editor';
@@ -6,7 +8,7 @@ import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton } from './ModelControls.js';
-import { layoutUV } from './UVLayout.js';
+import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {
 
@@ -66,9 +68,10 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const status = document.createElement( 'output' );
 	status.setAttribute( 'role', 'status' );
 	const size = object.userData.projectorWarp?.size || 4;
-	let geometry = object.geometry;
+	const source = () => modifierSource( object );
+	let geometry = source();
 	let selected = [], dragging, dirty = false;
-	let original = object.geometry;
+	let original = geometry;
 	function reset() {
 
 		if ( warp ) return structuredClone( object.userData.projectorWarp?.points || Array.from( { length: size * size },
@@ -90,12 +93,45 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	}
 	if ( ! warp ) {
 
-		for ( const [ id, label ] of [ [ 'xy', 'Planar XY' ], [ 'xz', 'Planar XZ' ], [ 'yz', 'Planar YZ' ], [ 'box', 'Box by face' ] ] ) layout.append( new Option( label, id ) );
-		editor.scene.traverse( candidate => { if ( isProjector( candidate ) ) layout.append( new Option( candidate.name || 'Projector', candidate.uuid ) ); } );
+		const options = ( label, rows ) => {
+
+			const group = document.createElement( 'optgroup' );
+			group.label = label;
+			group.append( ...rows.map( ( [ id, name ] ) => new Option( name, id ) ) );
+			layout.append( group );
+
+		};
+		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'lightmap', 'Lightmap pack' ] ] );
+		options( 'Projection', [ [ 'box', 'Cube projection' ], [ 'cylinder', 'Cylinder projection (Y)' ],
+			[ 'sphere', 'Sphere projection' ], [ 'view', 'Project from view' ],
+			[ 'xy', 'Planar XY' ], [ 'xz', 'Planar XZ' ], [ 'yz', 'Planar YZ' ] ] );
+		const projectors = [];
+		editor.scene.traverse( candidate => { if ( isProjector( candidate ) ) projectors.push( [ candidate.uuid, candidate.name || 'Projector' ] ); } );
+		if ( projectors.length ) options( 'Projectors', projectors );
 		toolbar.append( layout );
 		modelButton( toolbar, 'Auto layout', 'toolGrid', () => run( () => {
 
-			const next = layoutUV( THREE, object, layout.value, editor.objectByUuid( layout.value ) );
+			const mode = layout.value;
+			let next;
+			if ( mode === 'smart' || mode === 'lightmap' ) {
+
+				object.updateWorldMatrix( true, false );
+				const proxy = new THREE.Mesh( original, object.material );
+				proxy.matrixAutoUpdate = false;
+				proxy.matrix.copy( object.matrixWorld );
+				const atlas = unwrapUVs( proxy, { mode: mode === 'smart' ? 'normal' : 'lightmap', attribute: 'uv',
+					respectUVSeams: false } );
+				if ( ! atlas?.charts.length ) { if ( proxy.geometry !== original ) proxy.geometry.dispose(); throw new Error( 'No usable UV islands could be packed.' ); }
+				next = proxy.geometry;
+				if ( atlas.warnings.excludedFaces ) status.textContent = atlas.warnings.excludedFaces + ' degenerate faces were omitted.';
+
+			} else {
+
+				const view = mode === 'view' ? editor.modeling.frame?.camera : null;
+				if ( mode === 'view' && ! view ) throw new Error( 'Open a 3D viewport to project from view.' );
+				next = layoutUV( THREE, object, mode, editor.objectByUuid( mode ), view, original );
+
+			}
 			if ( geometry !== original ) geometry.dispose();
 			geometry = next;
 			points = reset();
@@ -116,18 +152,26 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( warp ) setProjectorMapping( editor, object, 'projectorWarp', { size, points } );
 		else {
 
-			if ( object.geometry !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
+			if ( source() !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
 			if ( ! points.length ) throw new Error( 'Choose an automatic layout first.' );
 			const next = new THREE.BufferGeometry().copy( geometry );
 			const uv = next.attributes.uv;
 			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
 			uv.needsUpdate = true;
-			const command = new SetGeometryCommand( editor, object, next );
-			command.updatable = false;
-			dirty = true;
-			editor.execute( command, 'Edit UVs' );
+			if ( object.userData.modifiers?.length ) {
+
+				try { setModifierStack( editor, object, object.userData.modifiers, next, 'Edit UVs' ); }
+				finally { next.dispose(); }
+
+			} else {
+
+				const command = new SetGeometryCommand( editor, object, next );
+				command.updatable = false;
+				editor.execute( command, 'Edit UVs' );
+
+			}
 			if ( geometry !== original ) geometry.dispose();
-			original = geometry = next;
+			original = geometry = source();
 			dirty = false;
 
 		}
@@ -238,8 +282,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	workspacePanel.append( toolbar, canvas, status );
 	const updateGeometry = changed => {
 
-		if ( warp || changed !== object || object.geometry === original || dirty ) return;
-		original = geometry = object.geometry;
+		if ( warp || changed !== object || source() === original || dirty ) return;
+		original = geometry = source();
 		points = reset();
 		selected = [];
 		draw();
