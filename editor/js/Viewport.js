@@ -9,7 +9,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { UIPanel } from './libs/ui.js';
 
-import { EditorControls } from './EditorControls.js?v=edit-pointer-routing';
+import { EditorControls } from './EditorControls.js?v=object-selection';
 
 import { ViewportLabels } from './Viewport.Labels.js';
 import { ViewportControls } from './Viewport.Controls.js?v=area-splits';
@@ -29,9 +29,10 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=contour-editing';
+import { ViewportTools } from './modeling/ViewportTools.js?v=object-selection';
+import { ObjectSelection } from './modeling/ObjectSelection.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=contour-editing';
+import { ModelViewport } from './modeling/ModelViewport.js?v=object-selection';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -100,6 +101,7 @@ function Viewport( editor ) {
 	signals.selectionAppearanceChanged.add( render );
 	signals.timelineFrameChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
+	editor.objectSelection = new ObjectSelection( editor, container.dom, layout, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	editor.editWorkspace = createEditWorkspace( editor, container.dom );
 	const splatHost = new SplatHost();

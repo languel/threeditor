@@ -1,5 +1,5 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
-import { selectionCandidates, applySelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
+import { selectionCandidates, applySelection, edgeLoop, selectionRegionContains, meshEdges } from './MeshSelection.js?v=object-selection';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=contour-editing';
 import * as THREE from 'three';
@@ -539,9 +539,8 @@ export class ModelViewport {
 		}
 		const { width, height } = this.rect();
 		const pixels = this.data.points.map( point => this.project( point, width, height ) );
-		const inside = point => point && ( drag.tool === 'circle' ? drag.polygon.some( center => Math.hypot( point[ 0 ] - center[ 0 ], point[ 1 ] - center[ 1 ] ) <= this.brushRadius ) :
-			drag.tool === 'lasso' ? pointInPolygon( point, drag.polygon ) : point[ 0 ] >= Math.min( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 0 ] <= Math.max( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 1 ] >= Math.min( drag.start[ 1 ], drag.end[ 1 ] ) && point[ 1 ] <= Math.max( drag.start[ 1 ], drag.end[ 1 ] ) );
-		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => ids.every( i => inside( pixels[ i ] ) ) );
+		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids =>
+			ids.every( i => selectionRegionContains( drag, pixels[ i ], this.brushRadius ) ) );
 		this.applyElementSelection( hits, drag.operation );
 
 	}

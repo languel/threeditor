@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { meshEdges, edgeLoop, applySelection, elementKey } from '../editor/js/modeling/MeshSelection.js';
+import { meshEdges, edgeLoop, applySelection, elementKey, selectionRegionContains } from '../editor/js/modeling/MeshSelection.js';
 const grid = { points: Array.from( { length: 12 }, ( _, i ) => [ i % 4, Math.floor( i / 4 ), 0 ] ), faces: [] };
 for ( let y = 0; y < 2; y ++ ) for ( let x = 0; x < 3; x ++ ) { const a = y * 4 + x; grid.faces.push( [ a, a + 1, a + 5, a + 4 ] ); }
 
@@ -24,6 +24,15 @@ test( 'Quad edge rings walk opposite edges across a strip and stop at boundaries
 	const loop = edgeLoop( grid, [ 1, 5 ] ).map( elementKey );
 	assert.ok( loop.includes( '5:9' ) );
 	assert.ok( ! loop.includes( '1:2' ) );
+
+} );
+
+test( 'Circle selection covers the path between widely spaced pointer samples', () => {
+
+	const start = [ 4, 10 ], end = [ 96, 10 ];
+	const drag = { tool: 'circle', start, end, polygon: [ start, end ] };
+	assert.equal( selectionRegionContains( drag, [ 50, 12 ], 3 ), true );
+	assert.equal( selectionRegionContains( drag, [ 50, 14 ], 3 ), false );
 
 } );
 

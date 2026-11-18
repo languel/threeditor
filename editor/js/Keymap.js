@@ -6,7 +6,7 @@ import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import * as THREE from 'three';
-import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 import { meshBrushes } from './modeling/SculptBrush.js?v=contour-editing';
 
 const alignCameraShortcut = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl+alt+numpad0' : 'mod+alt+numpad0';
@@ -24,7 +24,7 @@ const definitions = [
  ['undo','Undo','Edit','mod+z','mod+z'], ['redo','Redo','Edit','mod+shift+z','mod+shift+z'],
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
  ['clearSelection','Clear selection','Selection','escape','escape'],
- ['selectAll','Select all / deselect','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
+ ['selectAll','Select all','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
  ['focus','Frame selection','View','f','numpaddecimal'], ['frameAll','Frame all','View','','home'], ['perspective','Perspective camera','View','p',''], ['orthographic','Orthographic camera','View','o',''], ['projection','Toggle perspective / orthographic','View','','numpad5'],
  ['viewFront','Front view','View','','numpad1'], ['viewBack','Back view','View','','mod+numpad1'], ['viewRight','Right view','View','','numpad3'], ['viewLeft','Left view','View','','mod+numpad3'], ['viewTop','Top view','View','','numpad7'], ['viewBottom','Bottom view','View','','mod+numpad7'], ['viewCamera','Toggle active camera view','View','numpad0','numpad0'],
  ['alignActiveCamera','Align active camera to view','View',alignCameraShortcut,alignCameraShortcut],
@@ -39,7 +39,7 @@ const definitions = [
  ['objectMode','Object Mode','Modeling','',''],
  ['boxSelect','Box select','Modeling','b','b'], ['lassoSelect','Lasso select','Modeling','',''],
  ['circleSelect','Circle select','Modeling','c','c'], ['knife','Knife','Modeling','k','k'],
- ['invertElements','Invert element selection','Modeling','mod+i','mod+i'],
+ ['invertElements','Invert selection','Modeling','mod+i','mod+i'],
  ['selectVertex','Vertex select','Modeling','1','1'], ['selectEdge','Edge select','Modeling','2','2'], ['selectFace','Face select','Modeling','3','3'],
  ['surfacePaintMode','Surface paint','Modeling','1',''], ['meshEditMode','Enter mesh edit mode','Modeling','2',''],
  ['meshSculptMode','Sculpt selected geometry','Modeling','3',''], ['topologyPen','Toggle topology pen','Modeling','6','6'],
@@ -107,7 +107,7 @@ class Keymap {
   document.addEventListener('focusin',event=>{
    if(areaOf(event.target)&&event.target.matches(':focus-visible')&&!event.target.closest(textControls))this.pointer=null;
   });
-  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
+  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||editor.objectSelection?.drag||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
   document.addEventListener('keydown',e=>this.onKey(e));
  }
  register(action){if(!this.actions.some(a=>a.id===action.id))this.actions.push(action);}
@@ -138,7 +138,7 @@ class Keymap {
    !event.target?.closest?.(textControls+', dialog[open], .context-menu, [role="separator"]')&&!document.querySelector('dialog[open]');
  }
  onKey(e){
-  if(this.recording||e.defaultPrevented||e.isComposing||e.repeat||document.querySelector('dialog[open]'))return;
+  if(this.recording||e.defaultPrevented||e.isComposing||e.repeat||this.editor.objectSelection?.drag||document.querySelector('dialog[open]'))return;
   const t=e.target;if(t?.isContentEditable||t?.closest?.(textControls+', .context-menu, [role="separator"]'))return;
   if(t?.closest?.('button')&&['Enter',' ','Tab'].includes(e.key)&&!e.ctrlKey&&!e.metaKey)return;
   const area=this.area;
@@ -165,21 +165,24 @@ class Keymap {
   const meshActions = ['boxSelect','lassoSelect','circleSelect','knife','invertElements','meshFill','meshExtrude'];
   const meshAction = meshActions.includes(id);
   if(!elementSelect&&!meshAction&&!['modePie','objectMode','surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
-  if(!m||e.editWorkspace?.exclusive||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
+  if(!m||e.editWorkspace?.exclusive||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer||e.objectSelection?.drag)return false;
   if ( id === 'meshSculptMode' ) return m.canSculptTarget( e.selected );
   if ( id === 'modePie' || id === 'objectMode' ) return true;
+  const regionSelect = ['boxSelect','lassoSelect','circleSelect'].includes(id);
+  if(mode==='object'&&!e.viewTools.mode&&(regionSelect||id==='invertElements'))return true;
   if ( elementSelect || meshAction ) {
    if ( ! m.editMode || ! m.canEdit() || e.viewTools.mode || m.brush && m.brush !== 'freehand' ) return false;
    if ( id === 'knife' ) return !!m.data.faces?.length && !m.data.profile;
    if ( id === 'meshFill' ) return m.canCloseProfile() || m.canFillSelection();
    if ( id === 'meshExtrude' ) return Boolean(m.extrusionSelection());
-   if ( ['boxSelect','lassoSelect','circleSelect'].includes(id) ) return !m.pen && !m.adding && !m.brush && !m.knife;
+   if ( regionSelect ) return !m.pen && !m.adding && !m.brush && !m.knife;
    return true;
   }
   if(id==='topologyPen')return mode==='edit'&&!e.viewTools.mode&&m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return mode==='edit'&&!e.viewTools.mode&&m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand');
-  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
+  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(m.brush&&m.brush!=='freehand')||
+   !e.viewTools.mode&&(mode==='edit'&&m.selectionTool==='circle'||mode==='object'&&e.objectSelection.tool==='circle');
   return true;
  }
 
@@ -203,9 +206,12 @@ class Keymap {
   switch(id){
    case 'modePie':e.openTransformPie?.('mode');break;
    case 'objectMode':e.viewTools.setWorkspaceMode('object');break;
-   case 'boxSelect':case 'lassoSelect':case 'circleSelect':e.modeling.setSelectionTool(id.slice(0,-6));break;
+   case 'boxSelect':case 'lassoSelect':case 'circleSelect':e.viewTools.setSelectionTool(id.slice(0,-6));break;
    case 'knife':e.modeling.toggleKnife();break;
-   case 'invertElements':e.modeling.invertElementSelection();break;
+   case 'invertElements':
+    if(e.modeling.editMode)e.modeling.invertElementSelection();
+    else e.objectSelection.apply(e.objectSelection.candidates(),'toggle');
+    break;
    case 'meshFill':e.viewTools.run(()=>e.modeling.canCloseProfile()?e.modeling.closeProfile():e.modeling.fillFace());break;
    case 'outlineInsert':e.viewTools.run(()=>e.modeling.insertAfterSelectedPoint());break;
    case 'outlineSmooth':e.viewTools.run(()=>e.modeling.toggleOutlineSmoothing());break;
@@ -222,9 +228,35 @@ class Keymap {
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
    case 'translate':case 'rotate':case 'scale': s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;
-   case 'delete':case 'deleteBack':{if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
-   case 'selectAll':{if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}
-   case 'selectNone':if(e.modeling?.editMode)e.modeling.selectPoints(false);else e.deselect();break;case 'focus':if(e.selected)e.focus(e.selected);break;
+   case 'delete':case 'deleteBack':{
+    if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}
+    const selected=new Set(e.selector.selection);
+    const roots=[...selected].filter(object=>{
+     if(!object.parent)return false;
+     for(let parent=object.parent;parent;parent=parent.parent)if(selected.has(parent))return false;
+     return true;
+    });
+    const removed=new Set(roots);
+    for(const object of roots)if(object.isSpotLight||object.isDirectionalLight){
+     const target=object.target;
+     if(target.parent&&!selected.has(target)&&!roots.some(root=>root.getObjectById(target.id)))removed.add(target);
+    }
+    const cmds=[...removed].map(object=>new RemoveObjectCommand(e,object));
+    if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));
+    break;
+   }
+   case 'selectAll':{
+    if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}
+    const objects=e.objectSelection.candidates();
+    if(this.preset==='basic'&&objects.length&&objects.every(object=>e.selector.selection.includes(object)))e.deselect();
+    else e.objectSelection.apply(objects,'set');
+    break;
+   }
+   case 'selectNone':if(e.modeling?.editMode)e.modeling.selectPoints(false);else e.deselect();break;
+   case 'focus':
+    if(e.selected)e.focus(e.selected);
+    else if(e.selector.selection.length)e.controls.focus(e.selector.getSelectionBox(new THREE.Box3()));
+    break;
    case 'frameAll':e.focus(e.scene);break;
    case 'perspective':e.setCameraType('perspective');break;case 'orthographic':e.setCameraType('orthographic');break;
    case 'projection':e.setCameraType(e.camera.isPerspectiveCamera?'orthographic':'perspective');break;

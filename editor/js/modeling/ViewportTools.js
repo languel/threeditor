@@ -101,7 +101,7 @@ export class ViewportTools {
 		const strip = element( 'div', this.geometryTools );
 		strip.className = 'viewport-tool-strip';
 		this.toolButtons = new Map( [
-			[ '', 'Select & navigate', 'toolSelect', () => { this.setMode( '' ); editor.modeling.setSelectionTool( 'select' ); } ],
+			[ '', 'Select & navigate', 'toolSelect', () => this.setSelectionTool( 'select' ) ],
 			[ 'mask', 'Edit light mask', 'toolMask', () => this.setMode( 'mask' ) ],
 			[ 'measure', 'Measure', 'toolMeasure', () => this.setMode( 'measure' ) ],
 			[ 'path', 'Surface path', 'toolPath', () => this.setMode( 'path' ) ],
@@ -109,12 +109,15 @@ export class ViewportTools {
 		].map( ( [ mode, label, glyph, action ] ) => [ mode, modelButton( strip, label, glyph, action ) ] ) );
 		this.selectionTools = element( 'div', this.geometryTools );
 		this.selectionTools.className = 'viewport-selection-tools';
-		this.selectionButtons = new Map( [ [ 'box', 'Box select (B)', 'selectBox' ], [ 'lasso', 'Lasso select', 'selectLasso' ], [ 'circle', 'Circle select (C)', 'selectCircle' ] ].map( ( [ tool, label, glyph ] ) => [ tool, modelButton( this.selectionTools, label, glyph, () => editor.modeling.setSelectionTool( tool ) ) ] ) );
-		this.selectionOp = modelButton( this.elementModes, 'Selection operation: Set', 'selectOperation', () => {
+		this.selectionButtons = new Map( [ [ 'box', 'Box select (B)', 'selectBox' ], [ 'lasso', 'Lasso select', 'selectLasso' ], [ 'circle', 'Circle select (C)', 'selectCircle' ] ].map( ( [ tool, label, glyph ] ) => [ tool, modelButton( this.selectionTools, label, glyph, () => this.setSelectionTool( tool ) ) ] ) );
+		this.selectionOp = modelButton( this.panel, 'Selection operation: Set', 'selectOperation', () => {
 
-			const model = editor.modeling, operations = [ 'set', 'extend', 'subtract', 'toggle', 'intersect' ];
-			model.selectionOperation = operations[ ( operations.indexOf( model.selectionOperation ) + 1 ) % operations.length ];
-			model.changed();
+			const selection = editor.objectSelection;
+			const model = editor.modeling;
+			const operations = [ 'set', 'extend', 'subtract', 'toggle', 'intersect' ];
+			if ( this.workspaceMode === 'object' ) selection.operation = operations[ ( operations.indexOf( selection.operation ) + 1 ) % operations.length ];
+			else model.selectionOperation = operations[ ( operations.indexOf( model.selectionOperation ) + 1 ) % operations.length ];
+			this.refreshWorkspace();
 
 		} );
 		this.creation = element( 'div', this.geometryTools );
@@ -284,6 +287,7 @@ export class ViewportTools {
 		const model = this.editor.modeling;
 		const previous = this.workspaceMode;
 		if ( previous === mode || mode === 'sculpt' && ! model.canSculptTarget( this.editor.selected ) ) return;
+		this.editor.objectSelection.cancel();
 		if ( previous === 'edit' ) this.editTool = {
 			selection: model.selectionTool, pen: model.pen, knife: model.knife,
 			adding: model.adding, freehand: model.brush === 'freehand', object: model.object
@@ -329,6 +333,18 @@ export class ViewportTools {
 
 	}
 
+	setSelectionTool( tool ) {
+
+		if ( this.mode ) this.setMode( '' );
+		if ( this.workspaceMode === 'object' ) {
+
+			this.editor.objectSelection.setTool( tool );
+			this.refreshWorkspace();
+
+		} else this.editor.modeling.setSelectionTool( tool );
+
+	}
+
 	refreshWorkspace() {
 
 		const model = this.editor.modeling;
@@ -337,10 +353,16 @@ export class ViewportTools {
 		const sculpt = workspace === 'sculpt';
 		const paint = workspace === 'paint';
 		const modelTools = edit && ! this.mode;
-		this.selectionTools.hidden = ! modelTools;
-		for ( const [ tool, button ] of this.selectionButtons ) button.setAttribute( 'aria-pressed', String( ! model.pen && ! model.knife && ! model.brush && ! model.adding && tool === model.selectionTool ) );
-		this.selectionOp.title = 'Selection operation: ' + model.selectionOperation + ' (click to cycle)';
-		this.selectionOp.setAttribute( 'aria-label', 'Selection operation: ' + model.selectionOperation );
+		const objectTools = workspace === 'object' && ! this.mode;
+		const objectSelection = this.editor.objectSelection;
+		const tool = objectTools ? objectSelection.tool : model.selectionTool;
+		const operation = objectTools ? objectSelection.operation : model.selectionOperation;
+		this.selectionTools.hidden = ! ( modelTools || objectTools );
+		for ( const [ id, button ] of this.selectionButtons ) button.setAttribute( 'aria-pressed', String( id === tool &&
+			( objectTools || modelTools && ! model.pen && ! model.knife && ! model.brush && ! model.adding ) ) );
+		this.selectionOp.hidden = objectTools ? tool === 'select' : ! modelTools || ! model.object;
+		this.selectionOp.title = 'Selection operation: ' + operation + ' (click to cycle)';
+		this.selectionOp.setAttribute( 'aria-label', 'Selection operation: ' + operation );
 		this.elementModes.hidden = ! modelTools || ! model.object;
 		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
 		this.modeSelect.value = workspace;
@@ -369,7 +391,7 @@ export class ViewportTools {
 		const name = this.mode ? { mask: 'Light mask', measure: 'Measure', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( meshBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
-				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
+				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : tool === 'select' ? 'Select' : tool + ' select';
 		this.panel.setAttribute( 'aria-label', 'Viewport tools · ' + name );
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode ? this.mode === mode : ! this.mode && name === 'Select' ) );
 		for ( const [ kind, control ] of this.creationButtons ) control.setAttribute( 'aria-pressed', String( ! this.mode && model.adding && model.data?.kind === kind ) );
@@ -396,6 +418,7 @@ export class ViewportTools {
 	setMode( mode ) {
 
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
+		this.editor.objectSelection.cancel();
 		this.release();
 		if ( mode === 'paint' && this.mode !== 'paint' && [ 'solid', 'wireframe', 'normals', 'realistic' ].includes( this.editor.viewportShading ) ) {
 
@@ -570,7 +593,13 @@ export class ViewportTools {
 	resizeBrush( factor ) {
 
 		const model = this.editor.modeling;
-		if ( this.mode === 'paint' ) {
+		const selection = this.editor.objectSelection;
+		if ( this.workspaceMode === 'object' && selection.tool === 'circle' ) {
+
+			selection.radius = THREE.MathUtils.clamp( Math.round( selection.radius * factor ), 5, 250 );
+			if ( selection.drag ) selection.draw();
+
+		} else if ( this.mode === 'paint' ) {
 
 			this.brush.diameter = THREE.MathUtils.clamp( Math.round( this.brush.diameter * factor ), 2, 100 );
 			this.buildOptions();

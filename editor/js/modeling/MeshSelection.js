@@ -1,3 +1,5 @@
+import { contourClosed, contourEdgeCount, projectToSegment } from './Contour.js';
+
 // Adapted to ordered face loops from ThreeGrease core/polyedit and meshedit:
 // independent element selections flush to a vertex union for transforms.
 export const elementKey = ids => ids.slice().sort( ( a, b ) => a - b ).join( ':' );
@@ -12,8 +14,7 @@ export function meshEdges( data ) {
 	}
 	if ( ! data.faces || data.profile ) {
 
-		const closed = data.kind === 'shape' ? data.closed !== false : data.closed === true;
-		for ( let i = 0, count = closed ? data.points.length : data.points.length - 1; i < count; i ++ ) {
+		for ( let i = 0, count = contourEdgeCount( data.points, contourClosed( data ) ); i < count; i ++ ) {
 
 			const edge = [ i, ( i + 1 ) % data.points.length ];
 			edges.set( elementKey( edge ), edge );
@@ -26,13 +27,18 @@ export function meshEdges( data ) {
 }
 export function selectionCandidates( data, mode ) {
 
-	return mode === 'vertex' ? data.points.map( ( _, i ) => [ i ] ) : mode === 'edge' ? meshEdges( data ) : data.faces || ( data.kind === 'shape' && data.closed !== false && data.points.length >= 3 ? [ data.points.map( ( _, i ) => i ) ] : [] );
+	return mode === 'vertex' ? data.points.map( ( _, i ) => [ i ] ) : mode === 'edge' ? meshEdges( data ) : data.faces || ( data.kind === 'shape' && contourClosed( data ) && data.points.length >= 3 ? [ data.points.map( ( _, i ) => i ) ] : [] );
 
 }
 export function applySelection( current, hits, operation = 'set' ) {
 
+	return combineSelection( current, new Map( hits.map( ids => [ elementKey( ids ), ids ] ) ), operation );
+
+}
+
+export function combineSelection( current, incoming, operation = 'set' ) {
+
 	const result = operation === 'set' ? new Map() : new Map( current );
-	const incoming = new Map( hits.map( ids => [ elementKey( ids ), ids ] ) );
 	if ( operation === 'intersect' ) return new Map( [ ...result ].filter( ( [ key ] ) => incoming.has( key ) ) );
 	for ( const [ key, ids ] of incoming ) {
 
@@ -41,6 +47,21 @@ export function applySelection( current, hits, operation = 'set' ) {
 
 	}
 	return result;
+
+}
+
+export function selectionRegionContains( { tool, polygon, start, end }, point, radius ) {
+
+	if ( ! point ) return false;
+	if ( tool === 'lasso' ) return pointInPolygon( point, polygon );
+	if ( tool === 'circle' ) {
+
+		if ( Math.hypot( point[ 0 ] - start[ 0 ], point[ 1 ] - start[ 1 ] ) <= radius ) return true;
+		return polygon.some( ( p, i ) => i > 0 && projectToSegment( point, polygon[ i - 1 ], p ).distance <= radius );
+
+	}
+	return point[ 0 ] >= Math.min( start[ 0 ], end[ 0 ] ) && point[ 0 ] <= Math.max( start[ 0 ], end[ 0 ] ) &&
+		point[ 1 ] >= Math.min( start[ 1 ], end[ 1 ] ) && point[ 1 ] <= Math.max( start[ 1 ], end[ 1 ] );
 
 }
 export function edgeLoop( data, start, ring = false ) {

@@ -48,6 +48,8 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 `Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass runs in the Director editing view and its split companion. Preview, Play and exported output omit the selection overlay. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.
 
+Object and Edit modes share region geometry and selection operations through `modeling/MeshSelection.js`. `modeling/ObjectSelection.js` projects eligible object origins into the pane where a gesture starts. The normal selector still owns selection and pivots. Removing a selection that includes both a parent and its descendants records the parent once, so undo restores the whole hierarchy.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.

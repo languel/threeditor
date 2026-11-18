@@ -159,6 +159,10 @@ In Edit Mode, double-click a path or shape edge to insert a point. The same gest
 
 Right-click with an outline selected to close it, convert a planar path to a shape, or convert a shape back to a path. Conversion creates a separate object. **Fit outline to mask** normalizes the outline for the chosen projector or spotlight. Look through a light and choose **Project outline as mask** to use the outline’s actual position in the light frame.
 
+### Object selection
+
+Choose **Box Select** (**B**), **Lasso Select**, or **Circle Select** (**C**) from the left shelf, right-click menu, or **F3**. In Object Mode, drag over object origins in either viewport pane. Hidden, disabled, and selection-restricted objects are skipped. Hold **Shift** to extend, **Ctrl** to subtract, or use the selection operation in the viewport header. **[** and **]** resize Circle Select. **Esc** cancels an active selection, and **Numpad Decimal** frames the selected objects.
+
 ### Topology pen and sculpting
 
 Select a mesh and press **Tab** to enter Edit mode. Switch on **Polybuild** with **6** or its left-shelf glyph. Closing a **Build mesh** profile activates it automatically. Click empty space to start a new face in the same mesh, click corners or existing vertices, then click its first vertex or press **F** to fill it. Click an edge to start a face draft attached to that edge; endpoint hits reuse the existing vertex. Drag a boundary edge to pull out a connected quad. Drag the center of an interior quad edge for a loop cut, or drag off-center to move it. Click or Ctrl-click a face to insert a vertex. Cmd-click toggles element selection inside Polybuild; **M** welds selected vertices. Shift-click deletes an element; Shift-drag relaxes the mesh. **Esc** cancels the active drag or draft; otherwise it clears selected elements and keeps the tool active.

@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=contour-editing';
-import { formatCombo } from './Keymap.js?v=contour-editing';
+import { formatCombo } from './Keymap.js?v=object-selection';
 
 function ContextMenu( editor, viewport ) {
 
@@ -138,7 +138,8 @@ function ContextMenu( editor, viewport ) {
 
 		}
 		const edit = model.editMode && model.object && ! editor.viewTools.mode;
-		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selected ? [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ] : [];
+		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selector.selection.length ? [ 'translate', 'rotate', 'scale', 'focus', 'delete' ] : [];
+		if ( ! edit && editor.selected ) ids.push( 'duplicate' );
 		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );
 		if ( edit ) {
 
@@ -154,6 +155,13 @@ function ContextMenu( editor, viewport ) {
 			actions.unshift( { label: 'Edit measurement', run: () => editor.viewTools.setWorkspaceMode( 'edit' ) } );
 
 		} else actions.unshift( { label: 'Add…', run: () => openAdd( position ) }, ...outlineActions( editor, editor.selected ) );
+		if ( editor.viewTools.workspaceMode === 'object' ) {
+
+			const tools = [ 'boxSelect', 'lassoSelect', 'circleSelect', 'invertElements', 'selectAll', 'selectNone' ];
+			actions.push( ...editor.keymap.actions.filter( action => tools.includes( action.id ) && editor.keymap.actionAvailable( action.id ) )
+				.map( action => ( { ...action, section: 'Selection' } ) ) );
+
+		}
 		actions.push( ...originActions( editor ) );
 		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
 

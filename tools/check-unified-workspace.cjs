@@ -18,6 +18,7 @@ async function check() {
 		page.on( 'pageerror', error => errors.push( error.message ) );
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( async () => window.editor?.renderer && await editor.startupReady.then( () => true ) );
+		await checkObjectSelection( page );
 		const workspaces = page.getByRole( 'navigation', { name: 'Workspaces' } );
 		const layoutWorkspace = workspaces.getByRole( 'button', { name: 'Layout', exact: true } );
 		assert.equal( await layoutWorkspace.getAttribute( 'aria-pressed' ), 'true' );
@@ -357,6 +358,101 @@ async function check() {
 		await fs.rm( folder, { recursive: true, force: true } );
 
 	}
+
+}
+
+async function checkObjectSelection( page ) {
+
+	const points = await page.evaluate( () => {
+
+		const group = new THREE.Group();
+		group.name = 'Selection group';
+		group.position.x = - 1;
+		const box = new THREE.Mesh( new THREE.BoxGeometry( .25, .25, .25 ), new THREE.MeshBasicMaterial() );
+		box.name = 'Child box';
+		group.add( box );
+		editor.addObject( group );
+		const reference = box.clone();
+		reference.name = 'Reference box';
+		reference.userData.threeditor = { unselectable: true, locked: true };
+		editor.addObject( reference, group );
+		const right = box.clone();
+		right.name = 'Right box';
+		right.position.x = 1;
+		editor.addObject( right );
+		editor.camera.position.set( 0, 0, 5 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+
+		const frame = editor.viewLayout.frames[ 0 ];
+		const rect = editor.viewLayout.clientRect( frame );
+		return [ group, right ].map( object => {
+
+			const p = object.getWorldPosition( new THREE.Vector3() ).project( frame.camera );
+			return [ rect.left + ( p.x + 1 ) * rect.width / 2, rect.top + ( 1 - p.y ) * rect.height / 2 ];
+
+		} );
+
+	} );
+	const selected = () => page.evaluate( () => editor.selector.selection.map( object => object.name ) );
+	const dragBox = async ( [ x, y ] ) => {
+
+		await page.mouse.move( x - 35, y - 35 );
+		await page.mouse.down();
+		await page.mouse.move( x + 35, y + 35, { steps: 5 } );
+		await page.mouse.up();
+
+	};
+	await page.mouse.move( ...points[ 0 ] );
+	await page.keyboard.press( 'b' );
+	await dragBox( points[ 0 ] );
+	assert.deepEqual( await selected(), [ 'Selection group', 'Child box' ] );
+	await page.keyboard.down( 'Control' );
+	await dragBox( points[ 0 ] );
+	await page.keyboard.up( 'Control' );
+	assert.deepEqual( await selected(), [] );
+	await page.keyboard.press( 'c' );
+	await page.mouse.click( ...points[ 1 ] );
+	assert.deepEqual( await selected(), [ 'Right box' ] );
+	const shelf = page.getByRole( 'group', { name: 'Tool shelf' } );
+	await shelf.getByRole( 'button', { name: 'Lasso select', exact: true } ).click();
+	const [ x, y ] = points[ 0 ];
+	await page.mouse.move( x - 35, y - 35 );
+	await page.mouse.down();
+	await page.mouse.move( x + 35, y - 35 );
+	await page.mouse.move( x + 35, y + 35 );
+	await page.mouse.move( x - 35, y + 35 );
+	await page.mouse.up();
+	assert.deepEqual( await selected(), [ 'Selection group', 'Child box' ] );
+	await page.keyboard.press( 'b' );
+	await page.mouse.move( points[ 1 ][ 0 ] - 35, points[ 1 ][ 1 ] - 35 );
+	await page.mouse.down();
+	await page.mouse.move( points[ 1 ][ 0 ] + 35, points[ 1 ][ 1 ] + 35 );
+	await page.keyboard.press( 'Escape' );
+	await page.mouse.up();
+	assert.deepEqual( await selected(), [ 'Selection group', 'Child box' ] );
+	await page.keyboard.press( 'x' );
+	assert.deepEqual( await selected(), [] );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.scene.getObjectByName( 'Child box' ).parent.name ), 'Selection group' );
+	const rightPanePoint = await page.evaluate( () => {
+
+		editor.setViewportSplit( true, 'vertical' );
+		const frame = editor.viewLayout.frames.at( -1 );
+		const rect = editor.viewLayout.clientRect( frame );
+		const point = editor.scene.getObjectByName( 'Right box' ).getWorldPosition( new THREE.Vector3() ).project( frame.camera );
+		return [ rect.left + ( point.x + 1 ) * rect.width / 2, rect.top + ( 1 - point.y ) * rect.height / 2 ];
+
+	} );
+	await dragBox( rightPanePoint );
+	assert.deepEqual( await selected(), [ 'Right box' ] );
+	await page.evaluate( () => {
+
+		editor.setViewportSplit( false );
+		editor.clear();
+
+	} );
+	await shelf.getByRole( 'button', { name: 'Select & navigate', exact: true } ).click();
 
 }
 check().catch( error => { console.error( error ); process.exitCode = 1; } );
