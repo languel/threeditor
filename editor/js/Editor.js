@@ -4,7 +4,7 @@ import { isProjector, upgradeProjectorScript } from './assets/Projector.js?v=mas
 import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
-import { ViewportVisibility } from './ViewportVisibility.js?v=unified-sync';
+import { ViewportVisibility } from './ViewportVisibility.js?v=local-lighting';
 import { upgradeMathScript } from './assets/MathObjects.js';
 import { upgradeSplatScript } from './assets/SplatObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';

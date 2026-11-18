@@ -1049,7 +1049,28 @@ async function check() {
 		await page.keyboard.press( 'Alt+h' );
 		assert.equal( await page.evaluate( () => editor.toJSON().viewportHidden.length ), 0 );
 		const cameraBeforeLocalView = await page.evaluate( () => editor.camera.position.toArray() );
-		await page.keyboard.press( '/' );
+		const lighting = await page.evaluate( () => {
+
+			const rig = new THREE.Group();
+			const lamp = new THREE.SpotLight();
+			const spare = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+			rig.add( lamp, spare );
+			editor.addObject( rig );
+			const renderer = editor.renderer, render = renderer.render;
+			let visible;
+			renderer.render = function ( scene, ...args ) {
+
+				if ( scene === editor.scene && editor.viewportVisibility.local && ! visible ) visible = [ rig.visible, lamp.visible, spare.visible ];
+				return render.call( this, scene, ...args );
+
+			};
+			try { editor.viewportVisibility.toggleLocal(); }
+			finally { renderer.render = render; editor.removeObject( rig ); }
+			return visible;
+
+		} );
+		assert.deepEqual( lighting, [ true, true, false ] );
+		assert.deepEqual( await page.evaluate( () => editor.camera.position.toArray() ), cameraBeforeLocalView );
 		assert.equal( await page.getByRole( 'button', { name: 'Exit Local View' } ).isVisible(), true );
 		await page.keyboard.press( 'NumpadDivide' );
 		assert.deepEqual( await page.evaluate( () => editor.camera.position.toArray() ), cameraBeforeLocalView );

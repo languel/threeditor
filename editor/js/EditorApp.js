@@ -1,7 +1,7 @@
 import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=unified-sync';
+import { Editor } from './Editor.js?v=local-lighting';
 import { Keymap } from './Keymap.js?v=uv-edit-selection';
 import { ModalTransform } from './ModalTransform.js?v=unified-sync';
 import { P5Preview } from './P5Preview.js';

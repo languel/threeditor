@@ -1,4 +1,3 @@
-import { Box3 } from 'three';
 import { SetViewportHiddenCommand } from './commands/SetViewportHiddenCommand.js';
 import { isVisible, registerViewportVisibility } from './ObjectRestrictions.js';
 
@@ -121,40 +120,12 @@ export class ViewportVisibility {
 	toggleLocal() {
 
 		const editor = this.editor;
-		if ( this.local ) {
-
-			const { camera, center, cursor, viewportCamera, viewportSource } = this.local;
-			this.local = null;
-			editor.setCameraType( camera.isOrthographicCamera ? 'orthographic' : 'perspective' );
-			const director = editor.camera;
-			director.position.copy( camera.position );
-			director.quaternion.copy( camera.quaternion );
-			director.up.copy( camera.up );
-			director.zoom = camera.zoom;
-			director.updateProjectionMatrix();
-			director.updateMatrixWorld( true );
-			editor.controls.getCenter( director ).copy( center );
-			editor.setCursor( cursor );
-			if ( viewportSource?.parent ) editor.setViewportSource( viewportSource );
-			else editor.setViewportCamera( viewportCamera.uuid );
-
-		} else {
+		if ( this.local ) this.local = null;
+		else {
 
 			const selected = editor.selector.selection.filter( object => object !== editor.scene && object !== editor.camera && isVisible( object ) );
 			if ( ! selected.length ) return;
-			const camera = editor.camera.clone( false );
-			camera.uuid = editor.camera.uuid;
-			this.local = {
-				objects: new Set( selected ),
-				camera,
-				center: editor.controls.getCenter( editor.camera ).clone(),
-				cursor: editor.cursor.clone(),
-				viewportCamera: editor.viewportCamera,
-				viewportSource: editor.viewportSource
-			};
-			if ( ! editor.viewportSplit ) editor.setViewportCamera( editor.camera.uuid );
-			if ( selected.length === 1 ) editor.focus( selected[ 0 ] );
-			else editor.focus( editor.selector.getSelectionBox( new Box3() ) );
+			this.local = { objects: new Set( selected ) };
 
 		}
 		editor.signals.viewportVisibilityChanged.dispatch();

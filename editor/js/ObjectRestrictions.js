@@ -20,16 +20,35 @@ function withViewportObjects( scene, render ) {
 
  const state = viewports.get( scene );
  if ( ! state || ! state.local && ! state.hidden.size ) return withEnabledObjects( scene, render );
- const hidden = [];
+ const lightAncestors = new Set();
+ if ( state.local ) scene.traverseVisible( object => {
+
+  if ( ! object.isLight || state.isHidden( object ) || hasRestriction( object, 'disabled' ) ) return;
+  for ( let parent = object.parent; parent && parent !== scene; parent = parent.parent ) lightAncestors.add( parent );
+
+ } );
+ const hidden = [], layers = [];
  scene.traverseVisible( object => {
-  if ( state.allows( object ) ) return;
-  object.visible = false;
-  hidden.push( object );
+
+  if ( state.isHidden( object ) ) {
+   object.visible = false;
+   hidden.push( object );
+  } else if ( ! state.inLocalView( object ) && ! object.isLight ) {
+   if ( lightAncestors.has( object ) ) {
+    layers.push( [ object, object.layers.mask ] );
+    object.layers.mask = 0;
+   } else {
+    object.visible = false;
+    hidden.push( object );
+   }
+  }
+
  } );
  try {
   return withEnabledObjects( scene, render );
  } finally {
   for ( const object of hidden ) object.visible = true;
+  for ( const [ object, mask ] of layers ) object.layers.mask = mask;
  }
 
 }
