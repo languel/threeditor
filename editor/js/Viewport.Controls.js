@@ -4,7 +4,7 @@ import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';
 import { formatCombo } from './Keymap.js';
 import { UISpan, UIPanel, UISelect, UIButton } from './libs/ui.js';
-import { ViewportParameters } from './Viewport.Parameters.js';
+import { ViewportParameters } from './Viewport.Parameters.js?v=component-layout';
 
 function ViewportControls( editor ) {
 

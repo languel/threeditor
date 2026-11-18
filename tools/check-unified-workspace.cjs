@@ -651,6 +651,55 @@ async function checkPaintGestures( page ) {
 
 }
 
+async function checkScriptParameterLayout( page ) {
+
+	await page.evaluate( async () => {
+
+		const { splatScript } = await import( new URL( 'js/assets/SplatObjects.js', document.baseURI ).href );
+		const { name, source } = splatScript( null );
+		const object = new THREE.Group();
+		editor.addObject( object );
+		editor.addScript( object, { name, source: source.split( 'let splat,' )[ 0 ] + '\nconst unkeyed = 1; /* 0..2 */' } );
+		editor.select( object );
+
+	} );
+	await page.locator( '.Tab#scriptTab' ).click();
+	const component = page.getByRole( 'group', { name: 'Gaussian Splat', exact: true } );
+	const points = component.getByRole( 'switch', { name: 'Points only', exact: true } );
+	await points.waitFor();
+	assert.equal( await points.isChecked(), false );
+	await points.press( 'Space' );
+	assert.equal( await points.isChecked(), true );
+	assert.equal( await page.evaluate( () => editor.scripts[ editor.selected.uuid ][ 0 ].paramValues.pointCloud ), true );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await points.isChecked(), false );
+	const style = await page.evaluate( () => editor.config.getKey( 'settings/uiStyle' ) );
+	for ( const mode of [ 'compact', 'clean' ] ) {
+
+		await page.evaluate( mode => { editor.config.setKey( 'settings/uiStyle', mode ); editor.signals.uiStyleChanged.dispatch(); }, mode );
+		const rows = await component.locator( '.script-parameter-row' ).evaluateAll( rows => rows.map( row => {
+
+			const value = row.querySelector( '.script-param-value' ).getBoundingClientRect();
+			const key = row.querySelector( '.timeline-key-dot' )?.getBoundingClientRect();
+			return { value: value.left, key: key?.left, fits: value.right <= row.getBoundingClientRect().right + 1 };
+
+		} ) );
+		assert.ok( rows.length >= 5 );
+		assert.ok( rows.every( row => row.fits && row.value === rows[ 0 ].value ) );
+		assert.ok( rows.filter( row => row.key !== undefined ).every( row => row.key === rows[ 0 ].key ) );
+		assert.ok( ( await points.boundingBox() ).width >= 24 );
+
+	}
+	await page.evaluate( style => {
+
+		editor.config.setKey( 'settings/uiStyle', style );
+		editor.signals.uiStyleChanged.dispatch();
+		editor.clear();
+
+	}, style );
+
+}
+
 async function checkComponents( page ) {
 
 	await page.evaluate( () => {
@@ -1388,6 +1437,7 @@ async function check() {
 		await checkTextureProjection( page );
 		await checkPaintGestures( page );
 		await checkComponents( page );
+		await checkScriptParameterLayout( page );
 		await page.evaluate( () => {
 
 			const light = new THREE.SpotLight();

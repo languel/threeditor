@@ -13,7 +13,7 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=unified-sync';
 
 import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
-import { ViewportControls } from './Viewport.Controls.js?v=live-preview';
+import { ViewportControls } from './Viewport.Controls.js?v=component-layout';
 import { FlyControls } from './FlyControls.js?v=ortho-fly';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';

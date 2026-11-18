@@ -12,7 +12,8 @@ function scriptParameterControl( editor, object, script, field ) {
 
 	} else if ( typeof value === 'boolean' ) {
 
-		control = new UICheckbox( value );
+		control = new UICheckbox( value ).addClass( 'script-param-toggle' );
+		control.dom.setAttribute( 'role', 'switch' );
 
 	} else if ( typeof value === 'number' ) {
 

@@ -1,6 +1,6 @@
 import { UIButton, UIPanel, UIRow, UIText } from './libs/ui.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
-import { scriptParameterControl } from './ScriptParameterControl.js';
+import { scriptParameterControl } from './ScriptParameterControl.js?v=component-layout';
 
 function ViewportParameters( editor ) {
 

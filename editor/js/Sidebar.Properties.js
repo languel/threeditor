@@ -10,7 +10,7 @@ import { SidebarModeling } from './Sidebar.Modeling.js?v=texture-bake';
 import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
-import { SidebarScript } from './Sidebar.Script.js?v=unified-sync';
+import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
 import { icon } from './Glyphs.js?v=mode-shelves';
 
 function SidebarProperties( editor, sceneSettings ) {

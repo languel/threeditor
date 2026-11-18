@@ -7,7 +7,7 @@ import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
 import { P5_TEMPLATE } from './P5Sketch.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
-import { scriptParameterControl } from './ScriptParameterControl.js';
+import { scriptParameterControl } from './ScriptParameterControl.js?v=component-layout';
 import { modelButton } from './modeling/ModelControls.js';
 
 const spinSource = `// @param speed = 45 (-360..360)
@@ -207,7 +207,7 @@ function SidebarScript( editor ) {
 							editor.execute( command );
 
 						} );
-						const control = scriptParameterControl( editor, object, script, field );
+						const control = scriptParameterControl( editor, object, script, field ).addClass( 'script-param-value' );
 						const caption = new UIText( field.label || field.name ).setClass( 'Label' );
 						caption.dom.title = caption.dom.textContent;
 						parameterControls.push( { script, field, control } );
