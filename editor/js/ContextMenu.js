@@ -1,5 +1,5 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
-import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
+import { outlineActions } from './modeling/OutlineActions.js?v=pencil-layout';
 import { formatCombo } from './Keymap.js';
 import { changeParent } from './ObjectParenting.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';

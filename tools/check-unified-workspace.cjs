@@ -83,6 +83,11 @@ async function checkSelectionShelf( page ) {
 
 	await shelf.getByRole( 'button', { name: 'Select · Selection tools', exact: true } ).click();
 	await page.getByRole( 'group', { name: 'Selection tools', exact: true } ).getByRole( 'button', { name: 'Box select' } ).click();
+	const settings = page.locator( '#toolbar' );
+	const settingsY = ( await settings.boundingBox() ).y;
+	await shelf.getByRole( 'button', { name: 'Measure', exact: true } ).click();
+	assert.equal( ( await settings.boundingBox() ).y, settingsY );
+	await page.evaluate( () => editor.viewTools.chooseSelectionTool( 'box' ) );
 	assert.equal( await shelf.getByRole( 'button', { name: 'Box select · Selection tools' } ).getAttribute( 'aria-pressed' ), 'true' );
 	const center = await page.evaluate( () => {
 
@@ -107,6 +112,62 @@ async function checkSelectionShelf( page ) {
 		assert.equal( await page.evaluate( () => editor.modeling.selectionTool ), mode );
 
 	}
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkPencil( page ) {
+
+	const center = await page.evaluate( () => {
+
+		const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 5, 5 ), new THREE.MeshBasicMaterial() );
+		receiver.name = 'Pencil receiver';
+		editor.addObject( receiver );
+		editor.select( receiver );
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const { left, top, width, height } = editor.modeling.rect();
+		return [ left + width / 2, top + height / 2 ];
+
+	} );
+	const draw = async ( loop ) => {
+
+		const [ x, y ] = center;
+		await page.mouse.move( x - 45, y );
+		await page.mouse.down();
+		await page.mouse.move( x + 45, y, { steps: 12 } );
+		if ( loop ) {
+
+			await page.mouse.move( x + 45, y + 55, { steps: 8 } );
+			await page.mouse.move( x - 45, y + 55, { steps: 12 } );
+			await page.mouse.move( x - 45, y, { steps: 8 } );
+
+		}
+		await page.mouse.up();
+
+	};
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await draw( true );
+	assert.deepEqual( await page.evaluate( () => {
+
+		const path = editor.scene.getObjectByName( 'Pencil stroke' );
+		return [ path?.parent.name, path?.geometry.userData.modeling.closed ];
+
+	} ), [ 'Pencil receiver', true ] );
+	await page.evaluate( () => editor.undo() );
+	await page.getByLabel( 'Interaction mode', { exact: true } ).selectOption( 'sculpt' );
+	await page.keyboard.press( 'd' );
+	await page.getByLabel( 'Pencil placement' ).selectOption( 'view' );
+	await draw( false );
+	assert.deepEqual( await page.evaluate( () => {
+
+		const path = editor.scene.getObjectByName( 'Pencil stroke' );
+		return [ path?.parent === editor.scene, path?.geometry.userData.modeling.kind, editor.modeling.brush ];
+
+	} ), [ true, 'path', 'grab' ] );
+	await page.keyboard.press( 'Escape' );
+	assert.equal( await page.getByLabel( 'Interaction mode', { exact: true } ).inputValue(), 'sculpt' );
 	await page.evaluate( () => editor.clear() );
 
 }
@@ -1003,6 +1064,7 @@ async function check() {
 
 		} ), [ 1, 2, 3 ] );
 		await checkSelectionShelf( page );
+		await checkPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
 		await checkViewportControls( page );

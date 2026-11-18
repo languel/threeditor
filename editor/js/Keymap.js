@@ -28,6 +28,7 @@ const definitions = [
  ['adjustLastOperation','Adjust Last Operation','Modeling','f9','f9'],
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
  ['clearSelection','Clear selection','Selection','escape','escape'],
+ ['pencilTool','Toggle Pencil','Modeling','d','d'],
  ['selectionCycle','Cycle selection tools','Modeling','','w'], ['selectionBox','Box select tool','Modeling','b','b'],
  ['selectionCircle','Circle select tool','Modeling','c','c'], ['selectionLasso','Lasso select tool','Modeling','shift+b','shift+b'],
  ['selectAll','Select all','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
@@ -198,7 +199,7 @@ class Keymap {
 
   }
   if(id==='setActiveCamera')return e.selected?.isCamera && e.selected!==e.camera && isVisible(e.selected);
-  if ( [ 'selectionCycle', 'selectionBox', 'selectionCircle', 'selectionLasso' ].includes( id ) )
+  if ( [ 'pencilTool', 'selectionCycle', 'selectionBox', 'selectionCircle', 'selectionLasso' ].includes( id ) )
    return !m?.gesture && !m?.drag && !e.viewTools?.pointer && !e.modalTransform?.active && !e.flyControls?.active;
   if ( id === 'toggleXRay' ) return e.viewportShading === 'solid';
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
@@ -249,6 +250,7 @@ class Keymap {
    case 'separateMesh':if(this.actionAvailable(id))e.contextMenu?.openSeparate(this.pointer);break;
    case 'invertMeshSelection':if(this.actionAvailable(id))e.modeling.invertElementSelection();break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
+   case 'pencilTool':e.viewTools.togglePencil();break;
    case 'selectionCycle':case 'selectionBox':case 'selectionCircle':case 'selectionLasso':
     e.viewTools.chooseSelectionTool(id.slice(9).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;

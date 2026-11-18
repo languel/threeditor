@@ -57,6 +57,7 @@ export class ViewportTools {
 		this.mode = '';
 		this.points = [];
 		this.brush = { output: 'surface', placement: 'surface', color: '#47cdea', diameter: 14, opacity: 1 };
+		this.pencil = { output: 'vector', placement: 'auto', color: '#ffae66', diameter: 6, opacity: 1 };
 		this.measure = { unit: 'm', closed: false, bind: true, snap: true };
 		this.ray = new THREE.Raycaster();
 		this.measurements = [];
@@ -104,7 +105,7 @@ export class ViewportTools {
 		updateElementShortcuts();
 		const tools = [
 			[ '', 'Select & navigate', 'toolSelect' ], [ 'cursor', '3D Cursor', 'pivotOrigin' ], [ 'mask', 'Edit light mask', 'toolMask' ],
-			[ 'measure', 'Measure', 'toolMeasure' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
+			[ 'measure', 'Measure', 'toolMeasure' ], [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
 		];
 		this.selector = select( this.panel, 'Viewport tool', tools );
 		this.selector.className = 'viewport-tool-select';
@@ -119,7 +120,7 @@ export class ViewportTools {
 
 			const control = element( 'button', strip );
 			control.type = 'button';
-			control.onclick = mode ? () => this.setMode( mode ) : () => this.openSelectionMenu();
+			control.onclick = mode === 'pencil' ? () => this.togglePencil() : mode ? () => this.setMode( mode ) : () => this.openSelectionMenu();
 			control.innerHTML = icon( glyph );
 			control.title = mode === 'cursor' ? label + ' (Shift+right-click)' : label;
 			control.setAttribute( 'aria-label', label );
@@ -188,7 +189,6 @@ export class ViewportTools {
 		for ( const [ kind, label, glyph ] of [
 			[ 'path', 'Draw path', 'pathDraw' ], [ 'shape', 'Draw shape', 'shapeDraw' ], [ 'mesh', 'Build mesh', 'meshBuild' ]
 		] ) this.creationButtons.set( kind, modelButton( this.creation, label, glyph, () => this.run( () => editor.modeling.create( kind, true ) ) ) );
-		this.freehandButton = modelButton( this.creation, 'Draw freehand', 'freehandDraw', () => this.run( () => editor.modeling.create( 'path', true, true ) ) );
 		this.primary = element( 'div', this.geometryTools );
 		this.primary.className = 'viewport-primary-tools';
 		this.penButton = modelButton( this.primary, 'Polybuild (6)', 'topologyPen', () => this.run( () => editor.modeling.togglePen() ) );
@@ -206,11 +206,13 @@ export class ViewportTools {
 		this.brushSettings = element( 'div', this.panel );
 		this.brushSettings.className = 'viewport-brush-settings';
 		editor.modeling.onToolsChange = () => this.refreshWorkspace();
-		this.controls = element( 'div', this.panel );
+		const context = element( 'div', this.panel.parentNode );
+		context.className = 'viewport-tool-panel viewport-tool-context';
+		this.controls = element( 'div', context );
 		this.controls.className = 'viewport-tool-options';
-		this.status = element( 'output', this.panel );
+		this.status = element( 'output', context );
 		this.status.setAttribute( 'aria-live', 'polite' );
-		this.readout = element( 'output', this.panel );
+		this.readout = element( 'output', context );
 
 		viewport.addEventListener( 'pointerdown', event => this.pointerDown( event ), true );
 		viewport.addEventListener( 'pointermove', event => this.pointerMove( event ), true );
@@ -234,10 +236,10 @@ export class ViewportTools {
 		}, true );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.mode || this.editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( 'input, textarea, select, [contenteditable]' ) ) return;
+			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], #editor-2d' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
 			if ( ! this.stroke && this.editor.keymap?.overEditableViewport === false ) return;
-			if ( this.mode === 'cursor' && event.key !== 'Escape' ) return;
+			if ( [ 'cursor', 'pencil' ].includes( this.mode ) && event.key !== 'Escape' ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.key === 'Escape' ) {
@@ -250,6 +252,7 @@ export class ViewportTools {
 
 				}
 				this.points = []; this.selected = -1;
+				if ( this.mode === 'pencil' ) { this.togglePencil(); return; }
 				this.editor.select( null ); this.draw();
 
 			}
@@ -371,7 +374,7 @@ export class ViewportTools {
 		this.selectionOp.setAttribute( 'aria-label', 'Selection operation: ' + model.selectionOperation );
 		this.elementModes.hidden = ! edit || ! model.object || !! this.mode;
 		for ( const [ mode, button ] of this.elementButtons ) button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
-		this.modeSelect.value = this.mode === 'paint' ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
+		this.modeSelect.value = this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
 		this.modeSelect.querySelector( 'option[value="sculpt"]' ).disabled = ! model.canEditTarget( this.editor.selected );
 		for ( const mode of [ 'path' ] ) {
 
@@ -387,7 +390,7 @@ export class ViewportTools {
 		const pen = model.pen && ! model.adding;
 		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
 		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );
-		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
+		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', pencil: 'Pencil', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( meshBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
@@ -399,7 +402,6 @@ export class ViewportTools {
 		this.panel.setAttribute( 'aria-label', 'Viewport tools · ' + name );
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode ? this.mode === mode : ! this.mode && ! model.pen && ! model.knife && ! model.brush && ! model.adding ) );
 		for ( const [ kind, control ] of this.creationButtons ) control.setAttribute( 'aria-pressed', String( ! this.mode && model.adding && model.data?.kind === kind ) );
-		this.freehandButton.setAttribute( 'aria-pressed', String( ! this.mode && model.brush === 'freehand' ) );
 		this.penButton.setAttribute( 'aria-pressed', String( ! this.mode && pen ) );
 		this.sculptButton.setAttribute( 'aria-pressed', String( ! this.mode && Boolean( sculpt ) ) );
 		this.penButton.disabled = ! model.canEdit() || ! model.data?.faces?.length;
@@ -449,23 +451,32 @@ export class ViewportTools {
 
 	}
 
+	togglePencil() {
+
+		this.setMode( this.mode === 'pencil' ? this.pencilFromPaint ? 'paint' : '' : 'pencil' );
+
+	}
+
 	setMode( mode ) {
 
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
-		if ( mode === 'paint' && this.mode !== 'paint' && this.editor.viewportShading !== 'materials' ) {
+		const wasPencil = this.mode === 'pencil';
+		const wasPaint = this.mode === 'paint' || this.pencilFromPaint;
+		this.pencilFromPaint = mode === 'pencil' && wasPaint;
+		if ( mode === 'paint' && ! wasPaint && this.editor.viewportShading !== 'materials' ) {
 
 			this.previousPaintShading = this.editor.viewportShading;
 			this.editor.setViewportShading( 'materials' );
 
-		} else if ( mode !== 'paint' && this.previousPaintShading ) {
+		} else if ( mode !== 'paint' && ! this.pencilFromPaint && this.previousPaintShading ) {
 
 			if ( this.editor.viewportShading === 'materials' ) this.editor.setViewportShading( this.previousPaintShading );
 			this.previousPaintShading = null;
 
 		}
 		this.mode = mode;
-		if ( ! mode ) {
+		if ( ! mode && ! wasPencil ) {
 
 			const model = this.editor.modeling;
 			model.selectionTool = 'select';
@@ -483,6 +494,7 @@ export class ViewportTools {
 		this.selected = - 1;
 		this.status.textContent = '';
 		this.readout.textContent = '';
+		this.brushCursor = null;
 		if ( mode === 'path' && ! this.editor.modeling.editMode ) {
 
 			this.mode = '';
@@ -616,6 +628,13 @@ export class ViewportTools {
 			known.step = 'any';
 			modelButton( parent, 'Calibrate units', 'calibrate', () => this.run( () => this.calibrate( known.valueAsNumber ) ) );
 
+		} else if ( this.mode === 'pencil' ) {
+
+			const placement = select( parent, 'Pencil placement', [ [ 'auto', 'Surface or view plane' ], [ 'surface', 'Surface' ], [ 'view', 'View plane' ] ] );
+			placement.value = this.pencil.placement;
+			placement.onchange = () => { this.pencil.placement = placement.value; placement.blur(); };
+			modelField( parent, 'Pencil color', 'color', 'color', this.pencil.color ).oninput = event => { this.pencil.color = event.target.value; };
+
 		} else {
 
 			modelField( parent, 'Color', 'color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
@@ -645,8 +664,8 @@ export class ViewportTools {
 			}
 
 		}
-		if ( this.mode !== 'paint' ) this.removeButton = modelButton( parent, 'Remove point', 'remove', () => this.removePoint() );
-		modelButton( parent, 'Done', 'exitTool', () => this.setMode( '' ) );
+		if ( this.mode !== 'paint' && this.mode !== 'pencil' ) this.removeButton = modelButton( parent, 'Remove point', 'remove', () => this.removePoint() );
+		modelButton( parent, 'Done', 'exitTool', () => this.mode === 'pencil' ? this.togglePencil() : this.setMode( '' ) );
 
 	}
 
@@ -707,7 +726,7 @@ export class ViewportTools {
 	finish() {
 
 		const minimum = this.mode === 'mask' || this.mode === 'measure' && this.measure.closed ? 3 : 2;
-		if ( this.mode === 'paint' || this.points.length < minimum ) return;
+		if ( this.mode === 'paint' || this.mode === 'pencil' || this.points.length < minimum ) return;
 		const editor = this.editor;
 		if ( this.mode === 'mask' ) {
 
@@ -877,12 +896,12 @@ export class ViewportTools {
 		if ( this.mode === 'cursor' ) return;
 		if ( this.pointer || ! this.mode || event.button !== 0 || event.altKey || event.target !== this.editor.renderer?.domElement ) return;
 		const frame = this.layout.at( event.clientX, event.clientY );
-		if ( ! frame || this.mode === 'mask' && frame.source !== this.maskSource ) return;
+		if ( ! frame || this.mode === 'pencil' && ( ! frame.director || this.editor.editWorkspace?.exclusive || this.editor.modalTransform?.active || this.editor.flyControls?.active ) || this.mode === 'mask' && frame.source !== this.maskSource ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		const { clientX: x, clientY: y } = event;
 		this.status.textContent = '';
-		this.selected = this.mode !== 'paint' ? this.nearestHandle( frame, x, y ) : - 1;
+		this.selected = ! [ 'paint', 'pencil' ].includes( this.mode ) ? this.nearestHandle( frame, x, y ) : - 1;
 		if ( this.mode === 'mask' ) {
 
 			if ( this.selected < 0 ) this.selected = this.points.push( normalized( this.layout.clientRect( frame ), x, y ) ) - 1;
@@ -922,10 +941,11 @@ export class ViewportTools {
 
 			} else {
 
-				const { output, diameter } = this.brush;
+				const brush = this.mode === 'pencil' ? this.pencil : this.brush;
+				const { output, diameter } = brush;
 				const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
 				const spacing = output === 'vector' ? diameter : Math.max( 2, diameter * .25 );
-				this.stroke = { ...this.brush, marks: new Set(), receivers: new Map(), surfaces: paintSurfaces( this.editor.scene ),
+				this.stroke = { ...brush, pencil: this.mode === 'pencil', startPixel: [ x, y ], marks: new Set(), receivers: new Map(), surfaces: paintSurfaces( this.editor.scene ),
 					sampler: new StrokeSampler( x, y, pressure, spacing ) };
 				if ( this.brush.output === 'texture' ) this.stroke.texture = new TexturePaintStroke( this.editor );
 				this.paintDab( frame, x, y, pressure );
@@ -1005,7 +1025,7 @@ export class ViewportTools {
 			const hit = meshHit( this.ray, this.editor.scene );
 			if ( hit?.object === this.target ) this.points[ this.selected ] = localSurfacePoint( hit, this.ray );
 
-		} else if ( this.mode === 'paint' ) {
+		} else if ( this.stroke ) {
 
 			this.brushCursor = samePane ? { x, y, frame } : null;
 			const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
@@ -1060,19 +1080,29 @@ export class ViewportTools {
 		if ( stroke.output === 'vector' || stroke.output === 'splat' ) {
 
 			let center;
-			if ( stroke.placement === 'view' ) {
+			if ( stroke.pencil && stroke.placement !== 'view' ) {
+
+				rayToView( this.ray, this.layout, frame, x, y );
+				const hit = meshHit( this.ray, this.editor.scene );
+				if ( hit ) {
+					const receiver = hasRestriction( hit.object, 'locked' ) ? this.editor.scene : hit.object;
+					center = { object: receiver, point: localSurfacePoint( hit, this.ray, receiver ) };
+				}
+
+			} else if ( stroke.placement !== 'view' ) center = sample( x, y, true );
+			if ( stroke.placement === 'view' || stroke.placement === 'auto' && ! center ) {
 
 				rayToView( this.ray, this.layout, frame, x, y );
 				const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-					frame.camera.getWorldDirection( new THREE.Vector3() ), this.editor.controls.getCenter( frame.camera ) );
+					frame.camera.getWorldDirection( new THREE.Vector3() ), stroke.pencil ? this.editor.cursor : this.editor.controls.getCenter( frame.camera ) );
 				const point = this.ray.ray.intersectPlane( plane, new THREE.Vector3() );
 				if ( point ) center = { object: this.editor.scene, point: this.editor.scene.worldToLocal( point ).toArray() };
 
-			} else center = sample( x, y, true );
+			}
 			if ( ! center ) {
 
 				stroke.segment = null;
-				this.status.textContent = stroke.placement === 'surface' ? 'Paint on a visible, unlocked surface.' : 'The brush ray does not reach the view plane.';
+				this.status.textContent = stroke.placement === 'surface' ? ( stroke.pencil ? 'Draw over a visible surface.' : 'Paint on a visible, unlocked surface.' ) : 'The brush ray does not reach the view plane.';
 				return;
 
 			}
@@ -1242,11 +1272,15 @@ export class ViewportTools {
 
 				}
 				if ( mark.points && mark.points.length < 2 ) continue;
-				const object = mark.points ? surfacePath( mark.points, stroke.color, false, stroke.opacity ) : surfacePaint( mark.positions, stroke.color, stroke.opacity );
+				const closed = stroke.pencil && stroke.marks.size === 1 && mark.points.length >= 4 &&
+					Math.hypot( event.clientX - stroke.startPixel[ 0 ], event.clientY - stroke.startPixel[ 1 ] ) < 10;
+				const object = mark.points ? surfacePath( closed ? mark.points.slice( 0, -1 ) : mark.points, stroke.color, closed, stroke.opacity ) :
+					surfacePaint( mark.positions, stroke.color, stroke.opacity );
+				if ( stroke.pencil ) object.name = 'Pencil stroke';
 				commands.push( new AddObjectCommand( this.editor, object, receiver, false ) );
 
 			}
-			if ( commands.length ) this.editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( this.editor, commands ), 'Paint surface stroke' );
+			if ( commands.length ) this.editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( this.editor, commands ), stroke.pencil ? 'Draw pencil stroke' : 'Paint surface stroke' );
 
 		}
 		if ( stroke ) this.render();

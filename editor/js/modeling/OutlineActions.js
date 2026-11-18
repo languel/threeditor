@@ -4,7 +4,7 @@ import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask, addLightMaskShape } from './LightMask.js?v=mask-editor';
 import { lightViewCamera } from './LightView.js';
-import { isClosedOutline, modelGeometry, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
+import { isClosedOutline, meshFromOutline, faceNormal, modelGeometry, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
 import { maskFromOutline } from './ProjectionMask.js';
 
 export function outlineActions( editor, object ) {
@@ -22,20 +22,42 @@ export function outlineActions( editor, object ) {
 	}
 	if ( closed && data.points.length >= 3 ) {
 
-		if ( data.kind === 'shape' || data.points.every( point => Math.abs( point[ 2 ] ) < 1e-6 ) ) {
+		if ( data.kind === 'path' ) {
 
-			const kind = data.kind === 'path' ? 'shape' : 'path';
-			add( kind === 'shape' ? 'Convert path to shape' : 'Convert shape to path', () => {
+			const origin = new THREE.Vector3( ...data.points[ 0 ] ).multiply( object.scale );
+			const vertices = data.points.map( point => new THREE.Vector3( ...point ).multiply( object.scale ).sub( origin ) );
+			const normal = faceNormal( THREE, { points: vertices.map( point => point.toArray() ) }, data.points.map( ( _, i ) => i ) );
+			const extent = vertices.reduce( ( max, point ) => Math.max( max, point.length() ), 0 );
+			if ( normal && vertices.every( point => Math.abs( normal.dot( point ) ) <= extent * 1e-4 ) ) add( 'Convert path to shape', () => {
 
-				const output = modelObject( THREE, { ...data, kind, closed: true, planar: true, depth: 0 }, object.name + ' ' + kind );
-				output.position.copy( object.position );
-				output.quaternion.copy( object.quaternion );
-				output.scale.copy( object.scale );
-				editor.execute( new AddObjectCommand( editor, output, object.parent ), 'Convert outline to ' + kind );
+				const rotation = new THREE.Quaternion().setFromUnitVectors( new THREE.Vector3( 0, 0, 1 ), normal );
+				const inverse = rotation.clone().invert();
+				const points = vertices.map( point => point.applyQuaternion( inverse ).setZ( 0 ).toArray() );
+				const output = modelObject( THREE, { ...data, kind: 'shape', points, closed: true, planar: true, depth: 0 }, object.name + ' shape' );
+				output.position.copy( origin ).applyQuaternion( object.quaternion ).add( object.position );
+				output.quaternion.copy( object.quaternion ).multiply( rotation );
+				editor.execute( new AddObjectCommand( editor, output, object.parent ), 'Convert outline to shape' );
 
 			} );
 
-		}
+		} else add( 'Convert shape to path', () => {
+
+			const output = modelObject( THREE, { ...data, kind: 'path', closed: true, planar: true, depth: 0 }, object.name + ' path' );
+			output.position.copy( object.position );
+			output.quaternion.copy( object.quaternion );
+			output.scale.copy( object.scale );
+			editor.execute( new AddObjectCommand( editor, output, object.parent ), 'Convert outline to path' );
+
+		} );
+		add( 'Convert outline to mesh', () => {
+
+			const output = modelObject( THREE, meshFromOutline( THREE, data ), object.name + ' mesh' );
+			output.position.copy( object.position );
+			output.quaternion.copy( object.quaternion );
+			output.scale.copy( object.scale );
+			editor.execute( new AddObjectCommand( editor, output, object.parent ), 'Convert outline to mesh' );
+
+		} );
 		const lights = [];
 		editor.scene.traverse( light => { if ( canEditLightMask( light ) ) lights.push( light ); } );
 		const active = editor.viewportSource;

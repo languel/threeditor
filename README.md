@@ -124,6 +124,8 @@ Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projec
 
 ### Measure and draw on receivers
 
+The **Pencil** glyph or **D** activates freehand drawing in any viewport mode. Strokes are editable paths. Auto placement binds to visible surfaces, with a view-plane fallback through the 3D Cursor. Use the placement menu to constrain a stroke to either one. End near the start to close a single contour, then use its right-click actions to make a shape or mesh, or reuse the outline in the mask editor.
+
 Use the mode selector at the upper left of the viewport to enter Object Mode, Edit Mode, Sculpt Mode or Paint Mode. **Tab** switches between Object Mode and Edit Mode. In the Blender keymap, **Ctrl+Tab** opens the mode pie. If the browser uses Ctrl+Tab to switch tabs, use the mode selector or search **Interaction mode menu** with **F3**. Object mode is for selecting and moving objects. Edit mode adds **Surface path** and geometry tools. **F3** also exposes the available Box Select, Circle Select, Knife, Fill and Extrude commands. **Measure** and light masks are available from the Object and Edit shelves. Use **Paint Mode** for brush work. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
 
 - **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Double-click the first point after placing at least three points to close the ruler. Closed rulers also show area. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.

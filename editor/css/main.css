@@ -2457,11 +2457,14 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 .viewport-toolbar-row { display: contents; }
 .viewport-header #toolbar { grid-area: 1 / 2; justify-self: center; }
 .viewport-header > .viewport-tool-panel { grid-area: 1 / 1; justify-self: start; min-width: 0; box-sizing: border-box; }
-.viewport-header > :is(.viewport-geometry-tools, .viewport-restore-toolbar) { grid-area: 2 / 1; }
+.viewport-header > :is(.viewport-geometry-tools, .viewport-restore-toolbar) { grid-area: 3 / 1; }
+.viewport-header > .viewport-tool-context { grid-area: 2 / 1 / auto / -1; }
+.viewport-tool-context:not(:has(.viewport-tool-options:not(:empty), output:not(:empty))) { display: none; }
 .viewport-header.narrow { grid-template-columns: minmax(0, 1fr) auto; }
 .viewport-header.narrow #toolbar { grid-area: 2 / 1 / auto / -1; }
 .viewport-header.narrow .viewport-controls { grid-column: 2; }
-.viewport-header.narrow > :is(.viewport-geometry-tools, .viewport-restore-toolbar) { grid-row: 3; }
+.viewport-header.narrow > .viewport-tool-context { grid-row: 3; }
+.viewport-header.narrow > :is(.viewport-geometry-tools, .viewport-restore-toolbar) { grid-row: 4; }
 .viewport-restore-toolbar { justify-self: start; margin: 4px; pointer-events: auto; }
 .viewport-restore-toolbar[hidden] { display: none !important; }
 .viewport-header .viewport-controls {
@@ -3099,7 +3102,7 @@ body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 .modifier-param input[type=number] { width: 80px; min-width: 0; }
 
 .viewport-transform-tools { display: grid; gap: 3px; }
-.viewport-transform-tools img { width: 16px; opacity: .7; }
+.viewport-transform-tools button { display: grid; place-items: center; min-height: 30px; }
 .viewport-selection-trigger { position: relative; }
 .viewport-selection-trigger::after {
 	content: '';
@@ -3122,12 +3125,16 @@ body .viewport-tool-panel .Button.model-control-button[aria-pressed="true"] {
 	color: var(--theme-text);
 }
 .viewport-selection-tools:popover-open { display: grid; gap: 2px; }
-body .viewport-geometry-tools .viewport-selection-tools button {
+body .viewport-geometry-tools .viewport-selection-tools .Button.model-control-button {
 	width: 100%;
 	display: flex;
 	align-items: center;
+	justify-content: start;
 	gap: 6px;
+	height: auto;
+	min-height: 28px;
 	padding: 3px 6px;
+	text-align: start;
 }
 body .viewport-geometry-tools .viewport-selection-tools :is(.model-control-icon, .model-control-label) { display: inline-flex; }
 .viewport-element-modes { display: flex; align-items: center; gap: 3px; }
@@ -3149,6 +3156,8 @@ body .viewport-geometry-tools .viewport-selection-tools :is(.model-control-icon,
 }
 .viewport-header.narrow::before { grid-row-end: 3; }
 .viewport-header > .viewport-tool-panel { background: transparent; }
+.viewport-header > .viewport-tool-context { background: var(--theme-background); }
+.viewport-header :is(#toolbar, .viewport-controls) { align-self: start; margin-block-start: 3px; }
 .viewport-header .viewport-controls { margin-inline-end: 4px; }
 .viewport-header > .viewport-geometry-tools { margin: 4px; }
 .viewport-header #toolbar { border-radius: 3px; }
