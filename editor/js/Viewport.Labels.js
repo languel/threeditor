@@ -44,8 +44,9 @@ class ViewportLabels {
 		for ( const object of editor.scene.children ) visit( object );
 		named.sort( ( a, b ) => Number( selection.has( b ) ) - Number( selection.has( a ) ) );
 
-		for ( const { camera, rect, source } of frames ) {
+		for ( const frame of frames ) {
 
+			const { camera, rect, source } = frame;
 			const placed = [];
 			const { x, y, width, height } = rect;
 			context.save();
@@ -54,7 +55,8 @@ class ViewportLabels {
 			context.clip();
 			for ( const object of named ) {
 
-				if ( object === camera || object === source || ! camera.layers.test( object.layers ) ) continue;
+				if ( object === camera || object === source || ! camera.layers.test( object.layers ) ||
+					editor.viewportVisibility?.allows( object, frame ) === false ) continue;
 				anchor.setFromMatrixPosition( object.matrixWorld ).project( camera );
 				if ( ! Number.isFinite( anchor.z ) || anchor.z < - 1 || anchor.z > 1 || Math.abs( anchor.x ) > 1 || Math.abs( anchor.y ) > 1 ) continue;
 

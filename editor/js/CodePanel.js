@@ -645,7 +645,6 @@ function CodePanel( editor ) {
 		if ( e.defaultPrevented ) e.stopPropagation();
 
 	}, true );
-	dom.addEventListener( 'keydown', ( e ) => e.stopPropagation() ); // keep editor shortcuts out of the code box
 
 	function onEdit() {
 

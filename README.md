@@ -18,6 +18,12 @@ In the 3D viewport, open the command palette with **F3**. **Vertical Split** pla
 
 Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
 
+## Workspaces
+
+The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens Code, and **Projection** opens a split light view when a projector or spotlight is selected. Small windows use workspace glyphs with tooltips.
+
+Use the viewport mode picker for **Object**, **Edit**, **Sculpt**, and **Paint**. Workspace tabs arrange tools and editors for a task.
+
 ## Examples, lessons, and saved projects
 
 Open **File → Examples** for a searchable folder tree:
@@ -118,7 +124,7 @@ Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projec
 
 ### Measure and draw on receivers
 
-Use the mode selector at the upper left of the viewport to enter Object Mode, Edit Mode, Sculpt Mode or Surface Paint. **Tab** switches between Object Mode and Edit Mode. Object mode is for selecting and moving objects. Edit mode adds **Surface path** and geometry tools. **Surface Paint**, **Measure**, and light masks work in either mode. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
+Use the mode selector at the upper left of the viewport to enter Object Mode, Edit Mode, Sculpt Mode or Paint Mode. **Tab** switches between Object Mode and Edit Mode. In the Blender keymap, **Ctrl+Tab** opens the mode pie. If the browser uses Ctrl+Tab to switch tabs, use the mode selector or search **Interaction mode menu** with **F3**. Object mode is for selecting and moving objects. Edit mode adds **Surface path** and geometry tools. **F3** also exposes the available Box Select, Circle Select, Knife, Fill and Extrude commands. **Measure** and light masks are available from the Object and Edit shelves. Use **Paint Mode** for brush work. Compact mode uses glyphs with hover labels for tools, actions, and toggles, including the ruler controls. Measurements, units, and editable values stay visible.
 
 - **Measure** places rulers on mesh surfaces or the ground. Turn on **Snap vertices** for nearby corners and **Bind to mesh** to follow mesh transforms. Double-click the first point after placing at least three points to close the ruler. Closed rulers also show area. Enter a known total length and choose **Calibrate units** to set the scene’s measurement scale. Select a saved ruler and re-enter Measure to adjust its points.
 - **Surface path** places points on one mesh and samples between them when you save. Add points around holes or silhouettes to keep the path on the receiver. Double-click the first point to close the loop before saving. Saved paths can be edited in **Modeling**.
@@ -129,11 +135,21 @@ Use the mode selector at the upper left of the viewport to enter Object Mode, Ed
 
 Use **Enter** to apply a mask or save a ruler or path. **Esc** cancels an active operation first; otherwise it clears the selection while keeping the current tool.
 
+## 2D and 3D areas
+
+Open **UV** or **Image & Vector** from **2D Editors**. When there is room, the 2D editor opens on the left with a live 3D view on the right. Drag the divider or focus it and press Left or Right to resize. Use the split glyph in the 2D header to switch between the split and a full-width editor. Narrow windows use the full-width editor. Mask and Warp can also use the split.
+
+The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to use modeling shortcuts there.
+
+## Outliner and Properties
+
+The Outliner stays above Properties, with a divider you can drag or resize with the arrow keys. Search filters the hierarchy and includes parents of matching objects. Properties uses vertical glyph tabs for Scene, Object, Geometry, Material, Components, Modeling, Modifiers, and Animations. The available tabs follow the selection. Open **Scene** for Background, Environment, Fog, Bloom, and Focus.
+
 ## Paths, shapes, and meshes
 
 Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view and its split companion. Projector outputs, Preview and Play stay clean. The WebGPU renderer falls back to bounds.
 
-Press **Tab** or click **Edit mode**. The single-column left tool shelf holds drawing tools, **Polybuild (6)**, **Knife (K)**, and **Sculpt brushes**. The active tool has an accent highlight and a tooltip. Mode controls stay at the top-left, transforms and grid settings are centered, and view controls stay at the top-right. Narrow viewports move transforms onto their own centered row. Open the **Mesh and point operations** menu (three dots) for fill, split, weld, extrusion, and deletion. The top toolbar holds transforms, snapping, placement, view, and the **2D Editors** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
+Press **Tab** or click **Edit mode**. The single-column Edit shelf holds drawing tools, **Polybuild (6)**, and **Knife (K)**. Sculpt has a brush shelf with radius and strength in the viewport header. Each mode remembers its active tool where it applies. Press **T** to toggle the shelf. The active tool has an accent highlight and a tooltip. Mode controls stay at the top-left, transforms and grid settings are centered, and view controls stay at the top-right. Narrow viewports move transforms onto their own centered row. Open the **Mesh and point operations** menu (three dots) for fill, split, weld, extrusion, and deletion. The top toolbar holds transforms, snapping, placement, view, and the **2D Editors** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
 
 Use **Shift+A** to add mesh primitives at the 3D cursor. In Object Mode this creates an object. In mesh Edit Mode the primitive joins the current mesh and its new elements become the selection. Cube and Plane have editable quad faces, and Cube has a separate UV island for each face. In the Blender keymap, Plane lies on the ground plane.
 
@@ -143,7 +159,21 @@ Use **Shift+A** to add mesh primitives at the 3D cursor. In Object Mode this cre
 
 **Add → Mesh** also offers editable objects with starter points. Shift-click point handles to extend the selection, or enter coordinates in **Modeling**. In split view use the Director pane. Press **Tab** to return to Object mode. Extrusion and placement commit together as one undo step.
 
+In Edit Mode, double-click a path or shape edge to insert a point. The same gesture works in the Image & Vector and Mask editors with the point editing tool. In the 3D view, **F3 → Insert outline point** inserts after the selected point, and **F3 → Toggle outline smoothing** switches between straight segments and a smooth curve. These edits can be undone.
+
 Right-click with an outline selected to close it, convert a planar path to a shape, or convert a shape back to a path. Conversion creates a separate object. **Fit outline to mask** normalizes the outline for the chosen projector or spotlight. Look through a light and choose **Project outline as mask** to use the outline’s actual position in the light frame.
+
+### Object selection
+
+Choose **Box Select** (**B**), **Lasso Select**, or **Circle Select** (**C**) from the left shelf, right-click menu, or **F3**. In Object Mode, drag over object origins in either viewport pane. Hidden, disabled, and selection-restricted objects are skipped. Hold **Shift** to extend, **Ctrl** to subtract, or use the selection operation in the viewport header. **[** and **]** resize Circle Select. **Esc** cancels an active selection, and **Numpad Decimal** frames the selected objects.
+
+**Numpad /** toggles **Local View** for the selection. On keyboards without a numpad, use **F3 → Toggle Local View** or the viewport context menu. In Object Mode, **H** temporarily hides selected objects, **Shift+H** hides the rest, and **Alt+H** restores temporary hides. Use the **Local View** and **Reveal** buttons in the viewport to exit isolation or restore hidden objects. These controls affect Director panes during editing. Scene cameras, projector views, Play, and saved projects use the authored visibility. Realistic shading uses raster preview in a temporarily filtered Director pane.
+
+### 3D Cursor
+
+In Object or Edit Mode, **Shift+right-click** in a Director pane to place the 3D Cursor. You can also choose **Place 3D Cursor** on the shelf and click. A surface hit places the cursor on the visible mesh. In empty space, placement uses a plane facing the view at the cursor's current depth.
+
+New objects from **Add** are placed at the cursor. Lights and projectors keep their starting offsets relative to it. Press **period** and choose **3D Cursor** to rotate or scale around it. The Blender preset assigns **Shift+S** to the cursor snap menu. Use it to snap the cursor to the grid, selected objects or points, or world origin, or to move the selection to the cursor while keeping its offsets. Planar outlines stay on their drawing plane. The cursor position is saved with the project.
 
 ### Topology pen and sculpting
 
@@ -287,7 +317,7 @@ Saved measurements are selectable by clicking their lines or choosing them in th
 
 In **Edit mode**, use the vertex, edge and face glyphs beside the mode controls, or **1**, **2**, **3**. Click an element to select it; Shift-click adds or removes elements. **G/R/S** and the transform gizmo act on the selected vertices, edges or faces. Primitive/imported static meshes expose their triangles while preserving their UV seams and material groups during transforms; authored meshes retain polygon faces and topology operations. The topology pen remains a separate drawing tool.
 
-Right-click opens actions for the current selection and mode. **Set origin → Origin to geometry / world origin / selected geometry** changes an eligible mesh or group’s origin while keeping its geometry and children in place, with undo. **Transform pivot** chooses bounds, median, active element or world origin for subsequent transforms. The app header’s editor glyph opens the 3D, mask, image/vector, UV and warp workspaces.
+Right-click opens actions for the current selection and mode. **Set origin → Origin to geometry / 3D Cursor / world origin / selected geometry** changes an eligible mesh or group’s origin while keeping its geometry and children in place, with undo. **Transform pivot** chooses bounds, median, active element, 3D Cursor, or world origin for subsequent transforms. The app header’s editor glyph opens the 3D, mask, image/vector, UV and warp workspaces.
 
 **Bounds bottom center** is available in Transform pivot and the selection context menu, using the world-aligned bounds minimum Y and center X/Z. It applies to objects, multiple objects, and selected mesh elements. **Origin to bounds bottom center** permanently relocates an eligible object’s origin with undo while preserving its geometry’s world position.
 

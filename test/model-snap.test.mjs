@@ -9,11 +9,8 @@ const restrictions = new URL( '../ObjectRestrictions.js', models ).href;
 async function moduleUrl( name, imports = {} ) {
 
 	let source = await readFile( new URL( name, models ), 'utf8' );
-	for ( const [ from, to ] of Object.entries( { 'three': three, '../ObjectRestrictions.js': restrictions, ...imports } ) ) {
-
-		source = source.replace( `from '${ from }'`, `from '${ to }'` );
-
-	}
+	const replacements = { 'three': three, '../ObjectRestrictions.js': restrictions, ...imports };
+	source = source.replace( /from '([^'?]+)(?:\?[^']+)?'/g, ( match, from ) => replacements[ from ] ? `from '${ replacements[ from ] }'` : match );
 	return 'data:text/javascript;base64,' + Buffer.from( source ).toString( 'base64' );
 
 }

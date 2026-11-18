@@ -30,13 +30,29 @@ Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open
 
 ### Mode and tool layout
 
-The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. The pressed tool button identifies the active tool without an extra label. Mode controls stay top-left, transform/grid controls center, and view controls top-right; a ResizeObserver puts transforms on a separate centered row when the viewport is narrow. Operation menus align glyphs and labels on one left-aligned row. Active shelf buttons use the same centered accent fill as transforms; keep their selector specific enough to override the nested theme Button rule. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.
+The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. The mode picker exposes Object, Edit, Sculpt and Paint. The shelf follows the mode, and returning to Edit or Sculpt restores its last compatible tool. The pressed tool button identifies the active tool without an extra label. The T binding and View menu toggle the tool shelf independently of the transform row. Mode controls stay top-left, transform/grid controls center, and view controls top-right; a ResizeObserver puts transforms on a separate centered row when the viewport is narrow. Operation menus align glyphs and labels on one left-aligned row. Active shelf buttons use the same centered accent fill as transforms; keep their selector specific enough to override the nested theme Button rule. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.
 
 The topology pen turns on when a mesh profile closes. Subsequent empty-space clicks collect a new face draft in the same object, reusing existing vertices when picked. Clicking the first corner or pressing F closes the face. Escape discards the draft. An uncommitted face stays outside serialized geometry.
+
+`Keymap.js` resolves the active area from the pointer or keyboard focus. The mesh and viewport tool handlers use the same routing as F3. Active transforms retain their confirmation and cancellation keys. `Animation.js` shares timeline delete commands between the inspector buttons and shortcuts. The unified workspace check exercises Outliner hover during mesh editing, area-specific F3 results, and timeline key deletion and undo.
+
+### Workspace tabs
+
+`WorkspaceTabs.js` opens the existing modes, docks, and editors from the application header or command palette. Layout starts with a short timeline, Animation expands it, and Projection can put the selected projector or spotlight alongside the Director. The header wraps onto separate rows and uses compact glyphs on phones. It shares one height with viewport positioning and top-menu auto-hide.
+
+### Outliner and Properties
+
+`Sidebar.Scene.js` supplies the Outliner and the Scene properties content. `Sidebar.js` docks them in independent regions. Search filters names and types while keeping matching ancestors and preserving collapsed branches. The Properties tabs follow selection and support arrow-key navigation. The Timeline spans the workspace to the left of the sidebar on desktop. In Assets, the Add assets disclosure keeps the preview visible in shorter panes.
 
 ### Selection feedback
 
 `Viewport.SelectionOutline.js` adapts ThreeGrease's alpha silhouette pass. It renders selected roots with their own materials (including cutouts, point sprites and deforming meshes) and composites a two CSS pixel orange rim. SplatHost attaches the scan renderer during the isolated pass. All visibility, ancestor layers, render target, viewport, scissor, background, override material and shadow-update state are restored, including on exceptions. The selection pass runs in the Director editing view and its split companion. Preview, Play and exported output omit the selection overlay. Settings → General → Selection highlight defaults to Outline; optional bounds modes remain available. WebGPU/XR use the bounds fallback. Test selection and deselection, a child mesh under another mesh, transparent textures, multi-selection, split views and renderer replacement.
+
+Object and Edit modes share region geometry and selection operations through `modeling/MeshSelection.js`. `modeling/ObjectSelection.js` projects eligible object origins into the pane where a gesture starts. The normal selector still owns selection and pivots. Removing a selection that includes both a parent and its descendants records the parent once, so undo restores the whole hierarchy.
+
+Local View and temporary hides live in `modeling/ViewportVisibility.js`. The Director draw scopes visibility and restores it in a `finally` block, including ancestor layers used to keep selected child meshes visible. Selection, measurement, snapping, paint, and asset drops use the same filter. Optical views and Play continue to render the authored scene. Realistic Director mode uses raster preview while a filter is active.
+
+The 3D Cursor is saved in the editor snapshot as `cursor3D`. `modeling/ViewportCursor.js` projects placement into the active Director pane and reuses viewport visibility for surface hits. Add-menu commands use the cursor as their placement offset. The Shift+S menu shares commands with F3, and the cursor pivot anchors the existing object group and mesh transform proxies. Selection-to-cursor uses the normal history for both modes.
 
 ### Profile building and extrusion
 
@@ -45,9 +61,11 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 - In a narrow viewport, use the **2D Editors** menu in the app’s top bar to enter Mask, Image and Vector, UV, or Warp. The menu stays anchored as the workspace changes. Drawing actions live in vertical tool strips, while view and transform settings stay horizontal. The Ground plane placement uses a down-arrow over a plane glyph.
 - Smoke-test by closing a polygon from **Build mesh**, previewing and canceling a pull, entering an exact signed extrusion distance, and undoing. Close and extrude a smooth path. Check the workspace menu at desktop and narrow widths.
 
+3D paths and shapes, 2D vectors, and projector masks use the same contour segment hit test and point insertion. `modeling/Contour.js` keeps the closing edge implicit. The 3D editor picks against rendered curve samples, preserves local coordinates, and commits through geometry history. The 2D editor applies its draft through its existing command, and projection and mask compositing retain their normalized image coordinates.
+
 ### Docked 2D editing
 
-- `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp in the viewport and retains the 3D layout on exit. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.
+- `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp. UV and Image & Vector default to a resizable split with the live 3D view when the available workspace is at least 640 pixels wide. All four can use the split through its header button. The 3D camera and any existing 3D split are retained on exit. UV follows another selected mesh after the current draft is applied. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.
 - Image & Vector reuses the drawing workspace in `MaskEditor.js`. It saves the vector contours in `scene.userData.vectorDrawing`. The local reference image is held in memory during editing. SVG exports the vectors, and PNG renders the shape and reference composite.
 - Smoke-test by opening Mask from the viewport toolbar and applying a multi-shape mask, switching to UV on a selected mesh, then loading a reference in Image & Vector. Apply a colored contour, export SVG and PNG, and reopen the mode to confirm the contour persists. Use **3D View** to return, then test the projector in Play.
 
@@ -59,13 +77,13 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 ### DDA Gallery projection mapping
 
-The deployed feature revision is `bac7827`. Open **File → Examples → Captured spaces → DDA Gallery · Lofts and cinema fragments**. The scene opens on **Director** with the cutaway proxy visible. Reveal the bundled **Scan · DDA Gallery Empty Dark** from the outliner. Three tapered, tilted lofts receive archival films, and three projectors feed head and hand crops onto the tilted ovoid on the floor. The crop feeds start with authored timing. Enable **Script → Live tracking** on an Orb projector to load MediaPipe models and WASM on demand.
+The deployed feature revision is `bac7827`. Open **File → Examples → Captured spaces → DDA Gallery · Lofts and cinema fragments**. The scene opens on **Director** with the cutaway proxy visible. Reveal the bundled **Scan · DDA Gallery Empty Dark** from the outliner. Three tapered, tilted lofts receive archival films, and three projectors feed head and hand crops onto the tilted ovoid on the floor. The crop feeds start with authored timing. Enable **Components → Live tracking** on an Orb projector to load MediaPipe models and WASM on demand.
 
 - `modeling/ProjectorMapping.js` supplies the functions embedded in serialized projector scripts. The silhouette raster is cached against the lens, transforms, and receiver geometry. `projectorTarget` stores the receiver UUID and `projectorWarp` stores the sampling grid in the rig's `userData`. `assets/Projector.js` upgrades older generated scripts, and `Publish.js` includes the mapping module in playable packages.
 - `modeling/UVEditor.js` exposes the target picker and warp dialog for projectors, plus the UV dialog for static meshes. `UVLayout.js` generates planar, box, or projector UVs. UV edits change the mesh material mapping. The 4 × 4 warp changes the outgoing projector image. Both edits are undoable.
 - Rebuild this scene with `node tools/build-gallery-examples.mjs ~/dev/mediatheque --cinema-only`. The generator tests sightlines against opaque gallery meshes and fails if a sampled ray is blocked before reaching its receiver. The saved arrangement checked 9,699 receiver rays across six projectors with zero blocked samples.
 
-For a smoke test, select **Plate projector · Fold · Serpentine**, turn on **Script → Calibration grid**, and enable **Split view**. Move the rig back and check that the mask follows **Fold · Serpentine**. Drag a warp handle, apply, and undo. On the loft, open **Modeling → Edit UVs**, choose the plate projector, apply **Auto layout**, and undo. Set the rig as the main camera, choose **Masked texture**, and start Play to verify the outgoing frame. The 55-test suite passed at `bac7827`. The deployed editor passed checks for these mapping controls, masked Play output, scan loading, and live tracking. See the [gallery notes](editor/examples/gallery/README.md) for scene setup and credits.
+For a smoke test, select **Plate projector · Fold · Serpentine**, turn on **Components → Calibration grid**, and enable **Split view**. Move the rig back and check that the mask follows **Fold · Serpentine**. Drag a warp handle, apply, and undo. On the loft, open **Modeling → Edit UVs**, choose the plate projector, apply **Auto layout**, and undo. Set the rig as the main camera, choose **Masked texture**, and start Play to verify the outgoing frame. The 55-test suite passed at `bac7827`. The deployed editor passed checks for these mapping controls, masked Play output, scan loading, and live tracking. See the [gallery notes](editor/examples/gallery/README.md) for scene setup and credits.
 
 ## Implementation map
 

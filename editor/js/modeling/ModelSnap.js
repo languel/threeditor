@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { isVisible } from '../ObjectRestrictions.js';
-import { meshHit } from './SurfacePicking.js';
+import { meshHit } from './SurfacePicking.js?v=local-view';
 
 export const modelSnapTargets = [
 	[ 'increment', 'Increment', 'toolSnap' ], [ 'grid', 'Grid', 'toolGrid' ],
@@ -36,14 +36,14 @@ function screenPoint( point, camera, rect ) {
 }
 
 // Measure feature proximity in pixels so zooming does not change the pick tolerance.
-export function snapMeshFeature( { mode, ray, scene, object, camera, rect, cursor, reference, points = [], excluded = [] } ) {
+export function snapMeshFeature( { mode, ray, scene, object, camera, rect, cursor, reference, points = [], excluded = [], allows } ) {
 
 	if ( mode === 'object' ) {
 
 		let nearest = 24, result;
 		scene.traverseVisible( candidate => {
 
-			if ( candidate === scene || candidate === object || candidate.userData.runtimeOnly || ! isVisible( candidate ) ) return;
+			if ( candidate === scene || candidate === object || candidate.userData.runtimeOnly || ! isVisible( candidate ) || allows?.( candidate ) === false ) return;
 			const point = candidate.getWorldPosition( new THREE.Vector3() );
 			const distance = screenPoint( point, camera, rect )?.distanceTo( cursor );
 			if ( distance < nearest ) { nearest = distance; result = point; }
@@ -53,7 +53,7 @@ export function snapMeshFeature( { mode, ray, scene, object, camera, rect, curso
 
 	}
 
-	const hit = meshHit( ray, scene, object );
+	const hit = meshHit( ray, scene, object, allows );
 	const candidates = [];
 	if ( hit ) {
 

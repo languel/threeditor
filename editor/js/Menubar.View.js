@@ -128,6 +128,9 @@ function MenubarView( editor ) {
 
 	options.add( new UIHorizontalRule() );
 
+	options.add( new UIRow().setClass( 'option' ).setTextContent( 'Toggle tool shelf' )
+		.onClick( () => editor.viewTools.toggleShelf() ) );
+
 	// Fullscreen
 
 	option = new UIRow();

@@ -6,18 +6,23 @@ import { UITabbedPanel } from './libs/ui.js';
 import { SidebarObject } from './Sidebar.Object.js?v=mask-editor';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=brush-shortcuts';
-import { editableMesh } from './modeling/ModelViewport.js?v=tool-layout';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=contour-editing';
+import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=dda-cinema';
+import { icon } from './Glyphs.js?v=mode-shelves';
 
-function SidebarProperties( editor ) {
+function SidebarProperties( editor, sceneSettings ) {
 
 	const strings = editor.strings;
 
 	const container = new UITabbedPanel();
 	container.setId( 'properties' );
+	const strip = container.tabsDiv.dom;
+	strip.setAttribute( 'role', 'tablist' );
+	strip.setAttribute( 'aria-label', 'Property categories' );
+	strip.setAttribute( 'aria-orientation', 'vertical' );
 
 	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ), 'sidebar/properties/object' );
 	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ), 'sidebar/properties/geometry' );
@@ -35,61 +40,24 @@ function SidebarProperties( editor ) {
 		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) container.select( tab.dom.id );
 	} );
 
-	function getTabByTabId( tabs, tabId ) {
-
-		return tabs.find( function ( tab ) {
-
-			return tab.dom.id === tabId;
-
-		} );
-
-	}
-
-	const geometryTab = getTabByTabId( container.tabs, 'geometryTab' );
-	const materialTab = getTabByTabId( container.tabs, 'materialTab' );
-	const modifiersTab = getTabByTabId( container.tabs, 'modifiersTab' );
-	const modelingTab = getTabByTabId( container.tabs, 'modelingTab' );
-	const scriptTab = getTabByTabId( container.tabs, 'scriptTab' );
-	const animationsTab = getTabByTabId( container.tabs, 'animationsTab' );
-
+	let previousSelection;
 	function toggleTabs( object ) {
 
-		container.setHidden( object === null );
-
-		if ( object === null ) return;
-
-		geometryTab.setHidden( ! object.geometry );
-
-		materialTab.setHidden( ! object.material && ( ! object.isGroup || isProjector( object ) ) );
-
-		scriptTab.setHidden( object === editor.camera );
-		animationsTab.setHidden( ! object.animations.length );
-		if ( container.selected === 'animationsTab' && animationsTab.isHidden() ) container.select( 'objectTab' );
-
-		modifiersTab.setHidden( ! canModify( object ) );
-		if ( container.selected === 'modifiersTab' && modifiersTab.isHidden() ) container.select( 'objectTab' );
-
-		modelingTab.setHidden( ! object.geometry?.userData.modeling && ! editableMesh( object ) && ! canMaskLight( object ) );
-
-		// set active tab
-
-		if ( container.selected === 'geometryTab' ) {
-
-			container.select( geometryTab.isHidden() ? 'objectTab' : 'geometryTab' );
-
-		} else if ( container.selected === 'materialTab' ) {
-
-			container.select( materialTab.isHidden() ? 'objectTab' : 'materialTab' );
-
-		} else if ( container.selected === 'modelingTab' ) {
-
-			container.select( modelingTab.isHidden() ? 'objectTab' : 'modelingTab' );
-
-		} else if ( container.selected === 'scriptTab' ) {
-
-			container.select( scriptTab.isHidden() ? 'objectTab' : 'scriptTab' );
-
-		}
+		const scene = ! object || object === editor.scene;
+		const visible = {
+			sceneTab: true,
+			objectTab: ! scene,
+			geometryTab: !! object?.geometry,
+			materialTab: !! object && ( !! object.material || object.isGroup && ! isProjector( object ) ),
+			scriptTab: !! object && object !== editor.camera,
+			modelingTab: !! object && ( !! object.geometry?.userData.modeling || editableMesh( object ) || canMaskLight( object ) ),
+			modifiersTab: !! object && canModify( object ),
+			animationsTab: !! object?.animations.length
+		};
+		for ( const tab of container.tabs ) tab.setHidden( ! visible[ tab.dom.id ] );
+		if ( scene && previousSelection !== object || ! visible[ container.selected ] ) container.select( scene ? 'sceneTab' : 'objectTab' );
+		else if ( ! scene && ( ! previousSelection || previousSelection === editor.scene ) && container.selected === 'sceneTab' ) container.select( 'objectTab' );
+		previousSelection = object;
 
 	}
 

@@ -86,7 +86,7 @@ class EditorControls extends THREE.EventDispatcher {
 			if ( box.isEmpty() === false ) {
 
 				box.getCenter( center );
-				distance = box.getBoundingSphere( sphere ).radius;
+				distance = Math.max( 0.1, box.getBoundingSphere( sphere ).radius );
 
 			} else {
 

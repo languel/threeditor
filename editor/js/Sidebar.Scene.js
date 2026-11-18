@@ -1,7 +1,7 @@
 import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import * as THREE from 'three';
 
-import { UIPanel, UIBreak, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
+import { UIPanel, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { isProjector } from './assets/Projector.js';
@@ -39,14 +39,27 @@ function SidebarScene( editor ) {
 	const strings = editor.strings;
 
 	const container = new UIPanel();
-	container.setBorderTop( '0' );
-	container.setPaddingTop( '20px' );
+	container.dom.classList.add( 'scene-properties' );
+	const outlinerArea = document.createElement( 'section' );
+	outlinerArea.className = 'sidebar-outliner';
+	outlinerArea.setAttribute( 'aria-label', 'Outliner' );
+	const header = document.createElement( 'div' );
+	header.className = 'sidebar-area-header';
+	const title = document.createElement( 'span' );
+	title.textContent = 'Outliner';
+	const search = document.createElement( 'input' );
+	search.type = 'search';
+	search.className = 'Input';
+	search.placeholder = 'Search';
+	search.setAttribute( 'aria-label', 'Search Outliner' );
+	header.append( title, search );
+	outlinerArea.append( header );
 
 	// outliner
 
 	const nodeStates = new WeakMap();
 
-	function buildOption( object, draggable ) {
+	function buildOption( object, draggable, filtering = false ) {
 
 		const option = document.createElement( 'div' );
 		option.draggable = draggable;
@@ -92,7 +105,7 @@ function SidebarScene( editor ) {
 
 		if ( nodeStates.has( object ) ) {
 
-			const state = nodeStates.get( object );
+			const state = filtering || nodeStates.get( object );
 
 			const opener = document.createElement( 'span' );
 			opener.classList.add( 'opener' );
@@ -101,10 +114,10 @@ function SidebarScene( editor ) {
 
 				option.setAttribute( 'aria-expanded', String( state ) );
 				opener.classList.add( state ? 'open' : 'closed' );
-				opener.addEventListener( 'click', function () {
+				if ( ! filtering ) opener.addEventListener( 'click', function () {
 
 					nodeStates.set( object, ! state );
-					refreshUI();
+					refreshOutliner();
 
 				} );
 
@@ -295,8 +308,8 @@ function SidebarScene( editor ) {
 		editor.focusById( parseInt( outliner.getValue() ) );
 
 	} );
-	container.add( outliner );
-	container.add( new UIBreak() );
+	outlinerArea.append( outliner.dom );
+	search.addEventListener( 'input', refreshOutliner );
 
 	// background
 
@@ -585,22 +598,30 @@ function SidebarScene( editor ) {
 		object: editor.scene.uuid, kind: 'object', property: 'backgroundRotation', label: 'Background rotation'
 	} ), { display: value => backgroundRotation.setValue( value[ 1 ] * THREE.MathUtils.RAD2DEG ) } );
 
-	function refreshUI() {
+	function refreshOutliner() {
 
 		const camera = editor.camera;
 		const scene = editor.scene;
+		const query = search.value.trim().toLowerCase();
+		const matches = new Set();
+		function match( object ) {
 
-		const options = [];
+			if ( object.userData?.runtimeOnly ) return false;
+			const childMatches = object.children.map( match ).some( Boolean );
+			if ( ! childMatches && ! [ object.name, getObjectType( object ) ].some( name => name.toLowerCase().includes( query ) ) ) return false;
+			matches.add( object );
+			return true;
 
-		options.push( buildOption( camera, false ) );
-		options.push( buildOption( scene, false ) );
+		}
+		if ( query ) { match( camera ); match( scene ); }
+		const options = [ camera, scene ].filter( object => ! query || matches.has( object ) ).map( object => buildOption( object, false ) );
 
 		( function addObjects( objects, pad ) {
 
 			for ( let i = 0, l = objects.length; i < l; i ++ ) {
 
 				const object = objects[ i ];
-				if ( object.userData?.runtimeOnly ) continue;
+				if ( object.userData?.runtimeOnly || query && ! matches.has( object ) ) continue;
 
 				if ( nodeStates.has( object ) === false ) {
 
@@ -608,12 +629,12 @@ function SidebarScene( editor ) {
 
 				}
 
-				const option = buildOption( object, true );
+				const option = buildOption( object, true, Boolean( query ) );
 				option.style.paddingLeft = ( pad * 18 ) + 'px';
 				option.setAttribute( 'aria-level', String( pad + 2 ) );
 				options.push( option );
 
-				if ( nodeStates.get( object ) === true ) {
+				if ( query || nodeStates.get( object ) === true ) {
 
 					addObjects( object.children, pad + 1 );
 
@@ -627,6 +648,12 @@ function SidebarScene( editor ) {
 
 		outliner.setValues( editor.selector.selection.map( object => object.id ), editor.selected?.id );
 
+	}
+
+	function refreshUI() {
+
+		refreshOutliner();
+		const scene = editor.scene;
 		backgroundType.setValue( editor.backgroundType );
 
 		switch ( editor.backgroundType ) {
@@ -850,7 +877,7 @@ function SidebarScene( editor ) {
 
 	} );
 
-	return container;
+	return { outlinerArea, settings: container };
 
 }
 

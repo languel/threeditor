@@ -43,3 +43,17 @@ export function fitDrawingContour( points ) {
 	] );
 
 }
+
+export function contourClosed( contour ) {
+
+	return contour.kind === 'shape' ? contour.closed !== false : contour.closed === true;
+
+}
+
+export { segmentCount as contourEdgeCount };
+
+export function projectToSegment( point, start, end ) {
+
+	return { ...closestPointOnSegment( point, start, end ), length: Math.hypot( ...end.map( ( value, axis ) => value - start[ axis ] ) ) };
+
+}

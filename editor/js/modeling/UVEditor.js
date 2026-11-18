@@ -50,7 +50,7 @@ export function addProjectorTargetControl( editor, projector, host, run ) {
 
 }
 
-export function openUVEditor( editor, object ) {
+export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 	if ( ! object || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) return;
 	const warp = isProjector( object );
@@ -67,7 +67,7 @@ export function openUVEditor( editor, object ) {
 	status.setAttribute( 'role', 'status' );
 	const size = object.userData.projectorWarp?.size || 4;
 	let geometry = object.geometry;
-	let selected = [], dragging;
+	let selected = [], dragging, dirty = false;
 	let original = object.geometry;
 	function reset() {
 
@@ -100,6 +100,7 @@ export function openUVEditor( editor, object ) {
 			geometry = next;
 			points = reset();
 			selected = [];
+			dirty = true;
 
 		} ) );
 
@@ -123,15 +124,16 @@ export function openUVEditor( editor, object ) {
 			uv.needsUpdate = true;
 			const command = new SetGeometryCommand( editor, object, next );
 			command.updatable = false;
+			dirty = true;
 			editor.execute( command, 'Edit UVs' );
 			if ( geometry !== original ) geometry.dispose();
 			original = geometry = next;
+			dirty = false;
 
 		}
 		status.textContent = warp ? 'Warp applied.' : 'UVs applied.';
 
 	} ) );
-	modelButton( toolbar, 'Close workspace', 'exitTool', () => editor.editWorkspace.close() );
 	function line( indices ) {
 
 		ctx.beginPath();
@@ -211,6 +213,7 @@ export function openUVEditor( editor, object ) {
 
 		if ( ! dragging ) return;
 		const at = cursor( event );
+		if ( selected.length ) dirty = true;
 		selected.forEach( ( index, i ) => {
 
 			points[ index ] = dragging.points[ i ].map( ( value, axis ) => {
@@ -233,12 +236,23 @@ export function openUVEditor( editor, object ) {
 
 	};
 	workspacePanel.append( toolbar, canvas, status );
+	const updateGeometry = changed => {
+
+		if ( warp || changed !== object || object.geometry === original || dirty ) return;
+		original = geometry = object.geometry;
+		points = reset();
+		selected = [];
+		draw();
+
+	};
+	editor.signals.geometryChanged.add( updateGeometry );
 	editor.editWorkspace.mount( warp ? 'warp' : 'uv', object, workspacePanel, () => {
 
+		editor.signals.geometryChanged.remove( updateGeometry );
 		if ( ! warp && geometry !== original ) geometry.dispose();
 
-	} );
-	canvas.focus();
+	}, () => dirty );
+	if ( focus ) canvas.focus();
 	draw();
 
 }

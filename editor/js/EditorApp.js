@@ -1,20 +1,20 @@
 import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=area-splits';
-import { Keymap } from './Keymap.js?v=brush-shortcuts';
-import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
+import { Editor } from './Editor.js?v=cursor-3d';
+import { Keymap } from './Keymap.js?v=cursor-3d';
+import { ModalTransform } from './ModalTransform.js?v=local-view';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=area-splits';
-import { Toolbar } from './Toolbar.js?v=poly-context';
+import { Viewport } from './Viewport.js?v=cursor-3d';
+import { Toolbar } from './Toolbar.js?v=cursor-3d';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=code-toggle';
-import { Menubar } from './Menubar.js?v=tool-layout';
+import { Sidebar } from './Sidebar.js?v=local-view';
+import { Menubar } from './Menubar.js?v=cursor-3d';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=area-splits';
+import { ContextMenu } from './ContextMenu.js?v=cursor-3d';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
@@ -22,7 +22,7 @@ import { WorkspaceArea } from './WorkspaceArea.js';
 import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
 import { CodePanel } from './CodePanel.js?v=code-toggle';
 import { AnimationResizer } from './AnimationResizer.js';
-import { Animation } from './Animation.js?v=timeline-autokey';
+import { Animation } from './Animation.js?v=workspace-tabs';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

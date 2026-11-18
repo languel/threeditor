@@ -42,3 +42,18 @@ Baseline is the local annotated tag `pre-unified-workspace` at `4a5ab83`. All 76
 - Initial texture support assumes usable UVs. Initial surface attachments follow rigid object transforms. Deforming topology and scan reimport need explicit remapping rules before they can preserve attachments.
 - Blender bindings can collide with browser and operating-system shortcuts. Test the actual focus and platform combinations and provide visible alternatives.
 - Treat projector aperture previews, live media and existing script parameters as compatibility checks during each slice. A layout pass alone can break their event routing.
+
+
+## Latest checkpoint
+
+The remote workspace commit added an interaction-mode selector, the Blender shading pie, three paint outputs, and an authoring walkthrough. The next input pass added the Ctrl+Tab mode pie and made Box, Lasso, Circle, Knife, Invert, Fill, and Extrude searchable through the same command registry that handles their bindings. The walkthrough now exercises the mode pie and keyboard selection through F3 before testing modeling, painting, scripting, and standalone publishing.
+
+Shortcut and palette routing now follows the active area. Mesh editing keeps its selection when using the Outliner or Timeline, while the Timeline supports deleting its own selection through the same commands as its inspector. Object, Edit, Sculpt and Paint now have mode-specific shelves with a remembered Edit tool and Sculpt brush. The workspace tabs, compact Layout timeline, independent Outliner, vertical Properties tabs, and mixed 2D/3D split now follow the supplied Blender references. Continue with shared contour editing, toolbar and interaction parity, and the wider legacy-scene audit before the engine phase.
+
+3D paths and shapes and the 2D vector and projector-mask editors now share contour edge picking, insertion, and closure rules. The browser check inserts on the closing seam in 3D, exercises the smoothing command and sampled curve hit, and verifies 2D contour conversion. Shared movement and contour workflows and the game engine remain open.
+
+Object Mode now has Box, Lasso, and Circle Select, selection operations, and framing for multiple objects. Browser coverage includes a split pane, locked references with selection disabled, canceling a gesture, and undoing deletion of a parent and child selection.
+
+Local View and temporary hide/reveal now filter Director panes, their selection and their surface tools. A scene-camera split regression checks that render and save preserve authored visibility. A DDA Gallery check also verifies Gaussian rendering in the optical pane and Play while the Director is isolated.
+
+The saved 3D Cursor now supports surface placement in Director panes, Add-menu placement, cursor pivots, and Shift+S snapping in Object and Edit modes. The browser test covers placement, parented transforms, undo, and reopening a saved cursor.

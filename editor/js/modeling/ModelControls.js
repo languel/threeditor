@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=poly-context';
+import { icon } from '../Glyphs.js?v=mode-shelves';
 
 function labelContent( node, label, glyph ) {
 

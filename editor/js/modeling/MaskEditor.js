@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { modelButton } from './ModelControls.js';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
-import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=top-toolbar';
+import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';

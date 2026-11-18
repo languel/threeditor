@@ -6,7 +6,7 @@ import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
 import { AssetLibrary, ASSET_MIME, fileKind, folderPath } from './assets/AssetLibrary.js';
 import { isProjector } from './assets/Projector.js';
-import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia } from './assets/AssetController.js?v=mask-editor';
+import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia } from './assets/AssetController.js?v=local-view';
 import { loadCatalog, mediathequeBase, search, facet, creditLine, state } from './assets/Mediatheque.js';
 import { textureEntries } from './AssetBrowser.js';
 
@@ -106,7 +106,11 @@ export function SidebarAssets( editor ) {
 	const query = el( 'input' ); query.type = 'search'; query.placeholder = 'Search assets or #tag…'; query.setAttribute( 'aria-label', 'Search assets' ); tools.append( query );
 	query.addEventListener( 'input', draw );
 	const kind = select( 'Asset type', [ [ 'all', 'All types' ], [ 'inputs', 'Input streams' ], [ 'model', 'Models' ], [ 'texture', 'Images / textures' ], [ 'animation', 'Animations' ], [ 'video', 'Video' ], [ 'audio', 'Audio' ], [ 'webcam', 'Webcams' ], [ 'microphone', 'Microphones' ], [ 'sdf', 'SDF' ], [ 'splat', 'Splats' ], [ 'point-cloud', 'Point clouds' ], [ 'landmark', 'Landmarks' ], [ 'landmark-texture', 'Landmark textures' ], [ 'file', 'Other files' ] ], tools, draw );
-	const actions = el( 'div', undefined, 'asset-actions' ); panel.dom.append( actions );
+	const addMenu = el( 'details', undefined, 'asset-add-menu' );
+	const actions = el( 'div', undefined, 'asset-actions' );
+	addMenu.append( el( 'summary', 'Add assets' ), actions );
+	actions.addEventListener( 'click', event => { if ( event.target.closest( 'button' ) ) addMenu.open = false; } );
+	panel.dom.append( addMenu );
 	const input = el( 'input' ); input.type = 'file'; input.multiple = true; input.hidden = true;
 	const directory = el( 'input' ); directory.type = 'file'; directory.multiple = true; directory.webkitdirectory = true; directory.hidden = true;
 	panel.dom.append( input, directory );

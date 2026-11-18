@@ -10,26 +10,26 @@ export function rayToView( ray, layout, frame, x, y ) {
 
 }
 
-export function meshHit( ray, scene, exclude ) {
+export function meshHit( ray, scene, exclude, allows ) {
 
 	scene.updateMatrixWorld( true );
 	return ray.intersectObjects( scene.children ).find( hit => {
 
 		const object = hit.object;
 		return object.isMesh && ! object.isInstancedMesh && object !== exclude && hit.face &&
-			! object.userData.runtimeOnly && ! object.userData.surfaceMark && isVisible( object );
+			! object.userData.runtimeOnly && ! object.userData.surfaceMark && isVisible( object ) && allows?.( object ) !== false;
 
 	} );
 
 }
 
 
-export function paintSurfaces( scene ) {
+export function paintSurfaces( scene, allows ) {
 
 	const triangles = [], scans = [], receivers = new Map();
 	scene.traverseVisible( object => {
 
-		if ( object.userData.surfaceMark || ! isVisible( object ) ) return;
+		if ( object.userData.surfaceMark || ! isVisible( object ) || allows?.( object ) === false ) return;
 		if ( ! object.userData.runtimeOnly && object.isMesh ) {
 
 			triangles.push( object );

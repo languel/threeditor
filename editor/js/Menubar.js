@@ -1,9 +1,10 @@
+import { WorkspaceTabs } from './WorkspaceTabs.js';
 import { UIPanel } from './libs/ui.js';
 
-import { MenubarAdd } from './Menubar.Add.js?v=mask-editor';
-import { MenubarEdit } from './Menubar.Edit.js';
+import { MenubarAdd } from './Menubar.Add.js?v=cursor-3d';
+import { MenubarEdit } from './Menubar.Edit.js?v=area-shortcuts';
 import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
-import { MenubarView } from './Menubar.View.js?v=viewport-tools';
+import { MenubarView } from './Menubar.View.js?v=mode-shelves';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
 import { formatCombo } from './Keymap.js';
@@ -13,11 +14,13 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 	const container = new UIPanel();
 	container.setId( 'menubar' );
 
-	container.add( new MenubarFile( editor ) );
-	container.add( new MenubarEdit( editor ) );
-	container.add( new MenubarAdd( editor ) );
-	container.add( new MenubarView( editor ) );
-	container.add( new MenubarRender( editor ) );
+	const menus = new UIPanel().setClass( 'app-menus' );
+	container.add( menus );
+	menus.add( new MenubarFile( editor ) );
+	menus.add( new MenubarEdit( editor ) );
+	menus.add( new MenubarAdd( editor ) );
+	menus.add( new MenubarView( editor ) );
+	menus.add( new MenubarRender( editor ) );
 
 	const code = new UIPanel();
 	code.setClass( 'menu' );
@@ -28,8 +31,9 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 	codeTitle.dom.style.cursor = 'pointer';
 	codeTitle.dom.addEventListener( 'click', () => editor.codePanel.toggle() );
 	code.add( codeTitle );
-	container.add( code );
-	container.add( new MenubarHelp( editor ) );
+	menus.add( code );
+	menus.add( new MenubarHelp( editor ) );
+	container.dom.append( WorkspaceTabs( editor, sidebar, sidebarDock ) );
 
 	const toggles = document.createElement( 'div' );
 	toggles.className = 'panel-toggles';
