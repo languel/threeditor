@@ -10,7 +10,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=live-preview">
+		<link rel="stylesheet" href="css/main.css?v=selection-shelf">
 
 		<script type="importmap">
 			{
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=local-lighting';
+			import { startEditor } from './js/EditorApp.js?v=selection-shelf';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

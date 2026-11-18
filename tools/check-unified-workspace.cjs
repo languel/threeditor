@@ -68,6 +68,49 @@ async function checkTextureProjection( page ) {
 
 }
 
+async function checkSelectionShelf( page ) {
+
+	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
+	const transforms = shelf.getByRole( 'group', { name: 'Transform tools' } );
+	const buttons = await transforms.getByRole( 'button' ).all();
+	assert.equal( buttons.length, 3 );
+	const positions = await Promise.all( buttons.map( button => button.boundingBox() ) );
+	assert.equal( positions[ 0 ].x, positions[ 2 ].x );
+	assert.ok( positions[ 0 ].y < positions[ 2 ].y );
+	await buttons[ 1 ].click();
+	assert.equal( await buttons[ 1 ].getAttribute( 'aria-pressed' ), 'true' );
+	await buttons[ 0 ].click();
+
+	await shelf.getByRole( 'button', { name: 'Select · Selection tools', exact: true } ).click();
+	await page.getByRole( 'group', { name: 'Selection tools', exact: true } ).getByRole( 'button', { name: 'Box select' } ).click();
+	assert.equal( await shelf.getByRole( 'button', { name: 'Box select · Selection tools' } ).getAttribute( 'aria-pressed' ), 'true' );
+	const center = await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+		mesh.name = 'Region target';
+		editor.addObject( mesh );
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const { left, top, width, height } = editor.modeling.rect();
+		return [ left + width / 2, top + height / 2 ];
+
+	} );
+	await page.mouse.move( center[ 0 ] - 35, center[ 1 ] - 35 );
+	await page.mouse.down();
+	await page.mouse.move( center[ 0 ] + 35, center[ 1 ] + 35, { steps: 4 } );
+	await page.mouse.up();
+	assert.equal( await page.evaluate( () => editor.selected?.name ), 'Region target' );
+	for ( const [ key, mode ] of [ [ 'w', 'circle' ], [ 'w', 'lasso' ], [ 'w', 'select' ], [ 'Shift+b', 'lasso' ], [ 'w', 'select' ] ] ) {
+
+		await page.keyboard.press( key );
+		assert.equal( await page.evaluate( () => editor.modeling.selectionTool ), mode );
+
+	}
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkUVSelection( page ) {
 
 	await page.evaluate( () => {
@@ -927,6 +970,7 @@ async function check() {
 			return migrated;
 
 		} ), [ 1, 2, 3 ] );
+		await checkSelectionShelf( page );
 		await checkUVSelection( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );

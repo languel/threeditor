@@ -1,5 +1,5 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
-import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
+import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, selectionRegionContains, meshEdges, combineSelection } from './MeshSelection.js?v=shape-selection';
 import { evaluateModifiers, modifierSource, modifierStackCommands, setModifierStack } from './Modifiers.js?v=poly-context';
 import { separateMesh } from './MeshSeparation.js';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
@@ -150,6 +150,15 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
+			if ( this.drag?.objectSelection && event.key === 'Escape' ) {
+
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				this.releaseDrag();
+				this.draw();
+				return;
+
+			}
 			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu, #editor-2d' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
@@ -186,12 +195,7 @@ export class ModelViewport {
 				state.axis = state.axis === axis ? '' : axis; state.planeLock = event.shiftKey; return;
 
 			}
-			if ( ! editingField && ! event.altKey && ! event.ctrlKey && ! event.metaKey && [ 'b', 'c' ].includes( event.key.toLowerCase() ) && ! this.pen && ! this.adding ) {
 
-				event.preventDefault(); event.stopImmediatePropagation();
-				this.setSelectionTool( event.key.toLowerCase() === 'b' ? 'box' : 'circle' ); return;
-
-			}
 			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
 
 				const key = event.key.toLowerCase();
@@ -730,13 +734,13 @@ export class ModelViewport {
 
 	}
 
-	beginSelection( event ) {
+	beginSelection( event, objectSelection = false ) {
 
 		const rect = this.rect();
 		const point = [ event.clientX - rect.left, event.clientY - rect.top ];
-		this.drag = { selection: true, tool: this.selectionTool, start: point, end: point, polygon: [ point ],
+		this.drag = { selection: true, objectSelection, tool: this.selectionTool, start: point, end: point, polygon: [ point ],
 			operation: event.ctrlKey ? 'subtract' : event.shiftKey ? 'extend' : this.selectionOperation,
-			initial: this.selectionMode === 'vertex' ? new Map( this.indices.map( i => [ String( i ), [ i ] ] ) ) : new Map( this.elements ),
+			initial: objectSelection ? new Map( this.editor.selector.selection.map( object => [ object.uuid, object ] ) ) : this.selectionMode === 'vertex' ? new Map( this.indices.map( i => [ String( i ), [ i ] ] ) ) : new Map( this.elements ),
 			target: event.target, id: event.pointerId, event };
 		event.target.setPointerCapture( event.pointerId );
 		this.draw();
@@ -745,6 +749,7 @@ export class ModelViewport {
 
 	finishSelection( drag, cancel ) {
 
+		if ( drag.objectSelection ) { this.finishObjectSelection( drag, cancel ); return; }
 		if ( cancel ) { this.applyElementSelection( [ ...drag.initial.values() ], 'set' ); return; }
 		if ( Math.hypot( drag.end[ 0 ] - drag.start[ 0 ], drag.end[ 1 ] - drag.start[ 1 ] ) < 4 && drag.tool === 'select' ) {
 
@@ -754,8 +759,7 @@ export class ModelViewport {
 		const { width, height } = this.rect();
 		const frame = this.frame;
 		const pixels = this.data.points.map( point => this.project( point, width, height ) );
-		const inside = point => point && ( drag.tool === 'circle' ? drag.polygon.some( center => Math.hypot( point[ 0 ] - center[ 0 ], point[ 1 ] - center[ 1 ] ) <= this.brushRadius ) :
-			drag.tool === 'lasso' ? pointInPolygon( point, drag.polygon ) : point[ 0 ] >= Math.min( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 0 ] <= Math.max( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 1 ] >= Math.min( drag.start[ 1 ], drag.end[ 1 ] ) && point[ 1 ] <= Math.max( drag.start[ 1 ], drag.end[ 1 ] ) );
+		const inside = point => selectionRegionContains( drag, point, this.brushRadius );
 		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => {
 
 			if ( this.selectionMode === 'face' ) {
@@ -772,6 +776,30 @@ export class ModelViewport {
 
 		} );
 		this.applyElementSelection( hits, drag.operation );
+
+	}
+
+	finishObjectSelection( drag, cancel ) {
+
+		if ( ! cancel ) {
+
+			const { scene, selector } = this.editor;
+			const { camera, rect: { width, height } } = this.frame;
+			const hits = new Map(), point = new THREE.Vector3();
+			scene.traverseVisible( object => {
+
+				const isSelectable = object.geometry || object.isLight || object.isCamera || object.userData.assetObject?.type === 'projector' || object.userData.hasSplat;
+				if ( ! isSelectable || object.userData.runtimeOnly || hasRestriction( object, 'unselectable' ) || ! isVisible( object ) ) return;
+				point.setFromMatrixPosition( object.matrixWorld ).project( camera );
+				if ( point.z < -1 || point.z > 1 ) return;
+				const pixel = [ ( point.x + 1 ) * width / 2, ( 1 - point.y ) * height / 2 ];
+				if ( selectionRegionContains( drag, pixel, this.brushRadius ) ) hits.set( object.uuid, object );
+
+			} );
+			selector.setSelection( [ ...combineSelection( drag.initial, hits, drag.operation ).values() ] );
+
+		}
+		this.draw();
 
 	}
 
@@ -1308,7 +1336,7 @@ export class ModelViewport {
 
 	draw() {
 
-		this.overlay.hidden = ! this.canEdit() || ! this.editor.renderer || ! this.frame ||
+		this.overlay.hidden = ( ! this.canEdit() && ! this.drag?.objectSelection ) || ! this.editor.renderer || ! this.frame ||
 			!! this.editor.viewTools?.mode || !! this.editor.editWorkspace?.exclusive;
 		if ( this.overlay.hidden ) {
 
@@ -1325,7 +1353,7 @@ export class ModelViewport {
 			this.overlay.height = h;
 
 		}
-		this.object.updateWorldMatrix( true, false );
+		this.object?.updateWorldMatrix( true, false );
 		const ctx = this.context;
 		ctx.setTransform( ratio, 0, 0, ratio, 0, 0 );
 		ctx.clearRect( 0, 0, bounds.width, bounds.height );
@@ -1347,6 +1375,13 @@ export class ModelViewport {
 		ctx.beginPath();
 		ctx.rect( 0, 0, width, height );
 		ctx.clip();
+		if ( this.drag?.objectSelection ) {
+
+			if ( interactive ) this.drawSelectionRegion( ctx, this.drag );
+			ctx.restore();
+			return;
+
+		}
 		const state = this.gesture || this.drag;
 		const data = this.penChain?.data || state?.draft || this.data;
 		const handles = data.points.map( point => {
@@ -1489,19 +1524,25 @@ export class ModelViewport {
 			ctx.strokeStyle = '#ff725e'; ctx.lineWidth = 2; stroke( [ state.start, state.end ], false );
 
 		}
-		if ( interactive && state?.selection ) {
-
-			ctx.strokeStyle = '#ffba62'; ctx.fillStyle = '#ffba6218'; ctx.lineWidth = 1;
-			ctx.beginPath();
-			if ( state.tool === 'circle' ) ctx.arc( ...state.end, this.brushRadius, 0, Math.PI * 2 );
-			else if ( state.tool === 'lasso' ) { state.polygon.forEach( ( p, i ) => i ? ctx.lineTo( ...p ) : ctx.moveTo( ...p ) ); ctx.closePath(); }
-			else ctx.rect( state.start[ 0 ], state.start[ 1 ], state.end[ 0 ] - state.start[ 0 ], state.end[ 1 ] - state.start[ 1 ] );
-			ctx.fill(); ctx.stroke();
-
-		}
+		if ( interactive && state?.selection ) this.drawSelectionRegion( ctx, state );
 		ctx.restore();
 
 	}
+
+	drawSelectionRegion( ctx, state ) {
+
+		ctx.strokeStyle = editSelectionColor;
+		ctx.fillStyle = '#ff9d4518';
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		if ( state.tool === 'circle' ) ctx.arc( ...state.end, this.brushRadius, 0, Math.PI * 2 );
+		else if ( state.tool === 'lasso' ) { state.polygon.forEach( ( p, i ) => i ? ctx.lineTo( ...p ) : ctx.moveTo( ...p ) ); ctx.closePath(); }
+		else ctx.rect( state.start[ 0 ], state.start[ 1 ], state.end[ 0 ] - state.start[ 0 ], state.end[ 1 ] - state.start[ 1 ] );
+		ctx.fill();
+		ctx.stroke();
+
+	}
+
 
 	pointUnder( x, y ) {
 
@@ -2039,6 +2080,17 @@ export class ModelViewport {
 	pointerDown( event ) {
 
 		if ( this.editor.viewportShading === 'preview' ) return;
+		if ( ! this.editMode && this.selectionTool !== 'select' && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
+			! this.editor.modalTransform?.active && ! this.editor.flyControls?.active && ! this.drag && event.button === 0 && ! event.altKey &&
+			event.target === this.editor.renderer?.domElement && this.editor.viewLayout.navigation &&
+			this.editor.viewLayout.at( event.clientX, event.clientY ) === this.editor.viewLayout.navigation ) {
+
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.beginSelection( event, true );
+			return;
+
+		}
 		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
 			event.button === 0 && ! event.altKey && event.target === this.editor.renderer?.domElement ) {
 

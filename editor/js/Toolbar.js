@@ -9,7 +9,7 @@ function Toolbar( editor ) {
 	const container = new UIPanel();
 	container.setId( 'toolbar' );
 
-	// translate / rotate / scale
+	const tools = editor.viewTools.transformTools;
 
 	const translateIcon = document.createElement( 'img' );
 	translateIcon.title = strings.getKey( 'toolbar/translate' );
@@ -24,7 +24,8 @@ function Toolbar( editor ) {
 		signals.transformModeChanged.dispatch( 'translate' );
 
 	} );
-	container.add( translate );
+	tools.append( translate.dom );
+	translate.dom.setAttribute( 'aria-pressed', 'true' );
 
 	const rotateIcon = document.createElement( 'img' );
 	rotateIcon.title = strings.getKey( 'toolbar/rotate' );
@@ -38,7 +39,8 @@ function Toolbar( editor ) {
 		signals.transformModeChanged.dispatch( 'rotate' );
 
 	} );
-	container.add( rotate );
+	tools.append( rotate.dom );
+	rotate.dom.setAttribute( 'aria-pressed', 'false' );
 
 	const scaleIcon = document.createElement( 'img' );
 	scaleIcon.title = strings.getKey( 'toolbar/scale' );
@@ -52,21 +54,17 @@ function Toolbar( editor ) {
 		signals.transformModeChanged.dispatch( 'scale' );
 
 	} );
-	container.add( scale );
+	tools.append( scale.dom );
+	scale.dom.setAttribute( 'aria-pressed', 'false' );
 
 	//
 
 	signals.transformModeChanged.add( function ( mode ) {
 
-		translate.dom.classList.remove( 'selected' );
-		rotate.dom.classList.remove( 'selected' );
-		scale.dom.classList.remove( 'selected' );
+		for ( const [ id, button ] of [ [ 'translate', translate ], [ 'rotate', rotate ], [ 'scale', scale ] ] ) {
 
-		switch ( mode ) {
-
-			case 'translate': translate.dom.classList.add( 'selected' ); break;
-			case 'rotate': rotate.dom.classList.add( 'selected' ); break;
-			case 'scale': scale.dom.classList.add( 'selected' ); break;
+			button.dom.classList.toggle( 'selected', id === mode );
+			button.dom.setAttribute( 'aria-pressed', String( id === mode ) );
 
 		}
 

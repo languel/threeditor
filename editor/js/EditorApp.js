@@ -2,14 +2,14 @@ import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=local-lighting';
-import { Keymap } from './Keymap.js?v=uv-edit-selection';
+import { Keymap } from './Keymap.js?v=selection-shelf';
 import { ModalTransform } from './ModalTransform.js?v=unified-sync';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=unified-sync';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=uv-edit-selection';
-import { Toolbar } from './Toolbar.js?v=live-preview';
+import { Viewport } from './Viewport.js?v=selection-shelf';
+import { Toolbar } from './Toolbar.js?v=selection-shelf';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=unified-sync';
 import { Menubar } from './Menubar.js?v=unified-sync';

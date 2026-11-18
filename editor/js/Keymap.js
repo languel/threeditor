@@ -28,6 +28,8 @@ const definitions = [
  ['adjustLastOperation','Adjust Last Operation','Modeling','f9','f9'],
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
  ['clearSelection','Clear selection','Selection','escape','escape'],
+ ['selectionCycle','Cycle selection tools','Modeling','','w'], ['selectionBox','Box select tool','Modeling','b','b'],
+ ['selectionCircle','Circle select tool','Modeling','c','c'], ['selectionLasso','Lasso select tool','Modeling','shift+b','shift+b'],
  ['selectAll','Select all','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
  ['focus','Frame selection','View','f','numpaddecimal'], ['frameAll','Frame all','View','','home'], ['perspective','Perspective camera','View','p',''], ['orthographic','Orthographic camera','View','o',''], ['projection','Toggle perspective / orthographic','View','','numpad5'],
  ['viewFront','Front view','View','','numpad1'], ['viewBack','Back view','View','',control+'+numpad1'], ['viewRight','Right view','View','','numpad3'], ['viewLeft','Left view','View','',control+'+numpad3'], ['viewTop','Top view','View','','numpad7'], ['viewBottom','Bottom view','View','',control+'+numpad7'], ['viewCamera','Toggle active camera view','View','numpad0','numpad0'],
@@ -196,6 +198,8 @@ class Keymap {
 
   }
   if(id==='setActiveCamera')return e.selected?.isCamera && e.selected!==e.camera && isVisible(e.selected);
+  if ( [ 'selectionCycle', 'selectionBox', 'selectionCircle', 'selectionLasso' ].includes( id ) )
+   return !m?.gesture && !m?.drag && !e.viewTools?.pointer && !e.modalTransform?.active && !e.flyControls?.active;
   if ( id === 'toggleXRay' ) return e.viewportShading === 'solid';
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   if(!elementSelect&&!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
@@ -245,6 +249,8 @@ class Keymap {
    case 'separateMesh':if(this.actionAvailable(id))e.contextMenu?.openSeparate(this.pointer);break;
    case 'invertMeshSelection':if(this.actionAvailable(id))e.modeling.invertElementSelection();break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
+   case 'selectionCycle':case 'selectionBox':case 'selectionCircle':case 'selectionLasso':
+    e.viewTools.chooseSelectionTool(id.slice(9).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
