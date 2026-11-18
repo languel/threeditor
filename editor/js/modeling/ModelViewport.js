@@ -121,6 +121,12 @@ export class ModelViewport {
 		} );
 		signals.startPlayer.add( () => this.stop() );
 		signals.editorCleared.add( () => this.stop() );
+		signals.cursor3DChanged.add( () => {
+
+			if ( ! this.gesture && ! this.drag && this.object && this.indices.length &&
+				editor.config.getKey( 'settings/transformPivot' ) === 'cursor' ) this.updateProxy();
+
+		} );
 		window.addEventListener( 'keydown', event => {
 
 			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
@@ -228,6 +234,7 @@ export class ModelViewport {
 
 	start( object ) {
 
+		this.editor.viewportCursor.tool = false;
 		if ( this.editor.editWorkspace?.exclusive ) this.editor.editWorkspace.close();
 		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
 		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.setViewportSplit( true );
@@ -311,6 +318,7 @@ export class ModelViewport {
 
 		}
 		const object = modelObject( THREE, data, labels[ kind ] );
+		if ( ! empty ) object.position.copy( this.editor.cursor3D );
 		this.editor.execute( new AddObjectCommand( this.editor, object ) );
 		this.start( object );
 		this.adding = empty && ! freehand;
@@ -391,6 +399,7 @@ export class ModelViewport {
 	togglePen() {
 
 		if ( ! this.canEdit() || ! this.data.faces?.length || this.gesture || this.drag ) return;
+		this.editor.viewportCursor.tool = false;
 		if ( this.data.kind === 'vertices' ) {
 
 			const data = { kind: 'mesh', points: structuredClone( this.data.points ), faces: structuredClone( this.data.faces ) };
@@ -411,6 +420,7 @@ export class ModelViewport {
 	toggleKnife() {
 
 		if ( ! this.canEdit() || ! this.data.faces?.length || this.data.profile ) return;
+		this.editor.viewportCursor.tool = false;
 		if ( this.data.kind === 'vertices' ) this.commit( 'Convert to editable polygon mesh', { kind: 'mesh', points: structuredClone( this.data.points ), faces: structuredClone( this.data.faces ) }, [] );
 		this.knife = ! this.knife; this.pen = false; this.penChain = null; this.brush = ''; this.adding = false;
 		this.changed(); this.render();
@@ -736,6 +746,7 @@ export class ModelViewport {
 
 		}
 		else if ( pivot === 'active' ) center.copy( points.at( -1 ) );
+		else if ( pivot === 'cursor' ) center.copy( this.editor.cursor3D );
 		else if ( pivot !== 'origin' ) {
 
 			for ( const point of points ) center.add( point );
@@ -1752,7 +1763,7 @@ export class ModelViewport {
 	editContourAtPointer( event ) {
 
 		if ( ! this.canEdit() || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
-			this.editor.viewTools?.mode || this.editor.editWorkspace?.exclusive || this.drag || this.gesture ||
+			this.editor.viewTools?.mode || this.editor.viewportCursor.tool || this.editor.editWorkspace?.exclusive || this.drag || this.gesture ||
 			event.target !== this.editor.renderer?.domElement || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.editor.viewLayout.navigation ) return;
 		const { left, top, width, height } = this.rect();
 		const cursor = [ event.clientX - left, event.clientY - top ];

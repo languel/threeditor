@@ -116,6 +116,11 @@ class Selector {
 			signals.objectSelected.dispatch( editor.selected );
 
 		} );
+		signals.cursor3DChanged.add( () => {
+
+			if ( editor.config.getKey( 'settings/transformPivot' ) === 'cursor' ) this.syncPivot();
+
+		} );
 
 	}
 
@@ -265,7 +270,7 @@ class Selector {
 		if ( ! this.selection.length ) return false;
 		if ( this.selection.length > 1 ) return true;
 		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
-		return pivot === 'bounds' || pivot === 'bottom' || pivot === 'origin';
+		return pivot === 'bounds' || pivot === 'bottom' || pivot === 'origin' || pivot === 'cursor';
 
 	}
 
@@ -290,6 +295,7 @@ class Selector {
 
 		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
 		if ( pivot === 'origin' ) group.position.set( 0, 0, 0 );
+		else if ( pivot === 'cursor' ) group.position.copy( this.editor.cursor3D );
 		else if ( pivot === 'active' ) this.selection.at( -1 ).getWorldPosition( group.position );
 		else if ( pivot === 'median' ) {
 
@@ -311,9 +317,15 @@ class Selector {
 
 		// members with a selected ancestor are updated by that ancestor's transform
 
-		const members = this.selection.filter( ( object ) => hasSelectedAncestor( object, this.selection ) === false );
+		const members = this.selectionRoots();
 
 		this._memberStates = members.map( ( object ) => ( { object: object, matrixWorld: object.matrixWorld.clone() } ) );
+
+	}
+
+	selectionRoots( selection = this.selection ) {
+
+		return selection.filter( object => ! hasSelectedAncestor( object, selection ) );
 
 	}
 

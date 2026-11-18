@@ -1,20 +1,20 @@
 import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=local-view';
-import { Keymap } from './Keymap.js?v=local-view';
+import { Editor } from './Editor.js?v=cursor-3d';
+import { Keymap } from './Keymap.js?v=cursor-3d';
 import { ModalTransform } from './ModalTransform.js?v=local-view';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=local-view';
-import { Toolbar } from './Toolbar.js?v=workspace-modes';
+import { Viewport } from './Viewport.js?v=cursor-3d';
+import { Toolbar } from './Toolbar.js?v=cursor-3d';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=local-view';
-import { Menubar } from './Menubar.js?v=workspace-tabs';
+import { Menubar } from './Menubar.js?v=cursor-3d';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=local-view';
+import { ContextMenu } from './ContextMenu.js?v=cursor-3d';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
@@ -225,6 +225,7 @@ async function startEditor( portable = null ) {
 
 			signals.cameraResetted.add( saveState );
 			signals.viewportCameraChanged.add( saveState );
+			signals.cursor3DChanged.add( saveState );
 			signals.geometryChanged.add( saveState );
 			signals.objectAdded.add( saveState );
 			signals.objectChanged.add( saveState );

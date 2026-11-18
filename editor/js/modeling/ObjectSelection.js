@@ -46,7 +46,7 @@ export class ObjectSelection {
 	accepts( event ) {
 
 		const editor = this.editor;
-		return regionTools.includes( this.tool ) && ! editor.viewTools.mode && editor.viewTools.workspaceMode === 'object' &&
+		return regionTools.includes( this.tool ) && ! editor.viewportCursor?.tool && ! editor.viewTools.mode && editor.viewTools.workspaceMode === 'object' &&
 			! editor.editWorkspace?.exclusive && ! editor.modalTransform?.active && ! editor.flyControls?.active &&
 			event.button === 0 && ! event.altKey && event.pointerType !== 'touch' && event.target === editor.renderer?.domElement;
 

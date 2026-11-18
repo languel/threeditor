@@ -1,6 +1,6 @@
 import { UIPanel } from './libs/ui.js';
 
-import { MenubarAdd } from './Menubar.Add.js?v=mask-editor';
+import { MenubarAdd } from './Menubar.Add.js?v=cursor-3d';
 import { MenubarEdit } from './Menubar.Edit.js?v=area-shortcuts';
 import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
 import { MenubarView } from './Menubar.View.js?v=mode-shelves';

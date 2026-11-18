@@ -52,6 +52,8 @@ Object and Edit modes share region geometry and selection operations through `mo
 
 Local View and temporary hides live in `modeling/ViewportVisibility.js`. The Director draw scopes visibility and restores it in a `finally` block, including ancestor layers used to keep selected child meshes visible. Selection, measurement, snapping, paint, and asset drops use the same filter. Optical views and Play continue to render the authored scene. Realistic Director mode uses raster preview while a filter is active.
 
+The 3D Cursor is saved in the editor snapshot as `cursor3D`. `modeling/ViewportCursor.js` projects placement into the active Director pane and reuses viewport visibility for surface hits. Add-menu commands use the cursor as their placement offset. The Shift+S menu shares commands with F3, and the cursor pivot anchors the existing object group and mesh transform proxies. Selection-to-cursor uses the normal history for both modes.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.

@@ -1,6 +1,6 @@
 import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=contour-editing';
-import { transformSnapStep } from './TransformSettings.js?v=workspace-modes';
+import { transformSnapStep } from './TransformSettings.js?v=cursor-3d';
 import { withViewportShading } from './ViewportShading.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -29,11 +29,12 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=local-view';
-import { ObjectSelection } from './modeling/ObjectSelection.js?v=local-view';
+import { ViewportTools } from './modeling/ViewportTools.js?v=cursor-3d';
+import { ObjectSelection } from './modeling/ObjectSelection.js?v=cursor-3d';
 import { ViewportVisibility } from './modeling/ViewportVisibility.js';
+import { ViewportCursor } from './modeling/ViewportCursor.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=local-view';
+import { ModelViewport } from './modeling/ModelViewport.js?v=cursor-3d';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -129,6 +130,7 @@ function Viewport( editor ) {
 	signals.viewportLabelsChanged.add( render );
 	signals.selectionAppearanceChanged.add( render );
 	signals.timelineFrameChanged.add( render );
+	const cursor = editor.viewportCursor = new ViewportCursor( editor, container.dom, layout );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
 	editor.objectSelection = new ObjectSelection( editor, container.dom, layout, render );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
@@ -284,6 +286,12 @@ function Viewport( editor ) {
 		setControlSnap( false );
 		if ( ! transformControls.dragging ) syncTransformTarget();
 		if ( key !== 'transformPivot' || model.object ) render();
+
+	} );
+	signals.cursor3DChanged.add( () => {
+
+		syncTransformTarget();
+		render();
 
 	} );
 
@@ -1459,6 +1467,7 @@ function Viewport( editor ) {
 		}
 
 		labels.draw( frames, width, height );
+		cursor.draw( frames );
 		endTime = performance.now();
 		editor.signals.sceneRendered.dispatch( endTime - startTime );
 

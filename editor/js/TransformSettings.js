@@ -1,5 +1,5 @@
 import { shadingModes } from './ViewportShading.js';
-import { icon } from './Glyphs.js?v=poly-context';
+import { icon } from './Glyphs.js?v=cursor-3d';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 
@@ -64,6 +64,18 @@ export function addTransformSettings( editor, toolbar ) {
 				}, config.getKey( 'settings/transformSnap' ) === value
 			] )
 		},
+		cursorSnap: {
+			label: 'Snap',
+			choices: () => [
+				[ 'selectionToCursor', 'move' ], [ 'cursorToSelected', 'cursor3D' ],
+				[ 'cursorToGrid', 'toolGrid' ], [ 'cursorToOrigin', 'pivotOrigin' ]
+			].filter( ( [ id ] ) => editor.keymap.actionAvailable( id ) ).map( ( [ id, glyph ] ) => {
+
+				const { label, run } = editor.keymap.actions.find( action => action.id === id );
+				return [ label, glyph, run ];
+
+			} )
+		},
 		orientation: {
 			label: 'Transform orientation', glyph: 'orientGlobal',
 			choices: () => [
@@ -78,7 +90,7 @@ export function addTransformSettings( editor, toolbar ) {
 			choices: () => [
 				[ 'auto', 'Default', 'toolSelect' ], [ 'bounds', 'Bounds center', 'pivotBox' ], [ 'bottom', 'Bounds bottom center', 'pivotBottom' ],
 				[ 'median', editor.modeling?.object ? 'Median point' : 'Median origins', 'pivotMedian' ], [ 'active', editor.modeling?.object ? 'Active point' : 'Active origin', 'pivotActive' ],
-				[ 'origin', 'World origin', 'pivotOrigin' ]
+				[ 'origin', 'World origin', 'pivotOrigin' ], [ 'cursor', '3D Cursor', 'cursor3D' ]
 			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'transformPivot', value ), config.getKey( 'settings/transformPivot' ) === value ] )
 		}
 	};
@@ -253,7 +265,7 @@ export function addTransformSettings( editor, toolbar ) {
 
 	for ( const [ kind, definition ] of Object.entries( configs ) ) {
 
-		if ( kind === 'shading' || kind === 'mode' ) continue; // The viewport header owns the shading control.
+		if ( kind === 'shading' || kind === 'mode' || kind === 'cursorSnap' ) continue;
 
 		const button = document.createElement( 'button' );
 		button.type = 'button';

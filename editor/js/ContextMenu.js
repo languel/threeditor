@@ -1,6 +1,6 @@
-import { originActions } from './modeling/OriginActions.js?v=poly-context';
+import { originActions } from './modeling/OriginActions.js?v=cursor-3d';
 import { outlineActions } from './modeling/OutlineActions.js?v=contour-editing';
-import { formatCombo } from './Keymap.js?v=local-view';
+import { formatCombo } from './Keymap.js?v=cursor-3d';
 
 function ContextMenu( editor, viewport ) {
 
@@ -168,7 +168,7 @@ function ContextMenu( editor, viewport ) {
 			if ( editor.keymap.actionAvailable( id ) ) actions.push( { ...editor.keymap.actions.find( action => action.id === id ), section: 'Visibility' } );
 
 		}
-		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
+		if ( editor.selector.selection.length ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ], [ 'cursor', '3D Cursor' ] ] ) actions.push( {
 
 			label: 'Pivot: ' + label, section: 'Transform pivot', run: () => {
 

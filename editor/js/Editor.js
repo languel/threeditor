@@ -15,7 +15,7 @@ import { Loader } from './Loader.js';
 import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
-import { Selector } from './Selector.js?v=local-view';
+import { Selector } from './Selector.js?v=cursor-3d';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );
@@ -30,6 +30,7 @@ function Editor( portable = false ) {
 
 	this.signals = {
 		projectLoaded: new Signal(),
+		cursor3DChanged: new Signal(),
 
 		// script
 
@@ -169,6 +170,7 @@ function Editor( portable = false ) {
 	this.activeSceneCameraUuid = null;
 	this.viewportShading = 'solid';
 	this.viewportColor = new THREE.Color();
+	this.cursor3D = new THREE.Vector3();
 
 	this.addCamera( this.camera );
 
@@ -806,10 +808,19 @@ Editor.prototype = {
 
 	},
 
+	setCursor3D: function ( position ) {
+
+		if ( this.cursor3D.equals( position ) ) return;
+		this.cursor3D.copy( position );
+		this.signals.cursor3DChanged.dispatch();
+
+	},
+
 	clear: function () {
 
 		this.userProjectPath = '';
 		this.activeSceneCameraUuid = null;
+		this.cursor3D.set( 0, 0, 0 );
 		this.history.clear();
 		this.storage.clear();
 		this.sourceFiles = new Map();
@@ -927,6 +938,9 @@ Editor.prototype = {
 		if ( json.mainCameraOutput && ! Object.hasOwn( this.scene.userData, 'mainCameraOutput' ) ) this.scene.userData.mainCameraOutput = json.mainCameraOutput;
 		if ( json.mainCameraTarget && this.mainCameraSource.isCamera ) this.controls.getCenter( this.mainCameraSource ).fromArray( json.mainCameraTarget );
 		if ( json.viewportTarget ) this.controls.getCenter( this.viewportCamera ).fromArray( json.viewportTarget );
+		const cursor = json.cursor3D;
+		this.setCursor3D( Array.isArray( cursor ) && cursor.length === 3 && cursor.every( Number.isFinite ) ?
+			new THREE.Vector3().fromArray( cursor ) : new THREE.Vector3() );
 		this.config.setKey( 'project/title', json.project?.title || '' );
 		this.userProjectPath = json.project?.libraryPath || '';
 		this.signals.projectLoaded.dispatch( json );
@@ -983,6 +997,7 @@ Editor.prototype = {
 			mainCameraTarget: mainCameraSource.isCamera ? ( this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,
 			activeSceneCamera: this.activeSceneCameraUuid,
 			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
+			cursor3D: this.cursor3D.toArray(),
 			controls: this.controls.toJSON( this.camera ),
 			scene: withoutRuntimeChildren( scene, () => scene.toJSON() ),
 			scripts: Object.fromEntries( Object.entries( scripts ).map( ( [ uuid, list ] ) => [ uuid, list.map( serializeScript ) ] ) ),

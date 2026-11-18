@@ -51,6 +51,7 @@ const ICONS = {
 	pivotMedian: svg( '<path d="M8.5 8.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M8.5 15.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M10.6 12a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0 -2.8 0"/>' ),
 	pivotActive: svg( '<path d="M4.5 12a7.5 7.5 0 1 0 15 0a7.5 7.5 0 1 0 -15 0M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M10.8 12a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0"/>' ),
 	pivotOrigin: svg( '<path d="M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M12 2v4M12 18v4M2 12h4M18 12h4"/>' ),
+	cursor3D: svg( '<circle cx="12" cy="12" r="8" stroke-dasharray="7 3"/><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/>' ),
 	toolPath: svg( '<path d="M4 18c5 0 4-12 11-12h5"/><rect x="2" y="16" width="4" height="4"/><rect x="18" y="4" width="4" height="4"/>' ),
 	toolPaint: svg( '<path d="M14 4l6 6-7.5 7.5-6-6z"/><path d="M6.5 11.5C4 12 3 14 3 16.5 3 18 2.5 19.5 1.5 20.5c3 0 6.5-.5 8-2 1.3-1.3 1.5-3 1-4.5"/>' ),
 	viewportSplit: svg( '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/>' ),

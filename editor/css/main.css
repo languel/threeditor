@@ -2403,6 +2403,21 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 .viewport-tool-panel output { flex-basis: 100%; color: var(--theme-text); font-size: 12px; }
 
 .viewport-controls { z-index: 4; }
+.viewport-cursor-3d {
+	position: absolute;
+	z-index: 3;
+	box-sizing: border-box;
+	width: 18px;
+	height: 18px;
+	transform: translate(-50%, -50%);
+	border: 2px solid #e8746b;
+	border-color: #f5f4ef #e8746b;
+	border-radius: 50%;
+	box-shadow: 0 0 0 1px #14161a99;
+	background: linear-gradient(#14161a, #14161a) center / 1px 100% no-repeat,
+		linear-gradient(#14161a, #14161a) center / 100% 1px no-repeat;
+	pointer-events: none;
+}
 .viewport-visibility-controls {
 	position: absolute;
 	bottom: 12px;

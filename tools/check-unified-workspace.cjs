@@ -20,6 +20,7 @@ async function check() {
 		await page.waitForFunction( async () => window.editor?.renderer && await editor.startupReady.then( () => true ) );
 		await checkLocalVisibility( page );
 		await checkObjectSelection( page );
+		await checkCursor( page );
 		const workspaces = page.getByRole( 'navigation', { name: 'Workspaces' } );
 		const layoutWorkspace = workspaces.getByRole( 'button', { name: 'Layout', exact: true } );
 		assert.equal( await layoutWorkspace.getAttribute( 'aria-pressed' ), 'true' );
@@ -523,6 +524,97 @@ async function checkLocalVisibility( page ) {
 		editor.clear();
 
 	} );
+
+}
+
+async function checkCursor( page ) {
+
+	const start = await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+		mesh.name = 'Cursor receiver';
+		editor.addObject( mesh );
+		editor.camera.position.set( 0, 0, 5 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const frame = editor.viewLayout.navigation;
+		const rect = editor.viewLayout.clientRect( frame );
+		const projected = new THREE.Vector3( .25, .1, .5 ).project( frame.camera );
+		return [ rect.left + ( projected.x + 1 ) * rect.width / 2, rect.top + ( 1 - projected.y ) * rect.height / 2 ];
+
+	} );
+	const cursor = () => page.evaluate( () => editor.cursor3D.toArray() );
+	await page.keyboard.down( 'Shift' );
+	await page.mouse.click( ...start, { button: 'right' } );
+	await page.keyboard.up( 'Shift' );
+	const expected = await cursor();
+	assert.ok( Math.abs( expected[ 0 ] - .25 ) < .02 && Math.abs( expected[ 1 ] - .1 ) < .02 && Math.abs( expected[ 2 ] - .5 ) < .02 );
+	assert.equal( await page.getByRole( 'dialog', { name: 'Scene', exact: true } ).count(), 0 );
+	assert.equal( await page.locator( '.viewport-cursor-3d:visible' ).count(), 1 );
+	await page.keyboard.press( 'Shift+a' );
+	await page.getByRole( 'button', { name: 'Box', exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => editor.selected.position.toArray() ), expected );
+	await page.evaluate( () => editor.undo() );
+
+	await page.evaluate( () => {
+
+		const child = editor.scene.getObjectByName( 'Cursor receiver' );
+		const parent = new THREE.Group();
+		parent.position.x = 3;
+		parent.rotation.z = Math.PI / 2;
+		parent.scale.setScalar( 2 );
+		editor.addObject( parent );
+		parent.add( child );
+		child.position.x = .75;
+		editor.select( child );
+
+	} );
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( 'Shift+s' );
+	await page.getByRole( 'dialog', { name: 'Snap', exact: true } ).getByRole( 'button', { name: 'Selection to Cursor (Keep Offset)', exact: true } ).click();
+	assert.ok( await page.evaluate( () => editor.selected.getWorldPosition( new THREE.Vector3() ).distanceTo( editor.cursor3D ) < 1e-6 ) );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.selected.position.x ), .75 );
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( '.' );
+	await page.getByRole( 'dialog', { name: 'Transform pivot', exact: true } ).getByRole( 'button', { name: '3D Cursor', exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => editor.selector.group.position.toArray() ), expected );
+	const rotated = await page.evaluate( () => editor.selected.getWorldPosition( new THREE.Vector3() ).sub( editor.cursor3D )
+		.applyAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI / 2 ).add( editor.cursor3D ).toArray() );
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( 'r' );
+	await page.keyboard.press( 'z' );
+	await page.keyboard.press( '9' );
+	await page.keyboard.press( '0' );
+	await page.keyboard.press( 'Enter' );
+	assert.ok( await page.evaluate( rotated => editor.selected.getWorldPosition( new THREE.Vector3() )
+		.distanceTo( new THREE.Vector3().fromArray( rotated ) ) < 1e-6, rotated ) );
+	await page.evaluate( () => {
+
+		editor.undo();
+		editor.viewTools.setWorkspaceMode( 'edit' );
+		editor.modeling.selectPoints( true );
+
+	} );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.proxy.position.toArray() ), expected );
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( 'Shift+s' );
+	await page.getByRole( 'dialog', { name: 'Snap', exact: true } ).getByRole( 'button', { name: 'Selection to Cursor (Keep Offset)', exact: true } ).click();
+	assert.ok( await page.evaluate( () => editor.viewportCursor.center().distanceTo( editor.cursor3D ) < 1e-6 ) );
+
+	await page.evaluate( async () => {
+
+		editor.viewTools.setWorkspaceMode( 'object' );
+		editor.config.setKey( 'settings/transformPivot', 'auto' );
+		editor.signals.transformSettingsChanged.dispatch( 'transformPivot' );
+		const saved = JSON.parse( JSON.stringify( editor.toJSON() ) );
+		editor.clear();
+		await editor.fromJSON( saved );
+
+	} );
+	assert.deepEqual( await cursor(), expected );
+	await page.evaluate( () => editor.clear() );
+	assert.deepEqual( await cursor(), [ 0, 0, 0 ] );
 
 }
 check().catch( error => { console.error( error ); process.exitCode = 1; } );

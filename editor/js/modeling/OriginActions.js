@@ -44,6 +44,7 @@ export function originActions( editor ) {
 
 		} },
 		{ label: 'Origin to geometry', section: 'Set origin', run: () => setObjectOrigin( editor, object, center() ) },
+		{ label: 'Origin to 3D Cursor', section: 'Set origin', run: () => setObjectOrigin( editor, object, editor.cursor3D ) },
 		{ label: 'Origin to world origin', section: 'Set origin', run: () => setObjectOrigin( editor, object, new THREE.Vector3() ) }
 	];
 	const model = editor.modeling;

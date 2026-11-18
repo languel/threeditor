@@ -27,6 +27,13 @@ function MenubarAdd( editor ) {
 	options.setClass( 'options' );
 	container.add( options );
 
+	function addAtCursor( object ) {
+
+		object.position.add( editor.cursor3D );
+		return new AddObjectCommand( editor, object );
+
+	}
+
 	// Group
 
 	let option = new UIRow();
@@ -37,7 +44,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Group();
 		mesh.name = 'Group';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	options.add( option );
@@ -89,7 +96,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Box';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -106,7 +113,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, material );
 		mesh.name = 'Capsule';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -122,7 +129,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Circle';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -138,7 +145,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Cylinder';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -154,7 +161,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Dodecahedron';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -170,7 +177,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Icosahedron';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -186,7 +193,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial( { side: THREE.DoubleSide } ) );
 		mesh.name = 'Lathe';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -202,7 +209,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Octahedron';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -219,7 +226,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, material );
 		mesh.name = 'Plane';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -235,7 +242,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Ring';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -251,7 +258,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Sphere';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -266,7 +273,7 @@ function MenubarAdd( editor ) {
 		const sprite = new THREE.Sprite( new THREE.SpriteMaterial() );
 		sprite.name = 'Sprite';
 
-		editor.execute( new AddObjectCommand( editor, sprite ) );
+		editor.execute( addAtCursor( sprite ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -282,7 +289,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Tetrahedron';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -317,7 +324,7 @@ function MenubarAdd( editor ) {
 			const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 			mesh.name = 'Text';
 
-			editor.execute( new AddObjectCommand( editor, mesh ) );
+			editor.execute( addAtCursor( mesh ) );
 
 		} );
 
@@ -335,7 +342,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Torus';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -351,7 +358,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'TorusKnot';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -374,7 +381,7 @@ function MenubarAdd( editor ) {
 		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
 		mesh.name = 'Tube';
 
-		editor.execute( new AddObjectCommand( editor, mesh ) );
+		editor.execute( addAtCursor( mesh ) );
 
 	} );
 	meshSubmenu.add( option );
@@ -415,7 +422,7 @@ function MenubarAdd( editor ) {
 		const light = new THREE.AmbientLight( color );
 		light.name = 'AmbientLight';
 
-		editor.execute( new AddObjectCommand( editor, light ) );
+		editor.execute( addAtCursor( light ) );
 
 	} );
 	lightSubmenu.add( option );
@@ -437,8 +444,8 @@ function MenubarAdd( editor ) {
 		light.position.set( 5, 10, 7.5 );
 
 		editor.execute( new MultiCmdsCommand( editor, [
-			new AddObjectCommand( editor, light.target ),
-			new AddObjectCommand( editor, light )
+			addAtCursor( light.target ),
+			addAtCursor( light )
 		] ) );
 
 	} );
@@ -460,7 +467,7 @@ function MenubarAdd( editor ) {
 
 		light.position.set( 0, 10, 0 );
 
-		editor.execute( new AddObjectCommand( editor, light ) );
+		editor.execute( addAtCursor( light ) );
 
 	} );
 	lightSubmenu.add( option );
@@ -479,7 +486,7 @@ function MenubarAdd( editor ) {
 		const light = new THREE.PointLight( color, intensity, distance );
 		light.name = 'PointLight';
 
-		editor.execute( new AddObjectCommand( editor, light ) );
+		editor.execute( addAtCursor( light ) );
 
 	} );
 	lightSubmenu.add( option );
@@ -504,8 +511,8 @@ function MenubarAdd( editor ) {
 		light.position.set( 5, 10, 7.5 );
 
 		editor.execute( new MultiCmdsCommand( editor, [
-			new AddObjectCommand( editor, light.target ),
-			new AddObjectCommand( editor, light )
+			addAtCursor( light.target ),
+			addAtCursor( light )
 		] ) );
 
 	} );
@@ -522,7 +529,7 @@ function MenubarAdd( editor ) {
 		rig.position.set( 0, 2, 4 );
 		rig.rotation.x = - Math.atan2( 2, 4 );
 		const command = new MultiCmdsCommand( editor, [
-			new AddObjectCommand( editor, rig ),
+			addAtCursor( rig ),
 			new AddScriptCommand( editor, rig, projectorScript() )
 		] );
 		command.name = 'Add Projector';
@@ -568,7 +575,7 @@ function MenubarAdd( editor ) {
 		const camera = new THREE.OrthographicCamera( - aspect, aspect );
 		camera.name = 'OrthographicCamera';
 
-		editor.execute( new AddObjectCommand( editor, camera ) );
+		editor.execute( addAtCursor( camera ) );
 
 	} );
 	cameraSubmenu.add( option );
@@ -583,7 +590,7 @@ function MenubarAdd( editor ) {
 		const camera = new THREE.PerspectiveCamera();
 		camera.name = 'PerspectiveCamera';
 
-		editor.execute( new AddObjectCommand( editor, camera ) );
+		editor.execute( addAtCursor( camera ) );
 
 	} );
 	cameraSubmenu.add( option );

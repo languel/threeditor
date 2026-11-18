@@ -55,7 +55,12 @@ const definitions = [
  ['revealObjects','Reveal temporarily hidden objects','View','','alt+h'],
  ['toggleSnap','Toggle magnet snapping','Transform','shift+tab','shift+tab'], ['orientationPie','Open orientation menu','Transform',',',','],
  ['placementPie','Open placement menu','Transform','alt+,','alt+,'],
- ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
+ ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping targets','View','shift+s',''], ['pivotPie','Open pivot menu','View','.','.'],
+ ['cursorSnapPie','Open cursor snap menu','View','','shift+s'],
+ ['cursorToOrigin','Cursor to World Origin','View','',''],
+ ['cursorToSelected','Cursor to Selected','View','',''],
+ ['cursorToGrid','Cursor to Grid','View','',''],
+ ['selectionToCursor','Selection to Cursor (Keep Offset)','View','',''],
  ['grid','Toggle grid','Transform','alt+g','alt+g'], ['cameraHelpers','Toggle camera helpers','View','',''], ['lightHelpers','Toggle light helpers','View','',''], ['skeletonHelpers','Toggle skeleton helpers','View','',''],
  ['timelineInsertKey','Insert timeline keyframe','Animation','i','i'],
  ['timelineDelete','Delete selected timeline keyframe or clip','Animation','delete','x'],
@@ -161,6 +166,13 @@ class Keymap {
   const action=this.actions.find(action=>action.id===id);
   if(action?.available&&!action.available())return false;
   if(area!=='viewport'&&(viewportCategories.has(action?.category)||viewportActions.has(id)||action?.viewportOnly))return false;
+  if(['cursorSnapPie','cursorToOrigin','cursorToSelected','cursorToGrid','selectionToCursor'].includes(id)){
+   const cursor=e.viewportCursor;
+   if(!cursor?.available)return false;
+   if(id==='cursorToSelected')return Boolean(cursor.center());
+   if(id==='selectionToCursor')return cursor.canSnapSelection();
+   return true;
+  }
   if(['localView','hideSelected','hideUnselected','revealObjects'].includes(id)){
    const visibility=e.viewportVisibility;
    if(!visibility||!e.viewLayout.frames.some(frame=>frame.director)||e.viewTools.mode||m.gesture||m.drag)return false;
@@ -330,6 +342,14 @@ class Keymap {
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
    case 'duplicate':if(!e.modeling?.editMode)e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
+   case 'cursorToOrigin':e.setCursor3D(new THREE.Vector3());break;
+   case 'cursorToSelected':{const center=e.viewportCursor.center();if(center)e.setCursor3D(center);break;}
+   case 'cursorToGrid':{
+    const step=e.config.getKey('settings/gridStep');
+    if(Number.isFinite(step)&&step>0)e.setCursor3D(e.cursor3D.clone().multiplyScalar(1/step).round().multiplyScalar(step));
+    break;
+   }
+   case 'selectionToCursor':e.viewportCursor.snapSelection();break;
    case 'localView':e.viewportVisibility.toggleLocal();break;
    case 'hideSelected':e.viewportVisibility.hideSelection();break;
    case 'hideUnselected':e.viewportVisibility.hideSelection(true);break;
@@ -337,7 +357,7 @@ class Keymap {
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toolShelf':e.viewTools.toggleShelf();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
-   case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
+   case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'pivotPie':case 'cursorSnapPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':e.toggleTransformGrid?.();break;
    case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;

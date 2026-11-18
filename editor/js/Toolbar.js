@@ -1,4 +1,4 @@
-import { addTransformSettings } from './TransformSettings.js?v=workspace-modes';
+import { addTransformSettings } from './TransformSettings.js?v=cursor-3d';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

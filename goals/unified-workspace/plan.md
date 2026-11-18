@@ -55,3 +55,5 @@ Shortcut and palette routing now follows the active area. Mesh editing keeps its
 Object Mode now has Box, Lasso, and Circle Select, selection operations, and framing for multiple objects. Browser coverage includes a split pane, locked references with selection disabled, canceling a gesture, and undoing deletion of a parent and child selection.
 
 Local View and temporary hide/reveal now filter Director panes, their selection and their surface tools. A scene-camera split regression checks that render and save preserve authored visibility. A DDA Gallery check also verifies Gaussian rendering in the optical pane and Play while the Director is isolated.
+
+The saved 3D Cursor now supports surface placement in Director panes, Add-menu placement, cursor pivots, and Shift+S snapping in Object and Edit modes. The browser test covers placement, parented transforms, undo, and reopening a saved cursor.
