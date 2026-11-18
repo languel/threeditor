@@ -50,6 +50,8 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 Object and Edit modes share region geometry and selection operations through `modeling/MeshSelection.js`. `modeling/ObjectSelection.js` projects eligible object origins into the pane where a gesture starts. The normal selector still owns selection and pivots. Removing a selection that includes both a parent and its descendants records the parent once, so undo restores the whole hierarchy.
 
+Local View and temporary hides live in `modeling/ViewportVisibility.js`. The Director draw scopes visibility and restores it in a `finally` block, including ancestor layers used to keep selected child meshes visible. Selection, measurement, snapping, paint, and asset drops use the same filter. Optical views and Play continue to render the authored scene. Realistic Director mode uses raster preview while a filter is active.
+
 ### Profile building and extrusion
 
 - `modeling/ModelViewport.js` draws and closes a pending mesh profile from the vertical tool strip. Closed paths and shapes can feed the same interactive extrusion. The pointer preview is transient. Confirm commits the underlying topology and cap movement together, and Escape drops the preview.

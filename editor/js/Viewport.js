@@ -11,7 +11,7 @@ import { UIPanel } from './libs/ui.js';
 
 import { EditorControls } from './EditorControls.js?v=object-selection';
 
-import { ViewportLabels } from './Viewport.Labels.js';
+import { ViewportLabels } from './Viewport.Labels.js?v=local-view';
 import { ViewportControls } from './Viewport.Controls.js?v=area-splits';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
@@ -29,10 +29,11 @@ import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=object-selection';
-import { ObjectSelection } from './modeling/ObjectSelection.js';
+import { ViewportTools } from './modeling/ViewportTools.js?v=local-view';
+import { ObjectSelection } from './modeling/ObjectSelection.js?v=local-view';
+import { ViewportVisibility } from './modeling/ViewportVisibility.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=object-selection';
+import { ModelViewport } from './modeling/ModelViewport.js?v=local-view';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -81,6 +82,34 @@ function Viewport( editor ) {
 
 	let renderer = null;
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
+	const visibility = editor.viewportVisibility = new ViewportVisibility( editor, () => {
+
+		syncTransformTarget();
+		initPT();
+		render();
+
+	} );
+	const visibilityControls = document.createElement( 'div' );
+	visibilityControls.className = 'viewport-visibility-controls';
+	visibilityControls.hidden = true;
+	const localView = document.createElement( 'button' );
+	localView.type = 'button';
+	localView.className = 'Button';
+	localView.textContent = 'Local View';
+	localView.title = 'Exit Local View';
+	localView.setAttribute( 'aria-label', localView.title );
+	localView.hidden = true;
+	localView.onclick = () => visibility.toggleLocal();
+	const reveal = document.createElement( 'button' );
+	reveal.type = 'button';
+	reveal.className = 'Button';
+	reveal.textContent = 'Reveal';
+	reveal.title = 'Reveal temporarily hidden objects';
+	reveal.setAttribute( 'aria-label', reveal.title );
+	reveal.hidden = true;
+	reveal.onclick = () => visibility.reveal();
+	visibilityControls.append( localView, reveal );
+	container.dom.append( visibilityControls );
 	// Route shortcuts and pointer tools to the Director area under the mouse
 	// before the modeling and transform controls process the event.
 	for ( const type of [ 'pointerdown', 'pointermove', 'wheel' ] ) container.dom.addEventListener( type, event => {
@@ -189,7 +218,7 @@ function Viewport( editor ) {
 		if ( transformControls.dragging ) return;
 		const selected = selector.selection;
 		const available = selected.length > 0 && selected.every( object => object !== scene && object !== camera &&
-			isVisible( object ) && ! hasRestriction( object, 'locked' ) );
+			isVisible( object ) && visibility.allows( object, layout.navigation ) && ! hasRestriction( object, 'locked' ) );
 		const candidate = model.editMode ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.brush && ! model.drag ? model.proxy : null ) :
 			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
 		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
@@ -1205,9 +1234,16 @@ function Viewport( editor ) {
 
 	}
 
+	function usePathtracer() {
+
+		return pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical &&
+			layout.frames.length < 2 && ! ( visibility.active && layout.frames[ 0 ]?.director );
+
+	}
+
 	function initPT() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( usePathtracer() ) {
 
 			pathtracer.init( scene, editor.viewportCamera );
 
@@ -1217,7 +1253,7 @@ function Viewport( editor ) {
 
 	function updatePTBackground() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( usePathtracer() ) {
 
 			pathtracer.setBackground( scene.background, scene.backgroundBlurriness );
 
@@ -1227,7 +1263,7 @@ function Viewport( editor ) {
 
 	function updatePTEnvironment() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( usePathtracer() ) {
 
 			pathtracer.setEnvironment( scene.environment );
 
@@ -1237,7 +1273,7 @@ function Viewport( editor ) {
 
 	function updatePTMaterials() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( usePathtracer() ) {
 
 			pathtracer.updateMaterials();
 
@@ -1257,7 +1293,7 @@ function Viewport( editor ) {
 
 	function updatePT() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( usePathtracer() ) {
 
 			pathtracer.update();
 			drawSelection( editor.viewportCamera );
@@ -1288,6 +1324,9 @@ function Viewport( editor ) {
 		const width = container.dom.offsetWidth, height = container.dom.offsetHeight;
 		if ( ! width || ! height ) return;
 		const frames = layout.update( width, height );
+		visibilityControls.hidden = ! visibility.active || ! frames.some( frame => frame.director );
+		localView.hidden = ! visibility.local;
+		reveal.hidden = ! visibility.only && ! visibility.hidden.size;
 		const tiled = frames.length > 1 || !! layout.optical;
 		const showViewHelper = ! tiled && frames[ 0 ].camera === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting;
 		if ( viewHelperPanel ) viewHelperPanel.hidden = ! showViewHelper;
@@ -1307,7 +1346,8 @@ function Viewport( editor ) {
 
 		const mode = editor.viewportShading;
 		const selectionStyle = editor.config.getKey( 'settings/selectionHighlight' ) || 'outline';
-		const selected = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) );
+		const selected = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) &&
+			visibility.allows( object, nav ) );
 		const outlineSupported = renderer.isWebGLRenderer && ! renderer.xr.isPresenting;
 		const surfaces = selected.filter( hasSelectionSurface );
 		const bounds = selectionStyle !== 'outline' || ! outlineSupported ? selected : selected.filter( object => ! surfaces.includes( object ) );
@@ -1365,9 +1405,13 @@ function Viewport( editor ) {
 		renderer.setViewport( 0, 0, width, height );
 		if ( ! tiled ) {
 
-			const view = frames[ 0 ].camera;
-			draw( view, splatHost, mode === 'preview' || mode === 'materials' || mode === 'realistic' );
-			drawGuides( frames[ 0 ] );
+			const frame = frames[ 0 ];
+			visibility.draw( frame, () => {
+
+				draw( frame.camera, splatHost, mode === 'preview' || mode === 'materials' || mode === 'realistic' );
+				drawGuides( frame );
+
+			} );
 			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;
 
@@ -1393,8 +1437,12 @@ function Viewport( editor ) {
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );
 					renderer.setScissor( rect.x, y, rect.width, rect.height );
-					draw( view, key === 'source' && secondarySplats ? secondarySplats : splatHost );
-					drawGuides( frame );
+					visibility.draw( frame, () => {
+
+						draw( view, key === 'source' && secondarySplats ? secondarySplats : splatHost );
+						drawGuides( frame );
+
+					} );
 
 				}
 

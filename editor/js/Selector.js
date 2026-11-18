@@ -119,7 +119,7 @@ class Selector {
 
 	}
 
-	getIntersects( raycaster ) {
+	getIntersects( raycaster, frame ) {
 
 		const objects = [];
 
@@ -138,7 +138,8 @@ class Selector {
 		return raycaster.intersectObjects( objects, false ).filter( hit => {
 
 			const object = hit.object.userData.object || hit.object;
-			return isVisible( object ) && ! hasRestriction( object, 'unselectable' );
+			return isVisible( object ) && ! hasRestriction( object, 'unselectable' ) &&
+				( ! frame || this.editor.viewportVisibility?.allows( object, frame ) !== false );
 
 		} );
 
@@ -150,14 +151,15 @@ class Selector {
 
 		raycaster.setFromCamera( mouse, camera );
 
-		const hits = this.getIntersects( raycaster );
 		const frame = this.editor.viewLayout?.frames.find( frame => frame.camera === camera );
+		const hits = this.getIntersects( raycaster, frame );
 		const rect = frame?.rect || this.editor.renderer.domElement.getBoundingClientRect();
 		const cursor = new THREE.Vector2( point.x * rect.width, point.y * rect.height );
 		this.editor.scene.traverseVisible( object => {
 
 			const data = object.userData.measurement;
-			if ( ! data || ! isVisible( object ) || hasRestriction( object, 'unselectable' ) ) return;
+			if ( ! data || ! isVisible( object ) || hasRestriction( object, 'unselectable' ) ||
+				this.editor.viewportVisibility?.allows( object, frame ) === false ) return;
 			const world = worldMeasurePoints( THREE, this.editor.scene, object, data.points );
 			const points = world.map( p => p.clone().project( camera ) );
 			const count = data.closed ? points.length : points.length - 1;

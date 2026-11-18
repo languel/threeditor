@@ -15,7 +15,7 @@ import { Loader } from './Loader.js';
 import { History as _History } from './History.js?v=look-controls';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
-import { Selector } from './Selector.js?v=bottom-pivot';
+import { Selector } from './Selector.js?v=local-view';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );

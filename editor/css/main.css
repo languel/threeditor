@@ -2403,6 +2403,18 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 .viewport-tool-panel output { flex-basis: 100%; color: var(--theme-text); font-size: 12px; }
 
 .viewport-controls { z-index: 4; }
+.viewport-visibility-controls {
+	position: absolute;
+	bottom: 12px;
+	left: 12px;
+	z-index: 4;
+	display: flex;
+	gap: 3px;
+}
+body.translucent-panels:not(.workspace-2d-split) .viewport-visibility-controls {
+	left: calc(var(--left-dock) + 12px);
+	bottom: calc(var(--timeline-h) + var(--sidebar-bottom) + 12px);
+}
 
 .viewport-labels, .viewport-tool-overlay {
 	position: absolute;

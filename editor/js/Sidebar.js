@@ -5,7 +5,7 @@ import { SidebarProperties } from './Sidebar.Properties.js?v=contour-editing';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=selection-outline';
 import { SidebarStreams } from './Sidebar.Streams.js';
-import { SidebarAssets } from './Sidebar.Assets.js?v=asset-dock';
+import { SidebarAssets } from './Sidebar.Assets.js?v=local-view';
 
 function Sidebar( editor ) {
 

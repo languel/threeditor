@@ -7,10 +7,10 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { SetPositionCommand } from '../commands/SetPositionCommand.js';
 import { SetRotationCommand } from '../commands/SetRotationCommand.js';
-import { meshHit } from './SurfacePicking.js';
+import { meshHit } from './SurfacePicking.js?v=local-view';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
-import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
+import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js?v=local-view';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=contour-editing';
 
 import { contourEdgeCount, insertContourPoint, interpolatePoint, nearestContourEdge } from './Contour.js';
@@ -215,7 +215,7 @@ export class ModelViewport {
 
 	canEdit() {
 
-		return this.object && isVisible( this.object ) && ! hasRestriction( this.object, 'locked' );
+		return this.object && isVisible( this.object ) && this.editor.viewportVisibility.allows( this.object, this.frame ) && ! hasRestriction( this.object, 'locked' );
 
 	}
 
@@ -249,7 +249,7 @@ export class ModelViewport {
 
 		const sourceGeometry = object?.geometry ? modifierSource( object ) : null;
 		const data = sourceGeometry?.userData.modeling;
-		return object && ( data || editableMesh( object ) ) && isVisible( object ) && ! hasRestriction( object, 'locked' ) &&
+		return object && ( data || editableMesh( object ) ) && isVisible( object ) && this.editor.viewportVisibility.allows( object, this.frame ) && ! hasRestriction( object, 'locked' ) &&
 			( ! object.userData.surfaceMark || data?.kind === 'path' ) && ( data?.points || sourceGeometry.attributes.position.count <= 20000 );
 
 	}
@@ -445,12 +445,18 @@ export class ModelViewport {
 
 	}
 
+	hitSurface( exclude ) {
+
+		return meshHit( this.ray, this.editor.scene, exclude, object => this.editor.viewportVisibility.allows( object, this.frame ) );
+
+	}
+
 	penPlacement( event, origin, plane, state ) {
 
 		let point = this.pointerWorld( event.clientX, event.clientY, plane );
 		if ( this.placement === 'surface' && ! state.axis ) {
 
-			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			const hit = this.hitSurface( this.object );
 			if ( hit ) point = hit.point;
 
 		}
@@ -1234,7 +1240,7 @@ export class ModelViewport {
 		const cursor = new THREE.Vector2( event.clientX - rect.left, event.clientY - rect.top );
 		this.ray.setFromCamera( new THREE.Vector2( cursor.x * 2 / rect.width - 1, 1 - cursor.y * 2 / rect.height ), camera );
 		const result = snapMeshFeature( { mode, ray: this.ray, scene: this.editor.scene, object: this.object, camera, rect, cursor,
-			reference, points: this.data.points, excluded: this.adding ? [] : this.indices } );
+			reference, allows: object => this.editor.viewportVisibility.allows( object, this.frame ), points: this.data.points, excluded: this.adding ? [] : this.indices } );
 		state.snap = null;
 		if ( ! result ) return point;
 		const delta = result.sub( reference );
@@ -1280,7 +1286,7 @@ export class ModelViewport {
 		if ( placement === 'surface' ) {
 
 			this.pointerWorld( event.clientX, event.clientY, plane.setFromNormalAndCoplanarPoint( normal, origin ) );
-			const hit = meshHit( this.ray, this.editor.scene, object );
+			const hit = this.hitSurface( object );
 			if ( ! hit ) return null;
 			normal.copy( hit.face.normal ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
 			if ( normal.dot( this.ray.ray.direction ) > 0 ) normal.negate();
@@ -1463,7 +1469,7 @@ export class ModelViewport {
 		if ( ! this.penChain && this.placement === 'surfacePerpendicular' ) {
 
 			this.pointerWorld( event.clientX, event.clientY, new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin ) );
-			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			const hit = this.hitSurface( this.object );
 			if ( hit ) {
 
 				origin.copy( hit.point );

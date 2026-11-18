@@ -108,7 +108,7 @@ export class ObjectSelection {
 		} else {
 
 			const point = new Vector3();
-			hits = this.candidates().filter( object => {
+			hits = this.candidates( drag.frame ).filter( object => {
 
 				object.getWorldPosition( point ).project( camera );
 				if ( point.z < - 1 || point.z > 1 || Math.abs( point.x ) > 1 || Math.abs( point.y ) > 1 ) return false;
@@ -131,15 +131,16 @@ export class ObjectSelection {
 
 	}
 
-	candidates() {
+	candidates( frame = this.layout.navigation ) {
 
 		const objects = [];
+		const visibility = this.editor.viewportVisibility;
 		function visit( parent ) {
 
 			for ( const object of parent.children ) {
 
 				if ( object.userData.runtimeOnly || ! isVisible( object ) || hasRestriction( object, 'unselectable' ) ) continue;
-				objects.push( object );
+				if ( visibility.allows( object, frame ) ) objects.push( object );
 				visit( object );
 
 			}

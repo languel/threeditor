@@ -18,6 +18,7 @@ async function check() {
 		page.on( 'pageerror', error => errors.push( error.message ) );
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( async () => window.editor?.renderer && await editor.startupReady.then( () => true ) );
+		await checkLocalVisibility( page );
 		await checkObjectSelection( page );
 		const workspaces = page.getByRole( 'navigation', { name: 'Workspaces' } );
 		const layoutWorkspace = workspaces.getByRole( 'button', { name: 'Layout', exact: true } );
@@ -453,6 +454,75 @@ async function checkObjectSelection( page ) {
 
 	} );
 	await shelf.getByRole( 'button', { name: 'Select & navigate', exact: true } ).click();
+
+}
+
+async function checkLocalVisibility( page ) {
+
+	await page.evaluate( () => {
+
+		const parent = new THREE.Mesh( new THREE.BoxGeometry( 2, 2, .3 ), new THREE.MeshBasicMaterial() );
+		parent.name = 'Local View parent';
+		const child = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+		child.name = 'Local View child';
+		child.position.z = .8;
+		parent.add( child );
+		editor.addObject( parent );
+		editor.camera.position.set( 0, 0, 5 );
+		editor.camera.lookAt( 0, 0, 0 );
+		const camera = new THREE.PerspectiveCamera();
+		camera.position.copy( editor.camera.position );
+		camera.quaternion.copy( editor.camera.quaternion );
+		editor.addObject( camera );
+		editor.setViewportCamera( camera.uuid );
+		editor.setViewportSplit( true, 'vertical' );
+		editor.select( child );
+
+	} );
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( 'F3' );
+	await page.getByRole( 'searchbox', { name: 'Search Command palette' } ).fill( 'Toggle Local View' );
+	await page.keyboard.press( 'Enter' );
+	const state = await page.evaluate( () => {
+
+		const parent = editor.scene.getObjectByName( 'Local View parent' );
+		const child = parent.children[ 0 ];
+		const frames = editor.viewLayout.frames;
+		const renderCameras = new Set();
+		parent.onBeforeRender = ( renderer, scene, camera ) => { renderCameras.add( camera.uuid ); };
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const scene = editor.toJSON().scene.object;
+		return {
+			directorPicks: editor.selector.getPointerIntersects( { x: .5, y: .5 }, frames[ 0 ].camera ).map( hit => hit.object.name ),
+			directorRendersParent: renderCameras.has( frames[ 0 ].camera.uuid ),
+			cameraRendersParent: renderCameras.has( frames[ 1 ].camera.uuid ),
+			authoringVisible: parent.visible && child.visible && scene.children.find( object => object.name === parent.name ).visible !== false
+		};
+
+	} );
+	assert.ok( state.directorPicks.includes( 'Local View child' ) );
+	assert.ok( ! state.directorPicks.includes( 'Local View parent' ) );
+	assert.equal( state.directorRendersParent, false );
+	assert.equal( state.cameraRendersParent, true );
+	assert.equal( state.authoringVisible, true );
+	await page.getByRole( 'button', { name: 'Exit Local View', exact: true } ).click();
+	await page.locator( '#viewport' ).hover();
+	await page.keyboard.press( 'h' );
+	assert.equal( await page.evaluate( () => editor.objectSelection.candidates().some( object => object.name === 'Local View child' ) ), false );
+	await page.keyboard.press( 'Alt+h' );
+	assert.equal( await page.evaluate( () => editor.objectSelection.candidates().some( object => object.name === 'Local View child' ) ), true );
+	await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Local View child' ) ) );
+	await page.keyboard.press( 'Shift+h' );
+	assert.deepEqual( await page.evaluate( () => editor.objectSelection.candidates().map( object => object.name ) ), [ 'Local View child' ] );
+	await page.getByRole( 'button', { name: 'Reveal temporarily hidden objects', exact: true } ).click();
+	assert.equal( await page.evaluate( () => editor.viewportVisibility.active ), false );
+	await page.evaluate( () => {
+
+		editor.setViewportCamera( editor.camera.uuid );
+		editor.setViewportSplit( false );
+		editor.clear();
+
+	} );
 
 }
 check().catch( error => { console.error( error ); process.exitCode = 1; } );

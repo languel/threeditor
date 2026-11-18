@@ -53,3 +53,5 @@ Shortcut and palette routing now follows the active area. Mesh editing keeps its
 3D paths and shapes and the 2D vector and projector-mask editors now share contour edge picking, insertion, and closure rules. The browser check inserts on the closing seam in 3D, exercises the smoothing command and sampled curve hit, and verifies 2D contour conversion. Shared movement and contour workflows and the game engine remain open.
 
 Object Mode now has Box, Lasso, and Circle Select, selection operations, and framing for multiple objects. Browser coverage includes a split pane, locked references with selection disabled, canceling a gesture, and undoing deletion of a parent and child selection.
+
+Local View and temporary hide/reveal now filter Director panes, their selection and their surface tools. A scene-camera split regression checks that render and save preserve authored visibility. A DDA Gallery check also verifies Gaussian rendering in the optical pane and Play while the Director is isolated.

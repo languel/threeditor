@@ -49,6 +49,10 @@ const definitions = [
  ['toolbar','Toggle transform toolbar','Workspace','',''], ['settings','Open settings','Workspace','',''],
  ['duplicate','Duplicate selected object','Edit','','shift+d'],
  ['objectNames','Toggle object names','View','shift+l','shift+l'],
+ ['localView','Toggle Local View','View','','numpaddivide'],
+ ['hideSelected','Hide selected objects in the viewport','View','','h'],
+ ['hideUnselected','Hide unselected objects in the viewport','View','','shift+h'],
+ ['revealObjects','Reveal temporarily hidden objects','View','','alt+h'],
  ['toggleSnap','Toggle magnet snapping','Transform','shift+tab','shift+tab'], ['orientationPie','Open orientation menu','Transform',',',','],
  ['placementPie','Open placement menu','Transform','alt+,','alt+,'],
  ['gridPie','Open grid menu','View','shift+g','shift+g'], ['snapPie','Open snapping menu','View','shift+s','shift+s'], ['pivotPie','Open pivot menu','View','.','.'],
@@ -157,6 +161,13 @@ class Keymap {
   const action=this.actions.find(action=>action.id===id);
   if(action?.available&&!action.available())return false;
   if(area!=='viewport'&&(viewportCategories.has(action?.category)||viewportActions.has(id)||action?.viewportOnly))return false;
+  if(['localView','hideSelected','hideUnselected','revealObjects'].includes(id)){
+   const visibility=e.viewportVisibility;
+   if(!visibility||!e.viewLayout.frames.some(frame=>frame.director)||e.viewTools.mode||m.gesture||m.drag)return false;
+   if(id==='localView')return Boolean(visibility.local||visibility.selected().length);
+   if(id==='revealObjects')return Boolean(visibility.hidden.size||visibility.only);
+   return mode==='object'&&visibility.selected().length>0;
+  }
   if(id==='outlineInsert'||id==='outlineSmooth'){
    return mode==='edit'&&!e.viewTools.mode&&m.editingOutline&&
     (id==='outlineInsert'?m.indices.length===1:m.data.points.length>=3);
@@ -319,6 +330,10 @@ class Keymap {
    case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
    case 'duplicate':if(!e.modeling?.editMode)e.shortcutDuplicate?.();break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
+   case 'localView':e.viewportVisibility.toggleLocal();break;
+   case 'hideSelected':e.viewportVisibility.hideSelection();break;
+   case 'hideUnselected':e.viewportVisibility.hideSelection(true);break;
+   case 'revealObjects':e.viewportVisibility.reveal();break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toolShelf':e.viewTools.toggleShelf();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;

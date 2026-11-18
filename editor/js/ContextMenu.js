@@ -1,6 +1,6 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=contour-editing';
-import { formatCombo } from './Keymap.js?v=object-selection';
+import { formatCombo } from './Keymap.js?v=local-view';
 
 function ContextMenu( editor, viewport ) {
 
@@ -163,6 +163,11 @@ function ContextMenu( editor, viewport ) {
 
 		}
 		actions.push( ...originActions( editor ) );
+		for ( const id of [ 'localView', 'hideSelected', 'hideUnselected', 'revealObjects' ] ) {
+
+			if ( editor.keymap.actionAvailable( id ) ) actions.push( { ...editor.keymap.actions.find( action => action.id === id ), section: 'Visibility' } );
+
+		}
 		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
 
 			label: 'Pivot: ' + label, section: 'Transform pivot', run: () => {

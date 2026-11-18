@@ -14,6 +14,7 @@ function ModalTransform( editor ) {
   if(mode||editor.flyControls?.active||editor.viewTools?.mode||!editor.renderer)return;
   if(editor.modeling?.editMode){editor.modeling.startModal(next);return;}
   const selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
+  if(selection.some(object=>editor.viewportVisibility?.allows(object,editor.viewLayout.navigation)===false))return;
   const objects=selection.filter(o=>!selection.some(parent=>parent!==o&&isAncestor(parent,o)));
   if(!objects.length)return;
   const snapshot=o=>({o,position:o.position.clone(),rotation:o.rotation.clone(),scale:o.scale.clone()});

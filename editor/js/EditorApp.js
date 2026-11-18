@@ -1,20 +1,20 @@
 import { installNumericScrubbing } from './NumericScrubbing.js';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=area-splits';
-import { Keymap } from './Keymap.js?v=object-selection';
-import { ModalTransform } from './ModalTransform.js?v=top-toolbar';
+import { Editor } from './Editor.js?v=local-view';
+import { Keymap } from './Keymap.js?v=local-view';
+import { ModalTransform } from './ModalTransform.js?v=local-view';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=look-controls';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=object-selection';
+import { Viewport } from './Viewport.js?v=local-view';
 import { Toolbar } from './Toolbar.js?v=workspace-modes';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=contour-editing';
+import { Sidebar } from './Sidebar.js?v=local-view';
 import { Menubar } from './Menubar.js?v=workspace-tabs';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=object-selection';
+import { ContextMenu } from './ContextMenu.js?v=local-view';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';

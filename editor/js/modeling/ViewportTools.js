@@ -12,7 +12,7 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { openMaskEditor } from './MaskEditor.js?v=contour-editing';
-import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
+import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=local-view';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=contour-editing';
 
@@ -719,7 +719,7 @@ export class ViewportTools {
 				const y = bounds.top + THREE.MathUtils.lerp( a[ 1 ], b[ 1 ], j / steps );
 				if ( this.layout.at( x, y ) !== frame ) throw new Error( 'Frame the whole path in the viewport before saving it.' );
 				rayToView( this.ray, this.layout, frame, x, y );
-				const hit = meshHit( this.ray, this.editor.scene );
+				const hit = this.hitSurface( frame );
 				if ( hit?.object !== this.target ) throw new Error( 'A segment leaves the mesh. Add points around the gap.' );
 				points.push( localSurfacePoint( hit, this.ray ) );
 
@@ -786,10 +786,16 @@ export class ViewportTools {
 
 	}
 
+	hitSurface( frame ) {
+
+		return meshHit( this.ray, this.editor.scene, undefined, object => this.editor.viewportVisibility.allows( object, frame ) );
+
+	}
+
 	measurePoint( frame, x, y ) {
 
 		rayToView( this.ray, this.layout, frame, x, y );
-		const hit = meshHit( this.ray, this.editor.scene );
+		const hit = this.hitSurface( frame );
 		if ( ! hit ) {
 
 			const floor = this.ray.ray.intersectPlane( new THREE.Plane( new THREE.Vector3( 0, 1, 0 ) ), new THREE.Vector3() );
@@ -846,7 +852,7 @@ export class ViewportTools {
 			if ( this.mode === 'path' ) {
 
 				rayToView( this.ray, this.layout, frame, x, y );
-				const hit = meshHit( this.ray, this.editor.scene );
+				const hit = this.hitSurface( frame );
 				if ( ! hit || hasRestriction( hit.object, 'locked' ) ) {
 
 					this.status.textContent = 'Start on a visible, unlocked mesh.';
@@ -867,7 +873,7 @@ export class ViewportTools {
 			} else {
 
 				this.pointerType = event.pointerType;
-				this.stroke = { marks: new Set(), receivers: new Map(), output: this.brush.output, placement: this.brush.placement, surfaces: paintSurfaces( this.editor.scene ), x, y, color: this.brush.color, opacity: this.brush.opacity };
+				this.stroke = { marks: new Set(), receivers: new Map(), output: this.brush.output, placement: this.brush.placement, surfaces: paintSurfaces( this.editor.scene, object => this.editor.viewportVisibility.allows( object, frame ) ), x, y, color: this.brush.color, opacity: this.brush.opacity };
 				if ( this.brush.output === 'texture' ) this.stroke.texture = new TexturePaintStroke( this.editor );
 				this.paintDab( frame, x, y, event.pressure );
 				this.refreshPaintPreview();
@@ -911,7 +917,7 @@ export class ViewportTools {
 		} else if ( this.mode === 'path' && samePane ) {
 
 			rayToView( this.ray, this.layout, frame, x, y );
-			const hit = meshHit( this.ray, this.editor.scene );
+			const hit = this.hitSurface( frame );
 			if ( hit?.object === this.target ) this.points[ this.selected ] = localSurfacePoint( hit, this.ray );
 
 		} else if ( this.mode === 'paint' ) {
@@ -1184,7 +1190,7 @@ export class ViewportTools {
 			ctx.clip();
 			for ( const ruler of this.measurements ) {
 
-				if ( ! isVisible( ruler ) || this.mode === 'measure' && ruler === this.ruler ) continue;
+				if ( ! isVisible( ruler ) || ! this.editor.viewportVisibility.allows( ruler, frame ) || this.mode === 'measure' && ruler === this.ruler ) continue;
 				const data = ruler.userData.measurement;
 				this.drawRuler( ctx, frame, ruler, data.points, data, this.editor.selector.selection.includes( ruler ) );
 

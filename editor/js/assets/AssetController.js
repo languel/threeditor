@@ -1,4 +1,4 @@
-import { meshHit, rayToView } from '../modeling/SurfacePicking.js';
+import { meshHit, rayToView } from '../modeling/SurfacePicking.js?v=local-view';
 import { poseScript } from '../streams/PoseDriver.js';
 import * as THREE from 'three';
 import { storeSourceFiles, isImageAsset, isImportAsset, isTextureAsset } from '../ProjectAssets.js';
@@ -249,7 +249,7 @@ export class AssetController {
 			const frame = view ? view.at( event.clientX, event.clientY ) : { camera: this.editor.viewportCamera };
 			if ( ! frame ) return;
 			const ray = rayToView( new THREE.Raycaster(), view || { clientRect: () => viewport.getBoundingClientRect() }, frame, event.clientX, event.clientY );
-			const hit = meshHit( ray, this.editor.scene );
+			const hit = meshHit( ray, this.editor.scene, undefined, object => this.editor.viewportVisibility?.allows( object, frame ) );
 			const position = hit?.point || ray.ray.intersectPlane( new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 ), new THREE.Vector3() ) || ray.ray.at( 10, new THREE.Vector3() );
 			// A drop always places/applies; it never invokes a stale slot-picker callback.
 			this.cancelPicker();
