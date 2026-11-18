@@ -2,6 +2,76 @@ import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { SetMaterialCommand } from '../commands/SetMaterialCommand.js';
 
+function clipPolygonToFace( polygon, screen, det ) {
+
+	for ( let i = 0; i < 3 && polygon.length; i ++ ) {
+
+		const a = screen[ i ], b = screen[ ( i + 1 ) % 3 ];
+		const edge = p => Math.sign( det ) * ( ( b.x - a.x ) * ( p.y - a.y ) - ( b.y - a.y ) * ( p.x - a.x ) );
+		const input = polygon;
+		polygon = [];
+		let previous = input.at( -1 ), prevDist = edge( previous );
+		for ( const point of input ) {
+
+			const dist = edge( point );
+			if ( ( dist < 0 ) !== ( prevDist < 0 ) ) {
+
+				const t = prevDist / ( prevDist - dist );
+				polygon.push( { x: previous.x + ( point.x - previous.x ) * t, y: previous.y + ( point.y - previous.y ) * t } );
+
+			}
+			if ( dist >= 0 ) polygon.push( point );
+			previous = point;
+			prevDist = dist;
+
+		}
+
+	}
+	return polygon;
+
+}
+
+function perspectiveStamp( hit, texels, x, y, radius ) {
+
+	const { screen, det } = hit;
+	const [ a, b, c ] = screen;
+	const toUV = p => {
+
+		const u = ( ( p.x - a.x ) * ( c.y - a.y ) - ( p.y - a.y ) * ( c.x - a.x ) ) / det;
+		const v = ( ( b.x - a.x ) * ( p.y - a.y ) - ( b.y - a.y ) * ( p.x - a.x ) ) / det;
+		const weights = [ ( 1 - u - v ) * a.invW, u * b.invW, v * c.invW ];
+		const invW = weights[ 0 ] + weights[ 1 ] + weights[ 2 ];
+		return new THREE.Vector2().addScaledVector( texels[ 0 ], weights[ 0 ] / invW )
+			.addScaledVector( texels[ 1 ], weights[ 1 ] / invW ).addScaledVector( texels[ 2 ], weights[ 2 ] / invW );
+
+	};
+	const fullyCovered = screen.every( point => ( point.x - x ) ** 2 + ( point.y - y ) ** 2 <= radius ** 2 );
+	const circle = fullyCovered ? null : Array.from( { length: 32 }, ( _, index ) => {
+
+		const angle = index / 32 * 2 * Math.PI;
+		return { x: x + radius * Math.cos( angle ), y: y + radius * Math.sin( angle ) };
+
+	} );
+	const outline = fullyCovered ? texels : clipPolygonToFace( circle, screen, det ).map( toUV );
+	const holes = hit.occluded.map( ( [ ox, oy, length ] ) => {
+
+		const left = x + ox, top = y + oy, right = left + length, bottom = top + 1;
+		return clipPolygonToFace( [ { x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom } ], screen, det ).map( toUV );
+
+	} );
+	return { outline, holes };
+
+}
+
+function tracePolygon( ctx, polygon ) {
+
+	if ( polygon.length < 3 ) return;
+	ctx.moveTo( polygon[ 0 ].x, polygon[ 0 ].y );
+	for ( let i = 1; i < polygon.length; i ++ ) ctx.lineTo( polygon[ i ].x, polygon[ i ].y );
+	ctx.closePath();
+
+}
+
 // Each touched material slot owns a private working image until the gesture commits.
 export class TexturePaintStroke {
 
@@ -15,10 +85,14 @@ export class TexturePaintStroke {
 	paint( hit, color, opacity, radius, frame, offsetX, offsetY ) {
 
 		const receiver = hit.object;
+		const projection = hit.screen;
 		const slot = Array.isArray( receiver.material ) ? hit.face?.materialIndex ?? 0 : 0;
 		const source = this.editor.getObjectMaterial( receiver, slot );
-		const uv = source?.map?.channel === 1 ? hit.uv1 : hit.uv;
-		if ( ! hit.face || ! uv || ! source?.color || ! ( 'map' in source ) || ( source.map?.channel ?? 0 ) > 1 ) return 'Choose a mesh with UV coordinates and a base-color material.';
+		const channel = source?.map?.channel ?? 0;
+		const geometry = receiver.geometry;
+		const coords = geometry.getAttribute( channel === 1 ? 'uv1' : 'uv' );
+		const uv = channel === 1 ? hit.uv1 : hit.uv;
+		if ( ! hit.face || ! coords || ! ( projection || uv ) || ! source?.color || ! ( 'map' in source ) || channel > 1 ) return 'Choose a mesh with UV coordinates and a base-color material.';
 
 		const key = receiver.uuid + '/' + slot;
 		let target = this.targets.get( key );
@@ -68,20 +142,16 @@ export class TexturePaintStroke {
 
 		const { texture, ctx } = target;
 		if ( texture.matrixAutoUpdate ) texture.updateMatrix();
-		const coord = uv.clone().applyMatrix3( texture.matrix );
-		const geometry = receiver.geometry;
-		const coords = geometry.getAttribute( texture.channel === 1 ? 'uv1' : 'uv' );
 		const { a, b, c } = hit.face;
 		const world = receiver.matrixWorld.clone();
-		if ( receiver.isInstancedMesh ) {
+		if ( ! projection && receiver.isInstancedMesh ) {
 
 			const instance = new THREE.Matrix4();
 			receiver.getMatrixAt( hit.instanceId, instance );
 			world.multiply( instance );
 
 		}
-		const screen = [ a, b, c ].map( index => {
-
+		const screen = projection ? projection.map( point => new THREE.Vector2( point.x, point.y ) ) : [ a, b, c ].map( index => {
 			const point = receiver.getVertexPosition( index, new THREE.Vector3() ).applyMatrix4( world ).project( frame.camera );
 			return new THREE.Vector2( point.x * frame.rect.width / 2, - point.y * frame.rect.height / 2 );
 
@@ -99,14 +169,18 @@ export class TexturePaintStroke {
 		const xx = ( du.x * dy.y - dv.x * dx.y ) / det, xy = ( du.y * dy.y - dv.y * dx.y ) / det;
 		const yx = ( dv.x * dx.x - du.x * dy.x ) / det, yy = ( dv.y * dx.x - du.y * dy.x ) / det;
 		const width = ctx.canvas.width, height = ctx.canvas.height;
-		const cx = coord.x * width - offsetX * xx - offsetY * yx;
-		const cy = coord.y * height - offsetX * xy - offsetY * yy;
+		const coord = projection ? texels[ 0 ] : uv.clone().applyMatrix3( texture.matrix ).multiply( new THREE.Vector2( width, height ) );
+		const cx = coord.x - offsetX * xx - offsetY * yx;
+		const cy = coord.y - offsetX * xy - offsetY * yy;
+		const perspective = projection && projection.some( point => point.invW !== projection[ 0 ].invW ) ?
+			perspectiveStamp( hit, texels, projection[ 0 ].x - offsetX, projection[ 0 ].y - offsetY, radius ) : null;
+		if ( perspective && perspective.outline.length < 3 ) return '';
 		const tiles = ( center, extent, size, wrap, axis ) => {
 
 			if ( wrap === THREE.ClampToEdgeWrapping ) return [ 0, 0 ];
-			const values = texels.map( point => point[ axis ] );
-			const min = Math.max( center - extent, Math.min( ...values ) );
-			const max = Math.min( center + extent, Math.max( ...values ) );
+			const values = ( perspective?.outline || texels ).map( point => point[ axis ] );
+			const min = perspective ? Math.min( ...values ) : Math.max( center - extent, Math.min( ...values ) );
+			const max = perspective ? Math.max( ...values ) : Math.min( center + extent, Math.max( ...values ) );
 			return [ Math.floor( min / size ), Math.floor( max / size ) ];
 
 		};
@@ -122,17 +196,39 @@ export class TexturePaintStroke {
 			ctx.save();
 			ctx.setTransform( mirrorX ? -1 : 1, 0, 0, flipY ? -1 : 1,
 				( mirrorX ? column + 1 : -column ) * width, ( flipY ? row + 1 : -row ) * height );
-			ctx.beginPath();
-			ctx.moveTo( texels[ 0 ].x, texels[ 0 ].y );
-			ctx.lineTo( texels[ 1 ].x, texels[ 1 ].y );
-			ctx.lineTo( texels[ 2 ].x, texels[ 2 ].y );
-			ctx.closePath();
-			ctx.clip();
-			ctx.transform( xx, xy, yx, yy, cx, cy );
 			ctx.fillStyle = color;
 			ctx.globalAlpha = opacity;
 			ctx.beginPath();
+			if ( perspective ) {
+
+				tracePolygon( ctx, perspective.outline );
+				if ( perspective.holes.length ) {
+
+					ctx.clip();
+					for ( const hole of perspective.holes ) tracePolygon( ctx, hole );
+
+				}
+				ctx.fill( 'evenodd' );
+				ctx.restore();
+				continue;
+
+			}
+			tracePolygon( ctx, texels );
+			ctx.clip();
+			ctx.transform( xx, xy, yx, yy, cx, cy );
+			ctx.beginPath();
 			ctx.arc( 0, 0, radius, 0, Math.PI * 2 );
+			if ( hit.occluded?.length ) {
+
+				ctx.clip();
+				ctx.beginPath();
+				ctx.rect( -radius - 1, -radius - 1, 2 * radius + 2, 2 * radius + 2 );
+				for ( const [ x, y, length ] of hit.occluded ) ctx.rect( x, y, length, 1 );
+				ctx.clip( 'evenodd' );
+				ctx.beginPath();
+				ctx.rect( -radius, -radius, 2 * radius, 2 * radius );
+
+			}
 			ctx.fill();
 			ctx.restore();
 

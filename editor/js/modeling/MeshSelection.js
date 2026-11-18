@@ -29,6 +29,67 @@ export function selectionCandidates( data, mode ) {
 	return mode === 'vertex' ? data.points.map( ( _, i ) => [ i ] ) : mode === 'edge' ? meshEdges( data ) : data.faces || ( data.kind === 'shape' && data.closed !== false && data.points.length >= 3 ? [ data.points.map( ( _, i ) => i ) ] : [] );
 
 }
+
+// A port joins elements that can be reached in one step. Vertices share
+// an edge, edges share a vertex, and faces share an edge.
+export function connectedSelection( data, mode, seeds, operation ) {
+
+	const elements = selectionCandidates( data, mode );
+	const indices = new Map( elements.map( ( ids, i ) => [ elementKey( ids ), i ] ) );
+	const ports = elements.map( () => [] );
+	const members = new Map();
+	const connect = ( index, port ) => {
+
+		ports[ index ].push( port );
+		if ( ! members.has( port ) ) members.set( port, [] );
+		members.get( port ).push( index );
+
+	};
+	if ( mode === 'vertex' ) {
+
+		for ( const edge of meshEdges( data ) ) {
+
+			const port = elementKey( edge );
+			for ( const index of edge ) connect( index, port );
+
+		}
+
+	} else elements.forEach( ( ids, i ) => {
+
+		if ( mode === 'edge' ) for ( const vertex of ids ) connect( i, vertex );
+		else for ( let j = 0; j < ids.length; j ++ ) connect( i, elementKey( [ ids[ j ], ids[ ( j + 1 ) % ids.length ] ] ) );
+
+	} );
+
+	const selected = new Set( seeds.map( ids => indices.get( elementKey( ids ) ) ).filter( i => i !== undefined ) );
+	if ( operation === 'less' ) {
+
+		const boundary = new Set();
+		for ( const [ port, adjacent ] of members ) if ( adjacent.some( index => ! selected.has( index ) ) ) boundary.add( port );
+		return [ ...selected ].filter( index => ! ports[ index ].some( port => boundary.has( port ) ) ).map( index => elements[ index ] );
+
+	}
+	const queue = [ ...selected ], originalCount = queue.length;
+	const visited = new Set();
+	for ( let i = 0; i < ( operation === 'more' ? originalCount : queue.length ); i ++ ) {
+
+		for ( const port of ports[ queue[ i ] ] ) {
+
+			if ( visited.has( port ) ) continue;
+			visited.add( port );
+			for ( const index of members.get( port ) ) if ( ! selected.has( index ) ) {
+
+				selected.add( index );
+				queue.push( index );
+
+			}
+
+		}
+
+	}
+	return queue.map( index => elements[ index ] );
+
+}
 export function applySelection( current, hits, operation = 'set' ) {
 
 	const result = operation === 'set' ? new Map() : new Map( current );

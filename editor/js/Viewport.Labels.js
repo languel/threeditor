@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { isVisible } from './ObjectRestrictions.js';
 
 class ViewportLabels {
 
@@ -18,7 +19,7 @@ class ViewportLabels {
 	draw( frames, width, height ) {
 
 		const { canvas, context, editor, anchor } = this;
-		canvas.hidden = ! editor.config.getKey( 'settings/showObjectNames' );
+		canvas.hidden = ! editor.viewportOverlays || ! editor.config.getKey( 'settings/showObjectNames' );
 		if ( canvas.hidden || ! context ) return;
 
 		const ratio = window.devicePixelRatio || 1;
@@ -35,7 +36,7 @@ class ViewportLabels {
 		const named = [];
 		function visit( object ) {
 
-			if ( ! object.visible || object.userData.runtimeOnly || object.userData.threeditor?.disabled ) return;
+			if ( ! isVisible( object ) || object.userData.runtimeOnly ) return;
 			if ( object.name.trim() ) named.push( object );
 			for ( const child of object.children ) visit( child );
 
@@ -65,7 +66,7 @@ class ViewportLabels {
 
 				context.fillStyle = 'rgba(12, 16, 24, 0.82)';
 				context.fillRect( left, top, labelWidth, 18 );
-				context.fillStyle = selection.has( object ) ? '#ffd282' : '#fff';
+				context.fillStyle = object === editor.selected ? '#ffe3ac' : selection.has( object ) ? '#ffae60' : '#fff';
 				context.fillText( object.name, left + labelWidth / 2, top + 9, Math.max( 1, labelWidth - 10 ) );
 
 			}

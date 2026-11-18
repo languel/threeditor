@@ -156,6 +156,15 @@ function SidebarSettings( editor ) {
 
 	} );
 
+	const emulateNumpad = new UIBoolean( config.getKey( 'settings/emulateNumpad' ), 'Emulate Numpad' );
+	const emulateNumpadLabel = document.createElement( 'label' );
+	emulateNumpadLabel.className = 'settings-checkbox';
+	emulateNumpadLabel.style.display = 'block';
+	emulateNumpadLabel.title = 'Use the number row for viewport navigation. Mesh Edit mode keeps 1, 2 and 3 for element selection.';
+	emulateNumpadLabel.appendChild( emulateNumpad.dom );
+	general.dom.appendChild( emulateNumpadLabel );
+	emulateNumpad.onChange( () => config.setKey( 'settings/emulateNumpad', emulateNumpad.getValue() ) );
+
 	for ( const [ scope, key ] of [ [ 'tabs', 'glyphTabs' ], [ 'buttons', 'glyphButtons' ], [ 'headers', 'glyphHeaders' ], [ 'fields', 'glyphFields' ], [ 'menus', 'glyphMenus' ] ] ) {
 
 		const toggle = new UIBoolean( !! config.getKey( 'settings/' + key ), strings.getKey( 'sidebar/settings/glyphs/' + scope ), 'sidebar/settings/glyphs/' + scope );

@@ -2,6 +2,10 @@ import { shadingModes } from './ViewportShading.js';
 import { icon } from './Glyphs.js?v=poly-context';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
+import { cursorSnapActions } from './modeling/CursorSnap.js';
+
+// Keep the four Blender shading choices on their familiar compass points.
+const shadingPiePositions = [ [ 50, 16 ], [ 82, 50 ], [ 50, 84 ], [ 18, 50 ], [ 74, 69 ] ];
 
 export function transformSnapStep( config, held = false ) {
 
@@ -21,9 +25,35 @@ export function addTransformSettings( editor, toolbar ) {
 	}, { passive: true } );
 
 	const configs = {
+		mode: {
+			label: 'Interaction mode',
+			choices: () => {
+
+				const model = editor.modeling;
+				const current = editor.viewTools.mode === 'paint' ? 'paint' : model.editMode ?
+					( model.brush && model.brush !== 'freehand' ? 'sculpt' : 'edit' ) : 'object';
+				return [
+					[ 'Object Mode', 'objectMode', 'object' ],
+					[ 'Edit Mode', 'editMode', 'edit' ],
+					[ 'Sculpt Mode', 'sculptTool', 'sculpt' ],
+					[ 'Surface Paint', 'surfaceBrush', 'paint' ]
+				].map( ( [ label, glyph, mode ] ) => [ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode,
+					mode === 'sculpt' && ! model.canEditTarget( editor.selected ) ] );
+
+			}
+		},
+		navigation: {
+			label: 'View navigation',
+			choices: () => [
+				[ 'Top', 'up', 'viewTop' ], [ 'Frame Selected', 'frame', 'focus' ],
+				[ 'Right', 'objectMode', 'viewRight' ], [ 'Back', 'objectMode', 'viewBack' ],
+				[ 'Bottom', 'down', 'viewBottom' ], [ 'Front', 'objectMode', 'viewFront' ],
+				[ 'Left', 'objectMode', 'viewLeft' ], [ 'Camera', 'camera', 'viewCamera' ]
+			].map( ( [ label, glyph, action ] ) => [ label, glyph, () => editor.keymap.run( action ) ] )
+		},
 		shading: {
 			label: 'Viewport shading',
-			choices: () => shadingModes.slice( 0, 4 ).map( ( [ mode, label, glyph ] ) =>
+			choices: () => shadingModes.filter( ( [ mode ] ) => mode !== 'normals' ).map( ( [ mode, label, glyph ] ) =>
 				[ label, glyph, () => editor.setViewportShading( mode ), editor.viewportShading === mode ] )
 		},
 		placement: {
@@ -55,6 +85,10 @@ export function addTransformSettings( editor, toolbar ) {
 				}, config.getKey( 'settings/transformSnap' ) === value
 			] )
 		},
+		cursorSnap: {
+			label: 'Snap',
+			choices: () => cursorSnapActions( editor )
+		},
 		orientation: {
 			label: 'Transform orientation', glyph: 'orientGlobal',
 			choices: () => [
@@ -69,7 +103,7 @@ export function addTransformSettings( editor, toolbar ) {
 			choices: () => [
 				[ 'auto', 'Default', 'toolSelect' ], [ 'bounds', 'Bounds center', 'pivotBox' ], [ 'bottom', 'Bounds bottom center', 'pivotBottom' ],
 				[ 'median', editor.modeling?.object ? 'Median point' : 'Median origins', 'pivotMedian' ], [ 'active', editor.modeling?.object ? 'Active point' : 'Active origin', 'pivotActive' ],
-				[ 'origin', 'World origin', 'pivotOrigin' ]
+				[ 'origin', 'World origin', 'orientGlobal' ], [ 'cursor', '3D Cursor', 'pivotOrigin' ]
 			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'transformPivot', value ), config.getKey( 'settings/transformPivot' ) === value ] )
 		}
 	};
@@ -158,25 +192,36 @@ export function addTransformSettings( editor, toolbar ) {
 		opener?.setAttribute( 'aria-expanded', 'true' );
 		dialog.replaceChildren();
 		dialog.classList.toggle( 'transform-dropdown', dropdown );
-		dialog.classList.toggle( 'transform-snap-pie', ! dropdown && kind === 'snap' );
+		dialog.classList.toggle( 'transform-snap-pie', ! dropdown && [ 'snap', 'cursorSnap' ].includes( kind ) );
+		dialog.classList.toggle( 'transform-shading-pie', ! dropdown && kind === 'shading' );
 		dialog.setAttribute( 'aria-label', definition.label );
 		const wheel = document.createElement( 'div' );
 		wheel.className = 'transform-pie-wheel';
-		const center = document.createElement( kind === 'snap' ? 'button' : 'span' );
+		const center = document.createElement( [ 'snap', 'navigation' ].includes( kind ) ? 'button' : 'span' );
 		if ( kind === 'snap' ) {
 
 			center.type = 'button';
 			center.onclick = () => { close(); toggleSnap(); };
 
 		}
+		if ( kind === 'navigation' ) {
+
+			center.type = 'button';
+			center.onclick = () => { close(); editor.keymap.run( 'projection' ); };
+			center.title = 'Toggle perspective / orthographic (Numpad 5)';
+			center.setAttribute( 'aria-label', center.title );
+
+		}
 		center.className = 'transform-pie-center';
-		center.textContent = kind === 'snap' ? ( config.getKey( 'settings/transformSnap' ) == null ? 'Snap off' : 'Snap on' ) : definition.label;
+		center.textContent = kind === 'navigation' ? ( editor.camera.isOrthographicCamera ? 'Orthographic' : 'Perspective' ) :
+			kind === 'snap' ? ( config.getKey( 'settings/transformSnap' ) == null ? 'Snap off' : 'Snap on' ) : definition.label;
 		if ( ! dropdown || kind === 'snap' ) wheel.appendChild( center );
 		const choices = definition.choices();
-		entries = choices.map( ( [ label, glyph, apply, active ], index ) => {
+		entries = choices.map( ( [ label, glyph, apply, active, disabled ], index ) => {
 
 			const button = document.createElement( 'button' );
 			button.type = 'button';
+			button.disabled = Boolean( disabled );
 			button.className = 'transform-pie-choice';
 			button.innerHTML = icon( glyph );
 			const caption = document.createElement( 'span' );
@@ -190,8 +235,10 @@ export function addTransformSettings( editor, toolbar ) {
 			const angle = index / choices.length * Math.PI * 2 - Math.PI / 2;
 			if ( ! dropdown ) {
 
-				button.style.left = 50 + 32 * Math.cos( angle ) + '%';
-				button.style.top = 50 + 34 * Math.sin( angle ) + '%';
+				const [ x, y ] = kind === 'shading' ? shadingPiePositions[ index ] :
+					[ 50 + 32 * Math.cos( angle ), 50 + 34 * Math.sin( angle ) ];
+				button.style.left = x + '%';
+				button.style.top = y + '%';
 
 			}
 			button.onclick = () => {
@@ -244,7 +291,7 @@ export function addTransformSettings( editor, toolbar ) {
 
 	for ( const [ kind, definition ] of Object.entries( configs ) ) {
 
-		if ( kind === 'shading' ) continue; // The viewport header owns the shading control.
+		if ( [ 'mode', 'shading', 'navigation', 'cursorSnap' ].includes( kind ) ) continue;
 
 		const button = document.createElement( 'button' );
 		button.type = 'button';

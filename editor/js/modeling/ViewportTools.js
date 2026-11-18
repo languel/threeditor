@@ -1,6 +1,8 @@
 import { icon } from '../Glyphs.js?v=poly-context';
 import { splatStrokeCommands } from './SplatPaint.js';
 import { TexturePaintStroke } from './TexturePaint.js';
+import { TexturePaintProjection } from './TexturePaintProjection.js';
+import { cleanShading } from '../ViewportShading.js';
 import { formatCombo } from '../Keymap.js';
 import { meshBrushes } from './SculptBrush.js?v=surface-tools';
 import { modelButton, modelField } from './ModelControls.js?v=poly-context';
@@ -15,6 +17,7 @@ import { openMaskEditor } from './MaskEditor.js?v=brush-shortcuts';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
+import { StrokeSampler } from './StrokeSampler.js';
 
 function element( tag, parent, text ) {
 
@@ -95,7 +98,7 @@ export class ViewportTools {
 		editor.keymap.listeners.add( updateElementShortcuts );
 		updateElementShortcuts();
 		const tools = [
-			[ '', 'Select & navigate', 'toolSelect' ], [ 'mask', 'Edit light mask', 'toolMask' ],
+			[ '', 'Select & navigate', 'toolSelect' ], [ 'cursor', '3D Cursor', 'pivotOrigin' ], [ 'mask', 'Edit light mask', 'toolMask' ],
 			[ 'measure', 'Measure', 'toolMeasure' ], [ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
 		];
 		this.selector = select( this.panel, 'Viewport tool', tools );
@@ -113,14 +116,26 @@ export class ViewportTools {
 			control.type = 'button';
 			control.onclick = () => this.setMode( mode );
 			control.innerHTML = icon( glyph );
-			control.title = label;
+			control.title = mode === 'cursor' ? label + ' (Shift+right-click)' : label;
 			control.setAttribute( 'aria-label', label );
 			return [ mode, control ];
 
 		} ) );
 		this.geometryTools = element( 'div', this.panel.parentNode );
 		this.geometryTools.className = 'viewport-geometry-tools';
-		this.geometryTools.setAttribute( 'aria-label', 'Tool shelf' );
+		this.geometryTools.setAttribute( 'role', 'group' );
+		this.geometryTools.setAttribute( 'aria-label', 'Viewport Toolbar' );
+		this.restoreToolbar = modelButton( this.panel.parentNode, 'Show Viewport Toolbar', 'panel', () => this.toggleToolbar() );
+		this.restoreToolbar.classList.add( 'viewport-restore-toolbar' );
+		const updateToolbarHint = () => {
+
+			const binding = editor.keymap.combo( 'viewportToolbar' );
+			this.restoreToolbar.title = 'Show Viewport Toolbar' + ( binding ? ' (' + formatCombo( binding ) + ')' : '' );
+
+		};
+		editor.keymap.listeners.add( updateToolbarHint );
+		updateToolbarHint();
+		this.syncToolbar();
 		this.geometryTools.append( strip );
 		this.selectionTools = element( 'div', this.geometryTools );
 		this.selectionTools.className = 'viewport-selection-tools';
@@ -186,10 +201,13 @@ export class ViewportTools {
 
 			if ( ! this.mode || this.editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( 'input, textarea, select, [contenteditable]' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
+			if ( ! this.stroke && this.editor.keymap?.overEditableViewport === false ) return;
+			if ( this.mode === 'cursor' && event.key !== 'Escape' ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.key === 'Escape' ) {
 
+				if ( this.mode === 'cursor' ) { this.setMode( '' ); return; }
 				if ( this.stroke ) {
 
 					this.release(); this.render(); this.draw();
@@ -206,6 +224,13 @@ export class ViewportTools {
 		}, true );
 
 		const signals = editor.signals;
+		signals.cursorChanged.add( () => {
+
+			this.cursorFields?.forEach( ( field, axis ) => {
+				if ( document.activeElement !== field ) field.value = editor.cursor.getComponent( axis ).toFixed( 3 );
+			} );
+
+		} );
 		signals.objectSelected.add( object => {
 
 			if ( this.mode === 'measure' || this.editor.modeling.editMode && object?.userData.measurement ) this.setMode( object?.userData.measurement ? 'measure' : '' );
@@ -308,7 +333,7 @@ export class ViewportTools {
 		const pen = model.pen && ! model.adding;
 		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
 		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );
-		const name = this.mode ? { mask: 'Light mask', measure: 'Measure', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
+		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( meshBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
@@ -320,6 +345,8 @@ export class ViewportTools {
 		this.sculptButton.setAttribute( 'aria-pressed', String( ! this.mode && Boolean( sculpt ) ) );
 		this.penButton.disabled = ! model.canEdit() || ! model.data?.faces?.length;
 		this.sculptButton.disabled = ! model.canEdit() || ! model.data?.points.length;
+		this.editor.viewportSidebar?.refresh();
+		this.editor.primitiveAdjustment?.refresh();
 		if ( ! edit || this.mode ) return;
 		for ( const { label, glyph, run, disabled, pressed } of model.actions() ) {
 
@@ -339,6 +366,20 @@ export class ViewportTools {
 			strength.onchange = () => { model.brushStrength = THREE.MathUtils.clamp( strength.valueAsNumber || 0.5, 0.01, 1 ); strength.value = model.brushStrength; };
 
 		}
+	}
+
+	syncToolbar() {
+
+		const show = this.editor.config.getKey( 'settings/viewportToolbar' ) !== false;
+		this.geometryTools.hidden = ! show;
+		this.restoreToolbar.hidden = show;
+
+	}
+
+	toggleToolbar() {
+
+		this.editor.config.setKey( 'settings/viewportToolbar', this.geometryTools.hidden );
+		this.syncToolbar();
 
 	}
 
@@ -449,7 +490,27 @@ export class ViewportTools {
 		const parent = this.controls;
 		parent.replaceChildren();
 		this.maskLayers = this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
+		this.cursorFields = null;
 		if ( ! this.mode ) return;
+		if ( this.mode === 'cursor' ) {
+
+			this.cursorFields = [ 'X', 'Y', 'Z' ].map( ( axis, index ) => {
+
+				const field = modelField( parent, 'Cursor ' + axis, 'pivotOrigin', 'number', this.editor.cursor.getComponent( index ).toFixed( 3 ) );
+				field.step = 'any';
+				field.onchange = () => {
+
+					if ( Number.isFinite( field.valueAsNumber ) ) this.editor.setCursor( this.editor.cursor.clone().setComponent( index, field.valueAsNumber ) );
+					field.value = this.editor.cursor.getComponent( index ).toFixed( 3 );
+
+				};
+				return field;
+
+			} );
+			modelButton( parent, 'Done', 'exitTool', () => this.setMode( '' ) );
+			return;
+
+		}
 		if ( this.mode === 'mask' ) {
 
 			this.maskSelect = select( parent, 'Light mask mode', [ [ 'inside', 'Light inside' ], [ 'cutout', 'Block inside' ] ] );
@@ -753,6 +814,8 @@ export class ViewportTools {
 
 	pointerDown( event ) {
 
+		if ( this.placeCursor( event ) ) return;
+		if ( this.mode === 'cursor' ) return;
 		if ( this.pointer || ! this.mode || event.button !== 0 || event.altKey || event.target !== this.editor.renderer?.domElement ) return;
 		const frame = this.layout.at( event.clientX, event.clientY );
 		if ( ! frame || this.mode === 'mask' && frame.source !== this.maskSource ) return;
@@ -800,10 +863,13 @@ export class ViewportTools {
 
 			} else {
 
-				this.pointerType = event.pointerType;
-				this.stroke = { marks: new Set(), receivers: new Map(), output: this.brush.output, placement: this.brush.placement, surfaces: paintSurfaces( this.editor.scene ), x, y, color: this.brush.color, opacity: this.brush.opacity };
+				const { output, diameter } = this.brush;
+				const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
+				const spacing = output === 'vector' ? diameter : Math.max( 2, diameter * .25 );
+				this.stroke = { ...this.brush, marks: new Set(), receivers: new Map(), surfaces: paintSurfaces( this.editor.scene ),
+					sampler: new StrokeSampler( x, y, pressure, spacing ) };
 				if ( this.brush.output === 'texture' ) this.stroke.texture = new TexturePaintStroke( this.editor );
-				this.paintDab( frame, x, y, event.pressure );
+				this.paintDab( frame, x, y, pressure );
 				this.refreshPaintPreview();
 
 			}
@@ -812,6 +878,38 @@ export class ViewportTools {
 		this.pointer = { id: event.pointerId, target: event.target, key: frame.key, x, y };
 		event.target.setPointerCapture( event.pointerId );
 		this.draw();
+
+	}
+
+	placeCursor( event ) {
+
+		const { editor, layout } = this;
+		const shortcut = event.button === 2 && event.shiftKey;
+		const tool = this.mode === 'cursor' && event.button === 0 && ! event.altKey;
+		if ( ! ( shortcut || tool ) || event.target !== editor.renderer?.domElement ||
+			this.pointer || editor.editWorkspace?.mode || editor.flyControls?.active || editor.modalTransform?.active ||
+			editor.modeling.gesture || editor.modeling.drag ) return false;
+		const frame = layout.at( event.clientX, event.clientY );
+		if ( ! frame?.director ) return false;
+
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		if ( shortcut ) editor.suppressContextMenuUntil = performance.now() + 500;
+		editor.scene.updateMatrixWorld( true );
+		rayToView( this.ray, layout, frame, event.clientX, event.clientY );
+		const { triangles, scans } = paintSurfaces( editor.scene );
+		const hit = this.ray.intersectObjects( triangles, false )[ 0 ];
+		const view = frame.camera;
+		const distance = hit?.distance ?? view.position.distanceTo( editor.cursor );
+		const height = view.isOrthographicCamera ? ( view.top - view.bottom ) / view.zoom :
+			2 * Math.max( distance, view.near ) * Math.tan( THREE.MathUtils.degToRad( view.getEffectiveFOV() / 2 ) );
+		this.ray.params.Points.threshold = 4 * height / frame.rect.height;
+		const scan = this.ray.intersectObjects( scans, false )[ 0 ];
+		const plane = new THREE.Plane().setFromNormalAndCoplanarPoint( view.getWorldDirection( new THREE.Vector3() ), editor.cursor );
+		const point = scan && ( ! hit || scan.distance < hit.distance ) ? scan.point :
+			hit?.point || this.ray.ray.intersectPlane( plane, new THREE.Vector3() );
+		if ( point ) editor.setCursor( point );
+		return true;
 
 	}
 
@@ -829,7 +927,7 @@ export class ViewportTools {
 		if ( ! pointer || pointer.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const { clientX: x, clientY: y } = event;
-		if ( Math.hypot( x - pointer.x, y - pointer.y ) < 2 ) return;
+		if ( ! this.stroke && Math.hypot( x - pointer.x, y - pointer.y ) < 2 ) return;
 		const frame = this.layout.frames.find( frame => frame.key === pointer.key );
 		if ( ! frame ) return;
 		const samePane = this.layout.at( x, y ) === frame;
@@ -850,35 +948,34 @@ export class ViewportTools {
 
 		} else if ( this.mode === 'paint' ) {
 
-			const stroke = this.stroke;
-			const dx = x - stroke.x, dy = y - stroke.y;
 			this.brushCursor = samePane ? { x, y, frame } : null;
-			const step = stroke.output === 'vector' ? this.brush.diameter : Math.max( 2, this.brush.diameter * .25 );
-			const distance = Math.hypot( dx, dy );
-			if ( distance >= step ) {
-
-				const count = Math.min( 90, Math.floor( distance / step ) );
-				for ( let i = 1; i <= count; i ++ ) {
-
-					const px = stroke.x + dx * i / count, py = stroke.y + dy * i / count;
-					if ( this.layout.at( px, py ) === frame ) this.paintDab( frame, px, py, event.pressure );
-					else stroke.segment = null;
-
-				}
-				stroke.x = x;
-				stroke.y = y;
-				this.refreshPaintPreview();
-
-			}
+			const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
+			if ( this.sampleStroke( frame, x, y, pressure ) ) this.refreshPaintPreview();
 
 		}
 		this.draw();
 
 	}
 
+	sampleStroke( frame, x, y, pressure, ending = false ) {
+
+		const stroke = this.stroke;
+		const paint = ( px, py, force ) => {
+
+			if ( this.layout.at( px, py ) === frame ) this.paintDab( frame, px, py, force );
+			else stroke.segment = null;
+
+		};
+		const sampled = stroke.sampler.move( x, y, pressure, paint );
+		if ( ending && stroke.output === 'vector' && stroke.sampler.remainder >= 1 ) paint( x, y, pressure );
+		return sampled;
+
+	}
+
 	paintDab( frame, x, y, pressure ) {
 
-		const { triangles, scans, receivers } = this.stroke.surfaces;
+		const stroke = this.stroke;
+		const { triangles, scans, receivers } = stroke.surfaces;
 		const sample = ( px, py, includeScans = false ) => {
 
 			if ( this.layout.at( px, py ) !== frame ) return;
@@ -890,7 +987,7 @@ export class ViewportTools {
 				const reference = hit?.distance ?? camera.position.distanceTo( this.editor.controls.getCenter( camera ) );
 				const visibleHeight = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / camera.zoom :
 					2 * Math.max( reference, camera.near ) * Math.tan( THREE.MathUtils.degToRad( camera.getEffectiveFOV() / 2 ) );
-				this.ray.params.Points.threshold = visibleHeight * Math.max( 4, this.brush.diameter / 3 ) / frame.rect.height;
+				this.ray.params.Points.threshold = visibleHeight * Math.max( 4, stroke.diameter / 3 ) / frame.rect.height;
 				const scan = this.ray.intersectObjects( scans, false ).find( sample => isVisible( sample.object ) );
 				if ( scan && ( ! hit || scan.distance < hit.distance ) ) hit = scan;
 
@@ -901,7 +998,6 @@ export class ViewportTools {
 
 		};
 		this.editor.scene.updateMatrixWorld( true );
-		const stroke = this.stroke;
 		if ( stroke.output === 'vector' || stroke.output === 'splat' ) {
 
 			let center;
@@ -914,7 +1010,14 @@ export class ViewportTools {
 				if ( point ) center = { object: this.editor.scene, point: this.editor.scene.worldToLocal( point ).toArray() };
 
 			} else center = sample( x, y, true );
-			if ( ! center ) { stroke.segment = null; return; }
+			if ( ! center ) {
+
+				stroke.segment = null;
+				this.status.textContent = stroke.placement === 'surface' ? 'Paint on a visible, unlocked surface.' : 'The brush ray does not reach the view plane.';
+				return;
+
+			}
+			this.status.textContent = '';
 			if ( stroke.output === 'splat' ) {
 
 				let mark = stroke.receivers.get( center.object );
@@ -929,8 +1032,7 @@ export class ViewportTools {
 				const depth = - center.object.localToWorld( new THREE.Vector3( ...center.point ) ).applyMatrix4( camera.matrixWorldInverse ).z;
 				const height = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / camera.zoom :
 					2 * depth * Math.tan( THREE.MathUtils.degToRad( camera.getEffectiveFOV() / 2 ) );
-				const strength = this.pointerType === 'pen' ? Math.max( .12, pressure || .5 ) : 1;
-				mark.radii.push( height / frame.rect.height * this.brush.diameter * strength / 4 );
+				mark.radii.push( height / frame.rect.height * stroke.diameter * pressure / 4 );
 				mark.positions.push( ...center.point );
 				return;
 
@@ -946,10 +1048,28 @@ export class ViewportTools {
 			return;
 
 		}
-		const center = sample( x, y, true );
-		const radius = this.brush.diameter / 2 * ( this.pointerType === 'pen' ? Math.max( .12, pressure || .5 ) : 1 );
+		const radius = stroke.diameter / 2 * pressure;
 		if ( stroke.texture ) {
 
+			if ( ! stroke.projection?.matches( frame ) ) stroke.projection = new TexturePaintProjection( frame, triangles, scans );
+			if ( ! stroke.projection.clipped ) {
+
+				const rect = this.layout.clientRect( frame );
+				const px = x - rect.left, py = y - rect.top;
+				const faces = stroke.projection.faces( px, py, radius );
+				let issue = '';
+				for ( const face of faces ) {
+
+					const [ anchor ] = face.screen;
+					const result = stroke.texture.paint( face, stroke.color, stroke.opacity, radius,
+						frame, anchor.x - px, anchor.y - py );
+					issue ||= result;
+
+				}
+				this.status.textContent = faces.length ? issue : 'Choose a visible UV-mapped mesh.';
+				return;
+
+			}
 			const faces = new Map();
 			const stamp = ( contact, dx, dy ) => {
 
@@ -960,7 +1080,7 @@ export class ViewportTools {
 				faces.set( key, stroke.texture.paint( hit, stroke.color, stroke.opacity, radius, frame, dx, dy ) );
 
 			};
-			stamp( center, 0, 0 );
+			stamp( sample( x, y, true ), 0, 0 );
 			for ( const fraction of [ .5, .95 ] ) for ( let i = 0; i < 8; i ++ ) {
 
 				const angle = i * Math.PI / 4;
@@ -972,6 +1092,7 @@ export class ViewportTools {
 			return;
 
 		}
+		const center = sample( x, y, true );
 		if ( ! center ) return;
 		const scanPlane = ! center.hit.face && new THREE.Plane().setFromNormalAndCoplanarPoint(
 			frame.camera.getWorldDirection( new THREE.Vector3() ), center.object.localToWorld( new THREE.Vector3( ...center.point ) ) );
@@ -1008,7 +1129,7 @@ export class ViewportTools {
 
 	refreshPaintPreview() {
 
-		const { marks, color, opacity } = this.stroke;
+		const { marks, color, opacity, diameter } = this.stroke;
 		for ( const mark of marks ) {
 
 			if ( mark.positions.length === mark.uploaded ) continue;
@@ -1017,7 +1138,7 @@ export class ViewportTools {
 				if ( mark.radii ) {
 
 					mark.preview = new THREE.Points( new THREE.BufferGeometry(), new THREE.PointsMaterial( {
-						color, size: this.brush.diameter, sizeAttenuation: false, opacity, transparent: true, depthWrite: false
+						color, size: diameter, sizeAttenuation: false, opacity, transparent: true, depthWrite: false
 					} ) );
 
 				} else mark.preview = mark.points ? surfacePath( [], color, false, opacity ) : surfacePaint( [], color, opacity );
@@ -1040,10 +1161,10 @@ export class ViewportTools {
 		if ( this.pointer?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const stroke = this.stroke;
-		if ( event.type === 'pointerup' && stroke?.output === 'vector' && Math.hypot( event.clientX - stroke.x, event.clientY - stroke.y ) >= 1 ) {
+		if ( event.type === 'pointerup' && stroke ) {
 
-			const frame = this.layout.at( event.clientX, event.clientY );
-			if ( frame?.key === this.pointer.key ) this.paintDab( frame, event.clientX, event.clientY, event.pressure );
+			const frame = this.layout.frames.find( frame => frame.key === this.pointer.key );
+			if ( frame ) this.sampleStroke( frame, event.clientX, event.clientY, stroke.sampler.pressure, true );
 
 		}
 		const commands = stroke?.texture?.finish( event.type === 'pointerup' ) || [];
@@ -1095,7 +1216,9 @@ export class ViewportTools {
 	draw() {
 
 		if ( ! this.editor.renderer ) return;
-		this.overlay.hidden = ! this.mode && ! this.measurements.length;
+		const overlays = this.editor.viewportOverlays;
+		const showCursor = overlays && ! this.editor.editWorkspace?.mode && ! cleanShading( this.editor.viewportShading );
+		this.overlay.hidden = ! showCursor && ! this.mode && ! ( overlays && this.measurements.length );
 		if ( this.overlay.hidden ) return;
 		const { width, height } = this.editor.renderer.domElement.getBoundingClientRect();
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
@@ -1116,7 +1239,13 @@ export class ViewportTools {
 			ctx.beginPath();
 			ctx.rect( rect.x, rect.y, rect.width, rect.height );
 			ctx.clip();
-			for ( const ruler of this.measurements ) {
+			if ( showCursor && frame.director ) {
+
+				const pixel = this.project( this.editor.cursor, frame );
+				if ( pixel ) drawCursor( ctx, ...pixel );
+
+			}
+			if ( overlays ) for ( const ruler of this.measurements ) {
 
 				if ( ! isVisible( ruler ) || this.mode === 'measure' && ruler === this.ruler ) continue;
 				const data = ruler.userData.measurement;
@@ -1230,5 +1359,27 @@ export class ViewportTools {
 		}
 
 	}
+
+}
+
+function drawCursor( ctx, x, y ) {
+
+	ctx.save();
+	ctx.translate( x, y );
+	ctx.lineWidth = 1.5;
+	ctx.strokeStyle = '#e9e9e9';
+	ctx.beginPath();
+	ctx.moveTo( -12, 0 ); ctx.lineTo( 12, 0 );
+	ctx.moveTo( 0, -12 ); ctx.lineTo( 0, 12 );
+	ctx.stroke();
+	for ( let i = 0; i < 8; i ++ ) {
+
+		ctx.strokeStyle = i % 2 ? '#f14b57' : '#ffffff';
+		ctx.beginPath();
+		ctx.arc( 0, 0, 8, i * Math.PI / 4, ( i + 1 ) * Math.PI / 4 );
+		ctx.stroke();
+
+	}
+	ctx.restore();
 
 }

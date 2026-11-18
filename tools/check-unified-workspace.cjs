@@ -7,6 +7,820 @@ const path = require( 'node:path' );
 const { execFileSync } = require( 'node:child_process' );
 const { chromium } = require( 'playwright' );
 
+async function checkTextureProjection( page ) {
+
+	const tip = await page.evaluate( () => {
+
+		const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2, 100, 100 ), new THREE.MeshBasicMaterial() );
+		receiver.name = 'Texture projection test';
+		editor.addObject( receiver );
+		const blocker = new THREE.Mesh( new THREE.PlaneGeometry( 1, 2 ), new THREE.MeshBasicMaterial() );
+		blocker.position.set( .5, 0, 1 );
+		blocker.userData.threeditor = { locked: true };
+		editor.addObject( blocker );
+		const scan = new THREE.Points(
+			new THREE.BufferGeometry().setAttribute( 'position', new THREE.Float32BufferAttribute( [ 0, 0, -1 ], 3 ) ),
+			new THREE.PointsMaterial( { size: 12, sizeAttenuation: false } )
+		);
+		editor.addObject( scan );
+		editor.select( receiver );
+		editor.camera.position.set( 0, 0, 5 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.camera.updateMatrixWorld();
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const bounds = editor.renderer.domElement.getBoundingClientRect();
+		return [ bounds.left + bounds.width / 2, bounds.top + bounds.height / 2 ];
+
+	} );
+	await page.getByLabel( 'Interaction mode', { exact: true } ).selectOption( 'paint' );
+	await page.getByLabel( 'Brush output' ).selectOption( 'texture' );
+	const width = page.getByLabel( 'Brush (px)' );
+	await width.fill( '60' );
+	await width.press( 'Tab' );
+	await page.mouse.click( ...tip );
+	const coverage = await page.evaluate( () => {
+
+		const receiver = editor.scene.getObjectByName( 'Texture projection test' );
+		const { image } = receiver.material.map;
+		const { width, height } = image;
+		const data = image.getContext( '2d' ).getImageData( 0, 0, width, height ).data;
+		const viewport = editor.renderer.domElement.getBoundingClientRect();
+		const interior = 22 * 5 * Math.tan( THREE.MathUtils.degToRad( editor.camera.fov / 2 ) ) / viewport.height * width;
+		let visible = 0, painted = 0, hidden = 0;
+		for ( let y = 0; y < height; y ++ ) for ( let x = 0; x < width; x ++ ) {
+
+			if ( Math.hypot( x + .5 - width / 2, y + .5 - height / 2 ) >= interior ) continue;
+			const marked = data[ ( y * width + x ) * 4 ] < 225;
+			if ( x < width / 2 - 4 ) { visible ++; if ( marked ) painted ++; }
+			if ( x > width / 2 + 4 && marked ) hidden ++;
+
+		}
+		editor.undo();
+		return { visible, painted, hidden, undone: ! receiver.material.map };
+
+	} );
+	assert.ok( coverage.painted / coverage.visible > .98, 'Dense meshes should receive a solid brush print' );
+	assert.equal( coverage.hidden, 0, 'The foreground mesh should occlude the brush' );
+	assert.equal( coverage.undone, true );
+	await width.fill( '14' );
+	await width.press( 'Tab' );
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkViewportControls( page ) {
+
+	await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+		mesh.name = 'Viewport controls test';
+		mesh.rotation.order = 'ZYX';
+		editor.addObject( mesh );
+		editor.select( mesh );
+
+	} );
+	const item = page.getByRole( 'region', { name: 'Viewport Item', exact: true } );
+	const toggle = page.getByRole( 'button', { name: 'Viewport Sidebar', exact: true } );
+	const viewport = page.locator( '#viewport' );
+	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
+	const showShelf = page.getByRole( 'button', { name: 'Show Viewport Toolbar', exact: true } );
+	const overlays = page.getByRole( 'button', { name: 'Toggle Viewport Overlays', exact: true } );
+	const hoverView = async () => {
+
+		const rect = await viewport.boundingBox();
+		await page.mouse.move( rect.x + rect.width * .45, rect.y + rect.height * .6 );
+
+	};
+	await hoverView();
+	await page.keyboard.press( 't' );
+	assert.equal( await shelf.isVisible(), false );
+	assert.equal( await page.locator( '#toolbar' ).isVisible(), true );
+	await showShelf.click();
+	assert.equal( await shelf.isVisible(), true );
+	await page.locator( '#outliner' ).hover();
+	await page.keyboard.press( 't' );
+	assert.equal( await shelf.isVisible(), true );
+	await hoverView();
+	await page.evaluate( () => editor.setViewportObjectNames( true ) );
+	const gridDrawn = () => page.evaluate( () => {
+
+		const renderer = editor.renderer;
+		const render = renderer.render;
+		let drawn = false;
+		renderer.render = function ( object, ...args ) {
+
+			drawn ||= object.isGroup === true && object.children.length > 0 && object.children.every( child => child.type === 'GridHelper' );
+			return render.call( this, object, ...args );
+
+		};
+		try { editor.signals.viewportOverlaysChanged.dispatch(); }
+		finally { renderer.render = render; }
+		return drawn;
+
+	} );
+	assert.equal( await gridDrawn(), true );
+	await page.keyboard.press( 'Shift+Alt+z' );
+	assert.equal( await overlays.getAttribute( 'aria-pressed' ), 'false' );
+	assert.equal( await gridDrawn(), false );
+	assert.equal( await page.locator( '.viewport-labels' ).isVisible(), false );
+	assert.equal( await page.locator( '.viewport-tool-overlay' ).isVisible(), false );
+	assert.equal( await page.evaluate( () => editor.viewportShading ), 'solid' );
+	await overlays.click();
+	assert.equal( await gridDrawn(), true );
+	assert.equal( await page.locator( '.viewport-labels' ).isVisible(), true );
+	assert.equal( await page.locator( '.viewport-tool-overlay' ).isVisible(), true );
+	await page.evaluate( () => editor.setViewportObjectNames( false ) );
+	await hoverView();
+	await page.keyboard.press( 'n' );
+	assert.equal( await item.isVisible(), true );
+	assert.equal( await page.locator( '#sidebar' ).isVisible(), true );
+	const x = item.getByLabel( 'Location X', { exact: true } );
+	await x.fill( '0.005' );
+	await x.press( 'Enter' );
+	assert.equal( await page.evaluate( () => editor.selected.position.x ), .005 );
+	assert.equal( Number( await page.locator( '#properties' ).getByLabel( 'Position X', { exact: true } ).inputValue() ), .005 );
+	const z = item.getByLabel( 'Rotation Z', { exact: true } );
+	await z.fill( '0.4' );
+	await z.press( 'Enter' );
+	assert.ok( Math.abs( await page.evaluate( () => editor.selected.rotation.z ) - .4 * Math.PI / 180 ) < 1e-9 );
+	assert.equal( await page.evaluate( () => editor.selected.rotation.order ), 'ZYX' );
+	await page.evaluate( () => { document.activeElement.blur(); editor.undo(); } );
+	assert.equal( await page.evaluate( () => editor.selected.rotation.z ), 0 );
+	await hoverView();
+	await page.keyboard.press( 'Tab' );
+	await page.keyboard.press( 'a' );
+	const median = item.getByLabel( 'Median X', { exact: true } );
+	await median.fill( '0.25' );
+	await median.press( 'Enter' );
+	const coordinates = await page.evaluate( () => {
+
+		const { indices, data } = editor.modeling;
+		return [ indices.reduce( ( sum, index ) => sum + data.points[ index ][ 0 ], 0 ) / indices.length, editor.selected.position.x ];
+
+	} );
+	assert.deepEqual( coordinates, [ .25, .005 ] );
+	await page.evaluate( () => document.activeElement.blur() );
+	await page.keyboard.press( 'Tab' );
+	assert.equal( await x.isVisible(), true );
+	assert.equal( await median.isVisible(), false );
+	await page.keyboard.press( 'n' );
+	assert.equal( await item.isVisible(), false );
+	await page.setViewportSize( { width: 390, height: 844 } );
+	await toggle.click();
+	const narrow = await viewport.boundingBox(), panel = await item.boundingBox();
+	assert.ok( panel.x >= narrow.x && panel.x + panel.width <= narrow.x + narrow.width );
+	assert.ok( panel.y >= narrow.y && panel.y + panel.height <= narrow.y + narrow.height );
+	assert.ok( panel.height >= 155, 'Numeric controls need room below the header at a narrow width' );
+	await toggle.click();
+	await page.setViewportSize( { width: 1440, height: 900 } );
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkPaintGestures( page ) {
+
+	const ends = await page.evaluate( () => {
+
+		const camera = editor.camera;
+		camera.position.set( 0, 0, 5 );
+		camera.lookAt( 0, 0, 0 );
+		camera.updateMatrixWorld();
+		editor.signals.cameraChanged.dispatch( camera );
+		const rect = editor.renderer.domElement.getBoundingClientRect();
+		return [ -.6, .6 ].map( ( x, index ) => {
+
+			const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 1, 1 ), new THREE.MeshBasicMaterial() );
+			receiver.name = 'Paint receiver ' + index;
+			receiver.position.x = x;
+			receiver.scale.set( 1, 1.2, 1 );
+			editor.addObject( receiver );
+			const point = receiver.position.clone().project( camera );
+			return [ rect.left + ( 1 + point.x ) * rect.width / 2, rect.top + ( 1 - point.y ) * rect.height / 2 ];
+
+		} );
+
+	} );
+	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	await mode.selectOption( 'paint' );
+	const output = page.getByLabel( 'Brush output' );
+	const [ start, end ] = ends;
+	const paint = async ( yOffset, cancel = false ) => {
+
+		await page.mouse.move( start[ 0 ], start[ 1 ] + yOffset );
+		await page.mouse.down();
+		await page.mouse.move( end[ 0 ], end[ 1 ] + yOffset, { steps: 12 } );
+		if ( cancel ) await page.keyboard.press( 'Escape' );
+		await page.mouse.up();
+
+	};
+	for ( const medium of [ 'texture', 'vector' ] ) {
+
+		await output.selectOption( medium );
+		const hasPaint = () => page.evaluate( medium => [ 0, 1 ].map( index => {
+
+			const receiver = editor.scene.getObjectByName( 'Paint receiver ' + index );
+			return medium === 'texture' ? !! receiver.material.map :
+				receiver.children.some( child => child.isLine && child.userData.surfaceMark && ! child.userData.runtimeOnly );
+
+		} ), medium );
+		const before = await page.evaluate( () => editor.history.undos.length );
+		await paint( 0, true );
+		assert.deepEqual( await hasPaint(), [ false, false ] );
+		assert.equal( await page.evaluate( () => editor.history.undos.length ), before );
+		await paint( 0 );
+		assert.deepEqual( await hasPaint(), [ true, true ] );
+		await page.evaluate( () => editor.undo() );
+		assert.deepEqual( await hasPaint(), [ false, false ] );
+		await page.evaluate( () => editor.redo() );
+		assert.deepEqual( await hasPaint(), [ true, true ] );
+		await page.evaluate( () => editor.undo() );
+
+	}
+	await output.selectOption( 'splat' );
+	const batches = () => page.evaluate( () => [ 0, 1 ].map( index => {
+
+		const receiver = editor.scene.getObjectByName( 'Paint receiver ' + index );
+		return receiver.children.filter( child => child.userData.assetObject?.paintBatch ).map( object => ( {
+			uuid: object.uuid, data: object.userData.assetObject.splatData
+		} ) );
+
+	} ) );
+	const waitForSplats = () => page.waitForFunction( () => [ 0, 1 ].every( index => {
+
+		const receiver = editor.scene.getObjectByName( 'Paint receiver ' + index );
+		const batch = receiver.children.find( child => child.userData.assetObject?.paintBatch );
+		const mesh = batch?.getObjectByName( 'SplatMesh' );
+		return mesh?.isInitialized && mesh.numSplats * 32 === atob( batch.userData.assetObject.splatData ).length;
+
+	} ) );
+
+	await paint( -8 );
+	await waitForSplats();
+	const first = await batches();
+	assert.deepEqual( first.map( list => list.length ), [ 1, 1 ] );
+	await page.getByLabel( 'Color', { exact: true } ).fill( '#f18b43' );
+	await paint( -8 );
+	await waitForSplats();
+	const second = await batches();
+	assert.deepEqual( second.map( list => list.length ), [ 1, 1 ] );
+	for ( let i = 0; i < 2; i ++ ) {
+
+		assert.equal( second[ i ][ 0 ].uuid, first[ i ][ 0 ].uuid );
+		const initial = atob( first[ i ][ 0 ].data ), appended = atob( second[ i ][ 0 ].data );
+		assert.ok( appended.length > initial.length );
+		assert.ok( appended.startsWith( initial ) );
+		assert.notEqual( appended.slice( initial.length + 24, initial.length + 27 ), initial.slice( 24, 27 ) );
+
+	}
+	const history = await page.evaluate( () => editor.history.undos.length );
+	await paint( 25, true );
+	assert.deepEqual( await batches(), second );
+	assert.equal( await page.evaluate( () => editor.history.undos.length ), history );
+	assert.equal( await page.evaluate( () => editor.viewTools.stroke ), null );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await batches(), first );
+	await waitForSplats();
+	await page.evaluate( () => editor.redo() );
+	assert.deepEqual( await batches(), second );
+	await waitForSplats();
+	await mode.selectOption( 'object' );
+	await page.evaluate( async () => {
+
+		const save = JSON.stringify( editor.toJSON() );
+		editor.clear();
+		await editor.fromJSON( JSON.parse( save ) );
+
+	} );
+	assert.deepEqual( await batches(), second );
+	await waitForSplats();
+	const attached = await page.evaluate( () => {
+
+		const receiver = editor.scene.getObjectByName( 'Paint receiver 0' );
+		const batch = receiver.children.find( child => child.userData.assetObject?.paintBatch );
+		const mesh = batch.getObjectByName( 'SplatMesh' );
+		const sample = new THREE.Vector3();
+		mesh.forEachSplat( ( index, center ) => { if ( index === 0 ) sample.copy( center ); } );
+		const before = mesh.localToWorld( sample.clone() );
+		receiver.rotation.z = .45;
+		receiver.scale.y = 1.8;
+		receiver.position.y = .4;
+		const actual = mesh.localToWorld( sample.clone() );
+		return actual.distanceTo( before ) > .2 && actual.distanceTo( receiver.localToWorld( sample ) ) < 1e-7;
+
+	} );
+	assert.equal( attached, true );
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkComponents( page ) {
+
+	await page.evaluate( () => {
+
+		for ( const name of [ 'Component source', 'Component target' ] ) {
+
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+			mesh.name = name;
+			editor.addObject( mesh );
+
+		}
+		editor.select( editor.scene.getObjectByName( 'Component source' ) );
+
+	} );
+	await page.locator( '.Tab#scriptTab' ).click();
+	const add = page.getByRole( 'button', { name: 'Add Component', exact: true } );
+	const picker = page.getByRole( 'dialog', { name: 'Add Component', exact: true } );
+	await add.click();
+	await picker.getByRole( 'button', { name: 'Spin', exact: true } ).click();
+	const speed = page.getByLabel( 'Degrees per second', { exact: true } );
+	await speed.fill( '90' );
+	await speed.press( 'Enter' );
+	await page.evaluate( () => {
+
+		const object = editor.scene.getObjectByName( 'Component source' );
+		const script = editor.scripts[ object.uuid ][ 0 ];
+		editor.timeline.insertKey( { kind: 'script', object: object.uuid, index: 0, scriptId: script.timelineId, property: 'speed' } );
+		editor.select( editor.scene.getObjectByName( 'Component target' ) );
+
+	} );
+	await page.keyboard.press( 'F3' );
+	const palette = page.getByRole( 'dialog', { name: 'Command palette' } );
+	await palette.getByRole( 'searchbox' ).fill( 'Add Component' );
+	await palette.getByRole( 'button', { name: 'Add Component', exact: true } ).click();
+	const search = picker.getByRole( 'searchbox', { name: 'Search Add Component' } );
+	await search.fill( 'Spin Component source' );
+	await search.press( 'Enter' );
+	assert.equal( await picker.isVisible(), false );
+	assert.equal( Number( await speed.inputValue() ), 90 );
+	const identities = await page.evaluate( () => [ 'Component source', 'Component target' ].map( name => {
+
+		const object = editor.scene.getObjectByName( name );
+		const script = editor.scripts[ object.uuid ][ 0 ];
+		return [ script.timelineId, script.paramValues.speed ];
+
+	} ) );
+	assert.ok( identities.every( ( [ id ] ) => id ) );
+	assert.notEqual( identities[ 0 ][ 0 ], identities[ 1 ][ 0 ] );
+	await speed.fill( '-120' );
+	await speed.press( 'Enter' );
+	const header = page.getByRole( 'group', { name: 'Spin', exact: true } );
+	await header.hover();
+	await page.keyboard.press( 'Control+Space' );
+	const previous = page.getByRole( 'button', { name: 'Back to Previous' } );
+	assert.equal( await previous.isVisible(), true );
+	await header.getByRole( 'button', { name: 'Edit', exact: true } ).click();
+	assert.equal( await previous.isVisible(), false );
+	await page.locator( '#code-panel .code-target' ).getByText( /Component target.*Spin/ ).waitFor();
+	await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
+	await page.getByRole( 'checkbox', { name: 'Enable Spin' } ).uncheck();
+	const reloaded = await page.evaluate( async () => {
+
+		const json = JSON.stringify( editor.toJSON() );
+		editor.clear();
+		await editor.fromJSON( JSON.parse( json ) );
+		const source = editor.scene.getObjectByName( 'Component source' );
+		const target = editor.scene.getObjectByName( 'Component target' );
+		editor.select( target );
+		return [ source, target ].map( object => {
+
+			const script = editor.scripts[ object.uuid ][ 0 ];
+			return [ script.timelineId, script.paramValues.speed, script.enabled ];
+
+		} );
+
+	} );
+	assert.deepEqual( reloaded, [ [ identities[ 0 ][ 0 ], 90, true ], [ identities[ 1 ][ 0 ], -120, false ] ] );
+	await page.locator( '.Tab#scriptTab' ).click();
+	await page.evaluate( () => {
+
+		window.componentTurns = {};
+		for ( const name of [ 'Component source', 'Component target' ] ) editor.addScript( editor.scene.getObjectByName( name ), {
+			name: 'Probe', source: 'function update() { window.componentTurns[this.name] = this.rotation.y; }'
+		} );
+	} );
+	await page.getByRole( 'button', { name: 'Play Scene', exact: true } ).click();
+	await page.waitForFunction( () => window.componentTurns[ 'Component source' ] > .04 && window.componentTurns[ 'Component target' ] === 0 );
+	await page.getByRole( 'button', { name: 'Stop Scene', exact: true } ).click();
+	await page.getByRole( 'checkbox', { name: 'Enable Spin' } ).check();
+	await page.evaluate( () => {
+
+		window.componentTurns = {};
+		editor.signals.startPlayer.dispatch();
+
+	} );
+	await page.waitForFunction( () => window.componentTurns[ 'Component source' ] > .04 && window.componentTurns[ 'Component target' ] < -.04 );
+	await page.evaluate( () => {
+
+		editor.signals.stopPlayer.dispatch();
+		editor.clear();
+
+	} );
+
+}
+
+async function checkHierarchy( page ) {
+
+	const original = await page.evaluate( () => {
+
+		editor.config.setKey( 'settings/history', true );
+		const parent = new THREE.Group();
+		parent.name = 'Parent test';
+		parent.position.set( 1, 2, 3 );
+		parent.rotation.set( .2, -.4, .1 );
+		parent.scale.setScalar( 1.5 );
+		const children = [ 'First child', 'Second child' ].map( ( name, index ) => {
+
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+			mesh.name = name;
+			mesh.position.set( index * 2, index - 1, 0 );
+			mesh.rotation.set( -.3, .1, .6, 'ZYX' );
+			editor.addObject( mesh );
+			mesh.updateWorldMatrix( true, false );
+			return mesh;
+
+		} );
+		editor.addObject( parent );
+		editor.selector.setSelection( [ ...children, parent ] );
+		return { worlds: children.map( object => object.matrixWorld.toArray() ), order: editor.scene.children.map( object => object.name ) };
+
+	} );
+	const view = await page.locator( '#viewport' ).boundingBox();
+	await page.mouse.move( view.x + view.width * .45, view.y + view.height * .55 );
+	const parentMenu = page.getByRole( 'dialog', { name: 'Set Parent', exact: true } );
+	await page.evaluate( () => editor.scene.getObjectByName( 'Parent test' ).scale.set( 1, 2, 3 ) );
+	await page.keyboard.press( 'Control+p' );
+	await parentMenu.getByRole( 'button', { name: 'Object (Keep Transform)', exact: true } ).click();
+	assert.equal( await page.evaluate( () => editor.history.undos.length ), 0 );
+	assert.deepEqual( await page.evaluate( () => editor.scene.children.map( object => object.name ) ), original.order );
+	await page.evaluate( () => editor.scene.getObjectByName( 'Parent test' ).scale.setScalar( 1.5 ) );
+	await page.keyboard.press( 'Control+p' );
+	await parentMenu.getByRole( 'button', { name: 'Object (Keep Transform)', exact: true } ).click();
+	const hierarchy = () => page.evaluate( () => {
+
+		const children = [ 'First child', 'Second child' ].map( name => editor.scene.getObjectByName( name ) );
+		children.forEach( object => object.updateWorldMatrix( true, false ) );
+		return {
+			parents: children.map( object => object.parent.name ),
+			worlds: children.map( object => object.matrixWorld.toArray() ),
+			order: editor.scene.children.map( object => object.name )
+		};
+
+	} );
+	const assertWorld = matrices => matrices.forEach( ( matrix, index ) => {
+
+		assert.ok( matrix.every( ( value, entry ) => Math.abs( value - original.worlds[ index ][ entry ] ) < 1e-9 ) );
+
+	} );
+	const parented = await hierarchy();
+	assert.deepEqual( parented.parents, [ 'Parent test', 'Parent test' ] );
+	assertWorld( parented.worlds );
+	await page.evaluate( async () => {
+
+		const saved = JSON.parse( JSON.stringify( editor.toJSON() ) );
+		editor.clear();
+		await editor.fromJSON( saved );
+
+	} );
+	assertWorld( ( await hierarchy() ).worlds );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( ( await hierarchy() ).order, original.order );
+	await page.evaluate( () => editor.redo() );
+	assertWorld( ( await hierarchy() ).worlds );
+	await page.evaluate( () => editor.selector.setSelection( [ 'First child', 'Second child' ].map( name => editor.scene.getObjectByName( name ) ) ) );
+	await page.keyboard.press( 'Alt+p' );
+	await page.getByRole( 'dialog', { name: 'Clear Parent', exact: true } ).getByRole( 'button', { name: 'Clear and Keep Transform', exact: true } ).click();
+	const cleared = await hierarchy();
+	assert.equal( cleared.parents[ 0 ], cleared.parents[ 1 ] );
+	assert.notEqual( cleared.parents[ 0 ], 'Parent test' );
+	assertWorld( cleared.worlds );
+	await page.keyboard.press( 'F2' );
+	const rename = page.getByRole( 'dialog', { name: 'Rename Object', exact: true } );
+	const name = rename.getByRole( 'textbox', { name: 'Object Name' } );
+	assert.equal( await name.inputValue(), 'Second child' );
+	await name.fill( 'Renamed child' );
+	await name.press( 'Enter' );
+	assert.equal( await page.locator( '#outliner' ).getByText( 'Renamed child', { exact: true } ).isVisible(), true );
+	await page.evaluate( () => { editor.undo(); editor.undo(); } );
+	assert.deepEqual( ( await hierarchy() ).parents, [ 'Parent test', 'Parent test' ] );
+	assertWorld( ( await hierarchy() ).worlds );
+	await page.evaluate( () => {
+
+		editor.config.setKey( 'settings/history', false );
+		editor.clear();
+
+	} );
+
+}
+
+async function checkDuplication( page ) {
+
+	const source = await page.evaluate( () => {
+
+		editor.config.setKey( 'settings/history', true );
+		const stage = new THREE.Group();
+		stage.name = 'Duplicate stage';
+		stage.rotation.y = .3;
+		stage.scale.setScalar( 1.5 );
+		const actor = new THREE.Group();
+		actor.name = 'Actor';
+		stage.add( actor );
+		const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+		mesh.name = 'Actor mesh';
+		mesh.geometry.userData.points = [ 4, 5 ];
+		actor.add( mesh );
+		const rigGeometry = new THREE.BufferGeometry().copy( new THREE.BoxGeometry() );
+		const vertices = rigGeometry.attributes.position.count;
+		const weights = new Float32Array( vertices * 4 );
+		for ( let index = 0; index < vertices; index ++ ) weights[ index * 4 ] = 1;
+		rigGeometry.setAttribute( 'skinIndex', new THREE.Uint16BufferAttribute( new Uint16Array( vertices * 4 ), 4 ) );
+		rigGeometry.setAttribute( 'skinWeight', new THREE.Float32BufferAttribute( weights, 4 ) );
+		const rig = new THREE.SkinnedMesh( rigGeometry, mesh.material );
+		rig.name = 'Actor rig';
+		const bone = new THREE.Bone();
+		bone.name = 'Actor bone';
+		rig.add( bone );
+		rig.bind( new THREE.Skeleton( [ bone ] ) );
+		actor.add( rig );
+		const runtime = new THREE.Object3D();
+		runtime.userData.runtimeOnly = true;
+		actor.add( runtime );
+		const lamp = new THREE.SpotLight();
+		lamp.name = 'Actor lamp';
+		lamp.target.name = 'Actor lamp target';
+		stage.add( lamp, lamp.target );
+		editor.addObject( stage );
+		const script = { name: 'Spin', source: '// @param speed = 1\nfunction update() {}', paramValues: { speed: 2 }, timelineId: 'source-spin' };
+		editor.addScript( mesh, script );
+		const animation = new THREE.AnimationClip( 'Actor motion', 1, [ new THREE.NumberKeyframeTrack( 'Actor.position[y]', [ 0, 1 ], [ 0, 1 ] ) ] );
+		actor.animations.push( animation );
+		editor.scene.userData.timeline = { fps: 30, clips: [ {
+			id: 'source-clip', name: 'Spin animation', start: 0, duration: 2,
+			animation: { object: actor.uuid, clip: animation.uuid },
+			tracks: [ { target: { kind: 'script', object: mesh.uuid, property: 'speed', index: 0, scriptId: script.timelineId },
+				keys: [ { time: 0, value: 3 }, { time: 1, value: 6 } ] } ]
+		} ] };
+		editor.signals.objectChanged.dispatch( editor.scene, 'userData' );
+		editor.selector.setSelection( [ actor, mesh, lamp ] );
+		return actor.getWorldPosition( new THREE.Vector3() ).toArray();
+
+	} );
+	const viewport = await page.locator( '#viewport' ).boundingBox();
+	await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .55 );
+	await page.keyboard.press( 'Shift+d' );
+	assert.equal( await page.evaluate( () => editor.modalTransform.active ), true );
+	await page.keyboard.press( 'x' );
+	await page.keyboard.press( '2' );
+	await page.keyboard.press( 'Enter' );
+	const inspectCopies = () => page.evaluate( () => {
+
+		const source = editor.scene.getObjectByName( 'Actor' );
+		const actor = editor.scene.getObjectByName( 'Actor.001' );
+		const mesh = actor.getObjectByName( 'Actor mesh' );
+		const original = source.getObjectByName( 'Actor mesh' );
+		const lamp = editor.scene.getObjectByName( 'Actor lamp.001' );
+		const script = editor.scripts[ mesh.uuid ][ 0 ];
+		const clip = editor.scene.userData.timeline.clips[ 1 ];
+		const track = clip.tracks[ 0 ];
+		const rig = actor.getObjectByName( 'Actor rig' );
+		const animation = actor.animations[ 0 ];
+		return {
+			parent: actor.parent.name, rootPosition: actor.getWorldPosition( new THREE.Vector3() ).toArray(),
+			independent: mesh.geometry !== original.geometry && mesh.geometry.userData.points !== original.geometry.userData.points,
+			sharedMaterial: mesh.material === original.material,
+			children: actor.children.map( child => child.name ),
+			scriptId: script.timelineId, parameter: script.paramValues.speed,
+			timeline: track.target.object === mesh.uuid && track.target.scriptId === script.timelineId,
+			animation: clip.animation.object === actor.uuid && clip.animation.clip === animation.uuid && animation.tracks[ 0 ].name === 'Actor.001.position[y]',
+			rig: rig.skeleton.bones[ 0 ] === rig.getObjectByName( 'Actor bone' ) &&
+				rig.skeleton.bones[ 0 ] !== source.getObjectByName( 'Actor bone' ),
+			target: lamp.target.name, selection: editor.selector.selection.map( object => object.name )
+		};
+
+	} );
+	const copies = await inspectCopies();
+	assert.equal( copies.parent, 'Duplicate stage' );
+	assert.ok( Math.abs( copies.rootPosition[ 0 ] - source[ 0 ] - 2 ) < 1e-9 );
+	assert.equal( copies.independent, true );
+	assert.equal( copies.sharedMaterial, true );
+	assert.deepEqual( copies.children, [ 'Actor mesh', 'Actor rig' ] );
+	assert.notEqual( copies.scriptId, 'source-spin' );
+	assert.equal( copies.parameter, 2 );
+	assert.equal( copies.timeline, true );
+	assert.equal( copies.animation, true );
+	assert.equal( copies.rig, true );
+	assert.equal( copies.target, 'Actor lamp target.001' );
+	assert.deepEqual( copies.selection, [ 'Actor.001', 'Actor lamp.001' ] );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await page.evaluate( () => editor.selector.selection.map( object => object.name ) ), [ 'Actor', 'Actor mesh', 'Actor lamp' ] );
+	assert.equal( await page.evaluate( () => !! editor.scene.getObjectByName( 'Actor.001' ) ), false );
+	assert.equal( await page.evaluate( () => editor.scene.userData.timeline.clips.length ), 1 );
+	await page.evaluate( async () => {
+
+		const save = JSON.parse( JSON.stringify( editor.toJSON() ) );
+		editor.clear();
+		await editor.fromJSON( save );
+		editor.redo();
+
+	} );
+	const { rootPosition, ...restored } = await inspectCopies();
+	const { rootPosition: savedPosition, ...expected } = copies;
+	assert.ok( rootPosition.every( ( value, index ) => Math.abs( value - savedPosition[ index ] ) < 1e-9 ) );
+	assert.deepEqual( restored, expected );
+	const frame = page.getByLabel( 'Frame', { exact: true } );
+	await frame.fill( '15' );
+	await frame.press( 'Enter' );
+	assert.deepEqual( await page.evaluate( () => [ 'Actor', 'Actor.001' ].map( name => editor.scene.getObjectByName( name ).position.y ) ), [ .5, .5 ] );
+	await page.evaluate( () => { editor.animationCommands.animationStop(); document.activeElement.blur(); } );
+	await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .55 );
+	await page.keyboard.press( 'Shift+d' );
+	await page.keyboard.press( 'Escape' );
+	assert.equal( await page.evaluate( () => !! editor.scene.getObjectByName( 'Actor.002' ) ), true );
+	await page.evaluate( () => {
+
+		editor.config.setKey( 'settings/history', false );
+		editor.clear();
+
+	} );
+
+}
+
+async function checkActiveSelection( page ) {
+
+	await page.evaluate( () => {
+
+		for ( const [ name, x ] of [ [ 'Active test A', -1 ], [ 'Active test B', 1 ] ] ) {
+
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+			mesh.name = name;
+			mesh.position.x = x;
+			editor.addObject( mesh );
+
+		}
+
+	} );
+	const outliner = page.getByRole( 'tree', { name: 'Outliner', exact: true } );
+	const row = name => outliner.getByRole( 'treeitem' ).filter( { hasText: name } );
+	const first = row( 'Active test A' ), second = row( 'Active test B' );
+	const selection = () => page.evaluate( () => ( {
+		active: editor.selected?.name,
+		objects: editor.selector.selection.map( object => object.name ),
+		groupPivot: editor.selector.usesGroupPivot()
+	} ) );
+	await first.click();
+	await second.click( { modifiers: [ 'Shift' ] } );
+	assert.deepEqual( await selection(), { active: 'Active test B', objects: [ 'Active test A', 'Active test B' ], groupPivot: true } );
+	assert.equal( await first.getAttribute( 'aria-selected' ), 'true' );
+	assert.equal( await second.getAttribute( 'aria-selected' ), 'true' );
+	assert.equal( await outliner.getAttribute( 'aria-activedescendant' ), await second.getAttribute( 'id' ) );
+	assert.match( await second.getAttribute( 'class' ), /\bcurrent\b/ );
+	assert.doesNotMatch( await first.getAttribute( 'class' ), /\bcurrent\b/ );
+	const properties = page.locator( '#properties' );
+	assert.equal( Number( await properties.getByLabel( 'Position X', { exact: true } ).inputValue() ), 1 );
+	const outlines = await page.evaluate( () => {
+
+		const renderer = editor.renderer, render = renderer.render;
+		const colors = new Set();
+		renderer.render = function ( scene, ...args ) {
+
+			const uniforms = scene.children[ 0 ]?.material?.uniforms;
+			if ( uniforms?.tMask && uniforms.uColor ) colors.add( uniforms.uColor.value.getHex() );
+			return render.call( this, scene, ...args );
+
+		};
+		try { editor.signals.viewportLabelsChanged.dispatch(); }
+		finally { renderer.render = render; }
+		return [ ...colors ];
+
+	} );
+	assert.deepEqual( outlines, [ 0xff8a24, 0xffbd66 ] );
+	await first.click( { modifiers: [ 'Shift' ] } );
+	assert.deepEqual( await selection(), { active: 'Active test A', objects: [ 'Active test B', 'Active test A' ], groupPivot: true } );
+	assert.equal( Number( await properties.getByLabel( 'Position X', { exact: true } ).inputValue() ), -1 );
+	await page.getByRole( 'button', { name: 'Viewport Sidebar', exact: true } ).click();
+	const item = page.getByRole( 'region', { name: 'Viewport Item', exact: true } );
+	assert.equal( Number( await item.getByLabel( 'Location X', { exact: true } ).inputValue() ), -1 );
+	await page.getByRole( 'button', { name: 'Viewport Sidebar', exact: true } ).click();
+	const viewport = await page.locator( '#viewport' ).boundingBox();
+	await page.mouse.move( viewport.x + viewport.width * .4, viewport.y + viewport.height * .55 );
+	for ( const key of [ 'g', 'x', '1', 'Enter' ] ) await page.keyboard.press( key );
+	assert.deepEqual( await page.evaluate( () => editor.selector.selection.map( object => object.position.x ) ), [ 2, 0 ] );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await outliner.getAttribute( 'aria-activedescendant' ), await first.getAttribute( 'id' ) );
+	await page.keyboard.press( 'NumpadDecimal' );
+	assert.ok( Math.abs( await page.evaluate( () => editor.controls.center.x ) ) < 1e-9 );
+	const firstPoint = await page.evaluate( () => {
+
+		const rect = editor.renderer.domElement.getBoundingClientRect();
+		const point = editor.selected.getWorldPosition( new THREE.Vector3() ).project( editor.camera );
+		return [ rect.left + ( 1 + point.x ) * rect.width / 2, rect.top + ( 1 - point.y ) * rect.height / 2 ];
+
+	} );
+	await page.keyboard.down( 'Shift' );
+	await page.mouse.click( ...firstPoint );
+	await page.keyboard.up( 'Shift' );
+	assert.deepEqual( await selection(), { active: 'Active test B', objects: [ 'Active test B' ], groupPivot: false } );
+	await outliner.focus();
+	await outliner.press( 'ArrowUp' );
+	assert.equal( ( await selection() ).active, 'Active test A' );
+	await page.evaluate( () => editor.removeObject( editor.selected ) );
+	assert.equal( ( await selection() ).active, undefined );
+	assert.equal( await outliner.getAttribute( 'aria-activedescendant' ), null );
+	await page.evaluate( () => { document.activeElement.blur(); editor.clear(); } );
+
+}
+
+async function checkAddPrimitives( page ) {
+
+	await page.evaluate( () => editor.setCursor( new THREE.Vector3( 2, 1, 3 ) ) );
+	const viewport = await page.locator( '#viewport' ).boundingBox();
+	await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .55 );
+	const add = page.getByRole( 'dialog', { name: 'Add', exact: true } );
+	await page.keyboard.press( 'Shift+a' );
+	await add.getByRole( 'button', { name: 'Cube', exact: true } ).click();
+	const before = await page.evaluate( async () => {
+
+		const cube = editor.selected;
+		const position = cube.position.toArray();
+		const group = new THREE.Group();
+		group.position.set( 1, 2, 0 );
+		group.rotation.set( .1, .3, .2 );
+		group.scale.set( 2, 1, .75 );
+		editor.addObject( group );
+		group.add( cube );
+		const slots = [ cube.material, new THREE.MeshStandardMaterial( { color: '#ef8a44' } ) ];
+		const { SetMeshMaterialsCommand } = await import( '/editor/js/commands/SetMeshMaterialsCommand.js' );
+		editor.execute( new SetMeshMaterialsCommand( editor, cube, slots ) );
+		cube.geometry.addGroup( 0, 18, 0 );
+		cube.geometry.addGroup( 18, 18, 1 );
+		editor.signals.sceneGraphChanged.dispatch();
+		editor.setCursor( new THREE.Vector3( 1, 1, 2 ) );
+		return { uuid: cube.uuid, position, uv: Array.from( cube.geometry.attributes.uv.array ), slots: slots.map( slot => slot.uuid ) };
+
+	} );
+	assert.deepEqual( before.position, [ 2, 1, 3 ] );
+	await page.keyboard.press( 'Tab' );
+	await page.keyboard.press( '3' );
+	await page.keyboard.press( 'a' );
+	await page.keyboard.press( 'Shift+a' );
+	assert.equal( await add.getByRole( 'button', { name: 'Perspective', exact: true } ).count(), 0 );
+	await add.getByRole( 'button', { name: 'Plane', exact: true } ).click();
+	const appended = await page.evaluate( () => {
+
+		const model = editor.modeling, cube = model.object;
+		return {
+			uuid: cube.uuid, objects: cube.parent.children.length, topology: model.data.faces.map( face => face.length ),
+			points: model.indices.map( index => cube.localToWorld( new THREE.Vector3( ...model.data.points[ index ] ) ).toArray() ),
+			faces: model.selectedSurfaceFaces(), uv: Array.from( cube.geometry.attributes.uv.array ),
+			groups: cube.geometry.groups.map( group => group.materialIndex ),
+			slots: cube.material.map( material => material.uuid )
+		};
+
+	} );
+	assert.equal( appended.uuid, before.uuid );
+	assert.equal( appended.objects, 1 );
+	assert.deepEqual( appended.topology, [ 4, 4, 4, 4, 4, 4, 4 ] );
+	assert.deepEqual( appended.faces, [ 6 ] );
+	assert.equal( appended.points.length, 4 );
+	assert.ok( appended.points.every( ( [ , y ] ) => Math.abs( y - 1 ) < 1e-6 ) );
+	assert.equal( Math.round( appended.points.reduce( ( sum, point ) => sum + point[ 0 ], 0 ) / 4 ), 1 );
+	assert.equal( Math.round( appended.points.reduce( ( sum, point ) => sum + point[ 2 ], 0 ) / 4 ), 2 );
+	assert.deepEqual( appended.uv.slice( 0, before.uv.length ), before.uv );
+	assert.deepEqual( appended.groups, [ 0, 1, 0 ] );
+	assert.deepEqual( appended.slots, before.slots );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.modeling.data.faces.length ), 6 );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.selectedSurfaceFaces() ), [ 0, 1, 2, 3, 4, 5 ] );
+	await page.evaluate( () => editor.redo() );
+	assert.equal( await page.evaluate( () => editor.modeling.data.faces.length ), 7 );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.selectedSurfaceFaces() ), [ 6 ] );
+	const base = await page.evaluate( async () => {
+
+		const { createModifier, setModifierStack } = await import( '/editor/js/modeling/Modifiers.js?v=poly-context' );
+		const array = createModifier( 'ARRAY' );
+		array.params.count = 2;
+		setModifierStack( editor, editor.selected, [ array ] );
+		return { id: array.id, vertices: editor.selected.geometry.attributes.position.count };
+
+	} );
+	await page.keyboard.press( 'F3' );
+	const search = page.getByRole( 'dialog', { name: 'Command palette', exact: true } );
+	await search.getByRole( 'searchbox' ).fill( 'Cone' );
+	await search.getByRole( 'button', { name: 'Cone', exact: true } ).click();
+	const added = await page.evaluate( () => ( {
+		faces: editor.modeling.data.faces.length, evaluated: editor.selected.geometry.attributes.position.count,
+		id: editor.selected.userData.modifiers[ 0 ].id, selected: editor.modeling.selectedSurfaceFaces()
+	} ) );
+	assert.ok( added.faces > 7 && added.evaluated > base.vertices );
+	assert.equal( added.id, base.id );
+	assert.equal( added.selected.length, added.faces - 7 );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.selected.geometry.attributes.position.count ), base.vertices );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.selectedSurfaceFaces() ), [ 6 ] );
+	await page.keyboard.press( 'Tab' );
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function check() {
 
 	const browser = await chromium.launch( { channel: process.env.CHROME_CHANNEL || 'chrome', args: [ '--enable-unsafe-swiftshader' ] } );
@@ -18,28 +832,286 @@ async function check() {
 		page.on( 'pageerror', error => errors.push( error.message ) );
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( () => window.editor?.renderer );
+		await checkViewportControls( page );
+		await checkActiveSelection( page );
+		await checkAddPrimitives( page );
+		await checkHierarchy( page );
+		await checkDuplication( page );
+		await page.evaluate( () => {
+
+			const camera = new THREE.PerspectiveCamera();
+			camera.position.set( 8, 4, 1 );
+			editor.addObject( camera );
+			editor.setViewportCamera( camera.uuid );
+			editor.setViewportSplit( true, 'vertical', .42 );
+
+		} );
+		const splitBounds = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );
+		const item = page.getByRole( 'region', { name: 'Viewport Item', exact: true } );
+		const paneX = fraction => splitBounds.x + splitBounds.width * fraction;
+		const paneY = splitBounds.y + splitBounds.height * .55;
+		await page.mouse.move( paneX( .75 ), paneY );
+		await page.keyboard.press( 'n' );
+		assert.equal( await item.isVisible(), false );
+		await page.mouse.move( paneX( .25 ), paneY );
+		await page.keyboard.press( 'n' );
+		assert.ok( ( await item.boundingBox() ).x + ( await item.boundingBox() ).width < paneX( .42 ) );
+		await page.evaluate( () => editor.setViewportSplit( true, 'vertical', .32 ) );
+		assert.ok( ( await item.boundingBox() ).x + ( await item.boundingBox() ).width < paneX( .32 ) );
+		await page.evaluate( () => editor.setViewportSplit( true, 'vertical', .42 ) );
+		await page.keyboard.press( 'n' );
+		const dockLayout = await page.evaluate( () => editor.viewLayout.frames.map( frame => frame.area ) );
+		const restoreArea = page.getByRole( 'button', { name: 'Back to Previous' } );
+		for ( const [ fraction, key ] of [ [ .75, 'source' ], [ .25, 'director' ] ] ) {
+
+			await page.mouse.move( splitBounds.x + splitBounds.width * fraction, splitBounds.y + splitBounds.height * .5 );
+			await page.keyboard.press( 'Control+Space' );
+			assert.equal( await restoreArea.isVisible(), true );
+			assert.equal( await page.locator( '#sidebar' ).isVisible(), false );
+			assert.equal( await page.locator( '#animation' ).isVisible(), false );
+			assert.deepEqual( await page.evaluate( () => editor.viewLayout.frames.map( frame => frame.key ) ), [ key ] );
+			const expanded = await page.locator( '#viewport' ).boundingBox();
+			assert.equal( expanded.width, 1440 );
+			assert.equal( await page.evaluate( () => editor.toJSON().viewportSplit ), true );
+			assert.equal( await page.evaluate( () => editor.toJSON().viewportSplitRatio ), .42 );
+			if ( key === 'source' ) await restoreArea.click();
+			else await page.keyboard.press( 'Control+Space' );
+			assert.equal( await restoreArea.isVisible(), false );
+			assert.deepEqual( await page.evaluate( () => editor.viewLayout.frames.map( frame => frame.area ) ), dockLayout );
+
+		}
+		const directorPose = await page.evaluate( () => editor.camera.position.toArray() );
+		await page.mouse.move( splitBounds.x + splitBounds.width * .75, splitBounds.y + splitBounds.height * .5 );
+		await page.keyboard.press( 'Numpad4' );
+		assert.deepEqual( await page.evaluate( () => editor.camera.position.toArray() ), directorPose );
+		await page.mouse.move( splitBounds.x + splitBounds.width * .25, splitBounds.y + splitBounds.height * .5 );
+		await page.keyboard.press( 'Numpad4' );
+		await page.waitForFunction( pose => editor.camera.position.toArray().some( ( value, index ) => value !== pose[ index ] ), directorPose );
+		await page.keyboard.press( 'Backquote' );
+		await page.getByRole( 'dialog', { name: 'View navigation' } ).getByRole( 'button', { name: 'Front' } ).click();
+		assert.equal( await page.evaluate( () => editor.camera.isOrthographicCamera ), true );
+		await page.mouse.move( splitBounds.x + splitBounds.width * .25, splitBounds.y + splitBounds.height * .5 );
+		await page.keyboard.press( '5' );
+		assert.equal( await page.evaluate( () => editor.camera.isPerspectiveCamera ), true );
+		const projection = page.getByRole( 'button', { name: 'Toggle Perspective / Orthographic' } );
+		await projection.click();
+		assert.equal( await page.evaluate( () => editor.camera.isOrthographicCamera ), true );
+		await page.mouse.move( splitBounds.x + splitBounds.width * .25, splitBounds.y + splitBounds.height * .5 );
+		await page.keyboard.press( 'Control+7' );
+		assert.ok( await page.evaluate( () => editor.camera.position.y < editor.controls.getCenter( editor.camera ).y ) );
+		await page.keyboard.press( '0' );
+		assert.equal( await page.evaluate( () => editor.viewportCamera === editor.camera ), true );
+		await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
+		const code = page.locator( '#code-panel' );
+		await code.locator( '.CodeMirror' ).click( { position: { x: 100, y: 20 } } );
+		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '.CodeMirror' ) ), true );
+		await page.keyboard.press( 'Control+Space' );
+		assert.equal( ( await code.boundingBox() ).width, 1440 );
+		assert.equal( await page.locator( '#viewport' ).isVisible(), false );
+		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '#code-panel' ) ), true );
+		await page.keyboard.press( 'Control+Space' );
+		assert.ok( ( await code.boundingBox() ).width < 1440 );
+		await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
+		for ( const area of [ '#sidebar', '#animation' ] ) {
+
+			const bounds = await page.locator( area ).boundingBox();
+			await page.mouse.move( bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 );
+			await page.keyboard.press( 'Control+Space' );
+			assert.equal( ( await page.locator( area ).boundingBox() ).width, 1440 );
+			assert.equal( await page.locator( '#viewport' ).isVisible(), false );
+			await restoreArea.click();
+			assert.deepEqual( await page.locator( area ).boundingBox(), bounds );
+
+		}
+		await page.evaluate( () => editor.clear() );
+		const cursorTarget = await page.evaluate( () => {
+
+			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
+			mesh.position.x = 2;
+			editor.addObject( mesh );
+			editor.select( mesh );
+			editor.camera.position.set( 2, 0, 7 );
+			editor.camera.lookAt( 2, 0, 0 );
+			editor.camera.updateMatrixWorld();
+			editor.signals.cameraChanged.dispatch( editor.camera );
+			const bounds = editor.renderer.domElement.getBoundingClientRect();
+			const point = new THREE.Vector3( 2, 0, .5 ).project( editor.camera );
+			return [ bounds.left + ( 1 + point.x ) * bounds.width / 2, bounds.top + ( 1 - point.y ) * bounds.height / 2 ];
+
+		} );
+		await page.keyboard.down( 'Shift' );
+		await page.mouse.click( ...cursorTarget, { button: 'right' } );
+		await page.keyboard.up( 'Shift' );
+		assert.ok( Math.abs( await page.evaluate( () => editor.cursor.z ) - .5 ) < .01 );
+		await page.keyboard.press( 'Shift+s' );
+		await page.getByRole( 'dialog', { name: 'Snap', exact: true } ).getByRole( 'button', { name: 'Cursor to Selected', exact: true } ).click();
+		assert.deepEqual( await page.evaluate( () => editor.toJSON().cursor ), [ 2, 0, 0 ] );
+		await page.mouse.move( ...cursorTarget );
+		await page.keyboard.press( 'h' );
+		assert.equal( await page.evaluate( () => editor.toJSON().viewportHidden.length ), 1 );
+		assert.equal( await page.evaluate( () => editor.scene.children.find( object => object.isMesh ).visible ), true );
+		await page.keyboard.press( 'Alt+h' );
+		assert.equal( await page.evaluate( () => editor.toJSON().viewportHidden.length ), 0 );
+		const cameraBeforeLocalView = await page.evaluate( () => editor.camera.position.toArray() );
+		await page.keyboard.press( '/' );
+		assert.equal( await page.getByRole( 'button', { name: 'Exit Local View' } ).isVisible(), true );
+		await page.keyboard.press( 'NumpadDivide' );
+		assert.deepEqual( await page.evaluate( () => editor.camera.position.toArray() ), cameraBeforeLocalView );
+		const dragSelection = async () => {
+
+			await page.mouse.move( cursorTarget[ 0 ] - 78, cursorTarget[ 1 ] - 78 );
+			await page.mouse.down();
+			await page.mouse.move( cursorTarget[ 0 ] + 78, cursorTarget[ 1 ] + 78, { steps: 4 } );
+			await page.mouse.up();
+
+		};
+		await page.mouse.move( ...cursorTarget );
+		await page.keyboard.press( 'Tab' );
+		await page.keyboard.press( 'l' );
+		assert.equal( await page.evaluate( () => editor.modeling.indices.length ), 8 );
+		await page.keyboard.press( 'Shift+l' );
+		assert.equal( await page.evaluate( () => editor.modeling.indices.length ), 0 );
+		await dragSelection();
+		assert.equal( await page.evaluate( () => editor.modeling.indices.length ), 4 );
+		await page.keyboard.press( 'Alt+z' );
+		await dragSelection();
+		assert.equal( await page.evaluate( () => editor.modeling.indices.length ), 8 );
+		await page.keyboard.press( 'Alt+z' );
+		await page.keyboard.press( '3' );
+		await page.mouse.click( ...cursorTarget );
+		await page.keyboard.press( 'p' );
+		await page.getByRole( 'dialog', { name: 'Separate', exact: true } ).getByRole( 'button', { name: 'Selection', exact: true } ).click();
+		assert.deepEqual( await page.evaluate( () => editor.scene.children.filter( object => object.isMesh ).map( object => object.geometry.index.count ) ), [ 33, 3 ] );
+		await page.evaluate( () => editor.undo() );
+		assert.equal( await page.evaluate( () => editor.modeling.object.geometry.index.count ), 36 );
+		await page.keyboard.press( '1' );
+		await page.keyboard.press( 'Tab' );
+		await page.evaluate( () => editor.setViewportShading( 'preview' ) );
+		assert.equal( await page.locator( '.viewport-tool-overlay' ).isVisible(), false );
+		await page.evaluate( () => editor.clear() );
+		await checkTextureProjection( page );
+		await checkPaintGestures( page );
+		await checkComponents( page );
+		await page.evaluate( () => {
+
+			const light = new THREE.SpotLight();
+			light.name = 'Mask test light';
+			editor.addObject( light );
+			editor.select( light );
+
+		} );
+		await page.getByLabel( '2D Editors', { exact: true } ).click();
+		await page.getByRole( 'button', { name: 'Mask mode', exact: true } ).click();
+		const maskFrame = await page.getByLabel( 'Projection frame', { exact: true } ).boundingBox();
+		for ( const [ start, end ] of [ [ .31, .69 ], [ .42, .58 ] ] ) {
+
+			await page.getByRole( 'button', { name: 'Draw rectangle' } ).click();
+			await page.mouse.move( maskFrame.x + start * maskFrame.width, maskFrame.y + start * maskFrame.height );
+			await page.mouse.down();
+			await page.mouse.move( maskFrame.x + end * maskFrame.width, maskFrame.y + end * maskFrame.height, { steps: 4 } );
+			await page.mouse.up();
+
+		}
+		await page.getByLabel( 'Shape operation' ).selectOption( 'cutout' );
+		await page.getByRole( 'button', { name: 'Apply masks' } ).click();
+		assert.deepEqual( await page.evaluate( () => editor.selected.userData.projectionMask.shapes.map( shape => [ shape.mode, shape.points.length ] ) ),
+			[ [ 'inside', 4 ], [ 'cutout', 4 ] ] );
+		await page.getByLabel( 'Mask', { exact: true } ).click();
+		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
+		await page.evaluate( () => editor.clear() );
 		await page.getByLabel( '2D Editors', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Image and vector mode' } ).click();
 		await page.getByRole( 'button', { name: 'Draw rectangle' } ).click();
-		const drawing = await page.getByLabel( 'Vector drawing canvas' ).boundingBox();
+		const canvas = page.getByLabel( 'Vector drawing canvas' );
+		const drawing = await canvas.boundingBox();
+		const drawingArea = page.locator( '.viewport-edit-workspace' );
+		const dockedDrawingArea = await drawingArea.boundingBox();
+		await page.mouse.move( drawing.x + drawing.width / 2, drawing.y + drawing.height / 2 );
+		await page.keyboard.press( 'Control+Space' );
+		assert.ok( ( await drawingArea.boundingBox() ).width > dockedDrawingArea.width );
+		assert.equal( await canvas.isVisible(), true );
+		await restoreArea.click();
+		assert.deepEqual( await canvas.boundingBox(), drawing );
 		const start = [ drawing.x + drawing.width * .4, drawing.y + drawing.height * .4 ];
 		const end = [ drawing.x + drawing.width * .6, drawing.y + drawing.height * .6 ];
 		await page.mouse.move( ...start );
 		await page.mouse.down();
 		await page.mouse.move( ...end, { steps: 5 } );
 		await page.mouse.up();
+		await page.mouse.dblclick( ( start[ 0 ] + end[ 0 ] ) / 2, start[ 1 ] );
+		await page.getByLabel( 'Contour color' ).fill( '#e4572e' );
+		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
+		await page.getByRole( 'button', { name: 'Create filled scene shape' } ).click();
+		await page.getByRole( 'button', { name: 'Draw stroke', exact: true } ).click();
+		await page.mouse.move( drawing.x + drawing.width * .28, drawing.y + drawing.height * .28 );
+		await page.mouse.down();
+		await page.mouse.move( drawing.x + drawing.width * .34, drawing.y + drawing.height * .21, { steps: 4 } );
+		await page.mouse.move( drawing.x + drawing.width * .39, drawing.y + drawing.height * .27, { steps: 4 } );
+		await page.mouse.up();
+		const cyclic = page.getByRole( 'button', { name: 'Toggle Cyclic' } );
+		assert.equal( await cyclic.getAttribute( 'aria-pressed' ), 'false' );
+		await canvas.press( 'f' );
+		assert.equal( await cyclic.getAttribute( 'aria-pressed' ), 'true' );
+		await canvas.press( 'f' );
+		assert.equal( await cyclic.getAttribute( 'aria-pressed' ), 'false' );
+		assert.equal( await page.getByRole( 'button', { name: 'Create filled scene shape' } ).isEnabled(), false );
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
 		const contour = await page.evaluate( () => {
 
-			const curve = editor.scene.getObjectByName( 'Contour 1' );
-			const drawing = editor.scene.userData.vectorDrawing.shapes[ 0 ];
-			return { actual: curve.geometry.userData.modeling.points, expected: drawing.points.map( ( [ u, v ] ) => [ 2 * u - 1, 1 - 2 * v, 0 ] ) };
+			const [ drawing, stroke ] = editor.scene.userData.vectorDrawing.shapes;
+			const curve = editor.scene.children.find( object => object.name === drawing.name && object.isLine );
+			const fill = editor.scene.getObjectByName( drawing.name + ' fill' );
+			const open = editor.scene.getObjectByName( stroke.name );
+			const toPoints = shape => shape.points.map( ( [ u, v ] ) => [ 2 * u - 1, 1 - 2 * v, 0 ] );
+			return {
+				actual: curve.geometry.userData.modeling.points,
+				expected: toPoints( drawing ),
+				fill: fill.geometry.userData.modeling.points,
+				fillColor: fill.material.color.getHexString(),
+				stroke: open.geometry.userData.modeling.points,
+				strokeExpected: toPoints( stroke ),
+				open: ! ( open.geometry.userData.modeling.closed || stroke.closed )
+			};
 
 		} );
 		assert.deepEqual( contour.actual, contour.expected );
+		assert.equal( contour.actual.length, 5 );
+		assert.deepEqual( contour.fill, contour.expected );
+		assert.equal( contour.fillColor, 'e4572e' );
+		assert.deepEqual( contour.stroke, contour.strokeExpected );
+		assert.equal( contour.open, true );
+		await page.getByText( 'Pick scene outline', { exact: true } ).click();
+		await page.getByLabel( 'Search scene outlines' ).fill( 'Stroke 2' );
+		await page.getByRole( 'button', { name: 'Copy from scene in place' } ).click();
+		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
+		const strokeCopies = await page.evaluate( () => editor.scene.userData.vectorDrawing.shapes.slice( 1 ) );
+		assert.equal( strokeCopies.length, 2 );
+		assert.equal( strokeCopies[ 1 ].closed, false );
+		assert.equal( strokeCopies[ 0 ].points.length, strokeCopies[ 1 ].points.length );
+		strokeCopies[ 0 ].points.forEach( ( point, index ) => {
+
+			assert.ok( point.every( ( coordinate, axis ) => Math.abs( coordinate - strokeCopies[ 1 ].points[ index ][ axis ] ) < 1e-10 ) );
+
+		} );
+		await page.getByRole( 'button', { name: 'Undo drawing edit' } ).click();
+		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
+		const vectorDownload = page.waitForEvent( 'download' );
+		await page.getByRole( 'button', { name: 'Export SVG' } ).click();
+		const svg = await fs.readFile( await ( await vectorDownload ).path(), 'utf8' );
+		assert.match( svg, /<path fill="#e4572e"[^>]+ Z"/ );
+		assert.match( svg, /<path fill="none" stroke="#72cbef"[^>]+ [ML][^>]+"/ );
 		await page.getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
+		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
+		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Stroke 2' ) ) );
+		await page.keyboard.press( 'Tab' );
+		await page.keyboard.press( 'f' );
+		assert.equal( await page.evaluate( () => editor.selected.geometry.userData.modeling.closed ), true );
+		await page.keyboard.press( 'f' );
+		assert.equal( await page.evaluate( () => editor.selected.geometry.userData.modeling.closed ), false );
+		await page.keyboard.press( 'Tab' );
 		await page.evaluate( () => {
 
 			const mesh = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshStandardMaterial() );
@@ -49,7 +1121,55 @@ async function check() {
 
 		} );
 		await page.keyboard.press( 'z' );
-		await page.getByRole( 'dialog', { name: 'Viewport shading' } ).getByRole( 'button', { name: 'Wireframe' } ).click();
+		const shading = page.getByRole( 'dialog', { name: 'Viewport shading' } );
+		for ( const label of [ 'Rendered', 'Material Preview', 'Clean Preview' ] ) {
+
+			assert.equal( await shading.getByRole( 'button', { name: label, exact: true } ).count(), 1 );
+
+		}
+		const overlay = page.locator( '.viewport-tool-overlay' );
+		await shading.getByRole( 'button', { name: 'Clean Preview', exact: true } ).click();
+		assert.equal( await overlay.isVisible(), false );
+		assert.equal( await page.evaluate( () => editor.viewportShading ), 'preview' );
+		await page.evaluate( () => {
+
+			const geometry = new THREE.BufferGeometry();
+			geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( [ 1, 0, 0 ], 3 ) );
+			const points = new THREE.Points( geometry, new THREE.PointsMaterial() );
+			points.name = 'Raster sample test';
+			editor.addObject( points );
+
+		} );
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
+		await page.keyboard.press( 'z' );
+		await shading.getByRole( 'button', { name: 'Rendered', exact: true } ).click();
+		assert.equal( await overlay.isVisible(), false );
+		await page.getByText( 'Raster · 32 samples', { exact: true } ).waitFor();
+		await page.evaluate( () => {
+
+			window.samplesAfterBackground = [];
+			editor.signals.pathTracerUpdated.add( samples => window.samplesAfterBackground.push( samples ) );
+			editor.signals.sceneBackgroundChanged.dispatch( 'Color', 0x224466 );
+
+		} );
+		await page.waitForFunction( () => window.samplesAfterBackground.includes( 'Raster · 1 sample' ) &&
+			window.samplesAfterBackground.includes( 'Raster · 2 samples' ) );
+		await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Raster sample test' ) ) );
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
+		await page.keyboard.press( 'z' );
+		await shading.getByRole( 'button', { name: 'Solid', exact: true } ).click();
+		assert.equal( await overlay.isVisible(), true );
+		const tabOffsets = await page.locator( '#properties > .Tabs .Tab[data-glyph]:visible' ).evaluateAll( tabs => tabs.map( tab => {
+
+			const bounds = tab.getBoundingClientRect(), glyph = tab.querySelector( 'svg' ).getBoundingClientRect();
+			return Math.hypot( bounds.x + bounds.width / 2 - glyph.x - glyph.width / 2,
+				bounds.y + bounds.height / 2 - glyph.y - glyph.height / 2 );
+
+		} ) );
+		assert.ok( tabOffsets.length > 1 && tabOffsets.every( distance => distance < 1 ), 'Property tab glyphs should be centered' );
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
+		await page.keyboard.press( 'z' );
+		await shading.getByRole( 'button', { name: 'Wireframe' } ).click();
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'wireframe' );
 		await page.keyboard.press( 'Shift+z' );
 		await page.keyboard.press( 'Tab' );
@@ -63,7 +1183,7 @@ async function check() {
 		const edited = await page.evaluate( () => Array.from( editor.selected.geometry.attributes.position.array ) );
 		assert.ok( Math.max( ...edited ) > .65, 'Edit-mode transform changed mesh coordinates' );
 		await page.keyboard.press( 'Tab' );
-		const mode = page.getByLabel( 'Interaction mode' );
+		const mode = page.getByLabel( 'Interaction mode', { exact: true } );
 		await mode.selectOption( 'paint' );
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'materials' );
 		const center = await page.evaluate( () => {
@@ -83,17 +1203,33 @@ async function check() {
 			await page.mouse.up();
 
 		}
+		const receiverSplatCount = () => page.evaluate( () => {
+
+			const batches = editor.scene.getObjectByName( 'Receiver' ).children.filter( child => child.userData.assetObject?.paintBatch );
+			if ( batches.length !== 1 ) throw new Error( 'Expected one shared splat batch on the receiver' );
+			return atob( batches[ 0 ].userData.assetObject.splatData ).length / 32;
+
+		} );
+		const firstSplatCount = await receiverSplatCount();
+		await page.waitForFunction( () => editor.scene.getObjectByName( 'Receiver' ).getObjectByName( 'SplatMesh' )?.isInitialized );
+		await page.mouse.move( center[ 0 ] - 12, center[ 1 ] + 8 );
+		await page.mouse.down();
+		await page.mouse.move( center[ 0 ] + 12, center[ 1 ] + 8, { steps: 8 } );
+		await page.mouse.up();
+		const splatCount = await receiverSplatCount();
+		assert.equal( splatCount, 2 * firstSplatCount );
 		await mode.selectOption( 'object' );
 		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Receiver' ) ) );
 		await page.locator( '.Tab#scriptTab' ).click();
-		await page.getByText( 'Add Script', { exact: true } ).click();
+		await page.getByRole( 'button', { name: 'Add Component', exact: true } ).click();
+		await page.getByRole( 'dialog', { name: 'Add Component' } ).getByRole( 'button', { name: 'Add Script', exact: true } ).click();
 		const source = [
 			'// @param tilt = 0.25',
 			'function update() {',
 			' this.rotation.z = params.tilt;',
 			' const splats = this.getObjectByName("SplatMesh");',
 			' if (splats?.isInitialized) window.workspaceCheck = { tilt: this.rotation.z, x: this.position.x,',
-			'   splats: splats.numSplats, texture: this.material.map?.image?.width,',
+			'   splats: splats.numSplats, texture: this.material.map?.image?.width, visible: this.visible,',
 			'   points: this.getObjectByName("Surface path")?.geometry.userData.modeling.points.length };',
 			'}'
 		].join( '\n' );
@@ -136,9 +1272,23 @@ async function check() {
 		} );
 		const actual = await page.evaluate( () => Array.from( editor.scene.getObjectByName( 'Receiver' ).geometry.attributes.position.array ) );
 		assert.deepEqual( actual, edited );
+		const reopenedDrawing = await page.evaluate( () => ( {
+
+			stroke: editor.scene.getObjectByName( 'Stroke 2' ).geometry.userData.modeling,
+			fillColor: editor.scene.getObjectByName( 'Contour 1 fill' ).material.color.getHexString(),
+			shapeCount: editor.scene.userData.vectorDrawing.shapes.length
+
+		} ) );
+		assert.deepEqual( reopenedDrawing.stroke.points, contour.stroke );
+		assert.equal( reopenedDrawing.stroke.closed, false );
+		assert.equal( reopenedDrawing.fillColor, contour.fillColor );
+		assert.equal( reopenedDrawing.shapeCount, 2 );
 		const download = page.waitForEvent( 'download' );
 		await page.evaluate( async () => {
 
+			const receiver = editor.scene.getObjectByName( 'Receiver' );
+			editor.select( receiver );
+			editor.viewportVisibility.hide();
 			const { exportPlayableScene } = await import( '/editor/js/Publish.js' );
 			const { zip } = await exportPlayableScene( editor );
 			const a = document.createElement( 'a' );
@@ -162,7 +1312,9 @@ async function check() {
 		await published.waitForFunction( () => window.workspaceCheck?.x > .05 );
 		const result = await published.evaluate( () => window.workspaceCheck );
 		assert.equal( result.tilt, .5 );
-		assert.ok( result.splats > 0 && result.points >= 2 && result.texture === 1024 );
+		assert.equal( result.visible, true );
+		assert.equal( result.splats, splatCount );
+		assert.ok( result.points >= 2 && result.texture === 1024 );
 		assert.deepEqual( errors, [] );
 		console.log( 'Published workspace passed', result );
 

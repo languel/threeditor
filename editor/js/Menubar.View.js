@@ -94,6 +94,27 @@ function MenubarView( editor ) {
 	// new helpers are visible by default, the global visibility state
 	const helperOptions = [ ...options.dom.querySelectorAll( '.option' ) ];
 	editor.shortcutToggleHelper = id => helperOptions[ { grid: 0, cameraHelpers: 1, lightHelpers: 2, skeletonHelpers: 3 }[ id ] ]?.click();
+	options.add( new UIHorizontalRule() );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Maximize Area' ).onClick( () => editor.keymap.run( 'maximizeArea' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Sidebar' ).onClick( () => editor.keymap.run( 'viewportSidebar' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Toolbar' ).onClick( () => editor.keymap.run( 'viewportToolbar' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Overlays' ).onClick( () => editor.keymap.run( 'viewportOverlays' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'View Navigation…' ).onClick( () => editor.keymap.run( 'navigationPie' ) ) );
+	for ( const [ label, action ] of [
+		[ 'Toggle Local View', 'localView' ], [ 'Hide Selected in Viewport', 'hideSelection' ],
+		[ 'Hide Unselected in Viewport', 'hideUnselected' ], [ 'Reveal Hidden in Viewport', 'revealHidden' ],
+		[ 'Interaction Mode…', 'modePie' ]
+	] ) options.add( new UIRow().addClass( 'option' ).setTextContent( label ).onClick( () => editor.keymap.run( action ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Perspective / Orthographic' ).onClick( () => editor.keymap.run( 'projection' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle X-Ray' ).onClick( () => editor.keymap.run( 'toggleXRay' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Snap Selection and 3D Cursor…' ).onClick( () => editor.keymap.run( 'cursorSnapPie' ) ) );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Align Active Camera to View' ).onClick( () => editor.keymap.run( 'alignActiveCamera' ) ) );
+	const activeCamera = new UIRow().setTextContent( 'Set Selected Camera as Active' ).onClick( () => editor.keymap.run( 'setActiveCamera' ) );
+	const updateActiveCamera = () => activeCamera.setClass( editor.keymap?.actionAvailable( 'setActiveCamera' ) ? 'option' : 'inactive' );
+	signals.objectSelected.add( updateActiveCamera );
+	updateActiveCamera();
+	options.add( activeCamera );
+	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Fly Camera' ).onClick( () => editor.keymap.run( 'fly' ) ) );
 	// of helpers is managed in this component. every time a helper is added,
 	// we request a viewport updated by firing the showHelpersChanged signal.
 

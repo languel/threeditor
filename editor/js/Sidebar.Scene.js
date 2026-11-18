@@ -7,27 +7,28 @@ import { SetValueCommand } from './commands/SetValueCommand.js';
 import { isProjector } from './assets/Projector.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
 import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';
+import { icon } from './Glyphs.js';
 
 const outlinerGlyphs = {
 	Scene: 'M2 12l4-7 3 4 2-3 3 6zM10.5 3.5h.01',
-	Camera: 'M2 5h8v7H2zM10 7l4-2v7l-4-2',
 	Light: 'M6 13h4M7 15h2M5.5 10c0-2-2-2-2-4.5a4.5 4.5 0 019 0c0 2.5-2 2.5-2 4.5z',
 	Projector: 'M2 5h9v6H2zM11 6l3-2v8l-3-2M4 8h2',
-	Group: 'M2 5V3h5l2 2h5v8H2z',
-	Object3D: 'M8 1v14M1 8h14M8 5l3 3-3 3-3-3z',
-	Mesh: 'M8 1.5l6 3.4v6.2L8 14.5l-6-3.4V4.9zM2 5l6 3.5L14 5M8 8.5v6',
+	Group: 'M1.5 2.5h13v4h-13zm1 4v7h11v-7M6 9h4',
+	Object3D: 'M7 2v7h7M7 9l-5 5',
+	Mesh: 'M2 3h12L8 13z',
 	Model: 'M2 5l6-3 6 3-6 3zM2 5v6l6 3 6-3V5M8 8v6',
-	Line: 'M2 12c4 0 3-8 8-8h4M1 11h2v2H1zM13 3h2v2h-2z',
+	Line: 'M6 2.5c10 0 11 11-3 11',
 	Shape: 'M2 12l2-8 6-2 4 6-4 5z',
 	Points: 'M3 4h.01M8 2h.01M13 5h.01M7 7h.01M3 11h.01M12 11h.01M7 14h.01',
 	Scan: 'M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3M5 6h.01M10 5h.01M8 8h.01M5 11h.01M11 10h.01',
-	Geometry: 'M8 2l6 11H2zM8 2v11',
-	Material: 'M8 2a6 6 0 100 12 6 6 0 000-12zM8 2a8 8 0 010 12',
+	Geometry: 'M4 4h8M3.5 5l3.8 6m5.2-6-3.8 6M1.5 2.5h3v3h-3zm10 0h3v3h-3zm-5 9h3v3h-3z',
 	Script: 'M6 4L2 8l4 4M10 4l4 4-4 4'
 };
 
 function glyph( type ) {
 
+	if ( type === 'Camera' ) return icon( 'camera' );
+	if ( type === 'Material' ) return icon( 'shadingMaterial' );
 	return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ outlinerGlyphs[ type ] }"/></svg>`;
 
 }
@@ -52,6 +53,7 @@ function SidebarScene( editor ) {
 		option.innerHTML = buildHTML( object );
 		addRestrictions( option, object );
 		option.value = object.id;
+		option.setAttribute( 'aria-level', '1' );
 		if ( object.material || isProjector( object ) ) {
 
 			option.addEventListener( 'dragover', event => {
@@ -97,6 +99,7 @@ function SidebarScene( editor ) {
 
 			if ( object.children.some( child => ! child.userData?.runtimeOnly ) ) {
 
+				option.setAttribute( 'aria-expanded', String( state ) );
 				opener.classList.add( state ? 'open' : 'closed' );
 				opener.addEventListener( 'click', function () {
 
@@ -122,9 +125,13 @@ function SidebarScene( editor ) {
 		controls.className = 'outliner-restrictions';
 		const name = object.name || getObjectType( object );
 		const flags = object.userData?.threeditor || {};
+		const viewport = editor.viewportVisibility;
+		const hiddenHere = viewport.hidden.has( object.uuid );
+		option.classList.toggle( 'viewport-hidden', ! viewport.allows( object ) );
 		const items = [
 			...( object === editor.camera ? [] : [ { key: 'disabled', on: ! flags.disabled, label: flags.disabled ? 'Enable' : 'Disable', svg: '<path d="M8 1v7M5 3a5.5 5.5 0 106 0"/>' } ] ),
-			{ key: 'visible', on: object.visible, label: object.visible ? 'Hide' : 'Show', svg: '<path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2"/>' },
+			{ key: 'visible', on: object.visible && ! hiddenHere, label: hiddenHere ? 'Show in viewport' : object.visible ? 'Hide' : 'Show',
+				svg: object.visible && ! hiddenHere ? '<path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2"/>' : '<path d="M1 6c4 5 10 5 14 0M4 9l-1 2m5-1v3m4-4 1 2"/>' },
 			{ key: 'unselectable', on: ! flags.unselectable, label: flags.unselectable ? 'Enable viewport selection for' : 'Disable viewport selection for', svg: '<path d="M3 2l9 7-4 1-2 4z"/>' },
 			{ key: 'locked', on: ! flags.locked, label: flags.locked ? 'Unlock transforms for' : 'Lock transforms for', svg: flags.locked ? '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/>' : '<rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 015-2"/>' }
 		];
@@ -143,6 +150,14 @@ function SidebarScene( editor ) {
 
 				event.stopPropagation();
 				let command;
+				if ( item.key === 'visible' && hiddenHere ) {
+
+					const hidden = new Set( viewport.hidden );
+					hidden.delete( object.uuid );
+					viewport.changeHidden( 'Show in viewport', hidden );
+					return;
+
+				}
 				if ( item.key === 'visible' ) command = new SetValueCommand( editor, object, 'visible', ! object.visible );
 				else {
 
@@ -259,9 +274,9 @@ function SidebarScene( editor ) {
 
 			// scene and main camera can't be part of a group selection
 
-			if ( object !== editor.scene && object !== editor.camera ) {
+			if ( object && object !== editor.scene && object !== editor.camera ) {
 
-				editor.selector.toggle( object );
+				editor.selector.toggle( object, editor.keymap.preset === 'blender' );
 				return;
 
 			}
@@ -595,6 +610,7 @@ function SidebarScene( editor ) {
 
 				const option = buildOption( object, true );
 				option.style.paddingLeft = ( pad * 18 ) + 'px';
+				option.setAttribute( 'aria-level', String( pad + 2 ) );
 				options.push( option );
 
 				if ( nodeStates.get( object ) === true ) {
@@ -609,23 +625,7 @@ function SidebarScene( editor ) {
 
 		outliner.setOptions( options );
 
-		if ( editor.selected !== null ) {
-
-			outliner.setValue( editor.selected.id );
-
-		} else {
-
-			const selection = editor.selector.selection;
-
-			if ( selection.length > 1 ) {
-
-				// restore highlights of a group selection (e.g. after a graph change)
-
-				outliner.setValues( selection.map( ( object ) => object.id ) );
-
-			}
-
-		}
+		outliner.setValues( editor.selector.selection.map( object => object.id ), editor.selected?.id );
 
 		backgroundType.setValue( editor.backgroundType );
 
@@ -732,6 +732,7 @@ function SidebarScene( editor ) {
 
 	signals.cameraResetted.add( refreshUI );
 	signals.projectLoaded.add( refreshUI );
+	signals.viewportVisibilityChanged.add( refreshUI );
 
 	signals.objectChanged.add( function ( object, attribute ) {
 
@@ -782,7 +783,7 @@ function SidebarScene( editor ) {
 		let needsRefresh = false;
 		let parent = object.parent;
 
-		while ( parent !== editor.scene ) {
+		while ( parent && parent !== editor.scene ) {
 
 			if ( nodeStates.get( parent ) !== true ) {
 

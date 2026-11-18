@@ -1,20 +1,34 @@
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
-import { selectionCandidates, applySelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
-import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
+import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, pointInPolygon, meshEdges } from './MeshSelection.js?v=shape-selection';
+import { evaluateModifiers, modifierSource, modifierStackCommands, setModifierStack } from './Modifiers.js?v=poly-context';
+import { separateMesh } from './MeshSeparation.js';
 import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
+import { AddMeshPrimitiveCommand } from '../commands/AddMeshPrimitiveCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { SetPositionCommand } from '../commands/SetPositionCommand.js';
 import { SetRotationCommand } from '../commands/SetRotationCommand.js';
-import { meshHit } from './SurfacePicking.js';
+import { SetValueCommand } from '../commands/SetValueCommand.js';
+import { meshHit, paintSurfaces } from './SurfacePicking.js';
+import { TexturePaintProjection } from './TexturePaintProjection.js';
+import { insertContourPoint, interpolatePoint, segmentCount } from './Contour.js';
+import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
 
 
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
+
+function elementCenter( data, ids ) {
+
+	const point = [ 0, 0, 0 ];
+	for ( const index of ids ) for ( let axis = 0; axis < 3; axis ++ ) point[ axis ] += data.points[ index ][ axis ];
+	return point.map( value => value / ids.length );
+
+}
 
 export function editableMesh( object ) {
 
@@ -40,6 +54,8 @@ export class ModelViewport {
 		this.proxy = new THREE.Object3D();
 		this.proxy.name = 'Modeling pivot';
 		this.ray = new THREE.Raycaster();
+		this.depthViews = new WeakMap();
+		this.depthPoint = new THREE.Vector3();
 		this.overlay = document.createElement( 'canvas' );
 		this.overlay.className = 'modeling-overlay';
 		this.overlay.setAttribute( 'aria-hidden', 'true' );
@@ -73,8 +89,18 @@ export class ModelViewport {
 		}, true );
 
 		const { signals } = editor;
+		for ( const name of [ 'sceneGraphChanged', 'geometryChanged', 'objectChanged', 'materialChanged', 'viewportVisibilityChanged', 'timelineFrameChanged' ] ) {
+
+			signals[ name ].add( () => { this.depthViews = new WeakMap(); } );
+
+		}
 		signals.sceneRendered.add( () => this.draw() );
 		signals.transformSettingsChanged.add( () => { if ( this.object && ! this.gesture ) this.changed(); } );
+		signals.cursorChanged.add( () => {
+
+			if ( this.object && this.indices.length && ! this.gesture && editor.config.getKey( 'settings/transformPivot' ) === 'cursor' ) this.updateProxy();
+
+		} );
 		window.addEventListener( 'pointermove', event => {
 			this.lastPointer = event;
 			if ( this.gesture?.modal ) this.updateModal( event );
@@ -144,6 +170,7 @@ export class ModelViewport {
 				return;
 
 			}
+			if ( editor.keymap?.overEditableViewport === false ) return;
 			const editingField = event.target.closest?.( 'input, textarea, select, [contenteditable]' );
 			if ( ! editingField && this.data.faces?.length && ! event.ctrlKey && ! event.metaKey && event.key.toLowerCase() === 'k' ) {
 
@@ -163,25 +190,21 @@ export class ModelViewport {
 				this.setSelectionTool( event.key.toLowerCase() === 'b' ? 'box' : 'circle' ); return;
 
 			}
-			if ( ! editingField && ( event.ctrlKey || event.metaKey ) && event.key.toLowerCase() === 'i' ) {
-
-				event.preventDefault(); event.stopImmediatePropagation();
-				this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' ); return;
-
-			}
 			if ( ! editingField && ! ( event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ) && ! event.repeat ) {
 
 				const key = event.key.toLowerCase();
+				const open = key === 'f' && this.data.kind === 'path' && isClosedOutline( this.data );
 				const close = ( this.adding && key === 'enter' || key === 'f' ) && this.canCloseProfile();
 				const fill = key === 'f' && this.data.kind === 'mesh' && this.indices.length >= 3 && this.selectedFace() < 0;
 				const extrude = key === 'e' && this.extrusionSelection();
-				if ( close || fill || extrude ) {
+				if ( open || close || fill || extrude ) {
 
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					editor.viewTools.run( () => {
 
-						if ( close ) this.closeProfile();
+						if ( open ) this.openPath();
+						else if ( close ) this.closeProfile();
 						else if ( fill ) this.fillFace();
 						else this.startExtrusion();
 
@@ -210,36 +233,7 @@ export class ModelViewport {
 	read( object ) {
 
 		const geometry = modifierSource( object );
-		const data = geometry.userData.modeling;
-		if ( data && data.kind !== 'vertices' ) return structuredClone( data );
-		const position = geometry.attributes.position;
-		const points = [], vertices = [], coincident = new Map();
-		// Keep UV seams and hard edges intact by moving coincident buffer vertices together.
-		for ( let i = 0; i < position.count; i ++ ) {
-
-			const point = [ position.getX( i ), position.getY( i ), position.getZ( i ) ];
-			const key = point.join( ',' );
-			if ( ! coincident.has( key ) ) {
-
-				coincident.set( key, points.length );
-				points.push( point );
-				vertices.push( [] );
-
-			}
-			vertices[ coincident.get( key ) ].push( i );
-
-		}
-		const control = [];
-		vertices.forEach( ( list, i ) => list.forEach( index => control[ index ] = i ) );
-		const faces = [], index = geometry.index;
-		for ( let i = 0, count = index?.count ?? position.count; i + 2 < count; i += 3 ) {
-
-			const face = [ 0, 1, 2 ].map( offset => control[ index ? index.getX( i + offset ) : i + offset ] );
-			faces.push( face );
-
-		}
-		return { kind: 'vertices', points, vertices, faces };
-
+		return readModelGeometry( geometry );
 	}
 
 	canEdit() {
@@ -330,11 +324,82 @@ export class ModelViewport {
 
 		}
 		const object = modelObject( THREE, data, labels[ kind ] );
+		object.position.copy( this.editor.cursor );
 		this.editor.execute( new AddObjectCommand( this.editor, object ) );
 		this.start( object );
 		this.adding = empty && ! freehand;
 		this.pen = kind === 'mesh';
 		this.brush = freehand ? 'freehand' : '';
+		this.changed();
+		this.render();
+
+	}
+
+	get canInsertPrimitive() {
+
+		return this.canSelectTopology && editableMesh( this.object ) &&
+			( this.data.kind === 'vertices' || this.data.kind === 'mesh' ) && ! this.data.profile;
+
+	}
+
+	insertPrimitive( name, primitive ) {
+
+		if ( ! this.canInsertPrimitive ) return;
+		const object = this.object, source = modifierSource( object ), start = this.data.points.length;
+		object.updateWorldMatrix( true, false );
+		if ( object.matrixWorld.determinant() === 0 ) throw new Error( 'Add Mesh requires an object with nonzero scale.' );
+		const placement = new THREE.Matrix4().makeTranslation( ...this.editor.cursor.toArray() ).premultiply( object.matrixWorld.clone().invert() );
+		const material = Array.isArray( object.material ) ? object.material[ 0 ] : object.material;
+		const before = { indices: this.indices.slice(), mode: this.selectionMode, loops: [ ...this.elements.values() ].map( loop => loop.slice() ) };
+		const stack = object.userData.modifiers;
+		const oldGeometry = object.geometry, oldUserData = object.userData;
+		const build = input => {
+
+			const { geometry } = joinMeshGeometry( THREE, [
+				{ geometry: source, material: object.material, matrix: new THREE.Matrix4() },
+				{ geometry: input, material, matrix: placement }
+			], true );
+			const after = { indices: geometry.userData.modeling.points.slice( start ).map( ( _, index ) => start + index ) };
+			let commands;
+			if ( stack?.length ) {
+
+				try { commands = modifierStackCommands( this.editor, object, stack, geometry ); }
+				finally { geometry.dispose(); }
+				commands[ 0 ].oldValue = oldUserData;
+
+			} else commands = [ new SetGeometryCommand( this.editor, object, geometry ) ];
+			commands.at( -1 ).oldGeometry = oldGeometry;
+			return { commands, after };
+
+		};
+		const { commands, after } = build( primitive );
+		const command = new AddMeshPrimitiveCommand( this.editor, object, commands, before, after );
+		this.editor.execute( command, 'Add ' + name );
+		return {
+			command,
+			available: () => this.object === object && this.canInsertPrimitive,
+			replace: input => {
+
+				const next = build( input );
+				command.replaceResult( next.commands, next.after );
+
+			}
+		};
+
+	}
+
+	restorePointSelection( { indices, mode, loops } ) {
+
+		this.indices = indices.filter( index => index < this.data.points.length );
+		this.elements.clear();
+		if ( this.selectionMode !== 'vertex' ) {
+
+			const selected = new Set( this.indices );
+			const drawn = mode === this.selectionMode ? loops : this.data.faces.flatMap( face => this.selectionMode === 'face' ?
+				[ face ] : face.map( ( index, i ) => [ index, face[ ( i + 1 ) % face.length ] ] ) );
+			for ( const loop of drawn ) if ( loop.every( index => selected.has( index ) ) ) this.elements.set( elementKey( loop ), loop );
+
+		}
 		this.changed();
 		this.render();
 
@@ -386,16 +451,16 @@ export class ModelViewport {
 
 		} else {
 
-			add( 'Close outline', 'closeTool', () => this.closeProfile(), ! this.canCloseProfile() );
+			if ( data.kind === 'path' && isClosedOutline( data ) ) add( 'Open path', 'closeTool', () => this.openPath() );
+			else add( 'Close outline', 'closeTool', () => this.closeProfile(), ! this.canCloseProfile() );
 			add( 'Extrude outline', 'extrude', () => this.startExtrusion(), ! this.extrusionSelection() );
 			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
 
 				const i = indices[ 0 ];
-				const following = isClosedOutline( data ) ? ( i + 1 ) % next.points.length : i + 1;
-				const other = next.points[ following ] || next.points[ i - 1 ];
-				const sign = next.points[ following ] ? 1 : - 1;
-				const point = next.points[ i ].map( ( value, axis ) => other ? value + sign * ( other[ axis ] - value ) * 0.5 : value + ( axis === 0 ? 0.5 : 0 ) );
-				next.points.splice( i + 1, 0, point );
+				if ( i < segmentCount( next.points, isClosedOutline( next ) ) ) return [ insertContourPoint( next.points, i, .5 ) ];
+				const point = next.points[ i ];
+				const previous = next.points[ i - 1 ];
+				next.points.push( previous ? interpolatePoint( point, previous, -.5 ) : [ point[ 0 ] + .5, point[ 1 ], point[ 2 ] ] );
 				return [ i + 1 ];
 
 			} ), indices.length !== 1 );
@@ -532,13 +597,135 @@ export class ModelViewport {
 
 	}
 
+	get canSelectTopology() {
+
+		return this.editMode && this.canEdit() && ! ( this.adding || this.penChain || this.brush || this.drag || this.gesture || this.editor.viewTools.mode );
+
+	}
+
+	get canSeparate() {
+
+		return this.canSelectTopology && this.object.isMesh && ! this.object.userData.assetObject && this.data.faces?.length > 0 &&
+			! Object.keys( modifierSource( this.object ).morphAttributes ).length;
+
+	}
+
+	selectedSurfaceFaces() {
+
+		const points = new Set( this.indices );
+		return this.data.faces.flatMap( ( face, index ) => {
+
+			const selected = this.selectionMode === 'face' ? this.elements.has( elementKey( face ) ) :
+				this.selectionMode === 'edge' ? face.every( ( a, i ) => this.elements.has( elementKey( [ a, face[ ( i + 1 ) % face.length ] ] ) ) ) :
+				face.every( point => points.has( point ) );
+			return selected ? [ index ] : [];
+
+		} );
+
+	}
+
+	separate( mode ) {
+
+		if ( ! this.canSeparate ) return;
+		const { editor, object, data } = this;
+		const selected = mode === 'selection' ? this.selectedSurfaceFaces() : [];
+		const source = modifierSource( object );
+		const parts = separateMesh( THREE, source, data, mode, selected );
+		if ( parts.length < 2 ) {
+
+			editor.viewTools.status.textContent = mode === 'loose' ? 'This mesh has one connected surface.' : 'There are no faces to separate by this method.';
+			return;
+
+		}
+		const stack = object.userData.modifiers;
+		const evaluated = [];
+		try {
+
+			for ( const part of parts ) evaluated.push( stack?.length ?
+				{ geometry: evaluateModifiers( part, stack, true ), userData: { ...object.userData, modifierBase: part.toJSON() } } :
+				{ geometry: part, userData: object.userData } );
+
+		} catch ( error ) {
+
+			for ( const { geometry } of evaluated ) if ( ! parts.includes( geometry ) ) geometry.dispose();
+			for ( const part of parts ) part.dispose();
+			throw error;
+
+		}
+		if ( stack?.length ) for ( const part of parts ) part.dispose();
+		const commands = [];
+		const [ original, ...pieces ] = evaluated;
+		if ( stack?.length ) commands.push( new SetValueCommand( editor, object, 'userData', original.userData ) );
+		commands.push( new SetGeometryCommand( editor, object, original.geometry ) );
+		const names = new Set();
+		editor.scene.traverse( item => names.add( item.name ) );
+		let suffix = 1;
+		const baseName = object.name || 'Mesh';
+		for ( const { geometry, userData } of pieces ) {
+
+			const piece = object.clone( false );
+			piece.geometry = geometry;
+			piece.userData = structuredClone( userData );
+			do { piece.name = baseName + '.' + String( suffix++ ).padStart( 3, '0' ); } while ( names.has( piece.name ) );
+			commands.push( new AddObjectCommand( editor, piece, object.parent, false ) );
+
+		}
+		this.indices = [];
+		this.elements.clear();
+		editor.execute( new MultiCmdsCommand( editor, commands ), 'Separate mesh' );
+
+	}
+
+	selectTopology( operation, pointer ) {
+
+		if ( ! this.canSelectTopology ) return;
+		const current = this.selectionMode === 'vertex' ? this.indices.map( i => [ i ] ) : [ ...this.elements.values() ];
+		let seeds = current;
+		if ( pointer ) {
+
+			const event = { clientX: pointer.x, clientY: pointer.y };
+			let element = this.elementUnder( event );
+			if ( ! element && this.selectionMode !== 'face' ) {
+
+				const face = this.visibleFaceHit( event )?.face;
+				if ( face ) element = face.slice( 0, this.selectionMode === 'edge' ? 2 : 1 );
+
+			}
+			if ( ! element ) return;
+			seeds = [ element ];
+
+		}
+		if ( ! seeds.length ) return;
+		const hits = connectedSelection( this.data, this.selectionMode, seeds, operation === 'subtract' ? 'linked' : operation );
+		this.applyElementSelection( hits, pointer ? operation === 'subtract' ? 'subtract' : 'extend' : 'set' );
+
+	}
+
+	invertElementSelection() {
+
+		this.applyElementSelection( selectionCandidates( this.data, this.selectionMode ), 'toggle' );
+
+	}
+
+	elementUnder( event ) {
+
+		if ( this.selectionMode === 'face' ) return this.faceUnder( event );
+		if ( this.selectionMode === 'edge' ) {
+
+			const edge = this.penHit( event ).edge;
+			return edge ? [ edge.a, edge.b ] : null;
+
+		}
+		const rect = this.rect();
+		const vertex = this.pointUnder( event.clientX - rect.left, event.clientY - rect.top );
+		return vertex < 0 ? null : [ vertex ];
+
+	}
+
 	selectElement( event ) {
 
-		const edge = this.selectionMode === 'edge' ? this.penHit( event ).edge : null;
-		const rect = this.rect();
-		const vertex = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) : -1;
-		const hit = this.selectionMode === 'face' ? this.faceHit( event )?.face : edge ? [ edge.a, edge.b ] : vertex >= 0 ? [ vertex ] : null;
-		const hits = edge && event.altKey ? edgeLoop( this.data, hit, event.ctrlKey ) : hit ? [ hit ] : [];
+		const hit = this.elementUnder( event );
+		const hits = hit && this.selectionMode === 'edge' && event.altKey ? edgeLoop( this.data, hit, event.ctrlKey ) : hit ? [ hit ] : [];
 		this.applyElementSelection( hits, event.shiftKey ? 'toggle' : event.ctrlKey && ! event.altKey ? 'subtract' : this.selectionOperation );
 
 	}
@@ -565,10 +752,25 @@ export class ModelViewport {
 
 		}
 		const { width, height } = this.rect();
+		const frame = this.frame;
 		const pixels = this.data.points.map( point => this.project( point, width, height ) );
 		const inside = point => point && ( drag.tool === 'circle' ? drag.polygon.some( center => Math.hypot( point[ 0 ] - center[ 0 ], point[ 1 ] - center[ 1 ] ) <= this.brushRadius ) :
 			drag.tool === 'lasso' ? pointInPolygon( point, drag.polygon ) : point[ 0 ] >= Math.min( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 0 ] <= Math.max( drag.start[ 0 ], drag.end[ 0 ] ) && point[ 1 ] >= Math.min( drag.start[ 1 ], drag.end[ 1 ] ) && point[ 1 ] <= Math.max( drag.start[ 1 ], drag.end[ 1 ] ) );
-		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => ids.every( i => inside( pixels[ i ] ) ) );
+		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => {
+
+			if ( this.selectionMode === 'face' ) {
+
+				const center = elementCenter( this.data, ids );
+				const pixel = this.project( center, width, height );
+				return inside( pixel ) && this.pointVisible( center, pixel, frame );
+
+			}
+			if ( ! ids.every( i => inside( pixels[ i ] ) ) ) return false;
+			if ( ids.length === 1 ) return this.pointVisible( this.data.points[ ids[ 0 ] ], pixels[ ids[ 0 ] ], frame );
+			const center = elementCenter( this.data, ids );
+			return this.pointVisible( center, this.project( center, width, height ), frame );
+
+		} );
 		this.applyElementSelection( hits, drag.operation );
 
 	}
@@ -688,7 +890,13 @@ export class ModelViewport {
 
 		} else {
 
-			geometry = modelGeometry( THREE, data );
+			geometry = data.kind === 'mesh' ? moveAuthoredMeshPoints( THREE, modifierSource( object ), this.data, data, reusable ) : null;
+			geometry ||= modelGeometry( THREE, data );
+			if ( Array.isArray( object.material ) && ! geometry.groups.length && ! data.faces?.some( face => face.surface?.slot === -1 ) ) {
+
+				geometry.addGroup( 0, geometry.index?.count ?? geometry.attributes.position.count, 0 );
+
+			}
 
 		}
 		return geometry;
@@ -755,6 +963,7 @@ export class ModelViewport {
 			if ( pivot === 'bottom' ) center.y = box.min.y;
 
 		}
+		else if ( pivot === 'cursor' ) center.copy( this.editor.cursor );
 		else if ( pivot === 'active' ) center.copy( points.at( -1 ) );
 		else if ( pivot !== 'origin' ) {
 
@@ -1001,6 +1210,7 @@ export class ModelViewport {
 		const points = data.points.map( ( [ x, y ] ) => [ x, y, 0 ] );
 		if ( ! data.closed || points.length < 3 || data.points.some( point => Math.abs( point[ 2 ] ) > 1e-6 ) ) throw new Error( 'Close the path and place its points in the local XY plane first.' );
 		const shape = modelObject( THREE, { kind: 'shape', points, smooth: data.smooth, depth: 0 }, object.name + ' shape' );
+		if ( object.material?.color ) shape.material.color.copy( object.material.color );
 		shape.position.copy( object.position );
 		shape.quaternion.copy( object.quaternion );
 		shape.scale.copy( object.scale );
@@ -1029,6 +1239,73 @@ export class ModelViewport {
 
 	}
 
+	get selectThrough() {
+
+		return this.editor.viewportXRay || this.editor.viewportShading === 'wireframe';
+
+	}
+
+	depthView( frame ) {
+
+		let view = this.depthViews.get( frame.camera );
+		if ( ! view?.matches( frame ) ) {
+
+			const { triangles } = paintSurfaces( this.editor.scene );
+			view = new TexturePaintProjection( frame, triangles );
+			this.depthViews.set( frame.camera, view );
+
+		}
+		return view;
+
+	}
+
+	pointVisible( point, pixel, frame = this.frame ) {
+
+		if ( ! pixel ) return false;
+		if ( this.selectThrough ) return true;
+		const world = this.depthPoint.fromArray( point ).applyMatrix4( this.object.matrixWorld );
+		return this.worldPointVisible( world, pixel, frame );
+
+	}
+
+	worldPointVisible( world, pixel, frame ) {
+
+		const { camera } = frame;
+		const distance = -this.depthPoint.copy( world ).applyMatrix4( camera.matrixWorldInverse ).z;
+		if ( distance < camera.near || distance > camera.far ) return false;
+		const depth = this.depthView( frame ).surfaceDepthAt( ...pixel );
+		if ( depth === Infinity ) return true;
+		const surfaceDistance = camera.isPerspectiveCamera ? -1 / depth : depth;
+		return distance <= surfaceDistance + Math.max( .00001, distance * .0001 );
+
+	}
+
+	faceUnder( event ) {
+
+		if ( ! this.selectThrough || this.pen ) return this.visibleFaceHit( event )?.face;
+		const { left, top, width, height } = this.rect();
+		const x = event.clientX - left, y = event.clientY - top;
+		let nearest = 9, face;
+		for ( const candidate of selectionCandidates( this.data, 'face' ) ) {
+
+			const pixel = this.project( elementCenter( this.data, candidate ), width, height );
+			if ( ! pixel ) continue;
+			const distance = Math.hypot( x - pixel[ 0 ], y - pixel[ 1 ] );
+			if ( distance < nearest ) { nearest = distance; face = candidate; }
+
+		}
+		return face;
+
+	}
+
+	visibleFaceHit( event ) {
+
+		const hit = this.faceHit( event );
+		const { left, top } = this.rect();
+		if ( hit && this.worldPointVisible( hit.hit.point, [ event.clientX - left, event.clientY - top ], this.frame ) ) return hit;
+
+	}
+
 	draw() {
 
 		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
@@ -1047,6 +1324,7 @@ export class ModelViewport {
 		ctx.clearRect( 0, 0, bounds.width, bounds.height );
 		const frames = this.editor.viewLayout.frames;
 		for ( const frame of frames ) {
+			if ( frames.length > 1 && ! frame.director ) continue;
 			this.drawFrame( ctx, frame, frame === this.frame );
 		}
 
@@ -1064,7 +1342,12 @@ export class ModelViewport {
 		ctx.clip();
 		const state = this.gesture || this.drag;
 		const data = this.penChain?.data || state?.draft || this.data;
-		const handles = data.points.map( point => project( point ) );
+		const handles = data.points.map( point => {
+
+			const pixel = project( point );
+			return state?.draft || this.penChain || this.pointVisible( point, pixel, frame ) ? pixel : undefined;
+
+		} );
 		if ( interactive ) this.handles = handles;
 		ctx.lineWidth = 1.5;
 		ctx.strokeStyle = '#6cd4f2';
@@ -1121,8 +1404,9 @@ export class ModelViewport {
 			ctx.lineWidth = 2.5;
 			for ( const element of this.elements.values() ) {
 
-				stroke( element.map( i => handles[ i ] ), this.selectionMode === 'face' );
-				if ( this.selectionMode === 'face' ) ctx.fill();
+				const points = element.map( i => handles[ i ] );
+				stroke( points, this.selectionMode === 'face' );
+				if ( this.selectionMode === 'face' && points.every( Boolean ) ) ctx.fill();
 
 			}
 
@@ -1141,11 +1425,12 @@ export class ModelViewport {
 
 		}
 		const selected = new Set( state?.cap || this.indices );
-		for ( let i = 0; i < handles.length; i ++ ) {
+		const dots = ! this.pen && this.selectionMode === 'face' ? ( this.selectThrough ?
+			selectionCandidates( data, 'face' ).map( face => [ project( elementCenter( data, face ) ), this.elements?.has( elementKey( face ) ) ] ) : [] ) :
+			handles.map( ( point, i ) => [ point, selected.has( i ) ] );
+		for ( const [ point, active ] of dots ) {
 
-			const point = handles[ i ];
 			if ( ! point ) continue;
-			const active = selected.has( i );
 			ctx.beginPath();
 			ctx.arc( ...point, active ? 5 : 3.5, 0, Math.PI * 2 );
 			ctx.fillStyle = active ? '#ffba62' : '#6cd4f2';
@@ -1376,6 +1661,12 @@ export class ModelViewport {
 
 	}
 
+	openPath() {
+
+		this.edit( 'Open path', data => { data.closed = false; } );
+
+	}
+
 	selectedFace() {
 
 		return this.data.faces?.findIndex( face => face.length === this.indices.length && face.every( index => this.indices.includes( index ) ) ) ?? -1;
@@ -1517,8 +1808,9 @@ export class ModelViewport {
 			const depthA = - start.clone().applyMatrix4( localToView ).z, depthB = - end.clone().applyMatrix4( localToView ).z;
 			const fraction = camera.isPerspectiveCamera ? ( t / depthB ) / ( ( 1 - t ) / depthA + t / depthB ) : t;
 			const along = start.lerp( end, fraction );
-			if ( hitZ !== undefined && ! face.face.includes( a ) && ! face.face.includes( b ) &&
+			if ( ! this.selectThrough && hitZ !== undefined && ! face.face.includes( a ) && ! face.face.includes( b ) &&
 				along.clone().applyMatrix4( localToView ).z < hitZ - Math.abs( hitZ ) * .018 ) continue;
+			if ( ! this.selectThrough && ! this.pointVisible( along.toArray(), [ p[ 0 ] + dx * t, p[ 1 ] + dy * t ] ) ) continue;
 			edge = { a, b, t: fraction, point: this.object.localToWorld( along ) };
 			best = distance;
 
@@ -1597,7 +1889,12 @@ export class ModelViewport {
 			}
 			if ( drag.edge && ! drag.moved ) {
 
-				if ( performance.now() - drag.downAt > 450 ) this.edit( 'Dissolve mesh edge', data => { if ( ! dissolveEdge( data, [ drag.edge.a, drag.edge.b ] ) ) data.faces = data.faces.filter( face => ! face.includes( drag.edge.a ) || ! face.includes( drag.edge.b ) ); return []; } );
+				if ( performance.now() - drag.downAt > 450 ) this.editor.viewTools.run( () => this.edit( 'Dissolve mesh edge', data => {
+
+					if ( ! dissolveEdge( data, [ drag.edge.a, drag.edge.b ] ) ) data.faces = data.faces.filter( face => ! face.includes( drag.edge.a ) || ! face.includes( drag.edge.b ) );
+					return [];
+
+				} ) );
 				else this.addPenPoint( drag.event, -1 );
 				return;
 
@@ -1788,7 +2085,7 @@ export class ModelViewport {
 
 			// Geometry picks take precedence over large transform gizmo planes.
 			const rect = this.rect();
-			const onGeometry = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) >= 0 : this.selectionMode === 'edge' ? !! this.penHit( event ).edge : !! this.faceHit( event );
+			const onGeometry = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) >= 0 : this.selectionMode === 'edge' ? !! this.penHit( event ).edge : !! this.faceUnder( event );
 			if ( ! onGeometry && ! event.shiftKey && this.selectionTool === 'select' && this.gizmoUnderPointer?.( event ) ) return;
 			event.preventDefault(); event.stopImmediatePropagation();
 			if ( event.altKey ) { this.editor.suppressContextMenuUntil = performance.now() + 500; this.selectElement( event ); return; }

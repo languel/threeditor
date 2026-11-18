@@ -9,6 +9,7 @@ import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
+import { closestPointOnSegment, fitDrawingContour, insertContourPoint, segmentCount } from './Contour.js';
 
 export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
 
@@ -47,6 +48,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	addTool( 'edit', 'Edit points', 'toolSelect' );
 	addTool( 'polygon', 'Draw polygon', 'toolMask' );
 	addTool( 'freehand', 'Freehand outline', 'toolPaint' );
+	if ( vectorMode ) addTool( 'stroke', 'Draw stroke', 'toolPath' );
 	addTool( 'rectangle', 'Draw rectangle', 'toolGrid' );
 	addTool( 'ellipse', 'Draw ellipse', 'brushWidth' );
 	addTool( 'push', 'Push brush', 'brush' );
@@ -55,14 +57,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const radius = node( 'input', radiusLabel );
 	Object.assign( radius, { type: 'range', min: 12, max: 130, value: 46 } );
 	radius.oninput = () => draw();
-	radius.setAttribute( 'aria-label', 'Mask brush radius' );
+	radius.setAttribute( 'aria-label', vectorMode ? 'Brush radius' : 'Mask brush radius' );
 	const strengthLabel = node( 'label', toolbar ); strengthLabel.innerHTML = icon( 'opacity' ); strengthLabel.title = 'Brush strength (Shift+[ / Shift+])';
 	const strength = node( 'input', strengthLabel );
 	Object.assign( strength, { type: 'range', min: .05, max: 1, step: .05, value: 1 } );
-	strength.setAttribute( 'aria-label', 'Mask brush strength' );
+	strength.setAttribute( 'aria-label', vectorMode ? 'Brush strength' : 'Mask brush strength' );
 	strength.oninput = () => draw();
-	modelButton( toolbar, 'Undo mask edit', 'undo', () => restore( undo, redo ) );
-	modelButton( toolbar, 'Redo mask edit', 'redo', () => restore( redo, undo ) );
+	modelButton( toolbar, vectorMode ? 'Undo drawing edit' : 'Undo mask edit', 'undo', () => restore( undo, redo ) );
+	modelButton( toolbar, vectorMode ? 'Redo drawing edit' : 'Redo mask edit', 'redo', () => restore( redo, undo ) );
 	const workspace = node( 'section', workspacePanel );
 	toolbar.className = 'editor-2d-tools';
 	workspace.append( toolbar );
@@ -73,7 +75,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.height = 490;
 	const ctx = canvas.getContext( '2d' );
 	const panel = node( 'aside', workspace );
-	node( 'label', panel, vectorMode ? 'Vector shapes' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
+	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
 	const layers = node( 'select', panel );
 	layers.id = 'mask-shape-list';
 	layers.size = 5;
@@ -89,7 +91,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	if ( fill ) {
 
 		fill.type = 'color';
-		fill.setAttribute( 'aria-label', 'Shape fill' );
+		fill.setAttribute( 'aria-label', 'Contour color' );
 		fill.onchange = () => change( () => { shapes[ active ].color = fill.value; } );
 
 	}
@@ -104,18 +106,23 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	} ) );
 	const duplicate = modelButton( layerActions, 'Duplicate shape', 'add', () => addShape( structuredClone( shapes[ active ] ) ) );
 	const deletePoint = modelButton( layerActions, 'Delete point', 'remove', removeVertex );
-	const createCurve = vectorMode && modelButton( layerActions, 'Create scene curve', 'toolPath', () => {
+	const cyclic = vectorMode && modelButton( layerActions, 'Toggle Cyclic', 'closeTool', toggleCyclic );
+	const createCurve = vectorMode && modelButton( layerActions, 'Create scene curve', 'toolPath', () => createSceneObject( 'path' ) );
+	const createShape = vectorMode && modelButton( layerActions, 'Create filled scene shape', 'fillTool', () => createSceneObject( 'shape' ) );
+
+	function createSceneObject( kind ) {
 
 		const shape = shapes[ active ];
 		const points = shape.points.map( ( [ u, v ] ) => [ 2 * u - 1, 1 - 2 * v, 0 ] );
-		const object = modelObject( THREE, { kind: 'path', points, closed: true, planar: true, smooth: false }, shape.name );
+		const closed = shape.closed !== false;
+		const object = modelObject( THREE, { kind, points, closed, planar: true, smooth: false }, kind === 'shape' ? shape.name + ' fill' : shape.name );
 		object.material.color.set( color( shape ) );
-		editor.execute( new AddObjectCommand( editor, object ), 'Create curve from vector contour' );
+		editor.execute( new AddObjectCommand( editor, object ), kind === 'shape' ? 'Create filled scene shape' : 'Create scene curve' );
 		available.push( [ object, object.name ] );
 		filter();
 		status.textContent = 'Created ' + object.name + ' in the 3D view.';
 
-	} );
+	}
 	const picker = node( 'details', panel );
 	picker.open = showPicker;
 	node( 'summary', picker, 'Pick scene outline' );
@@ -130,7 +137,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	editor.scene.traverse( object => {
 
 		const data = object.geometry?.userData.modeling;
-		if ( ! data || ! [ 'path', 'shape' ].includes( data.kind ) || ! isClosedOutline( data ) || hasRestriction( object, 'disabled' ) ) return;
+		if ( ! data || ! [ 'path', 'shape' ].includes( data.kind ) || data.points.length < 2 ||
+			( ! vectorMode && ! isClosedOutline( data ) ) || hasRestriction( object, 'disabled' ) ) return;
 		const path = [];
 		for ( let parent = object; parent && parent !== editor.scene; parent = parent.parent ) path.unshift( parent.name || parent.type );
 		available.push( [ object, path.join( ' / ' ) ] );
@@ -139,7 +147,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const importActions = node( 'div', picker );
 	importActions.className = 'modeling-actions';
 	const fit = modelButton( importActions, 'Fit outline to frame', 'toolGrid', () => importOutline( false ) );
-	const project = ! vectorMode && modelButton( importActions, 'Project outline in place', 'toolMask', () => importOutline( true ) );
+	const project = modelButton( importActions, vectorMode ? 'Copy from scene in place' : 'Project outline in place', 'toolMask', () => importOutline( true ) );
 	const pickerNotes = node( 'small', picker );
 	function filter() {
 
@@ -148,8 +156,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		sources.replaceChildren( ...matches.map( ( [ object, path ] ) => new Option( path, object.uuid ) ) );
 		sources.selectedIndex = matches.length ? 0 : -1;
 		fit.disabled = ! matches.length;
-		if ( project ) project.disabled = fit.disabled;
-		pickerNotes.textContent = matches.length ? '' : available.length ? 'No matching outlines.' : 'Create a closed Shape or Path in the scene first.';
+		project.disabled = fit.disabled;
+		pickerNotes.textContent = matches.length ? '' : available.length ? 'No matching outlines.' :
+			vectorMode ? 'Create a Shape or Path in the scene first.' : 'Create a closed Shape or Path in the scene first.';
 
 	}
 	search.oninput = filter;
@@ -264,8 +273,21 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	}
 	function removeVertex() {
 
-		if ( vertex < 0 || shapes[ active ]?.points.length < 4 ) return;
+		if ( ! canRemoveVertex() ) return;
 		change( () => { shapes[ active ].points.splice( vertex, 1 ); vertex = -1; } );
+
+	}
+	function canRemoveVertex() {
+
+		const shape = shapes[ active ];
+		return vertex >= 0 && shape && shape.points.length > ( shape.closed === false ? 2 : 3 );
+
+	}
+	function toggleCyclic() {
+
+		const shape = shapes[ active ];
+		if ( ! shape || shape.points.length < 3 || shape.mode === 'cutout' ) return;
+		change( () => { shape.closed = shape.closed === false; } );
 
 	}
 	function importOutline( inPlace ) {
@@ -274,7 +296,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			const object = editor.objectByUuid( sources.value );
 			if ( ! object ) throw new Error( 'The source outline is no longer in the scene.' );
-			const outline = outlinePoints( THREE, object.geometry.userData.modeling );
+			const data = object.geometry.userData.modeling;
+			const outline = outlinePoints( THREE, data );
+			if ( vectorMode ) {
+
+				const material = Array.isArray( object.material ) ? object.material[ 0 ] : object.material;
+				const points = inPlace ? outline.map( point => {
+
+					const { x, y } = object.localToWorld( point );
+					return [ ( x + 1 ) / 2, ( 1 - y ) / 2 ];
+
+				} ) : fitDrawingContour( outline.map( point => point.toArray() ) );
+				addShape( { name: object.name || object.type, points,
+					closed: isClosedOutline( data ), color: material?.color && '#' + material.color.getHexString() } );
+				return;
+
+			}
 			const camera = inPlace && lightViewCamera( THREE, light );
 			const points = camera ? outline.map( point => {
 
@@ -299,7 +336,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		name.disabled = mode.disabled = remove.disabled = duplicate.disabled = ! shape;
 		if ( fill ) {
 
-			if ( createCurve ) createCurve.disabled = ! shape;
+			const closed = shape?.closed !== false;
+			createCurve.disabled = ! shape;
+			createShape.disabled = ! shape || ! closed || shape.mode === 'cutout' || shape.points.length < 3;
+			cyclic.disabled = ! shape || shape.points.length < 3 || shape.mode === 'cutout';
+			cyclic.setAttribute( 'aria-pressed', String( !! shape && closed ) );
+			mode.disabled = ! shape || ! closed;
 			fill.value = color( shape );
 			fill.disabled = ! shape || shape.mode === 'cutout';
 
@@ -341,11 +383,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			if ( shape.mode !== operation ) continue;
 			target.globalCompositeOperation = operation === 'cutout' ? 'destination-out' : 'source-over';
-			target.fillStyle = color( shape );
 			target.beginPath();
 			shape.points.forEach( ( [ x, y ], i ) => target[ i ? 'lineTo' : 'moveTo' ]( x * width, y * height ) );
-			target.closePath();
-			target.fill( 'evenodd' );
+			if ( shape.closed === false ) {
+
+				target.strokeStyle = color( shape );
+				target.lineWidth = width * .004;
+				target.lineCap = target.lineJoin = 'round';
+				target.stroke();
+
+			} else {
+
+				target.fillStyle = color( shape );
+				target.closePath();
+				target.fill( 'evenodd' );
+
+			}
 
 		}
 		target.restore();
@@ -354,9 +407,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const vectorCanvas = document.createElement( 'canvas' );
 	function exportSVG() {
 
-		const path = shape => shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' ) + ' Z';
-		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape =>
-			'<path fill="' + ( operation === 'cutout' ? 'black' : color( shape ) ) + '" fill-rule="evenodd" d="' + path( shape ) + '"/>' ).join( '' );
+		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape => {
+
+			const path = shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' );
+			if ( shape.closed === false ) return '<path fill="none" stroke="' + color( shape ) + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/>';
+			return '<path fill="' + ( operation === 'cutout' ? 'black' : color( shape ) ) + '" fill-rule="evenodd" d="' + path + ' Z"/>';
+
+		} ).join( '' );
 		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' +
 			layers( 'cutout' ) + '</mask></defs><g mask="url(#cutouts)">' + layers( 'inside' ) + '</g></svg>';
 		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
@@ -417,7 +474,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		for ( const [ index, shape ] of shapes.entries() ) {
 
-			trace( shape.points, true );
+			trace( shape.points, shape.closed !== false );
 			ctx.strokeStyle = shape.mode === 'cutout' ? '#ff9e71' : '#74dcf3';
 			ctx.lineWidth = active === index ? 2 : 1;
 			ctx.stroke();
@@ -431,7 +488,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( draft.length ) {
 
-			trace( draft, tool !== 'polygon' );
+			trace( draft, tool !== 'polygon' && tool !== 'stroke' );
 			ctx.strokeStyle = '#fff';
 			ctx.stroke();
 			ctx.fillStyle = '#fff';
@@ -448,7 +505,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		ctx.strokeStyle = '#68778a';
 		ctx.strokeRect( x, y, width, height );
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
-		deletePoint.disabled = vertex < 0 || shapes[ active ]?.points.length < 4;
+		deletePoint.disabled = ! canRemoveVertex();
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
 
 	}
@@ -473,8 +530,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( ! shape ) continue;
 			const hit = shape.points.findIndex( p => distance( pixel( p ), point ) < 8 );
 			if ( hit >= 0 ) return [ i, hit ];
-			trace( shape.points, true );
-			if ( ctx.isPointInPath( ...point, 'evenodd' ) || ctx.isPointInStroke( ...point ) ) return [ i, -1 ];
+			const closed = shape.closed !== false;
+			trace( shape.points, closed );
+			ctx.save();
+			ctx.lineWidth = 12;
+			const hitStroke = ctx.isPointInStroke( ...point );
+			ctx.restore();
+			if ( hitStroke || ( closed && ctx.isPointInPath( ...point, 'evenodd' ) ) ) return [ i, -1 ];
 
 		}
 		return [ -1, -1 ];
@@ -498,7 +560,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'edit' ) [ active, vertex ] = hitShape( point );
 		if ( [ 'edit', 'push', 'smooth' ].includes( tool ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
-		draft = tool === 'freehand' ? [ uv( point ) ] : [];
+		draft = [ 'freehand', 'stroke' ].includes( tool ) ? [ uv( point ) ] : [];
 		canvas.setPointerCapture( event.pointerId );
 		refresh();
 
@@ -516,7 +578,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			const original = gesture.before.shapes[ active ].points;
 			shape.points = original.map( ( p, i ) => vertex >= 0 && vertex !== i ? p : p.map( ( value, axis ) => value + delta[ axis ] ) );
 
-		} else if ( tool === 'freehand' ) draft.push( end );
+		} else if ( tool === 'freehand' || tool === 'stroke' ) draft.push( end );
 		else if ( tool === 'rectangle' ) draft = [ start, [ end[ 0 ], start[ 1 ] ], end, [ start[ 0 ], end[ 1 ] ] ];
 		else if ( tool === 'ellipse' ) draft = Array.from( { length: 48 }, ( _, i ) => {
 
@@ -527,7 +589,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		else {
 
 			const step = point.map( ( value, i ) => value - gesture.last[ i ] );
-			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), event.shiftKey ? 'smooth' : tool, Number( strength.value ) * ( event.pointerType === 'pen' ? event.pressure || .5 : 1 ) ).map( uv );
+			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), event.shiftKey ? 'smooth' : tool,
+				Number( strength.value ) * ( event.pointerType === 'pen' ? event.pressure || .5 : 1 ), shape.closed !== false ).map( uv );
 
 		}
 		gesture.last = point;
@@ -538,7 +601,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.onpointerup = () => {
 
 		if ( ! gesture ) return;
-		if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
+		if ( tool === 'stroke' && draft.length >= 2 ) addShape( { points: draft, closed: false, name: 'Stroke ' + ( shapes.length + 1 ) } );
+		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
 		else if ( gesture.moved && [ 'edit', 'push', 'smooth' ].includes( tool ) ) remember( gesture.before );
 		gesture = null;
 		draft = [];
@@ -558,19 +622,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		if ( tool === 'polygon' && draft.length > 2 && distance( pixel( draft[ 0 ] ), pointer( event ) ) < 9 ) { closeDraft(); return; }
 		if ( tool !== 'edit' || vertex >= 0 || ! shapes[ active ] ) return;
-		const point = pointer( event ), points = shapes[ active ].points;
+		const shape = shapes[ active ], point = pointer( event );
+		const points = shape.points, pixels = points.map( pixel );
 		let best, threshold = 12;
-		points.forEach( ( p, i ) => {
+		for ( let i = 0; i < segmentCount( points, shape.closed !== false ); i ++ ) {
 
-			const a = pixel( p ), b = pixel( points[ ( i + 1 ) % points.length ] );
-			const ab = b.map( ( value, axis ) => value - a[ axis ] );
-			const t = Math.max( 0, Math.min( 1, ( ( point[ 0 ] - a[ 0 ] ) * ab[ 0 ] + ( point[ 1 ] - a[ 1 ] ) * ab[ 1 ] ) / ( ab[ 0 ] ** 2 + ab[ 1 ] ** 2 || 1 ) ) );
-			const q = a.map( ( value, axis ) => value + t * ab[ axis ] );
-			const d = distance( q, point );
-			if ( d < threshold ) { threshold = d; best = [ i + 1, uv( q ) ]; }
+			const { distance, fraction } = closestPointOnSegment( point, pixels[ i ], pixels[ ( i + 1 ) % pixels.length ] );
+			if ( distance < threshold && fraction > 0 && fraction < 1 ) { threshold = distance; best = [ i, fraction ]; }
 
-		} );
-		if ( best ) change( () => { points.splice( best[ 0 ], 0, best[ 1 ] ); vertex = best[ 0 ]; } );
+		}
+		if ( best ) change( () => { vertex = insertContourPoint( points, ...best ); } );
 
 	};
 	workspacePanel.onkeydown = event => {
@@ -587,7 +648,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
-		if ( key === 'enter' && draft.length ) { event.preventDefault(); closeDraft(); }
+		if ( key === 'enter' && tool === 'polygon' && draft.length ) { event.preventDefault(); closeDraft(); }
+		if ( key === 'f' && vectorMode && tool === 'edit' && ! ( event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ) ) {
+
+			event.preventDefault();
+			toggleCyclic();
+
+		}
 		if ( key === 'delete' || key === 'backspace' || key === 'x' && ! ( event.ctrlKey || event.metaKey || event.altKey ) ) { event.preventDefault(); removeVertex(); }
 		if ( key === 'z' && ( event.metaKey || event.ctrlKey ) ) {
 

@@ -1,8 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { meshEdges, edgeLoop, applySelection, elementKey } from '../editor/js/modeling/MeshSelection.js';
+import { meshEdges, edgeLoop, applySelection, connectedSelection, elementKey } from '../editor/js/modeling/MeshSelection.js';
 const grid = { points: Array.from( { length: 12 }, ( _, i ) => [ i % 4, Math.floor( i / 4 ), 0 ] ), faces: [] };
 for ( let y = 0; y < 2; y ++ ) for ( let x = 0; x < 3; x ++ ) { const a = y * 4 + x; grid.faces.push( [ a, a + 1, a + 5, a + 4 ] ); }
+
+test( 'Linked selection stays on its island in every element mode', () => {
+
+	const data = { points: [ ...grid.points, [ 0, 0, 1 ], [ 1, 0, 1 ], [ 0, 1, 1 ] ], faces: [ ...grid.faces, [ 12, 13, 14 ] ] };
+	assert.equal( connectedSelection( data, 'vertex', [ [ 0 ] ], 'linked' ).length, 12 );
+	assert.deepEqual( connectedSelection( data, 'edge', [ [ 12, 13 ] ], 'linked' ).map( elementKey ).sort(), [ '12:13', '12:14', '13:14' ] );
+	assert.deepEqual( connectedSelection( data, 'face', [ [ 12, 13, 14 ] ], 'linked' ), [ [ 12, 13, 14 ] ] );
+
+} );
+
+test( 'More and less use one step along mesh edges and curve segments', () => {
+
+	const seed = grid.faces[ 0 ];
+	const grown = connectedSelection( grid, 'face', [ seed ], 'more' );
+	assert.deepEqual( new Set( grown ), new Set( [ grid.faces[ 0 ], grid.faces[ 1 ], grid.faces[ 3 ] ] ) );
+	assert.deepEqual( connectedSelection( grid, 'face', grown, 'less' ), [ seed ] );
+	const path = { kind: 'path', points: grid.points.slice( 0, 5 ) };
+	assert.deepEqual( connectedSelection( path, 'vertex', [ [ 2 ] ], 'more' ).flat().sort(), [ 1, 2, 3 ] );
+	assert.deepEqual( connectedSelection( path, 'vertex', [ [ 1 ], [ 2 ], [ 3 ] ], 'less' ), [ [ 2 ] ] );
+
+} );
 
 test( 'Edge selections remain independent when sharing vertices and support subtract/toggle/intersection', () => {
 

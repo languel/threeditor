@@ -117,6 +117,13 @@ function ViewportInfo( editor ) {
 
 	editor.signals.pathTracerUpdated.add( function ( samples ) {
 
+		if ( typeof samples === 'string' ) {
+
+			samplesText.setValue( '' );
+			samplesUnitText.setValue( samples );
+			return;
+
+		}
 		samples = Math.floor( samples );
 
 		samplesText.setValue( samples );

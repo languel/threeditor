@@ -67,7 +67,7 @@ export class ViewLayout {
 	areas( width, height ) {
 
 		const whole = { x: 0, y: 0, width, height };
-		if ( ! this.editor.viewportSplit ) return [ whole ];
+		if ( ! this.editor.viewportSplit || this.maximizedPane ) return [ whole ];
 		const ratio = this.editor.viewportSplitRatio;
 		if ( this.editor.viewportSplitAxis === 'horizontal' ) {
 
@@ -83,11 +83,12 @@ export class ViewLayout {
 	update( width, height ) {
 
 		const editor = this.editor;
-		const source = editor.viewportSource;
+		const soloDirector = editor.viewportSplit && this.maximizedPane === 'director';
+		const source = soloDirector ? null : editor.viewportSource;
 		const areas = this.areas( width, height );
 		const split = areas.length > 1;
 		const area = areas.at( - 1 );
-		let camera = editor.viewportCamera, rect = area;
+		let camera = soloDirector ? editor.camera : editor.viewportCamera, rect = area;
 		const director = ! source && camera === editor.camera;
 		if ( source ) {
 
@@ -115,7 +116,7 @@ export class ViewLayout {
 
 		}
 
-		this.frames = [ { key: 'source', camera, source, rect, area, director } ];
+		this.frames = [ { key: soloDirector ? 'director' : 'source', camera, source, rect, area, director } ];
 		if ( split ) this.frames.unshift( { key: 'director', camera: editor.camera, rect: areas[ 0 ], area: areas[ 0 ], director: true } );
 		this.divider.hidden = this.directorName.hidden = this.sourceName.hidden = ! split;
 		if ( split ) {
@@ -162,7 +163,12 @@ export class ViewLayout {
 
 	get navigation() {
 
-		if ( this.frames.length === 1 ) return this.frames[ 0 ].source ? undefined : this.frames[ 0 ];
+		if ( this.frames.length === 1 ) {
+
+			const frame = this.frames[ 0 ];
+			return frame.source || ( this.maximizedPane && ! frame.director ) ? undefined : frame;
+
+		}
 		return this.frames.find( frame => frame.key === this.activeKey && frame.director ) || this.frames[ 0 ];
 
 	}

@@ -1,3 +1,5 @@
+import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
+
 export function modelData( kind ) {
 
 	if ( kind === 'path' ) return { kind, points: [ [ -1.5, -.5, 0 ], [ -.6, .6, 0 ], [ .5, .2, 0 ], [ 1.5, .7, 0 ] ], smooth: true, closed: false, planar: true };
@@ -86,6 +88,9 @@ export function splitEdge( data, a, b, fraction = .5 ) {
 			return vertex === a && next === b || vertex === b && next === a;
 
 		} );
+		const next = ( index + 1 ) % face.length;
+		const t = face[ index ] === a ? fraction : 1 - fraction;
+		interpolateFaceCorner( face, index + 1, [ [ index, 1 - t ], [ next, t ] ] );
 		face.splice( index + 1, 0, middle );
 
 	}
@@ -105,7 +110,12 @@ export function pokeFace( THREE, data, faceIndex, triangleIndex, point ) {
 	const split = triangle.map( ( vertex, i ) => [ vertex, triangle[ ( i + 1 ) % 3 ], center ] );
 	if ( split.some( part => ! faceNormal( THREE, data, part ) ) ) throw new Error( 'Click inside the face, away from its edges.' );
 	triangles.splice( triangleIndex, 1, ...split );
-	data.faces.splice( faceIndex, 1, ...triangles );
+	const augmented = faceCorners( [ ...face ], face );
+	const [ a, b, c ] = triangle.map( index => new THREE.Vector3( ...data.points[ index ] ) );
+	const weights = THREE.Triangle.getBarycoord( point, a, b, c, new THREE.Vector3() );
+	if ( weights ) interpolateFaceCorner( augmented, augmented.length, triangle.map( ( id, index ) => [ face.indexOf( id ), weights.getComponent( index ) ] ) );
+	augmented.push( center );
+	data.faces.splice( faceIndex, 1, ...triangles.map( part => faceCorners( part, augmented ) ) );
 	return [ center ];
 
 }
@@ -115,7 +125,13 @@ export function weldPoints( data, indices ) {
 	const [ keep, ...merged ] = indices;
 	const points = new Set( indices );
 	data.points[ keep ] = data.points[ keep ].map( ( _, axis ) => indices.reduce( ( sum, index ) => sum + data.points[ index ][ axis ], 0 ) / indices.length );
-	data.faces = data.faces.map( face => [ ...new Set( face.map( index => points.has( index ) ? keep : index ) ) ] );
+	data.faces = data.faces.map( face => {
+
+		const remapped = face.map( index => points.has( index ) ? keep : index );
+		const unique = [ ...new Set( remapped ) ];
+		return faceCorners( unique, face, unique.map( point => remapped.indexOf( point ) ) );
+
+	} );
 	removePoints( data, merged );
 	const seen = new Set();
 	data.faces = data.faces.filter( face => {
@@ -141,7 +157,12 @@ export function removePoints( data, indices ) {
 		return true;
 
 	} );
-	if ( data.faces ) data.faces = data.faces.map( face => face.filter( index => remap.has( index ) ).map( index => remap.get( index ) ) ).filter( face => face.length >= 3 );
+	if ( data.faces ) data.faces = data.faces.map( face => {
+
+		const kept = face.filter( index => remap.has( index ) );
+		return faceCorners( kept.map( index => remap.get( index ) ), face, kept.map( index => face.indexOf( index ) ) );
+
+	} ).filter( face => face.length >= 3 );
 
 }
 
@@ -163,13 +184,14 @@ export function extrudeFace( THREE, data, faceIndex, distance ) {
 		index !== faceIndex && other.includes( vertex ) && other.includes( face[ ( i + 1 ) % face.length ] ) ) );
 	const cap = face.map( index => data.points.push( new THREE.Vector3( ...data.points[ index ] ).add( offset ).toArray() ) - 1 );
 	const reverse = isolated && normal.dot( offset ) < 0;
-	data.faces[ faceIndex ] = reverse ? cap.slice().reverse() : cap;
-	if ( isolated ) data.faces.push( reverse ? face : face.slice().reverse() );
+	const corners = face.map( ( _, i ) => i );
+	data.faces[ faceIndex ] = faceCorners( reverse ? cap.slice().reverse() : cap, face, reverse ? corners.reverse() : corners );
+	if ( isolated ) data.faces.push( reverse ? face : faceCorners( face.slice().reverse(), face ) );
 	for ( let i = 0; i < face.length; i ++ ) {
 
 		const j = ( i + 1 ) % face.length;
 		const side = [ face[ i ], face[ j ], cap[ j ], cap[ i ] ];
-		data.faces.push( reverse ? side.reverse() : side );
+		data.faces.push( inheritMaterial( reverse ? side.reverse() : side, face ) );
 
 	}
 	return cap;
@@ -193,7 +215,13 @@ export function extrudeEdge( THREE, data, edge, offset ) {
 
 	const [ a, b ] = edge;
 	const cap = edge.map( index => data.points.push( new THREE.Vector3( ...data.points[ index ] ).add( offset ).toArray() ) - 1 );
-	data.faces.push( [ a, b, cap[ 1 ], cap[ 0 ] ] );
+	const adjacent = data.faces.find( face => face.some( ( point, i ) => {
+
+		const next = face[ ( i + 1 ) % face.length ];
+		return point === a && next === b || point === b && next === a;
+
+	} ) );
+	data.faces.push( inheritMaterial( [ a, b, cap[ 1 ], cap[ 0 ] ], adjacent ) );
 	return cap;
 
 }
@@ -212,7 +240,17 @@ export function meshFromOutline( THREE, data ) {
 function polygonGeometry( THREE, data ) {
 
 	const geometry = new THREE.BufferGeometry();
-	const positions = [], normals = [], uv = [], triangleFaces = [];
+	const positions = [], normals = [], triangleFaces = [];
+	const channels = new Map( [ [ 'uv', { size: 2, array: [] } ] ] );
+	const grouped = data.faces.some( face => face.surface?.slot !== undefined );
+	for ( const face of data.faces ) for ( const [ name, values ] of Object.entries( face.surface?.channels || {} ) ) {
+
+		const size = values.find( Boolean )?.length;
+		if ( ! size ) continue;
+		if ( ! channels.has( name ) ) channels.set( name, { size, array: [] } );
+		else channels.get( name ).size = Math.max( channels.get( name ).size, size );
+
+	}
 	for ( const [ faceIndex, face ] of data.faces.entries() ) {
 
 		const vertices = face.map( index => data.points[ index ] );
@@ -221,6 +259,7 @@ function polygonGeometry( THREE, data ) {
 		const { normal, outline } = projection;
 		const box = new THREE.Box2().setFromPoints( outline );
 		const size = box.getSize( new THREE.Vector2() );
+		const start = positions.length / 3;
 		for ( const triangle of THREE.ShapeUtils.triangulateShape( outline, [] ) ) {
 
 			triangleFaces.push( faceIndex );
@@ -229,9 +268,24 @@ function polygonGeometry( THREE, data ) {
 				positions.push( ...vertices[ index ] );
 				normals.push( ...normal );
 				const point = outline[ index ];
-				uv.push( ( point.x - box.min.x ) / ( size.x || 1 ), ( point.y - box.min.y ) / ( size.y || 1 ) );
+				for ( const [ name, channel ] of channels ) {
+
+					const value = face.surface?.channels[ name ]?.[ index ] || ( name.startsWith( 'uv' ) ?
+						[ ( point.x - box.min.x ) / ( size.x || 1 ), ( point.y - box.min.y ) / ( size.y || 1 ) ] : [] );
+					for ( let axis = 0; axis < channel.size; axis ++ ) channel.array.push( value[ axis ] ?? ( name === 'color' ? 1 : 0 ) );
+
+				}
 
 			}
+
+		}
+		const slot = face.surface?.slot ?? 0;
+		const count = positions.length / 3 - start;
+		if ( grouped && count && slot >= 0 ) {
+
+			const last = geometry.groups.at( -1 );
+			if ( last?.materialIndex === slot && last.start + last.count === start ) last.count += count;
+			else geometry.addGroup( start, count, slot );
 
 		}
 
@@ -239,7 +293,7 @@ function polygonGeometry( THREE, data ) {
 	geometry.userData.triangleFaces = triangleFaces;
 	geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
 	geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
-	geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
+	for ( const [ name, { array, size } ] of channels ) geometry.setAttribute( name, new THREE.Float32BufferAttribute( array, size ) );
 	return geometry;
 
 }
@@ -271,8 +325,14 @@ export function modelGeometry( THREE, data ) {
 		}
 
 	}
-	geometry.userData.modeling = structuredClone( data );
+	geometry.userData.modeling = savedModeling( data );
 	return geometry;
+
+}
+
+function savedModeling( data ) {
+
+	return structuredClone( data.kind === 'mesh' ? { ...data, faces: data.faces.map( face => face.slice() ) } : data );
 
 }
 
@@ -284,5 +344,83 @@ export function modelObject( THREE, data, name ) {
 	object.name = name;
 	if ( object.isMesh ) object.castShadow = object.receiveShadow = true;
 	return object;
+
+}
+
+export function readModelGeometry( geometry, useAuthored = true ) {
+
+	const data = geometry.userData.modeling;
+	if ( useAuthored && data && data.kind !== 'vertices' ) {
+
+		const copy = structuredClone( data );
+		return copy.kind === 'mesh' ? readFaceAttributes( geometry, copy, true ) : copy;
+
+	}
+	const position = geometry.attributes.position;
+	const points = [], vertices = [], coincident = new Map();
+	// Keep UV seams and hard edges intact by moving coincident buffer vertices together.
+	for ( let i = 0; i < position.count; i ++ ) {
+
+		const point = [ position.getX( i ), position.getY( i ), position.getZ( i ) ];
+		const key = point.join( ',' );
+		if ( ! coincident.has( key ) ) {
+
+			coincident.set( key, points.length );
+			points.push( point );
+			vertices.push( [] );
+
+		}
+		vertices[ coincident.get( key ) ].push( i );
+
+	}
+	const control = [];
+	vertices.forEach( ( list, i ) => list.forEach( index => control[ index ] = i ) );
+	const faces = [], index = geometry.index;
+	for ( let i = 0, count = index?.count ?? position.count; i + 2 < count; i += 3 ) {
+
+		const face = [ 0, 1, 2 ].map( offset => control[ index ? index.getX( i + offset ) : i + offset ] );
+		faces.push( face );
+
+	}
+	return readFaceAttributes( geometry, { kind: 'vertices', points, vertices, faces }, false );
+}
+
+// Position-only edits keep the existing triangulation, UVs and material
+// groups. Topology-changing edits use the regular geometry builder.
+export function moveAuthoredMeshPoints( THREE, source, previous, next, reusable ) {
+
+	const mapping = source.userData.triangleFaces;
+	if ( ! mapping || previous.kind !== 'mesh' || previous.points.length !== next.points.length ||
+		previous.faces.length !== next.faces.length || previous.faces.some( ( face, i ) =>
+			face.length !== next.faces[ i ].length || face.some( ( point, j ) => point !== next.faces[ i ][ j ] ) ) ) return null;
+
+	const position = source.attributes.position;
+	const index = source.index;
+	const references = new Map();
+	const keys = previous.points.map( point => point.map( Math.fround ).join( ',' ) );
+	const faces = previous.faces.map( face => new Map( face.map( point => [ keys[ point ], point ] ) ) );
+	for ( const [ triangle, face ] of mapping.entries() ) {
+
+		for ( let corner = 0; corner < 3; corner ++ ) {
+
+			const row = triangle * 3 + corner;
+			const vertex = index ? index.getX( row ) : row;
+			const key = [ position.getX( vertex ), position.getY( vertex ), position.getZ( vertex ) ].join( ',' );
+			const point = faces[ face ]?.get( key );
+			if ( point === undefined || references.has( vertex ) && references.get( vertex ) !== point ) return null;
+			references.set( vertex, point );
+
+		}
+
+	}
+	const geometry = reusable || new THREE.BufferGeometry().copy( source );
+	const target = geometry.attributes.position;
+	for ( const [ vertex, point ] of references ) target.setXYZ( vertex, ...next.points[ point ] );
+	target.needsUpdate = true;
+	geometry.computeVertexNormals();
+	geometry.computeBoundingBox();
+	geometry.computeBoundingSphere();
+	geometry.userData = { ...source.userData, modeling: savedModeling( next ) };
+	return geometry;
 
 }

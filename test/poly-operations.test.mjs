@@ -2,9 +2,45 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cutAcrossMesh, splitFace, loopCut, dissolveEdge, autoQuad } from '../editor/js/modeling/PolyOperations.js';
 import * as THREE from '../build/three.module.js';
-import { addFace } from '../editor/js/modeling/ModelGeometry.js';
+import { addFace, extrudeFace, modelGeometry, readModelGeometry } from '../editor/js/modeling/ModelGeometry.js';
 const quad = () => ( { kind: 'mesh', points: [ [ 0, 0, 0 ], [ 2, 0, 0 ], [ 2, 2, 0 ], [ 0, 2, 0 ] ], faces: [ [ 0, 1, 2, 3 ] ] } );
 const project = p => [ p[ 0 ] * 100, p[ 1 ] * 100 ];
+
+test( 'Knife and extrusion preserve assigned face materials and interpolate atlas UVs', () => {
+
+	const data = quad();
+	data.faces[ 0 ].surface = { slot: 2, channels: {
+		uv: [ [ .25, .25 ], [ .75, .25 ], [ .75, .75 ], [ .25, .75 ] ],
+		uv1: [ [ 0, 0 ], [ 1, 0 ], [ 1, 1 ], [ 0, 1 ] ]
+	} };
+	const restored = new THREE.ObjectLoader().parseGeometries( [ modelGeometry( THREE, data ).toJSON() ] );
+	const draft = readModelGeometry( Object.values( restored )[ 0 ] );
+	const cut = cutAcrossMesh( draft, [ -10, 100 ], [ 210, 100 ], project );
+	assert.equal( draft.faces.length, 2 );
+	for ( const face of draft.faces ) {
+
+		assert.equal( face.surface.slot, 2 );
+		for ( const point of cut ) assert.equal( face.surface.channels.uv[ face.indexOf( point ) ][ 1 ], .5 );
+
+	}
+	const uv = draft.faces[ 0 ].surface.channels.uv.map( point => point.slice() );
+	extrudeFace( THREE, draft, 0, .5 );
+	assert.deepEqual( draft.faces[ 0 ].surface.channels.uv, uv );
+	assert.ok( modelGeometry( THREE, draft ).groups.every( group => group.materialIndex === 2 ) );
+
+} );
+
+test( 'Dissolving a material boundary leaves the mesh unchanged', () => {
+
+	const data = quad();
+	splitFace( data, 0, 0, 2 );
+	data.faces[ 0 ].surface = { slot: 0, channels: {} };
+	data.faces[ 1 ].surface = { slot: 1, channels: {} };
+	const before = structuredClone( data );
+	assert.throws( () => dissolveEdge( data, [ 0, 2 ] ), /material slots/ );
+	assert.deepEqual( data, before );
+
+} );
 
 test( 'Knife cuts a polygon with shared edge vertices and preserves undo input isolation', () => {
 

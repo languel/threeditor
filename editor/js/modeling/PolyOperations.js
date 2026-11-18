@@ -1,5 +1,6 @@
 import { splitEdge, faceNormal } from './ModelGeometry.js?v=surface-tools';
 import { meshEdges, elementKey, edgeLoop } from './MeshSelection.js?v=shape-selection';
+import { faceCorners, mergeFaceCorners } from './FaceAttributes.js';
 
 // Ordered-face adaptation of ThreeGrease polytool.cutAcrossMesh. Existing
 // vertices near the cut are seeds; each crossed shared edge is split once.
@@ -10,7 +11,7 @@ export function splitFace( data, index, a, b ) {
 	const lo = Math.min( ia, ib ), hi = Math.max( ia, ib );
 	const first = face.slice( lo, hi + 1 ), second = [ ...face.slice( hi ), ...face.slice( 0, lo + 1 ) ];
 	if ( first.length < 3 || second.length < 3 ) return false;
-	data.faces.splice( index, 1, first, second );
+	data.faces.splice( index, 1, faceCorners( first, face ), faceCorners( second, face ) );
 	return true;
 
 }
@@ -95,7 +96,8 @@ export function dissolveEdge( data, edge ) {
 		loop.push( e[ 1 ] );
 
 	}
-	data.faces.splice( adjacent[ 1 ].index, 1 ); data.faces.splice( adjacent[ 0 ].index, 1, loop );
+	const merged = mergeFaceCorners( loop, adjacent[ 0 ].face, adjacent[ 1 ].face );
+	data.faces.splice( adjacent[ 1 ].index, 1 ); data.faces.splice( adjacent[ 0 ].index, 1, merged );
 	return true;
 
 }

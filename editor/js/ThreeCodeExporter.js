@@ -250,6 +250,7 @@ function generateThreeCode( editor ) {
 		if ( o.position.lengthSq() > 0 ) out( `${ name }.position.set(${ vec( o.position.x, o.position.y, o.position.z ) });` );
 		if ( o.rotation.x || o.rotation.y || o.rotation.z ) out( `${ name }.rotation.set(${ vec( o.rotation.x, o.rotation.y, o.rotation.z ) });   // radians` );
 		if ( o.scale.x !== 1 || o.scale.y !== 1 || o.scale.z !== 1 ) out( `${ name }.scale.set(${ vec( o.scale.x, o.scale.y, o.scale.z ) });` );
+		if ( ! o.matrixAutoUpdate ) out( `${ name }.matrix.fromArray(${ q( o.matrix.toArray() ) }); ${ name }.matrixAutoUpdate = false;` );
 		if ( o.castShadow ) out( `${ name }.castShadow = true;` );
 		if ( o.receiveShadow ) out( `${ name }.receiveShadow = true;` );
 		if ( o.visible === false || o.userData.threeditor?.disabled === true ) out( `${ name }.visible = false;` );

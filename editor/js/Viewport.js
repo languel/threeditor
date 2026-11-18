@@ -1,7 +1,8 @@
-import { SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
+import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=brush-shortcuts';
 import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
-import { withViewportShading } from './ViewportShading.js';
+import { cleanShading, withViewportShading } from './ViewportShading.js';
+import { isProjector } from './assets/Projector.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
@@ -14,8 +15,9 @@ import { EditorControls } from './EditorControls.js?v=edit-pointer-routing';
 import { ViewportLabels } from './Viewport.Labels.js';
 import { ViewportControls } from './Viewport.Controls.js?v=area-splits';
 import { FlyControls } from './FlyControls.js';
-import { hasRestriction, isVisible, withEnabledObjects } from './ObjectRestrictions.js';
+import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js';
+import { ViewportSidebar } from './Viewport.Sidebar.js';
 
 import { ViewHelper } from './Viewport.ViewHelper.js?v=viewport-tools';
 import { XR } from './Viewport.XR.js';
@@ -28,6 +30,7 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js';
+import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=brush-shortcuts';
 import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
@@ -97,11 +100,15 @@ function Viewport( editor ) {
 	}, true );
 	const labels = new ViewportLabels( editor, container.dom );
 	signals.viewportLabelsChanged.add( render );
+	signals.viewportOverlaysChanged.add( render );
 	signals.selectionAppearanceChanged.add( render );
-	signals.timelineFrameChanged.add( render );
+	signals.cursorChanged.add( render );
 	editor.modeling = new ModelViewport( editor, container.dom, render );
+	signals.viewportVisibilityChanged.add( () => { initPT(); updateHelperVisibility(); syncTransformTarget(); render(); } );
+	signals.timelineFrameChanged.add( () => { initPT(); render(); } );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
 	editor.editWorkspace = createEditWorkspace( editor, container.dom );
+	editor.viewportSidebar = new ViewportSidebar( editor, container.dom, header, layout, render );
 	const splatHost = new SplatHost();
 	let secondarySplats = null;
 	const postHost = new PostProcessingHost();
@@ -113,6 +120,7 @@ function Viewport( editor ) {
 		requestAnimationFrame( () => {
 
 			splatRenderQueued = false;
+			accumulation?.reset();
 			if ( editor.viewportShading !== 'realistic' || editor.viewportSplit || editor.viewportSource ) render();
 
 		} );
@@ -122,6 +130,7 @@ function Viewport( editor ) {
 	let pmremGenerator = null;
 	let environmentTarget = null;
 	let pathtracer = null;
+	let accumulation = null;
 	let helperAppearance = { cameraHelpers: true, lightHelpers: true, skeletonHelpers: true };
 
 	function updateHelperVisibility() {
@@ -169,12 +178,17 @@ function Viewport( editor ) {
 	const box = new THREE.Box3();
 
 	let selectionOutline = new SelectionOutline();
-	const selectionBox = new THREE.Box3Helper( box, 0xff8a24 );
-	selectionBox.material.depthTest = false;
-	selectionBox.material.toneMapped = false;
-	selectionBox.material.transparent = true;
-	selectionBox.visible = false;
-	sceneHelpers.add( selectionBox );
+	const selectionBox = new THREE.Box3Helper( box, SELECTED_OUTLINE );
+	const activeSelectionBox = new THREE.Box3Helper( new THREE.Box3(), ACTIVE_OUTLINE );
+	for ( const helper of [ selectionBox, activeSelectionBox ] ) {
+
+		helper.material.depthTest = false;
+		helper.material.toneMapped = false;
+		helper.material.transparent = true;
+		helper.visible = false;
+		sceneHelpers.add( helper );
+
+	}
 
 	let objectStatesOnDown = [];
 
@@ -396,12 +410,13 @@ function Viewport( editor ) {
 
 	function updateAspectRatio() {
 
+		const width = container.dom.offsetWidth, height = container.dom.offsetHeight;
+		if ( ! width || ! height ) return;
+		const areas = layout.areas( width, height );
 		for ( const uuid in editor.cameras ) {
 
 			const camera = editor.cameras[ uuid ];
 
-			const width = container.dom.offsetWidth;
-			const areas = layout.areas( width, container.dom.offsetHeight );
 			const area = camera === editor.camera ? areas[ 0 ] : areas.at( -1 );
 			const aspect = Math.max( 1, area.width ) / Math.max( 1, area.height );
 
@@ -647,6 +662,9 @@ function Viewport( editor ) {
 
 			}
 
+			pathtracer?.dispose();
+			accumulation?.dispose();
+			accumulation = null;
 			renderer.dispose();
 
 			container.dom.removeChild( renderer.domElement );
@@ -736,6 +754,7 @@ function Viewport( editor ) {
 	signals.cameraChanged.add( function () {
 
 		if ( pathtracer ) pathtracer.reset();
+		accumulation?.reset();
 		if ( model.object && model.indices.length && ! model.gesture && ! model.drag &&
 			editor.config.getKey( 'settings/transformOrientation' ) === 'view' ) model.updateProxy();
 		render();
@@ -1019,6 +1038,7 @@ function Viewport( editor ) {
 
 		}
 
+		initPT();
 		render();
 
 	} );
@@ -1060,7 +1080,7 @@ function Viewport( editor ) {
 		viewHelper.location.top = top + 30;
 		updateAspectRatio();
 
-		if ( renderer === null ) return;
+		if ( renderer === null || ! container.dom.offsetWidth || ! container.dom.offsetHeight ) return;
 
 		renderer.setSize( container.dom.offsetWidth, container.dom.offsetHeight );
 		if ( pathtracer ) pathtracer.setSize( container.dom.offsetWidth, container.dom.offsetHeight );
@@ -1140,6 +1160,7 @@ function Viewport( editor ) {
 		}
 
 		updateAspectRatio();
+		initPT();
 		render();
 
 	} );
@@ -1197,24 +1218,24 @@ function Viewport( editor ) {
 
 		}
 
-		if ( editor.timeline?.tick( delta ) || needsUpdate ) render();
+		const liveScene = editor.timeline?.tick( delta ) || needsUpdate;
+		if ( liveScene ) render();
 
-		updatePT();
+		updatePT( liveScene );
 
 	}
 
 	function initPT() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
-
-			pathtracer.init( scene, editor.viewportCamera );
-
-		}
+		pathtracer?.invalidate();
+		accumulation?.reset();
+		renderedFallback = undefined;
 
 	}
 
 	function updatePTBackground() {
 
+		accumulation?.reset();
 		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.setBackground( scene.background, scene.backgroundBlurriness );
@@ -1225,6 +1246,7 @@ function Viewport( editor ) {
 
 	function updatePTEnvironment() {
 
+		accumulation?.reset();
 		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
 
 			pathtracer.setEnvironment( scene.environment );
@@ -1235,33 +1257,74 @@ function Viewport( editor ) {
 
 	function updatePTMaterials() {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
-
-			pathtracer.updateMaterials();
-
-		}
+		initPT();
 
 	}
 
 	function drawSelection( view, show = view === camera, host = splatHost ) {
 
-		if ( ! show || model.editMode && model.object || editor.viewportShading === 'preview' || ! sceneHelpers.visible ||
+		if ( ! show || model.editMode && model.object || cleanShading( editor.viewportShading ) || ! sceneHelpers.visible ||
 			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
-		selectionOutline.draw( renderer, scene, view, roots, () => host.render( renderer, scene,
-			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () => renderer.render( scene, view ) ) ), queueSplatRender ) );
+		const active = editor.selected;
+		const mask = () => host.render( renderer, scene,
+			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () => renderer.render( scene, view ) ) ), queueSplatRender );
+		withViewportObjects( scene, () => {
+
+			selectionOutline.draw( renderer, scene, view, roots.filter( object => object !== active ), mask );
+			if ( roots.includes( active ) ) selectionOutline.draw( renderer, scene, view, [ active ], mask, ACTIVE_OUTLINE );
+
+		} );
 
 	}
 
-	function updatePT() {
+	let renderedFallback, renderedStatus;
+	function updatePT( liveScene ) {
 
-		if ( pathtracer && editor.viewportShading === 'realistic' && ! editor.viewportSource && ! layout.optical && layout.frames.length < 2 ) {
+		if ( editor.viewportShading !== 'realistic' || renderer.xr.isPresenting || ! container.dom.offsetWidth ) { renderedStatus = undefined; return; }
+		let status = 'Raster · split or source view';
+		if ( liveScene ) {
 
-			pathtracer.update();
-			drawSelection( editor.viewportCamera );
-			editor.signals.pathTracerUpdated.dispatch( pathtracer.getSamples() );
+			pathtracer?.invalidate();
+			accumulation?.reset();
+			status = 'Raster · scene in motion';
+
+		} else if ( layout.frames.length === 1 && ! layout.optical && ( ! editor.viewportSplit || layout.maximizedPane ) ) {
+
+			if ( renderedFallback === undefined ) {
+
+				const effects = scene.userData.postprocessing;
+				renderedFallback = Boolean( effects?.bloom || effects?.dof || scene.fog );
+				scene.traverseVisible( object => {
+
+					if ( renderedFallback || ! isVisible( object ) ) return;
+					if ( object.splats || object.isPoints || isProjector( object ) ) renderedFallback = true;
+					else if ( object.isLine || object.isSprite ||
+						[ object.material ].flat().some( material => material?.isShaderMaterial ) ) renderedFallback = true;
+
+				} );
+
+			}
+			if ( ! pathtracer ) status = 'Raster · progressive rendering requires WebGL';
+			else {
+
+				const view = layout.frames[ 0 ].camera;
+				const samples = renderedFallback ? null : pathtracer.update( scene, view );
+				if ( samples === null ) {
+
+					accumulation ||= new ViewportAccumulation( renderer );
+					const width = container.dom.offsetWidth, height = container.dom.offsetHeight;
+					const count = accumulation.update( view, () => drawScene( view, splatHost, width, height, true ) );
+					status = 'Raster · ' + count + ( count === 1 ? ' sample' : ' samples' );
+
+				} else status = samples;
+
+			}
 
 		}
+		if ( status === renderedStatus ) return;
+		renderedStatus = status;
+		editor.signals.pathTracerUpdated.dispatch( status );
 
 	}
 
@@ -1270,6 +1333,20 @@ function Viewport( editor ) {
 	let startTime = 0;
 	let endTime = 0;
 	let viewToolMode;
+
+	function drawScene( view, host, width, height, post, editorView = true ) {
+
+		const visibility = editorView ? withViewportObjects : withEnabledObjects;
+		const shading = editorView && editor.viewportXRay ? 'xray' : editor.viewportShading;
+		visibility( scene, () => host.render( renderer, scene, () => withViewportShading( scene, shading, () => {
+
+			const raster = () => model.withPreview( () => renderer.render( scene, view ) );
+			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
+			else raster();
+
+		} ), queueSplatRender ) );
+
+	}
 
 	function render() {
 
@@ -1287,7 +1364,13 @@ function Viewport( editor ) {
 		if ( ! width || ! height ) return;
 		const frames = layout.update( width, height );
 		const tiled = frames.length > 1 || !! layout.optical;
-		const showViewHelper = ! tiled && frames[ 0 ].camera === camera && editor.viewportShading !== 'preview' && ! renderer.xr.isPresenting;
+		const clean = cleanShading( editor.viewportShading );
+		const overlays = editor.viewportOverlays;
+		container.dom.dataset.cleanView = String( clean );
+		container.dom.dataset.overlays = String( overlays );
+		container.dom.dataset.shading = editor.viewportShading;
+		const showViewHelper = ! tiled && ( width >= 600 || ! editor.viewportSidebar.open ) && document.body.dataset.maximizedArea !== 'viewport' &&
+			frames[ 0 ].camera === camera && ! clean && ! renderer.xr.isPresenting;
 		if ( viewHelperPanel ) viewHelperPanel.hidden = ! showViewHelper;
 		// Each eye needs its own asynchronous Gaussian depth order.
 		if ( frames.length > 1 ) secondarySplats ||= new SplatHost();
@@ -1310,35 +1393,43 @@ function Viewport( editor ) {
 		const surfaces = selected.filter( hasSelectionSurface );
 		const bounds = selectionStyle !== 'outline' || ! outlineSupported ? selected : selected.filter( object => ! surfaces.includes( object ) );
 		box.makeEmpty();
-		for ( const object of bounds ) box.expandByObject( object, true );
-		selectionBox.visible = ! box.isEmpty();
-		const draw = ( view, host = splatHost, post = false ) => host.render( renderer, scene, () => {
+		activeSelectionBox.box.makeEmpty();
+		for ( const object of bounds ) {
 
-			withEnabledObjects( scene, () => withViewportShading( scene, mode, () => {
+			const target = object === editor.selected ? activeSelectionBox.box : box;
+			target.expandByObject( object, true );
 
-				const raster = () => model.withPreview( () => renderer.render( scene, view ) );
-				if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
-				else raster();
-
-			} ) );
-
-		}, queueSplatRender );
+		}
+		const boundGuides = ! ( model.editMode && model.object );
+		selectionBox.visible = boundGuides && ! box.isEmpty();
+		activeSelectionBox.visible = boundGuides && ! activeSelectionBox.box.isEmpty();
 		const drawGuides = frame => {
 
 			const view = frame.camera;
 			const gizmo = transformControls.getHelper();
 			const showModelGizmo = frame === nav && transformControls.object === model.proxy;
-			drawSelection( view, frame.director || frames.length > 1, frame.key === 'source' && secondarySplats ? secondarySplats : splatHost );
-			if ( ! frame.director || editor.viewportShading === 'preview' ) {
+			if ( ! overlays && ! clean ) {
 
-				if ( frames.length > 1 && editor.viewportShading !== 'preview' && sceneHelpers.visible &&
-					! ( model.editMode && model.object ) && selectionBox.visible ) {
+				if ( frame === nav && gizmo.visible && ! editor.viewTools.mode ) {
 
 					renderer.autoClear = false;
-					renderer.render( selectionBox, view );
+					renderer.render( gizmo, view );
 
 				}
-				if ( showModelGizmo ) {
+				return;
+
+			}
+			drawSelection( view, frame.director || frames.length > 1, frame.key === 'source' && secondarySplats ? secondarySplats : splatHost );
+			if ( ! frame.director || clean ) {
+
+				if ( frames.length > 1 && ! clean && sceneHelpers.visible && ( selectionBox.visible || activeSelectionBox.visible ) ) {
+
+					renderer.autoClear = false;
+					if ( selectionBox.visible ) renderer.render( selectionBox, view );
+					if ( activeSelectionBox.visible ) renderer.render( activeSelectionBox, view );
+
+				}
+				if ( showModelGizmo && mode !== 'realistic' ) {
 
 					renderer.autoClear = false;
 					renderer.render( gizmo, view );
@@ -1364,7 +1455,7 @@ function Viewport( editor ) {
 		if ( ! tiled ) {
 
 			const view = frames[ 0 ].camera;
-			draw( view, splatHost, mode === 'preview' || mode === 'materials' || mode === 'realistic' );
+			drawScene( view, splatHost, width, height, clean );
 			drawGuides( frames[ 0 ] );
 			if ( showViewHelper ) viewHelper.render( renderer );
 			renderer.autoClear = true;
@@ -1391,7 +1482,7 @@ function Viewport( editor ) {
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );
 					renderer.setScissor( rect.x, y, rect.width, rect.height );
-					draw( view, key === 'source' && secondarySplats ? secondarySplats : splatHost );
+					drawScene( view, key === 'source' && secondarySplats ? secondarySplats : splatHost, width, height, false, frame.director );
 					drawGuides( frame );
 
 				}

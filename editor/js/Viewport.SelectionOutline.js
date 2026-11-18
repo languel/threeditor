@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 
+export const SELECTED_OUTLINE = 0xff8a24;
+export const ACTIVE_OUTLINE = 0xffbd66;
+
 // Adapted from ThreeGrease's render/outline.ts: isolate the selection using
 // its own materials, then dilate its alpha silhouette by two screen pixels.
 // This preserves cutouts, strokes, points, skinning and shader deformation.
@@ -99,7 +102,7 @@ export class SelectionOutline {
 				tMask: { value: this.mask.texture },
 				uTexel: { value: new THREE.Vector2() },
 				uWidth: { value: 2 },
-				uColor: { value: new THREE.Color( 0xff8a24 ) }
+				uColor: { value: new THREE.Color( SELECTED_OUTLINE ) }
 			},
 			transparent: true, depthTest: false, depthWrite: false, toneMapped: false
 		} );
@@ -110,7 +113,7 @@ export class SelectionOutline {
 
 	}
 
-	draw( renderer, scene, camera, roots, renderMask ) {
+	draw( renderer, scene, camera, roots, renderMask, color = SELECTED_OUTLINE ) {
 
 		if ( ! roots.length || ! renderer.isWebGLRenderer || renderer.xr.isPresenting ) return;
 		const viewport = renderer.getViewport( new THREE.Vector4() );
@@ -129,6 +132,7 @@ export class SelectionOutline {
 		this.mask.setSize( width, height );
 		this.material.uniforms.uTexel.value.set( 1 / width, 1 / height );
 		this.material.uniforms.uWidth.value = 2 * ratio;
+		this.material.uniforms.uColor.value.setHex( color );
 		try {
 
 			scene.background = null;

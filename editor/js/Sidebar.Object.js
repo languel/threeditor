@@ -8,12 +8,10 @@ import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISe
 import { UIBoolean } from './libs/ui.three.js';
 import { isProjector } from './assets/Projector.js';
 import { hasRestriction } from './ObjectRestrictions.js';
+import { ObjectTransformControls } from './ObjectTransformControls.js';
 
 import { SetUuidCommand } from './commands/SetUuidCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
-import { SetPositionCommand } from './commands/SetPositionCommand.js';
-import { SetRotationCommand } from './commands/SetRotationCommand.js';
-import { SetScaleCommand } from './commands/SetScaleCommand.js';
 import { SetColorCommand } from './commands/SetColorCommand.js';
 import { SetShadowValueCommand } from './commands/SetShadowValueCommand.js';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
@@ -143,41 +141,8 @@ function SidebarObject( editor ) {
 
 	container.add( objectNameRow );
 
-	// position
-
-	const objectPositionRow = new UIRow();
-	const objectPositionX = new UINumber().setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-	const objectPositionY = new UINumber().setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-	const objectPositionZ = new UINumber().setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-
-	objectPositionRow.add( new UIText( strings.getKey( 'sidebar/object/position' ) ).setClass( 'Label' ) );
-	objectPositionRow.add( objectPositionX, objectPositionY, objectPositionZ );
-
-	container.add( objectPositionRow );
-
-	// rotation
-
-	const objectRotationRow = new UIRow();
-	const objectRotationX = new UINumber().setStep( 10 ).setNudge( 0.1 ).setUnit( '°' ).setWidth( '50px' ).onChange( update );
-	const objectRotationY = new UINumber().setStep( 10 ).setNudge( 0.1 ).setUnit( '°' ).setWidth( '50px' ).onChange( update );
-	const objectRotationZ = new UINumber().setStep( 10 ).setNudge( 0.1 ).setUnit( '°' ).setWidth( '50px' ).onChange( update );
-
-	objectRotationRow.add( new UIText( strings.getKey( 'sidebar/object/rotation' ) ).setClass( 'Label' ) );
-	objectRotationRow.add( objectRotationX, objectRotationY, objectRotationZ );
-
-	container.add( objectRotationRow );
-
-	// scale
-
-	const objectScaleRow = new UIRow();
-	const objectScaleX = new UINumber( 1 ).setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-	const objectScaleY = new UINumber( 1 ).setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-	const objectScaleZ = new UINumber( 1 ).setPrecision( 3 ).setWidth( '50px' ).onChange( update );
-
-	objectScaleRow.add( new UIText( strings.getKey( 'sidebar/object/scale' ) ).setClass( 'Label' ) );
-	objectScaleRow.add( objectScaleX, objectScaleY, objectScaleZ );
-
-	container.add( objectScaleRow );
+	const transform = new ObjectTransformControls( editor );
+	container.add( ...transform.rows );
 
 	// fov
 
@@ -612,15 +577,6 @@ function SidebarObject( editor ) {
 		[ objectFrustumCulledRow, 'frustumCulled', objectFrustumCulled ], [ objectRenderOrderRow, 'renderOrder', objectRenderOrder ]
 	] ) key( { dom: row.dom.firstElementChild }, property, field );
 
-	for ( const [ row, property, controls ] of [
-		[ objectPositionRow, 'position', [ objectPositionX, objectPositionY, objectPositionZ ] ],
-		[ objectRotationRow, 'rotation', [ objectRotationX, objectRotationY, objectRotationZ ] ],
-		[ objectScaleRow, 'scale', [ objectScaleX, objectScaleY, objectScaleZ ] ]
-	] ) key( { dom: row.dom.firstElementChild }, property, row, 'object', values => {
-
-		controls.forEach( ( control, index ) => control.setValue( values[ index ] * ( property === 'rotation' ? THREE.MathUtils.RAD2DEG : 1 ) ) );
-
-	} );
 	for ( const [ row, property, field ] of [
 		[ objectShadowIntensityRow, 'intensity', objectShadowIntensity ], [ objectShadowBiasRow, 'bias', objectShadowBias ],
 		[ objectShadowNormalBiasRow, 'normalBias', objectShadowNormalBias ], [ objectShadowRadiusRow, 'radius', objectShadowRadius ]
@@ -633,27 +589,6 @@ function SidebarObject( editor ) {
 		const object = editor.selected;
 
 		if ( object !== null ) {
-
-			const newPosition = new THREE.Vector3( objectPositionX.getValue(), objectPositionY.getValue(), objectPositionZ.getValue() );
-			if ( ! hasRestriction( object, 'locked' ) && object.position.distanceTo( newPosition ) >= 0.01 ) {
-
-				editor.execute( new SetPositionCommand( editor, object, newPosition ) );
-
-			}
-
-			const newRotation = new THREE.Euler( objectRotationX.getValue() * THREE.MathUtils.DEG2RAD, objectRotationY.getValue() * THREE.MathUtils.DEG2RAD, objectRotationZ.getValue() * THREE.MathUtils.DEG2RAD );
-			if ( ! hasRestriction( object, 'locked' ) && new THREE.Vector3().setFromEuler( object.rotation ).distanceTo( new THREE.Vector3().setFromEuler( newRotation ) ) >= 0.01 ) {
-
-				editor.execute( new SetRotationCommand( editor, object, newRotation ) );
-
-			}
-
-			const newScale = new THREE.Vector3( objectScaleX.getValue(), objectScaleY.getValue(), objectScaleZ.getValue() );
-			if ( ! hasRestriction( object, 'locked' ) && object.scale.distanceTo( newScale ) >= 0.01 ) {
-
-				editor.execute( new SetScaleCommand( editor, object, newScale ) );
-
-			}
 
 			if ( object.fov !== undefined && Math.abs( object.fov - objectFov.getValue() ) >= 0.01 ) {
 
@@ -890,22 +825,6 @@ function SidebarObject( editor ) {
 
 	}
 
-	function updateTransformRows( object ) {
-
-		if ( object.isLight ) {
-
-			objectRotationRow.setDisplay( 'none' );
-			objectScaleRow.setDisplay( 'none' );
-
-		} else {
-
-			objectRotationRow.setDisplay( '' );
-			objectScaleRow.setDisplay( '' );
-
-		}
-
-	}
-
 	// events
 
 	signals.objectSelected.add( function ( object ) {
@@ -958,30 +877,12 @@ function SidebarObject( editor ) {
 		maskInView.setDisabled( ! canEditLightMask( object ) );
 		maskInView.dom.title = canEditLightMask( object ) ? '' : 'Enable and unlock this light to edit its mask';
 
-		const locked = hasRestriction( object, 'locked' );
-		for ( const row of [ objectPositionRow, objectRotationRow, objectScaleRow ] ) {
-
-			row.dom.querySelectorAll( 'input' ).forEach( input => { input.disabled = locked; } );
-			row.dom.style.opacity = locked ? '0.5' : '';
-
-		}
-
 		objectType.setValue( isProjector( object ) ? 'Projector' : object.type );
 
 		objectUUID.setValue( object.uuid );
 		objectName.setValue( object.name );
 
-		objectPositionX.setValue( object.position.x );
-		objectPositionY.setValue( object.position.y );
-		objectPositionZ.setValue( object.position.z );
-
-		objectRotationX.setValue( object.rotation.x * THREE.MathUtils.RAD2DEG );
-		objectRotationY.setValue( object.rotation.y * THREE.MathUtils.RAD2DEG );
-		objectRotationZ.setValue( object.rotation.z * THREE.MathUtils.RAD2DEG );
-
-		objectScaleX.setValue( object.scale.x );
-		objectScaleY.setValue( object.scale.y );
-		objectScaleZ.setValue( object.scale.z );
+		transform.update( object );
 
 		if ( object.fov !== undefined ) {
 
@@ -1105,7 +1006,6 @@ function SidebarObject( editor ) {
 		objectUserData.setBorderColor( 'transparent' );
 		objectUserData.setBackgroundColor( '' );
 
-		updateTransformRows( object );
 
 	}
 

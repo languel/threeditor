@@ -549,7 +549,7 @@ function CodePanel( editor ) {
 		return { list: shaderWords.filter( entry => entry.startsWith( word ) && entry !== word ), from: { line: cursor.line, ch: start }, to: cursor };
 
 	}
-	if ( cm ) cm.addKeyMap( { 'Ctrl-Space': c => {
+	if ( cm ) cm.addKeyMap( { 'Shift-Ctrl-Space': c => {
 
 		if ( ! codeEditorSettings( editor ).completion ) return;
 		if ( target.kind === 'glsl' ) c.showHint( { hint: shaderHint, completeSingle: false } ); else if ( target.kind !== 'json' ) c.showHint( { hint: semanticHint, completeSingle: false } );
@@ -912,6 +912,7 @@ function CodePanel( editor ) {
 
 	signals.editScript.add( ( object, script, materialSlot ) => {
 
+		editor.workspaceArea?.reveal( dom );
 		dock.toggle( true );
 
 		if ( typeof script === 'object' ) {

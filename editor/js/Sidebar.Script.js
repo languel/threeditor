@@ -1,5 +1,6 @@
 import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import { UIPanel, UIButton, UIRow, UIInput, UICheckbox, UIText } from './libs/ui.js';
+import { MathUtils } from 'three';
 
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
@@ -7,6 +8,14 @@ import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
 import { P5_TEMPLATE } from './P5Sketch.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
 import { scriptParameterControl } from './ScriptParameterControl.js';
+import { modelButton } from './modeling/ModelControls.js';
+
+const spinSource = `// @param speed = 45 (-360..360)
+// @label speed = "Degrees per second"
+function update( { delta } ) {
+	this.rotateY( THREE.MathUtils.degToRad( params.speed ) * delta / 1000 );
+}
+`;
 
 function SidebarScript( editor ) {
 
@@ -26,31 +35,51 @@ function SidebarScript( editor ) {
 	let trackingStatus;
 	container.add( scriptsContainer );
 
-	const newScript = new UIButton( strings.getKey( 'sidebar/script/new' ) );
-	newScript.onClick( function () {
+	const addComponent = modelButton( container.dom, 'Add Component', 'add', openComponentPicker );
+	addComponent.classList.add( 'script-add-component' );
+	addComponent.setAttribute( 'aria-haspopup', 'dialog' );
+	container.openComponentPicker = openComponentPicker;
+
+	function openComponentPicker() {
 
 		const object = editor.selected;
-		const script = { name: 'Script', source: 'function update( event ) {\n\n}', enabled: true };
-		editor.execute( new AddScriptCommand( editor, object, script ) );
-		signals.editScript.dispatch( object, script );
+		if ( ! object ) return;
+		const actions = [
+			{ label: strings.getKey( 'sidebar/script/new' ), section: 'New', run: () => attach( { name: 'Script', source: 'function update( event ) {\n\n}' }, true ) },
+			{ label: 'New p5 sketch', section: 'New', run: () => attach( { name: 'sketch', type: 'p5', source: P5_TEMPLATE, preview: true } ) },
+			{ label: 'Spin', section: 'Behaviors', run: () => attach( { name: 'Spin', source: spinSource } ) }
+		];
+		editor.scene.traverse( source => {
 
-	} );
-	container.add( newScript );
+			for ( const script of editor.scripts[ source.uuid ] || [] ) {
 
-	const newP5Script = new UIButton( strings.getKey( 'sidebar/script/new-p5' ) );
-	newP5Script.onClick( function () {
+				if ( script.generated || script.assetBehavior || script.cameraController || ! script.source ) continue;
+				const name = script.name || 'Script';
+				actions.push( { label: name + ' · ' + ( source.name || source.type ), section: 'Copy from scene', run: () => attach( script ) } );
 
-		const script = { name: 'sketch', type: 'p5', source: P5_TEMPLATE, enabled: true, preview: true };
-		editor.execute( new AddScriptCommand( editor, editor.selected, script ) );
+			}
 
-	} );
-	container.add( newP5Script );
+		} );
+		addComponent.focus();
+		const bounds = addComponent.getBoundingClientRect();
+		editor.contextMenu.show( 'Add Component', actions, [ bounds.left, bounds.bottom + 4 ] );
 
-	/*
-	let loadScript = new UI.Button( 'Load' );
-	loadScript.setMarginLeft( '4px' );
-	container.add( loadScript );
-	*/
+		function attach( template, edit = false ) {
+
+			if ( editor.selected !== object || ( ! object.parent && object !== editor.scene ) ) return;
+			const names = new Set( ( editor.scripts[ object.uuid ] || [] ).map( script => script.name ) );
+			const baseName = template.name || 'Script';
+			let name = baseName;
+			for ( let suffix = 1; names.has( name ); suffix ++ ) name = baseName + '.' + String( suffix ).padStart( 3, '0' );
+			const script = { enabled: true, ...structuredClone( template ), name, timelineId: MathUtils.generateUUID() };
+			delete script.parameters;
+			editor.execute( new AddScriptCommand( editor, object, script ), 'Add Component' );
+			if ( edit ) signals.editScript.dispatch( object, script );
+			else addComponent.focus();
+
+		}
+
+	}
 
 	//
 

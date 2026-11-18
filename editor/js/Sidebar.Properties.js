@@ -19,14 +19,16 @@ function SidebarProperties( editor ) {
 	const container = new UITabbedPanel();
 	container.setId( 'properties' );
 
-	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ) );
-	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ) );
-	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ) );
-	container.addTab( 'scriptTab', strings.getKey( 'sidebar/properties/script' ), new SidebarScript( editor ) );
-	container.addTab( 'modelingTab', 'Modeling', new SidebarModeling( editor ) );
-	container.addTab( 'modifiersTab', 'Modifiers', new SidebarModifiers( editor ) );
-	container.addTab( 'animationsTab', 'Animations', new SidebarAnimationClips( editor ) );
+	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ), 'sidebar/properties/object' );
+	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ), 'sidebar/properties/geometry' );
+	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ), 'sidebar/properties/material' );
+	const scripts = new SidebarScript( editor );
+	container.addTab( 'scriptTab', strings.getKey( 'sidebar/properties/script' ), scripts, 'sidebar/properties/script' );
+	container.addTab( 'modelingTab', 'Modeling', new SidebarModeling( editor ), 'sidebar/properties/modeling' );
+	container.addTab( 'modifiersTab', 'Modifiers', new SidebarModifiers( editor ), 'sidebar/properties/modifiers' );
+	container.addTab( 'animationsTab', 'Animations', new SidebarAnimationClips( editor ), 'sidebar/properties/animations' );
 	editor.modeling.reveal = () => container.select( 'modelingTab' );
+	editor.revealComponents = () => { container.select( 'scriptTab' ); scripts.openComponentPicker(); };
 	container.select( 'objectTab' );
 
 	for ( const tab of container.tabs ) tab.dom.addEventListener( 'dragenter', event => {

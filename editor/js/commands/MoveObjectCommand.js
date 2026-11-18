@@ -1,5 +1,21 @@
 import { Command } from '../Command.js';
 
+function localTransform( object ) {
+
+	return { position: object.position.toArray(), rotation: object.rotation.toArray(), scale: object.scale.toArray() };
+
+}
+
+function applyLocalTransform( object, transform ) {
+
+	if ( ! transform ) return;
+	object.position.fromArray( transform.position );
+	object.rotation.fromArray( transform.rotation );
+	object.scale.fromArray( transform.scale );
+	object.updateMatrix();
+
+}
+
 class MoveObjectCommand extends Command {
 
 	/**
@@ -7,9 +23,10 @@ class MoveObjectCommand extends Command {
 	 * @param {THREE.Object3D|null} [object=null]
 	 * @param {THREE.Object3D|null} [newParent=null]
 	 * @param {THREE.Object3D|null} [newBefore=null]
+	 * @param {Object|null} [transform=null] Local position, rotation and scale after moving.
 	 * @constructor
 	 */
-	constructor( editor, object = null, newParent = null, newBefore = null ) {
+	constructor( editor, object = null, newParent = null, newBefore = null, transform = null ) {
 
 		super( editor );
 
@@ -38,16 +55,21 @@ class MoveObjectCommand extends Command {
 		}
 
 		this.newBefore = newBefore;
+		this.newTransform = transform;
+		this.oldTransform = transform && localTransform( object );
 
 	}
 
 	execute() {
 
+		this.oldIndex = this.oldParent.children.indexOf( this.object );
 		this.oldParent.remove( this.object );
 
 		const children = this.newParent.children;
 		children.splice( this.newIndex, 0, this.object );
 		this.object.parent = this.newParent;
+		applyLocalTransform( this.object, this.newTransform );
+		this.object.updateWorldMatrix( true, true );
 
 		this.object.dispatchEvent( { type: 'added' } );
 		this.editor.signals.objectChanged.dispatch( this.object );
@@ -64,6 +86,8 @@ class MoveObjectCommand extends Command {
 		const children = this.oldParent.children;
 		children.splice( this.oldIndex, 0, this.object );
 		this.object.parent = this.oldParent;
+		applyLocalTransform( this.object, this.oldTransform );
+		this.object.updateWorldMatrix( true, true );
 
 		this.object.dispatchEvent( { type: 'added' } );
 		this.editor.signals.objectChanged.dispatch( this.object );
@@ -82,6 +106,12 @@ class MoveObjectCommand extends Command {
 		output.oldParentUuid = this.oldParent.uuid;
 		output.newIndex = this.newIndex;
 		output.oldIndex = this.oldIndex;
+		if ( this.newTransform ) {
+
+			output.newTransform = this.newTransform;
+			output.oldTransform = this.oldTransform;
+
+		}
 
 		return output;
 
@@ -109,6 +139,8 @@ class MoveObjectCommand extends Command {
 
 		this.newIndex = json.newIndex;
 		this.oldIndex = json.oldIndex;
+		this.newTransform = json.newTransform;
+		this.oldTransform = json.oldTransform;
 
 	}
 

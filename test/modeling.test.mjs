@@ -1,13 +1,121 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, outlinePoints, pokeFace, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, pokeFace, readModelGeometry, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
 import { sculptNeighbors, sculptPoints } from '../editor/js/modeling/SculptBrush.js';
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
+import { fitDrawingContour, insertContourPoint, segmentCount } from '../editor/js/modeling/Contour.js';
+import { StrokeSampler } from '../editor/js/modeling/StrokeSampler.js';
+import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
+import { separateMesh } from '../editor/js/modeling/MeshSeparation.js';
+import { joinMeshGeometry } from '../editor/js/modeling/MeshJoin.js';
+
+test( 'Cube and Plane primitives use authored quad topology and UVs', () => {
+
+	const build = key => meshPrimitives.find( ( [ kind ] ) => kind === key )[ 2 ]( THREE, true );
+	const cube = build( 'box' );
+	const faces = readModelGeometry( cube ).faces;
+	assert.deepEqual( faces.map( face => face.length ), [ 4, 4, 4, 4, 4, 4 ] );
+	const islands = faces.map( face => {
+
+		const uv = face.surface.channels.uv;
+		return [ 0, 1 ].map( axis => [ Math.min( ...uv.map( point => point[ axis ] ) ), Math.max( ...uv.map( point => point[ axis ] ) ) ] );
+
+	} );
+	for ( const [ index, island ] of islands.entries() ) for ( const other of islands.slice( index + 1 ) ) {
+
+		assert.ok( island.some( ( [ low, high ], axis ) => high < other[ axis ][ 0 ] || low > other[ axis ][ 1 ] ) );
+
+	}
+	const plane = build( 'plane' );
+	assert.equal( readModelGeometry( plane ).faces.length, 1 );
+	assert.equal( plane.attributes.normal.getY( 0 ), 1 );
+	assert.equal( plane.attributes.uv.count, plane.attributes.position.count );
+	assert.deepEqual( plane.userData.modeling.points.map( point => point[ 1 ] ), [ 0, 0, 0, 0 ] );
+	cube.dispose();
+	plane.dispose();
+
+} );
+
+test( 'Brush samples follow pointer corners and interpolate pressure at fixed spacing', () => {
+
+	const sampler = new StrokeSampler( 0, 0, .2, 5 );
+	const samples = [];
+	const emit = ( x, y, pressure ) => samples.push( [ x, y, Number( pressure.toFixed( 2 ) ) ] );
+	assert.equal( sampler.move( 3, 0, .5, emit ), false );
+	assert.equal( sampler.move( 3, 4, .9, emit ), true );
+	assert.equal( sampler.move( 3, 7, .3, emit ), true );
+	assert.equal( sampler.move( 3, 7, .3, emit ), false );
+	assert.deepEqual( samples, [ [ 3, 2, .7 ], [ 3, 7, .3 ] ] );
+
+} );
+
+test( 'Joining meshes preserves slot order, polygon faces and mirrored winding', () => {
+
+	const active = modelGeometry( THREE, modelData( 'mesh' ) );
+	active.addGroup( 0, active.attributes.position.count, 1 );
+	const other = new THREE.PlaneGeometry();
+	const activeSlots = [ new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial() ];
+	const sourceMaterial = new THREE.MeshStandardMaterial();
+	const { geometry, material } = joinMeshGeometry( THREE, [
+		{ geometry: active, material: activeSlots, matrix: new THREE.Matrix4() },
+		{ geometry: other, material: sourceMaterial, matrix: new THREE.Matrix4().makeScale( -1, 2, 1 ).setPosition( 4, 0, 0 ) }
+	] );
+	assert.deepEqual( material, [ ...activeSlots, sourceMaterial ] );
+	assert.deepEqual( geometry.groups.map( group => group.materialIndex ), [ 1, 2 ] );
+	assert.deepEqual( geometry.userData.modeling.faces.map( face => face.length ), [ 4, 3, 3 ] );
+	assert.deepEqual( geometry.userData.triangleFaces, [ 0, 0, 1, 2 ] );
+	const first = geometry.groups[ 1 ].start;
+	const vertices = [ 0, 1, 2 ].map( i => new THREE.Vector3().fromBufferAttribute( geometry.attributes.position, geometry.index.getX( first + i ) ) );
+	const [ a, b, c ] = vertices;
+	assert.ok( b.sub( a ).cross( c.sub( a ) ).z > 0 );
+	assert.deepEqual( geometry.attributes.uv.array.slice( -other.attributes.uv.array.length ), other.attributes.uv.array );
+	const previous = geometry.userData.modeling, next = structuredClone( previous );
+	next.points[ 0 ][ 2 ] += .5;
+	const moved = moveAuthoredMeshPoints( THREE, geometry, previous, next );
+	assert.deepEqual( moved.groups, geometry.groups );
+	assert.deepEqual( moved.attributes.uv.array, geometry.attributes.uv.array );
+	assert.equal( moved.index.count, geometry.index.count );
+
+} );
+
+test( 'Separating authored faces preserves n-gons and remaps triangulation', () => {
+
+	const data = modelData( 'mesh' );
+	data.points.push( [ 3, 0, 0 ], [ 4, 0, 0 ], [ 4, 1, 0 ], [ 3, 1, 0 ], [ 5, 0, 0 ] );
+	data.faces.push( [ 4, 5, 6, 7 ] );
+	const source = modelGeometry( THREE, data );
+	const parts = separateMesh( THREE, source, data, 'selection', [ 1 ] );
+	assert.equal( parts.length, 2 );
+	assert.deepEqual( parts.map( part => part.userData.modeling.faces ), [ [ [ 0, 1, 2, 3 ] ], [ [ 0, 1, 2, 3 ] ] ] );
+	assert.deepEqual( parts.map( part => part.userData.modeling.points.length ), [ 5, 4 ] );
+	assert.deepEqual( parts.map( part => part.userData.triangleFaces ), [ [ 0, 0 ], [ 0, 0 ] ] );
+	assert.deepEqual( parts[ 1 ].attributes.uv.array, source.attributes.uv.array.slice( 12 ) );
+	assert.equal( separateMesh( THREE, source, data, 'loose' ).length, 2 );
+
+} );
+
+test( 'Separating indexed triangles copies custom channels and material slots', () => {
+
+	const geometry = new THREE.BufferGeometry().setIndex( [ 0, 1, 2, 2, 1, 3 ] );
+	const positions = [ [ 0, 0, 0 ], [ 1, 0, 0 ], [ 0, 1, 0 ], [ 1, 1, 0 ] ];
+	geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions.flat(), 3 ) );
+	const stream = new THREE.InterleavedBuffer( Uint8Array.from( [ 11, 21, 12, 22, 13, 23, 14, 24 ] ), 2 );
+	geometry.setAttribute( 'custom', new THREE.InterleavedBufferAttribute( stream, 1, 1, true ) );
+	geometry.addGroup( 0, 3, 1 );
+	geometry.addGroup( 3, 3, 0 );
+	const [ first, second ] = separateMesh( THREE, geometry, { kind: 'vertices', points: positions, faces: [ [ 0, 1, 2 ], [ 2, 1, 3 ] ] }, 'material' );
+	assert.deepEqual( first.groups, [ { start: 0, count: 3, materialIndex: 1 } ] );
+	assert.deepEqual( second.groups, [ { start: 0, count: 3, materialIndex: 0 } ] );
+	assert.deepEqual( [ ...second.attributes.custom.array ], [ 23, 22, 24 ] );
+	assert.equal( second.attributes.custom.normalized, true );
+	assert.deepEqual( [ ...second.index.array ], [ 0, 1, 2 ] );
+
+} );
 
 test( 'Authored polygon topology persists through split, extrusion, serialization and deletion', () => {
 
@@ -208,6 +316,19 @@ test( 'Mask sculpt subdivides and changes the contour locally near the brush', (
 	const smooth = sculptMask( square, [ 0, 0 ], [ 0, 0 ], 25, 'smooth' );
 	assert.ok( smooth[ 0 ].every( coordinate => coordinate > 0 ) );
 	assert.deepEqual( square[ 0 ], [ 0, 0 ] );
+
+} );
+
+test( 'Open contours omit the closing segment during insertion and sculpting', () => {
+
+	const points = [ [ 0, 0 ], [ 100, 0 ], [ 100, 100 ] ];
+	assert.equal( segmentCount( points, false ), 2 );
+	assert.equal( segmentCount( points, true ), 3 );
+	assert.deepEqual( sculptMask( points, [ 50, 50 ], [ 10, 0 ], 15, 'push', 1, false ), points );
+	assert.ok( sculptMask( points, [ 50, 50 ], [ 10, 0 ], 15, 'push' ).length > 3 );
+	assert.equal( insertContourPoint( points, 2, .5 ), 3 );
+	assert.deepEqual( points.at( -1 ), [ 50, 50 ] );
+	assert.deepEqual( fitDrawingContour( [ [ 0, 1 ], [ 2, 1 ] ] ), [ [ .5 - .4, .5 ], [ .9, .5 ] ] );
 
 } );
 

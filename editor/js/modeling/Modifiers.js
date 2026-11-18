@@ -232,7 +232,7 @@ export function evaluateModifiers( source, stack, mesh = true ) {
 
 }
 
-export function setModifierStack( editor, object, stack, source = modifierSource( object ), name = 'Edit modifiers' ) {
+export function modifierStackCommands( editor, object, stack, source = modifierSource( object ) ) {
 
 	const base = plain( source );
 	const userData = { ...object.userData, modifiers: structuredClone( stack ), modifierBase: base.toJSON() };
@@ -241,7 +241,13 @@ export function setModifierStack( editor, object, stack, source = modifierSource
 	if ( ! stack.length ) { delete userData.modifierBase; delete userData.modifiers; }
 	const metadata = new SetValueCommand( editor, object, 'userData', userData ); metadata.updatable = false;
 	const buffer = new SetGeometryCommand( editor, object, geometry ); buffer.updatable = false;
-	editor.execute( new MultiCmdsCommand( editor, [ metadata, buffer ] ), name );
+	return [ metadata, buffer ];
+
+}
+
+export function setModifierStack( editor, object, stack, source = modifierSource( object ), name = 'Edit modifiers' ) {
+
+	editor.execute( new MultiCmdsCommand( editor, modifierStackCommands( editor, object, stack, source ) ), name );
 
 }
 

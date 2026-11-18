@@ -179,6 +179,9 @@ class UIOutliner extends UIDiv {
 
 		this.dom.className = 'Outliner';
 		this.dom.tabIndex = 0;	// keyup event is ignored without setting tabIndex
+		this.dom.setAttribute( 'role', 'tree' );
+		this.dom.setAttribute( 'aria-label', 'Outliner' );
+		this.dom.setAttribute( 'aria-multiselectable', 'true' );
 
 		const scope = this;
 
@@ -286,18 +289,19 @@ class UIOutliner extends UIDiv {
 			if ( this === currentDrag ) return;
 
 			const area = event.offsetY / this.clientHeight;
+			this.classList.remove( 'dragTop', 'dragBottom', 'drag' );
 
 			if ( area < 0.25 ) {
 
-				this.className = 'option dragTop';
+				this.classList.add( 'dragTop' );
 
 			} else if ( area > 0.75 ) {
 
-				this.className = 'option dragBottom';
+				this.classList.add( 'dragBottom' );
 
 			} else {
 
-				this.className = 'option drag';
+				this.classList.add( 'drag' );
 
 			}
 
@@ -307,7 +311,7 @@ class UIOutliner extends UIDiv {
 
 			if ( this === currentDrag ) return;
 
-			this.className = 'option';
+			this.classList.remove( 'dragTop', 'dragBottom', 'drag' );
 
 		}
 
@@ -315,7 +319,7 @@ class UIOutliner extends UIDiv {
 
 			if ( this === currentDrag || currentDrag === undefined ) return;
 
-			this.className = 'option';
+			this.classList.remove( 'dragTop', 'dragBottom', 'drag' );
 
 			const scene = scope.scene;
 			const object = scene.getObjectById( currentDrag.value );
@@ -385,7 +389,9 @@ class UIOutliner extends UIDiv {
 		for ( let i = 0; i < options.length; i ++ ) {
 
 			const div = options[ i ];
-			div.className = 'option';
+			div.classList.add( 'option' );
+			div.setAttribute( 'role', 'treeitem' );
+			div.id = 'outliner-option-' + div.value;
 			scope.dom.appendChild( div );
 
 			scope.options.push( div );
@@ -418,66 +424,33 @@ class UIOutliner extends UIDiv {
 
 	setValue( value ) {
 
-		for ( let i = 0; i < this.options.length; i ++ ) {
-
-			const element = this.options[ i ];
-
-			if ( element.value === value ) {
-
-				element.classList.add( 'active' );
-
-				// scroll into view
-
-				const y = element.offsetTop - this.dom.offsetTop;
-				const bottomY = y + element.offsetHeight;
-				const minScroll = bottomY - this.dom.offsetHeight;
-
-				if ( this.dom.scrollTop > y ) {
-
-					this.dom.scrollTop = y;
-
-				} else if ( this.dom.scrollTop < minScroll ) {
-
-					this.dom.scrollTop = minScroll;
-
-				}
-
-				this.selectedIndex = i;
-
-			} else {
-
-				element.classList.remove( 'active' );
-
-			}
-
-		}
-
-		this.selectedValue = value;
-
-		return this;
+		return this.setValues( value == null ? [] : [ value ], value );
 
 	}
 
-	setValues( values ) {
+	setValues( values, active = values.at( -1 ) ) {
 
+		const selected = new Set( values );
+		this.selectedValue = active ?? null;
+		this.selectedIndex = - 1;
+		this.dom.removeAttribute( 'aria-activedescendant' );
 		for ( let i = 0; i < this.options.length; i ++ ) {
 
 			const element = this.options[ i ];
+			const isActive = element.value === active;
+			element.classList.toggle( 'active', selected.has( element.value ) );
+			element.classList.toggle( 'current', isActive );
+			element.setAttribute( 'aria-selected', String( selected.has( element.value ) ) );
+			if ( ! isActive ) continue;
 
-			if ( values.indexOf( element.value ) !== - 1 ) {
-
-				element.classList.add( 'active' );
-
-			} else {
-
-				element.classList.remove( 'active' );
-
-			}
+			this.selectedIndex = i;
+			this.dom.setAttribute( 'aria-activedescendant', element.id );
+			const y = element.offsetTop - this.dom.offsetTop;
+			const minScroll = y + element.offsetHeight - this.dom.offsetHeight;
+			if ( this.dom.scrollTop > y ) this.dom.scrollTop = y;
+			else if ( this.dom.scrollTop < minScroll ) this.dom.scrollTop = minScroll;
 
 		}
-
-		this.selectedIndex = - 1;
-		this.selectedValue = null;
 
 		return this;
 

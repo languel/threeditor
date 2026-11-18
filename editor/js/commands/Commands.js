@@ -23,3 +23,8 @@ export { SetShadowValueCommand } from './SetShadowValueCommand.js';
 export { SetTextureParametersCommand } from './SetTextureParametersCommand.js';
 export { SetUuidCommand } from './SetUuidCommand.js';
 export { SetValueCommand } from './SetValueCommand.js';
+export { SetViewportHiddenCommand } from './SetViewportHiddenCommand.js';
+export { JoinMeshesCommand } from './JoinMeshesCommand.js';
+export { SetMeshMaterialsCommand } from './SetMeshMaterialsCommand.js';
+export { DuplicateObjectsCommand } from './DuplicateObjectsCommand.js';
+export { AddMeshPrimitiveCommand } from './AddMeshPrimitiveCommand.js';

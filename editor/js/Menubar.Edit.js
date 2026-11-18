@@ -1,15 +1,10 @@
 import { Box3, Vector3 } from 'three';
-import { clone } from 'three/addons/utils/SkeletonUtils.js';
 
 import { UIPanel, UIRow, UIHorizontalRule, UIText } from './libs/ui.js';
 
-import { AddScriptCommand } from './commands/AddScriptCommand.js';
-import { AddObjectCommand } from './commands/AddObjectCommand.js';
-import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
-import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { formatCombo } from './Keymap.js';
-import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
+import { hasRestriction } from './ObjectRestrictions.js';
 
 function MenubarEdit( editor ) {
 
@@ -81,6 +76,15 @@ function MenubarEdit( editor ) {
 	// ---
 
 	options.add( new UIHorizontalRule() );
+	const adjustLast = new UIRow().setTextContent( 'Adjust Last Operation…' ).onClick( () => editor.keymap.run( 'adjustLastOperation' ) );
+	const adjustKey = new UIText().setClass( 'key' );
+	adjustLast.dom.dataset.keymapAction = 'adjustLastOperation';
+	adjustLast.add( adjustKey );
+	options.add( adjustLast );
+	const updateAdjust = () => adjustLast.setClass( editor.keymap.actionAvailable( 'adjustLastOperation' ) ? 'option' : 'inactive' );
+	editor.signals.historyChanged.add( updateAdjust );
+	title.onMouseOver( updateAdjust );
+	updateAdjust();
 
 	// Center
 
@@ -106,64 +110,48 @@ function MenubarEdit( editor ) {
 	} );
 	options.add( option );
 
-	// Clone
+	const duplicate = new UIRow().setTextContent( 'Duplicate Objects' ).onClick( () => editor.keymap.run( 'duplicate' ) );
+	duplicate.dom.dataset.keymapAction = 'duplicate';
+	options.add( duplicate );
+	const updateDuplicate = () => duplicate.setClass( editor.keymap.actionAvailable( 'duplicate' ) ? 'option' : 'inactive' );
+	editor.signals.objectSelected.add( updateDuplicate );
+	title.onMouseOver( updateDuplicate );
+	updateDuplicate();
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/edit/clone' ) );
-	option.onClick( function () {
+	const join = new UIRow().setTextContent( 'Join' ).onClick( () => editor.keymap.run( 'joinMeshes' ) );
+	const joinKey = new UIText().setClass( 'key' );
+	join.add( joinKey );
+	options.add( join );
+	const updateJoin = () => join.setClass( editor.keymap.actionAvailable( 'joinMeshes' ) ? 'option' : 'inactive' );
+	editor.signals.objectSelected.add( updateJoin );
+	title.onMouseOver( updateJoin );
+	updateJoin();
+	const hierarchy = [
+		[ 'renameObject', 'Rename Object' ], [ 'parentObject', 'Set Parent' ], [ 'clearParent', 'Clear Parent' ]
+	].map( ( [ action, label ] ) => {
 
-		let object = editor.selected;
-
-		if ( object === null || object.parent === null ) return; // avoid cloning the camera or scene
-
-		const commands = withoutRuntimeChildren( object, () => {
-
-			const copy = clone( object );
-			const commands = [ new AddObjectCommand( editor, copy ) ];
-			const copyScanAndProjectorScripts = ( source, target ) => {
-				for ( const script of editor.scripts[ source.uuid ] || [] ) {
-					if ( [ 'splat', 'projector' ].includes( script.assetBehavior ) ) commands.push( new AddScriptCommand( editor, target, structuredClone( script ) ) );
-				}
-				source.children.forEach( ( child, index ) => copyScanAndProjectorScripts( child, target.children[ index ] ) );
-			};
-			copyScanAndProjectorScripts( object, copy );
-			return commands;
-
-		} );
-		editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( editor, commands ) );
+		const row = new UIRow().setTextContent( label ).onClick( () => editor.keymap.run( action ) );
+		const key = new UIText().setClass( 'key' );
+		row.dom.dataset.keymapAction = action;
+		row.add( key );
+		options.add( row );
+		return { action, row, key };
 
 	} );
-	options.add( option );
+	const updateHierarchy = () => {
 
-	// Delete
-	const cloneOption = option;
-	editor.shortcutDuplicate = () => cloneOption.dom.click();
+		for ( const { action, row } of hierarchy ) row.setClass( editor.keymap.actionAvailable( action ) ? 'option' : 'inactive' );
+
+	};
+	editor.signals.objectSelected.add( updateHierarchy );
+	title.onMouseOver( updateHierarchy );
+	updateHierarchy();
 
 	option = new UIRow();
 	option.setClass( 'option' );
 	option.setTextContent( strings.getKey( 'menubar/edit/delete' ) );
 	option.add( new UIText( 'DEL' ).setClass( 'key' ) );
-	option.onClick( function () {
-
-		const object = editor.selected;
-
-		if ( object === null || object.parent === null ) return;
-
-		if ( object.isSpotLight || object.isDirectionalLight ) {
-
-			editor.execute( new MultiCmdsCommand( editor, [
-				new RemoveObjectCommand( editor, object ),
-				new RemoveObjectCommand( editor, object.target )
-			] ) );
-
-		} else {
-
-			editor.execute( new RemoveObjectCommand( editor, object ) );
-
-		}
-
-	} );
+	option.onClick( () => editor.keymap.run( 'delete' ) );
 	options.add( option );
 	const deleteOption = option;
 	const updateKeys = () => {
@@ -171,6 +159,15 @@ function MenubarEdit( editor ) {
 		undo.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'undo' ) );
 		redo.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'redo' ) );
 		deleteOption.dom.querySelector( '.key' ).textContent = formatCombo( editor.keymap.combo( 'delete' ) );
+		const adjust = editor.keymap.combo( 'adjustLastOperation' );
+		adjustKey.setValue( adjust ? formatCombo( adjust ) : '' );
+		joinKey.setValue( formatCombo( editor.keymap.combo( 'joinMeshes' ) ) );
+		for ( const { action, key } of hierarchy ) {
+
+			const shortcut = editor.keymap.combo( action );
+			key.setValue( shortcut ? formatCombo( shortcut ) : '' );
+
+		}
 
 	};
 	editor.keymap.listeners.add( updateKeys );

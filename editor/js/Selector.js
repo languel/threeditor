@@ -57,11 +57,10 @@ class Selector {
 
 				}
 
-				if ( shiftKey === true && this.selection.length > 0 && editor.selected !== editor.scene && editor.selected !== editor.camera ) {
+				if ( shiftKey === true && this.selection.length > 0 && objects[ 0 ] !== editor.camera &&
+					objects[ 0 ] !== editor.scene && editor.selected !== editor.scene && editor.selected !== editor.camera ) {
 
-					// Shift-click toggles membership in the current selection
-
-					this.toggle( objects[ 0 ] );
+					this.toggle( objects[ 0 ], editor.keymap.preset === 'blender' );
 
 				} else {
 
@@ -108,12 +107,24 @@ class Selector {
 			}
 
 		} );
+		signals.objectRemoved.add( object => {
+
+			if ( ! this.selection.length ) return;
+			const remaining = this.selection.filter( selected => ! object.getObjectById( selected.id ) );
+			if ( remaining.length !== this.selection.length ) this.setSelection( remaining );
+
+		} );
 
 		signals.transformSettingsChanged.add( key => {
 
 			if ( key !== 'transformPivot' ) return;
 			this.syncPivot();
 			signals.objectSelected.dispatch( editor.selected );
+
+		} );
+		signals.cursorChanged.add( () => {
+
+			if ( editor.config.getKey( 'settings/transformPivot' ) === 'cursor' ) this.syncPivot();
 
 		} );
 
@@ -125,7 +136,7 @@ class Selector {
 
 		this.editor.scene.traverseVisible( function ( child ) {
 
-			objects.push( child );
+			if ( isVisible( child ) ) objects.push( child );
 
 		} );
 
@@ -207,7 +218,7 @@ class Selector {
 
 	}
 
-	toggle( object ) {
+	toggle( object, promote = false ) {
 
 		const selection = this.selection.slice();
 
@@ -220,6 +231,7 @@ class Selector {
 		} else {
 
 			selection.splice( index, 1 );
+			if ( promote && object !== this.editor.selected ) selection.push( object );
 
 		}
 
@@ -231,30 +243,14 @@ class Selector {
 
 		const editor = this.editor;
 
-		const hadGroupSelection = this.group.parent !== null;
-
-		this.selection = objects.slice();
+		const selection = [ ...new Set( objects.filter( Boolean ) ) ];
+		const changed = selection.length !== this.selection.length || selection.some( ( object, index ) => object !== this.selection[ index ] );
+		this.selection = selection;
+		editor.selected = selection.at( -1 ) || null;
 		this.syncPivot();
-
-		if ( objects.length > 1 ) {
-
-			editor.selected = null;
-			editor.config.setKey( 'selected', null );
-
-			this.signals.objectSelected.dispatch( null );
-
-		} else {
-
-			const object = ( objects.length === 1 ) ? objects[ 0 ] : null;
-
-			if ( editor.selected === object && hadGroupSelection === false ) return;
-
-			editor.selected = object;
-			editor.config.setKey( 'selected', ( object !== null ) ? object.uuid : null );
-
-			this.signals.objectSelected.dispatch( object );
-
-		}
+		if ( ! changed ) return;
+		editor.config.setKey( 'selected', editor.selected?.uuid || null );
+		this.signals.objectSelected.dispatch( editor.selected );
 
 	}
 
@@ -263,7 +259,7 @@ class Selector {
 		if ( ! this.selection.length ) return false;
 		if ( this.selection.length > 1 ) return true;
 		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
-		return pivot === 'bounds' || pivot === 'bottom' || pivot === 'origin';
+		return pivot === 'bounds' || pivot === 'bottom' || pivot === 'origin' || pivot === 'cursor';
 
 	}
 
@@ -287,7 +283,8 @@ class Selector {
 		const group = this.group;
 
 		const pivot = this.editor.config.getKey( 'settings/transformPivot' );
-		if ( pivot === 'origin' ) group.position.set( 0, 0, 0 );
+		if ( pivot === 'cursor' ) group.position.copy( this.editor.cursor );
+		else if ( pivot === 'origin' ) group.position.set( 0, 0, 0 );
 		else if ( pivot === 'active' ) this.selection.at( -1 ).getWorldPosition( group.position );
 		else if ( pivot === 'median' ) {
 

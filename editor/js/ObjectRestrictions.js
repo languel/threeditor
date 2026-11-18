@@ -1,12 +1,37 @@
 // Object restrictions are stored in userData so project JSON and editable
 // HTML retain them. Visibility itself remains the standard three.js property.
+const viewports = new WeakMap();
+function registerViewportVisibility( scene, visibility ) {
+ viewports.set( scene, visibility );
+}
 function hasRestriction( object, key ) {
  for ( let current=object; current; current=current.parent ) if ( current.userData?.threeditor?.[ key ] === true ) return true;
  return false;
 }
 function isVisible( object ) {
- for ( let current=object; current; current=current.parent ) if ( current.visible === false || current.userData?.threeditor?.disabled === true ) return false;
+ for ( let current=object; current; current=current.parent ) {
+  if ( current.visible === false || current.userData?.threeditor?.disabled === true ) return false;
+  if ( ! current.parent && viewports.has( current ) ) return viewports.get( current ).allows( object );
+ }
  return true;
+}
+
+function withViewportObjects( scene, render ) {
+
+ const state = viewports.get( scene );
+ if ( ! state || ! state.local && ! state.hidden.size ) return withEnabledObjects( scene, render );
+ const hidden = [];
+ scene.traverseVisible( object => {
+  if ( state.allows( object ) ) return;
+  object.visible = false;
+  hidden.push( object );
+ } );
+ try {
+  return withEnabledObjects( scene, render );
+ } finally {
+  for ( const object of hidden ) object.visible = true;
+ }
+
 }
 function withEnabledObjects( scene, render ) {
 
@@ -58,4 +83,4 @@ function withoutRuntimeChildren( root, callback ) {
 
 }
 
-export { hasRestriction, isVisible, withEnabledObjects, withoutRuntimeChildren };
+export { hasRestriction, isVisible, registerViewportVisibility, withEnabledObjects, withViewportObjects, withoutRuntimeChildren };

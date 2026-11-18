@@ -84,6 +84,18 @@ class History {
 
 	}
 
+	reviseLast( command, revise ) {
+
+		if ( this.historyDisabled || ! command || this.undos.at( -1 ) !== command ) return false;
+		revise();
+		if ( command.json || this.config.getKey( 'settings/history' ) ) command.json = command.toJSON();
+		this.lastCmdTime = Date.now();
+		this.redos = [];
+		this.editor.signals.historyChanged.dispatch( command );
+		return true;
+
+	}
+
 	undo() {
 
 		if ( this.historyDisabled ) {

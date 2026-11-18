@@ -80,7 +80,8 @@ class EditorControls extends THREE.EventDispatcher {
 			if ( ! scope.enabled || ! scope.canNavigate() || target === object ) return;
 			var distance;
 
-			box.setFromObject( target );
+			if ( target instanceof THREE.Box3 ) box.copy( target );
+			else box.setFromObject( target );
 
 			if ( box.isEmpty() === false ) {
 
@@ -91,6 +92,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 				// Focusing on an Group, AmbientLight, etc
 
+				if ( ! target.matrixWorld ) return;
 				center.setFromMatrixPosition( target.matrixWorld );
 				distance = 0.1;
 

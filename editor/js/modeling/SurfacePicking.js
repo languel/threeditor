@@ -38,7 +38,9 @@ export function paintSurfaces( scene ) {
 		} else if ( object.isPoints || object.splats && object.isInitialized ) {
 
 			const receiver = object.userData.runtimeOnly ? object.parent : object;
-			if ( receiver && ( receiver === object || receiver.userData.assetObject?.type === 'gaussian-splat' ) ) {
+			// Keep hit testing on the original receiver as painted Gaussians accumulate.
+			if ( receiver && ! receiver.userData.surfaceMark &&
+				( receiver === object || receiver.userData.assetObject?.type === 'gaussian-splat' ) ) {
 
 				scans.push( object );
 				receivers.set( object, receiver );

@@ -7,10 +7,10 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 
 function ModalTransform( editor ) {
- let mode=null,states=[],members=null,axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0;
+ let mode=null,states=[],members=null,axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0,commitPreview=null;
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
  function label(){notice.textContent=`${mode==='translate'?'Grab':mode==='rotate'?'Rotate':'Scale'}${axis?' · '+(plane?'plane excluding ':'')+axis.toUpperCase()+(local?' local':' global'):''}${numeric?' · '+numeric:''} · X/Y/Z axis · Shift+axis plane · type value · Enter accept · Esc cancel`;}
- function start(next){
+ function start(next,commit=null){
   if(mode||editor.flyControls?.active||editor.viewTools?.mode||!editor.renderer)return;
   if(editor.modeling?.editMode){editor.modeling.startModal(next);return;}
   const selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
@@ -21,7 +21,7 @@ function ModalTransform( editor ) {
    editor.selector.usesGroupPivot() && selection.length===editor.selector.selection.length;
   members=usePivot?objects.map(snapshot):null;
   if(usePivot)editor.selector.updateGroup();
-  states=(usePivot?[editor.selector.group]:objects).map(snapshot);mode=next;axis=null;plane=false;local=false;numeric='';precision=false;startX=lastX;startY=lastY;x=0;y=0;editor.controls.enabled=false;document.getElementById('viewport').appendChild(notice);notice.hidden=false;label();
+  states=(usePivot?[editor.selector.group]:objects).map(snapshot);mode=next;axis=null;plane=false;local=false;numeric='';precision=false;startX=lastX;startY=lastY;x=0;y=0;commitPreview=commit;editor.controls.enabled=false;document.getElementById('viewport').appendChild(notice);notice.hidden=false;label();
  }
  function isAncestor(a,o){for(let p=o.parent;p;p=p.parent)if(p===a)return true;return false;}
  function update(){
@@ -70,7 +70,11 @@ function ModalTransform( editor ) {
    if(!accept){state.o.updateMatrixWorld(true);editor.signals.objectChanged.dispatch(state.o);}
   }
   mode=null;states=[];members=null;notice.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
-  if(commands.length)editor.execute(commands.length===1?commands[0]:new MultiCmdsCommand(editor,commands));
+  const commit=commitPreview;commitPreview=null;
+  if(commands.length){
+   if(commit)commit();
+   else editor.execute(commands.length===1?commands[0]:new MultiCmdsCommand(editor,commands));
+  }
   if(editor.selector.usesGroupPivot())editor.selector.updateGroup();
  }
 

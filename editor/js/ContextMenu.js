@@ -1,6 +1,8 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=mask-editor';
 import { formatCombo } from './Keymap.js';
+import { changeParent } from './ObjectParenting.js';
+import { SetValueCommand } from './commands/SetValueCommand.js';
 
 function ContextMenu( editor, viewport ) {
 
@@ -57,11 +59,12 @@ function ContextMenu( editor, viewport ) {
 		function draw() {
 
 			list.replaceChildren();
-			const query = search.value.trim().toLowerCase();
+			const terms = search.value.toLowerCase().match( /\S+/g ) || [];
 			let lastSection = '';
 			for ( const action of actions ) {
 
-				if ( query && ! ( action.label + ' ' + ( action.section || '' ) ).toLowerCase().includes( query ) ) continue;
+				const text = ( action.label + ' ' + ( action.section || '' ) ).toLowerCase();
+				if ( ! terms.every( term => text.includes( term ) ) ) continue;
 				if ( action.section && action.section !== lastSection ) {
 
 					lastSection = action.section;
@@ -88,38 +91,119 @@ function ContextMenu( editor, viewport ) {
 				list.appendChild( button );
 
 			}
+			if ( ! list.childElementCount ) {
+
+				const empty = document.createElement( 'div' );
+				empty.className = 'context-menu-section';
+				empty.setAttribute( 'role', 'status' );
+				empty.textContent = 'No matches';
+				list.appendChild( empty );
+
+			}
 
 		}
 		search.addEventListener( 'input', draw );
 		menu.addEventListener( 'keydown', navigate );
 		draw();
+		openAt( position );
+		search.focus();
+
+	}
+
+	function openAt( position ) {
+
 		menu.hidden = false;
 		const rect = viewport.getBoundingClientRect();
 		const x = position?.x ?? rect.left + rect.width / 2;
 		const y = position?.y ?? rect.top + rect.height / 2;
 		menu.style.left = Math.max( 4, Math.min( x, window.innerWidth - menu.offsetWidth - 4 ) ) + 'px';
 		menu.style.top = Math.max( 4, Math.min( y, window.innerHeight - menu.offsetHeight - 4 ) ) + 'px';
-		search.focus();
-
 	}
 
 	function navigate( event ) {
 
 		if ( event.key === 'Escape' ) { event.preventDefault(); event.stopPropagation(); close(); return; }
 		if ( ! [ 'ArrowDown', 'ArrowUp', 'Enter' ].includes( event.key ) ) return;
-		const buttons = [ ...menu.querySelectorAll( '.context-menu-item' ) ];
+		const buttons = [ ...menu.querySelectorAll( '.context-menu-item:not(:disabled)' ) ];
 		if ( ! buttons.length ) return;
 		if ( event.key === 'Enter' && event.target.matches( 'input' ) ) { event.preventDefault(); buttons[ 0 ].click(); return; }
 		if ( event.key === 'Enter' ) return;
 		event.preventDefault();
 		const index = buttons.indexOf( document.activeElement );
-		buttons[ ( index + ( event.key === 'ArrowDown' ? 1 : buttons.length - 1 ) ) % buttons.length ].focus();
+		const next = event.key === 'ArrowDown' ? index + 1 : ( index <= 0 ? buttons.length - 1 : index - 1 );
+		buttons[ next % buttons.length ].focus();
 
 	}
 
 	function openAdd( position ) {
 
-		show( 'Add', editor.keymap.actions.filter( action => action.category === 'Menu · ' + editor.strings.getKey( 'menubar/add' ) ), position );
+		const category = 'Menu · ' + editor.strings.getKey( 'menubar/add' );
+		show( 'Add', editor.keymap.actions.filter( action => action.category === category && editor.keymap.actionAvailable( action.id ) ), position );
+
+	}
+
+	function openSeparate( position ) {
+
+		const model = editor.modeling;
+		if ( ! model.canSeparate ) return;
+		const materials = model.object.material;
+		const options = [
+			[ 'Selection', 'selection', ! model.selectedSurfaceFaces().length ],
+			[ 'By Material', 'material', ! Array.isArray( materials ) || materials.length < 2 ],
+			[ 'By Loose Parts', 'loose', false ]
+		];
+		show( 'Separate', options.map( ( [ label, mode, disabled ] ) =>
+			( { label, disabled, run: () => editor.viewTools.run( () => model.separate( mode ) ) } ) ), position );
+
+	}
+
+	function openParent( clearing, position ) {
+
+		const choices = clearing ? [ [ 'Clear Parent', 'keepLocal' ], [ 'Clear and Keep Transform', 'keepWorld' ] ] :
+			[ [ 'Object (Keep Transform)', 'keepWorld' ], [ 'Object (Without Inverse)', 'withoutInverse' ] ];
+		show( clearing ? 'Clear Parent' : 'Set Parent', choices.map( ( [ label, mode ] ) => ( {
+			label, run: () => editor.viewTools.run( () => changeParent( editor, clearing, mode ) )
+		} ) ), position );
+
+	}
+
+	function openRename( position ) {
+
+		const object = editor.selector.selection.at( -1 );
+		previousFocus = document.activeElement;
+		menu.setAttribute( 'aria-label', 'Rename Object' );
+		const form = document.createElement( 'form' );
+		const caption = document.createElement( 'label' );
+		caption.className = 'context-menu-title';
+		caption.textContent = 'Object Name';
+		const name = document.createElement( 'input' );
+		name.className = 'Input context-menu-search';
+		name.value = object.name;
+		caption.appendChild( name );
+		const submit = document.createElement( 'button' );
+		submit.className = 'Button';
+		submit.textContent = 'Rename';
+		form.append( caption, submit );
+		form.onsubmit = event => {
+
+			event.preventDefault();
+			const value = name.value.trim();
+			if ( value && value !== object.name && editor.selector.selection.at( -1 ) === object &&
+				editor.keymap.actionAvailable( 'renameObject' ) ) {
+
+				const command = new SetValueCommand( editor, object, 'name', value );
+				command.updatable = false;
+				editor.execute( command, 'Rename Object' );
+
+			}
+			close();
+
+		};
+		menu.replaceChildren( form );
+		menu.addEventListener( 'keydown', navigate );
+		openAt( position || pointer );
+		name.focus();
+		name.select();
 
 	}
 
@@ -129,11 +213,25 @@ function ContextMenu( editor, viewport ) {
 		const edit = model.editMode && model.object && ! editor.viewTools.mode;
 		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selected ? [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ] : [];
 		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );
+		for ( const id of [ 'renameObject', 'parentObject', 'clearParent' ] ) {
+
+			if ( editor.keymap.actionAvailable( id ) ) actions.push( { ...editor.keymap.actions.find( action => action.id === id ), section: 'Hierarchy' } );
+
+		}
+		if ( editor.keymap.actionAvailable( 'joinMeshes' ) ) actions.unshift( editor.keymap.actions.find( action => action.id === 'joinMeshes' ) );
 		if ( edit ) {
 
+			if ( model.canInsertPrimitive ) actions.push( { label: 'Add Mesh…', section: 'Mesh operations', run: () => openAdd( position ) } );
 			actions.push( ...model.actions().map( action => ( { ...action, section: 'Mesh operations' } ) ) );
+			if ( model.canSeparate ) actions.push( { label: 'Separate…', section: 'Mesh operations', run: () => openSeparate( position ) } );
 			actions.push( { label: 'Select all', section: 'Selection', run: () => model.selectPoints( true ) },
 				{ label: 'Deselect all', section: 'Selection', run: () => model.selectPoints( false ) } );
+			for ( const id of [ 'selectLinked', 'selectMore', 'selectLess', 'invertMeshSelection' ] ) {
+
+				const action = editor.keymap.actions.find( action => action.id === id );
+				if ( editor.keymap.actionAvailable( id ) ) actions.push( { ...action, section: 'Selection' } );
+
+			}
 
 		} else if ( editor.selected?.userData.measurement ) {
 
@@ -141,7 +239,7 @@ function ContextMenu( editor, viewport ) {
 
 		} else actions.unshift( { label: 'Add…', run: () => openAdd( position ) }, ...outlineActions( editor, editor.selected ) );
 		actions.push( ...originActions( editor ) );
-		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ] ] ) actions.push( {
+		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ], [ 'cursor', '3D Cursor' ] ] ) actions.push( {
 
 			label: 'Pivot: ' + label, section: 'Transform pivot', run: () => {
 
@@ -157,8 +255,8 @@ function ContextMenu( editor, viewport ) {
 	function openPalette() {
 
 		const rect = viewport.getBoundingClientRect();
-		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) ).map( action => ( { ...action, section: action.section || action.category } ) );
-		if ( ! editor.editWorkspace.mode ) {
+		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) && editor.keymap.inArea( action ) ).map( action => ( { ...action, section: action.section || action.category } ) );
+		if ( ! editor.editWorkspace.mode && ! document.body.dataset.maximizedArea ) {
 
 			const areaPointer = pointer;
 			const section = 'Viewport areas';
@@ -184,7 +282,7 @@ function ContextMenu( editor, viewport ) {
 
 	} );
 	document.addEventListener( 'pointerdown', event => { if ( ! menu.hidden && ! menu.contains( event.target ) ) close( false ); }, true );
-	return { openAdd, openObject, openPalette, show, close };
+	return { openAdd, openObject, openPalette, openSeparate, openParent, openRename, show, close };
 
 }
 

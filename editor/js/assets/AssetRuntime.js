@@ -35,6 +35,12 @@ export class AssetRuntime {
 		editor.signals.objectChanged.add( ( object, attribute ) => {
 
 			if ( attribute !== 'userData' ) return;
+			for ( const runtime of this.active.values() ) {
+
+				if ( runtime.object === object && runtime.script.assetBehavior === 'splat' &&
+					runtime.splatData !== object.userData.assetObject?.splatData ) this.stop( runtime.script );
+
+			}
 			this.refresh();
 			for ( const runtime of this.active.values() ) {
 
@@ -85,7 +91,8 @@ export class AssetRuntime {
 				try {
 					const parameters = serializeScript( script ).parameters || {};
 					const runtime = evaluateAssetScript( object, script, player, editor.scene, editor.viewportCamera, source, parameters );
-					runtime.init?.call( object ); this.active.set( script, { ...runtime, object, script, urls, parameters } );
+					runtime.init?.call( object );
+					this.active.set( script, { ...runtime, object, script, urls, parameters, splatData: object.userData.assetObject?.splatData } );
 					editor.signals.objectChanged.dispatch( object );
 				} catch ( error ) { for ( const url of urls ) URL.revokeObjectURL( url ); editor.assetBrowser?.status?.( 'Asset script: ' + error.message, true ); console.error( error ); }
 			}

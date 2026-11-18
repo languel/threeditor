@@ -6,6 +6,7 @@ import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
 import { MenubarView } from './Menubar.View.js?v=viewport-tools';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
+import { formatCombo } from './Keymap.js';
 
 function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 
@@ -48,6 +49,27 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 		return button;
 
 	}
+
+	const playGlyph = '<path d="M6 4.5 16 10 6 15.5Z"/>';
+	const stopGlyph = '<rect x="5" y="5" width="10" height="10" rx="1"/>';
+	const playScene = iconButton( 'Play Scene', playGlyph );
+	playScene.classList.add( 'workspace-play-scene' );
+	playScene.setAttribute( 'aria-controls', 'player' );
+	playScene.addEventListener( 'click', () => editor.keymap.run( 'play' ) );
+	function syncPlayer( playing ) {
+
+		const label = playing ? 'Stop Scene' : 'Play Scene';
+		playScene.setAttribute( 'aria-label', label );
+		playScene.setAttribute( 'aria-pressed', String( playing ) );
+		playScene.querySelector( 'svg' ).innerHTML = playing ? stopGlyph : playGlyph;
+		const binding = editor.keymap.combo( 'play' );
+		playScene.title = label + ( binding ? ' (' + formatCombo( binding ) + ')' : '' );
+
+	}
+	editor.signals.startPlayer.add( () => syncPlayer( true ) );
+	editor.signals.stopPlayer.add( () => syncPlayer( false ) );
+	editor.keymap.listeners.add( () => syncPlayer( playScene.getAttribute( 'aria-pressed' ) === 'true' ) );
+	syncPlayer( false );
 
 	iconButton( 'Open asset browser', '<path d="M2 6h6l2-3h8v14H2z"/><path d="M2 7h16"/>' ).addEventListener( 'click', () => editor.assetBrowser.reveal() );
 

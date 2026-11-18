@@ -1,6 +1,6 @@
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
 import { ShaderChunk } from 'three';
-import { withEnabledObjects } from './ObjectRestrictions.js';
+import { withViewportObjects } from './ObjectRestrictions.js';
 import cubeUVReflection from './libs/cube_uv_reflection_fragment.js';
 
 // WebGL path tracer still references the pre-r187 cube-UV shader chunk.
@@ -9,17 +9,31 @@ if ( ! ShaderChunk.cube_uv_reflection_fragment ) ShaderChunk.cube_uv_reflection_
 function ViewportPathtracer( renderer ) {
 
 	let pathTracer = null;
+	let dirty = true;
+	let stopped = false;
 
 	function init( scene, camera ) {
 
+		if ( ! dirty || stopped ) return;
 		if ( pathTracer === null ) {
 
 			pathTracer = new WebGLPathTracer( renderer );
 			pathTracer.filterGlossyFactor = 0.5;
+			pathTracer.tiles.set( 1, 1 );
+			pathTracer.minSamples = 1;
+			pathTracer.fadeDuration = 0;
 
 		}
 
-		withEnabledObjects( scene, () => pathTracer.setScene( scene, camera ) );
+		withViewportObjects( scene, () => pathTracer.setScene( scene, camera ) );
+		dirty = false;
+
+	}
+
+	function invalidate() {
+
+		dirty = true;
+		stopped = false;
 
 	}
 
@@ -57,39 +71,48 @@ function ViewportPathtracer( renderer ) {
 
 	}
 
-	function update() {
+	function update( scene, camera ) {
 
-		if ( pathTracer === null ) return;
+		if ( stopped ) return null;
+		try {
 
-		pathTracer.renderSample();
+			init( scene, camera );
+			pathTracer.pausePathTracing = pathTracer.samples >= 128;
+			withViewportObjects( scene, () => pathTracer.renderSample() );
+			return Math.floor( pathTracer.samples );
+
+		} catch ( error ) {
+
+			console.warn( 'Viewport path tracing paused:', error );
+			stopped = true;
+			return null;
+
+		}
 
 	}
 
 	function reset() {
 
-		if ( pathTracer === null ) return;
-
-		pathTracer.updateCamera();
+		if ( pathTracer && ! dirty ) pathTracer.updateCamera();
 
 	}
 
-	function getSamples() {
+	function dispose() {
 
-		if ( pathTracer === null ) return;
-
-		return pathTracer.samples;
-
+		pathTracer?.dispose();
+		pathTracer = null;
+		invalidate();
 	}
 
 	return {
-		init: init,
+		invalidate,
+		dispose,
 		setSize: setSize,
 		setBackground: setBackground,
 		setEnvironment: setEnvironment,
 		updateMaterials: updateMaterials,
 		update: update,
-		reset: reset,
-		getSamples: getSamples
+		reset: reset
 	};
 
 }

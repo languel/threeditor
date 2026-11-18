@@ -9,8 +9,11 @@ export const shadingModes = [
 	[ 'preview', 'Clean Preview', 'preview' ]
 ];
 
+export const cleanShading = mode => [ 'preview', 'materials', 'realistic' ].includes( mode );
+
 const factories = {
 	solid: () => new MeshMatcapMaterial( { color: 0xaaaaaa, toneMapped: false } ),
+	xray: () => new MeshMatcapMaterial( { color: 0xaaaaaa, toneMapped: false, transparent: true, opacity: .32, depthWrite: false } ),
 	normals: () => new MeshNormalMaterial(),
 	wireframe: () => new MeshBasicMaterial( { color: 0x9aabbc, wireframe: true, toneMapped: false } )
 };

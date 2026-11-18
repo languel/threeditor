@@ -43,15 +43,6 @@ function Sidebar( editor ) {
 		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) container.select( tab.dom.id );
 	} );
 
-
-	const sidebarPropertiesResizeObserver = new ResizeObserver( function () {
-
-		sidebarProperties.tabsDiv.setWidth( getComputedStyle( container.dom ).width );
-
-	} );
-
-	sidebarPropertiesResizeObserver.observe( container.tabsDiv.dom );
-
 	return container;
 
 }

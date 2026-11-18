@@ -18,6 +18,8 @@ import { ContextMenu } from './ContextMenu.js?v=area-splits';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js';
 import { PanelDock } from './PanelDock.js';
+import { WorkspaceArea } from './WorkspaceArea.js';
+import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
 import { CodePanel } from './CodePanel.js?v=code-toggle';
 import { AnimationResizer } from './AnimationResizer.js';
 import { Animation } from './Animation.js?v=timeline-autokey';
@@ -77,6 +79,7 @@ async function startEditor( portable = null ) {
 	editor.p5Preview = new P5Preview( editor );
 	const viewport = new Viewport( editor );
 	document.body.appendChild( viewport.dom );
+	editor.primitiveAdjustment = new PrimitiveAdjustment( editor, viewport.dom );
 
 	const toolbar = new Toolbar( editor );
 	editor.viewportToolbar.prepend( toolbar.dom );
@@ -111,6 +114,15 @@ async function startEditor( portable = null ) {
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
+	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, viewport.dom, sidebar.dom, codePanel.dom, animation.dom );
+	editor.openComponentPicker = () => {
+
+		editor.workspaceArea.reveal( sidebar.dom );
+		sidebar.select( 'scene' );
+		sidebarDock.toggle( true );
+		editor.revealComponents();
+
+	};
 	MenuAutoHide( editor, menubar.dom );
 	editor.keymap.registerMenu( menubar.dom );
 	editor.contextMenu = new ContextMenu( editor, viewport.dom );
@@ -225,6 +237,7 @@ async function startEditor( portable = null ) {
 
 			signals.cameraResetted.add( saveState );
 			signals.viewportCameraChanged.add( saveState );
+			signals.cursorChanged.add( saveState );
 			signals.geometryChanged.add( saveState );
 			signals.objectAdded.add( saveState );
 			signals.objectChanged.add( saveState );

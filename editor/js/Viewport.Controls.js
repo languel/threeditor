@@ -2,6 +2,7 @@ import { shadingModes } from './ViewportShading.js';
 import { icon } from './Glyphs.js?v=viewport-tools';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';
+import { formatCombo } from './Keymap.js';
 import { UISpan, UIPanel, UISelect, UIButton } from './libs/ui.js';
 import { ViewportParameters } from './Viewport.Parameters.js';
 
@@ -42,6 +43,22 @@ function ViewportControls( editor ) {
 	} );
 	const syncCameraGlyph = glyphSelect( cameraSelect, 'camera' );
 
+	const projection = new UIButton().onClick( () => editor.keymap.run( 'projection' ) );
+	projection.dom.classList.add( 'viewport-projection-button' );
+	projection.dom.setAttribute( 'aria-label', 'Toggle Perspective / Orthographic' );
+	container.add( projection );
+	function syncProjection() {
+
+		const ortho = editor.camera.isOrthographicCamera;
+		const label = ortho ? 'Orthographic' : 'Perspective';
+		projection.dom.innerHTML = icon( ortho ? 'viewOrthographic' : 'viewPerspective' );
+		projection.dom.title = label + ' · Toggle projection (Numpad 5)';
+
+	}
+	signals.cameraChanged.add( syncProjection );
+	signals.viewportCameraChanged.add( syncProjection );
+	syncProjection();
+
 	const split = new UIButton( 'Split view' ).onClick( () => {
 
 		if ( ! editor.viewportSplit && ! editor.viewportSource && editor.viewportCamera === editor.camera ) {
@@ -58,6 +75,15 @@ function ViewportControls( editor ) {
 	split.dom.title = 'Split view';
 	split.dom.innerHTML = '<span class="viewport-select-symbol">' + icon( 'viewportSplit' ) + '</span><span class="viewport-split-label">Split view</span>';
 	container.add( split );
+	const local = new UIButton( 'Local View' ).onClick( () => editor.viewportVisibility.toggleLocal() );
+	local.dom.classList.add( 'viewport-local-view' );
+	local.dom.title = 'Exit Local View (/)';
+	local.dom.setAttribute( 'aria-label', 'Exit Local View' );
+	local.dom.hidden = true;
+	container.add( local );
+	signals.viewportVisibilityChanged.add( () => { local.dom.hidden = ! editor.viewportVisibility.local; } );
+	signals.editorCleared.add( () => { local.dom.hidden = true; } );
+	signals.projectLoaded.add( () => { local.dom.hidden = true; } );
 	signals.cameraAdded.add( update );
 	signals.cameraRemoved.add( update );
 	signals.sceneGraphChanged.add( update );
@@ -93,6 +119,28 @@ function ViewportControls( editor ) {
 	const parameters = new ViewportParameters( editor );
 	editor.viewportParameters = parameters;
 	const syncShadingGlyph = glyphSelect( shadingSelect, 'shadingSolid' );
+	const xray = new UIButton().onClick( () => editor.toggleViewportXRay() );
+	xray.dom.classList.add( 'viewport-xray-button' );
+	xray.dom.setAttribute( 'aria-label', 'Toggle X-Ray' );
+	xray.dom.innerHTML = icon( 'xray' );
+	xray.dom.title = 'Toggle X-Ray (Alt+Z)';
+	container.add( xray );
+	const overlays = new UIButton().onClick( () => editor.toggleViewportOverlays() );
+	overlays.dom.classList.add( 'viewport-overlays-button' );
+	overlays.dom.setAttribute( 'aria-label', 'Toggle Viewport Overlays' );
+	overlays.dom.innerHTML = icon( 'viewportOverlays' );
+	const updateOverlayHint = () => {
+
+		const binding = editor.keymap.combo( 'viewportOverlays' );
+		overlays.dom.title = 'Toggle Viewport Overlays' + ( binding ? ' (' + formatCombo( binding ) + ')' : '' );
+
+	};
+	editor.keymap.listeners.add( updateOverlayHint );
+	updateOverlayHint();
+	container.add( overlays );
+	const syncOverlays = () => overlays.dom.setAttribute( 'aria-pressed', String( editor.viewportOverlays ) );
+	signals.viewportOverlaysChanged.add( syncOverlays );
+	syncOverlays();
 	container.add( parameters );
 	function syncShading() {
 
@@ -100,6 +148,8 @@ function ViewportControls( editor ) {
 		shadingSelect.setValue( mode );
 		const glyph = shadingModes.find( ( [ value ] ) => value === mode )?.[ 2 ];
 		syncShadingGlyph( glyph );
+		xray.dom.disabled = mode !== 'solid';
+		xray.dom.setAttribute( 'aria-pressed', String( editor.viewportXRay ) );
 
 	}
 	signals.viewportShadingChanged.add( syncShading );

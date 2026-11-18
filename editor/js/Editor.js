@@ -4,6 +4,7 @@ import { isProjector, upgradeProjectorScript } from './assets/Projector.js?v=mas
 import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
+import { ViewportVisibility } from './ViewportVisibility.js';
 import { upgradeMathScript } from './assets/MathObjects.js';
 import { upgradeSplatScript } from './assets/SplatObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
@@ -113,6 +114,9 @@ function Editor( portable = false ) {
 
 		viewportCameraChanged: new Signal(),
 		viewportShadingChanged: new Signal(),
+		viewportOverlaysChanged: new Signal(),
+		cursorChanged: new Signal(),
+		viewportVisibilityChanged: new Signal(),
 
 		intersectionsDetected: new Signal(),
 
@@ -137,6 +141,7 @@ function Editor( portable = false ) {
 
 	this.streams = new StreamRouter();
 	this.scene = new THREE.Scene();
+	this.viewportVisibility = new ViewportVisibility( this );
 	this.scene.name = 'Scene';
 
 	this.sceneHelpers = new THREE.Scene();
@@ -169,12 +174,21 @@ function Editor( portable = false ) {
 	this.activeSceneCameraUuid = null;
 	this.viewportShading = 'solid';
 	this.viewportColor = new THREE.Color();
+	this.cursor = new THREE.Vector3();
 
 	this.addCamera( this.camera );
 
 }
 
 Editor.prototype = {
+
+	setCursor: function ( position ) {
+
+		if ( ! [ position.x, position.y, position.z ].every( Number.isFinite ) || this.cursor.equals( position ) ) return;
+		this.cursor.copy( position );
+		this.signals.cursorChanged.dispatch();
+
+	},
 
 	setScene: function ( scene ) {
 
@@ -747,6 +761,33 @@ Editor.prototype = {
 
 	},
 
+	get viewportXRay() {
+
+		return this.viewportShading === 'solid' && this.config.getKey( 'settings/viewportXRay' ) === true;
+
+	},
+
+	get viewportOverlays() {
+
+		return this.config.getKey( 'settings/viewportOverlays' ) !== false;
+
+	},
+
+	toggleViewportOverlays: function () {
+
+		this.config.setKey( 'settings/viewportOverlays', ! this.viewportOverlays );
+		this.signals.viewportOverlaysChanged.dispatch();
+
+	},
+
+	toggleViewportXRay: function () {
+
+		if ( this.viewportShading !== 'solid' ) return;
+		this.config.setKey( 'settings/viewportXRay', ! this.viewportXRay );
+		this.signals.viewportShadingChanged.dispatch();
+
+	},
+
 	//
 
 	select: function ( object ) {
@@ -809,6 +850,9 @@ Editor.prototype = {
 	clear: function () {
 
 		this.userProjectPath = '';
+		this.cursor.set( 0, 0, 0 );
+		this.viewportVisibility.hidden.clear();
+		this.viewportVisibility.local = null;
 		this.activeSceneCameraUuid = null;
 		this.history.clear();
 		this.storage.clear();
@@ -909,6 +953,10 @@ Editor.prototype = {
 		this.backgroundType = json.backgroundType || 'Default';
 		this.environmentType = json.environmentType || 'Default';
 
+		const cursor = json.cursor;
+		this.cursor.fromArray( Array.isArray( cursor ) && cursor.length === 3 && cursor.every( Number.isFinite ) ? cursor : [ 0, 0, 0 ] );
+		this.viewportVisibility.local = null;
+		this.viewportVisibility.hidden = new Set( Array.isArray( json.viewportHidden ) ? json.viewportHidden : [] );
 		this.setScene( scene );
 		this.activeSceneCameraUuid = json.activeSceneCamera || null;
 		if ( ! Object.hasOwn( this.scene.userData, 'mainCamera' ) ) {
@@ -959,6 +1007,11 @@ Editor.prototype = {
 		}
 
 		const mainCameraSource = this.mainCameraSource;
+		const local = this.viewportVisibility.local;
+		const viewportCamera = local?.viewportCamera || this.viewportCamera;
+		const director = local?.camera || this.camera;
+		const directorTarget = local?.center || this.controls.getCenter?.( this.camera ) || this.controls.center;
+		const viewTarget = viewportCamera.uuid === director.uuid ? directorTarget : this.controls.getCenter?.( viewportCamera ) || this.controls.center;
 		return {
 
 			metadata: {},
@@ -972,18 +1025,21 @@ Editor.prototype = {
 				cameraController: cameraControllerSettings( this, mainCameraSource ).mode || 'none',
 				toneMappingExposure: this.config.getKey( 'project/renderer/toneMappingExposure' )
 			},
-			camera: this.camera.toJSON(),
-			viewportCamera: this.viewportCamera.uuid,
-			viewportSource: this.viewportSource?.uuid,
+			camera: director.toJSON(),
+			cursor: ( local?.cursor || this.cursor ).toArray(),
+			viewportHidden: [ ...this.viewportVisibility.hidden ],
+			viewportCamera: viewportCamera.uuid,
+			viewportSource: ( local ? local.viewportSource : this.viewportSource )?.uuid,
 			viewportSplit: this.viewportSplit,
 			viewportSplitAxis: this.viewportSplitAxis,
 			viewportSplitRatio: this.viewportSplitRatio,
 			mainCamera: mainCameraSource.uuid,
 			mainCameraOutput: this.mainCameraOutput,
-			mainCameraTarget: mainCameraSource.isCamera ? ( this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,
+			mainCameraTarget: mainCameraSource.isCamera ? ( mainCameraSource === this.camera ? directorTarget :
+				this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,
 			activeSceneCamera: this.activeSceneCameraUuid,
-			viewportTarget: ( this.controls.getCenter?.( this.viewportCamera ) || this.controls.center ).toArray(),
-			controls: this.controls.toJSON( this.camera ),
+			viewportTarget: viewTarget.toArray(),
+			controls: local ? { ...this.controls.toJSON( this.camera ), center: directorTarget.toArray() } : this.controls.toJSON( this.camera ),
 			scene: withoutRuntimeChildren( scene, () => scene.toJSON() ),
 			scripts: Object.fromEntries( Object.entries( scripts ).map( ( [ uuid, list ] ) => [ uuid, list.map( serializeScript ) ] ) ),
 			history: this.history.toJSON(),
