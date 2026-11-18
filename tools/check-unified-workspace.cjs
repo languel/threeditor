@@ -68,6 +68,70 @@ async function checkTextureProjection( page ) {
 
 }
 
+async function checkUVSelection( page ) {
+
+	await page.evaluate( () => {
+
+		editor.setViewportShading( 'solid' );
+		editor.modeling.create( 'shape' );
+		editor.modeling.setSelectionMode( 'vertex' );
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.controls.center.set( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+
+	} );
+	const vertex = ( index, previous ) => page.evaluate( ( { index, previous } ) => {
+
+		const model = editor.modeling, { camera, rect } = model.frame;
+		const projected = model.object.localToWorld( new THREE.Vector3( ...model.data.points[ index ] ) ).project( camera );
+		const local = [ ( projected.x + 1 ) * rect.width / 2, ( 1 - projected.y ) * rect.height / 2 ];
+		const { left, top } = model.rect();
+		const overlay = model.overlay, context = overlay.getContext( '2d' );
+		const bounds = overlay.getBoundingClientRect();
+		const pixel = ( [ x, y ] ) => [ ...context.getImageData(
+			Math.floor( x * overlay.width / bounds.width ), Math.floor( y * overlay.height / bounds.height ), 1, 1
+		).data ];
+		return { local, client: [ left + local[ 0 ], top + local[ 1 ] ], color: pixel( local ),
+			fringe: pixel( [ local[ 0 ], local[ 1 ] + 4 ] ), previous: previous && pixel( previous ) };
+
+	}, { index, previous } );
+	const orange = [ 255, 157, 69, 255 ];
+	await page.mouse.click( ...( await vertex( 0 ) ).client );
+	assert.deepEqual( ( await vertex( 0 ) ).color, orange );
+
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	await page.locator( 'body.workspace-2d-split' ).waitFor();
+	const split = await vertex( 0 );
+	assert.deepEqual( split.color, orange );
+	assert.notDeepEqual( split.fringe, orange, 'Vertex selection uses a small dot' );
+
+	const divider = page.getByRole( 'separator', { name: 'Resize 2D and 3D areas' } );
+	await divider.press( 'ArrowLeft' );
+	assert.deepEqual( ( await vertex( 0 ) ).color, orange );
+	await divider.press( 'ArrowRight' );
+
+	await page.mouse.move( split.client[ 0 ] + 110, split.client[ 1 ] - 45 );
+	await page.mouse.down( { button: 'middle' } );
+	await page.mouse.move( split.client[ 0 ] + 146, split.client[ 1 ] - 67, { steps: 5 } );
+	await page.mouse.up( { button: 'middle' } );
+	const orbited = await vertex( 0, split.local );
+	assert.ok( Math.hypot( orbited.local[ 0 ] - split.local[ 0 ], orbited.local[ 1 ] - split.local[ 1 ] ) > 5 );
+	assert.deepEqual( orbited.color, orange );
+	assert.notDeepEqual( orbited.previous, orange, 'The overlay clears the previous position after navigation' );
+
+	await page.mouse.click( ...( await vertex( 1 ) ).client );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.indices ), [ 1 ] );
+	assert.deepEqual( ( await vertex( 1 ) ).color, orange );
+	await page.keyboard.press( 'Escape' );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.indices ), [] );
+	assert.equal( await page.getByRole( 'region', { name: 'UV editor area' } ).isVisible(), true );
+	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkViewportControls( page ) {
 
 	await page.evaluate( () => {
@@ -863,6 +927,7 @@ async function check() {
 			return migrated;
 
 		} ), [ 1, 2, 3 ] );
+		await checkUVSelection( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );

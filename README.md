@@ -139,7 +139,7 @@ Use **Enter** to apply a mask or save a ruler or path. **Esc** cancels an active
 
 Open **UV** or **Image & Vector** from **2D Editors**. When there is room, the 2D editor opens on the left with a live 3D view on the right. Drag the divider or focus it and press Left or Right to resize. Use the split glyph in the 2D header to switch between the split and a full-width editor. Narrow windows use the full-width editor. Mask and Warp can also use the split.
 
-The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to use modeling shortcuts there.
+The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to select mesh elements and use modeling shortcuts there. Edit Mode draws selected vertices as small orange dots, selected edges in orange, and selected faces with an orange tint.
 
 ## Outliner and Properties
 

@@ -20,6 +20,8 @@ import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
 
 
+const editSelectionColor = '#ff9d45';
+const editWireColor = '#22262d';
 const worldAxes = [ new THREE.Vector3( 1, 0, 0 ), new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 1 ) ];
 
 function elementCenter( data, ids ) {
@@ -66,7 +68,7 @@ export class ModelViewport {
 		viewport.addEventListener( 'pointerdown', event => {
 
 			const control = document.activeElement;
-			if ( event.target === editor.renderer?.domElement && control?.closest( '.viewport-tool-panel, .modeling-panel, #animation' ) ) control.blur();
+			if ( event.target === editor.renderer?.domElement && control?.closest( '.viewport-tool-panel, .modeling-panel, #animation, #editor-2d' ) ) control.blur();
 			this.pointerDown( event );
 
 		}, true );
@@ -148,7 +150,7 @@ export class ModelViewport {
 		signals.editorCleared.add( () => this.stop() );
 		window.addEventListener( 'keydown', event => {
 
-			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.mode || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu' ) ) return;
+			if ( ! this.object || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu, #editor-2d' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
 
@@ -292,7 +294,6 @@ export class ModelViewport {
 		this.penHover = null;
 		this.penChain = null;
 		if ( ! this.editMode ) this.brush = '';
-		this.overlay.hidden = ! this.object;
 		this.changed();
 		this.render();
 
@@ -307,7 +308,6 @@ export class ModelViewport {
 			else if ( this.gesture ) this.cancelGizmo?.();
 
 		}
-		this.overlay.hidden = ! this.object || !! this.editor.viewTools?.mode;
 
 	}
 
@@ -1308,7 +1308,14 @@ export class ModelViewport {
 
 	draw() {
 
-		if ( ! this.canEdit() || ! this.editor.renderer || ! this.frame || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode ) return;
+		this.overlay.hidden = ! this.canEdit() || ! this.editor.renderer || ! this.frame ||
+			!! this.editor.viewTools?.mode || !! this.editor.editWorkspace?.exclusive;
+		if ( this.overlay.hidden ) {
+
+			this.handles = [];
+			return;
+
+		}
 		const bounds = this.editor.renderer.domElement.getBoundingClientRect();
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
 		const w = Math.round( bounds.width * ratio ), h = Math.round( bounds.height * ratio );
@@ -1349,8 +1356,8 @@ export class ModelViewport {
 
 		} );
 		if ( interactive ) this.handles = handles;
-		ctx.lineWidth = 1.5;
-		ctx.strokeStyle = '#6cd4f2';
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = editWireColor;
 		const stroke = ( points, closed ) => {
 
 			ctx.beginPath();
@@ -1376,9 +1383,11 @@ export class ModelViewport {
 
 					const pointer = this.lastPointer;
 					const { top, left } = this.rect();
+					ctx.strokeStyle = editSelectionColor;
 					ctx.setLineDash( [ 4, 4 ] );
 					stroke( [ handles.at( -1 ), [ pointer.clientX - left, pointer.clientY - top ] ], false );
 					ctx.setLineDash( [] );
+					ctx.strokeStyle = editWireColor;
 
 				}
 
@@ -1391,17 +1400,13 @@ export class ModelViewport {
 			stroke( points.map( point => project( point.toArray() ) ), isClosedOutline( data ) );
 
 		}
-		if ( this.penChain ) {
-
-			ctx.strokeStyle = '#ffba62';
-			stroke( this.penChain.indices.map( index => handles[ index ] ), false );
-
-		}
+		const selected = new Set( state?.cap || this.indices );
+		ctx.strokeStyle = editSelectionColor;
+		ctx.lineWidth = 2;
+		if ( this.penChain ) stroke( this.penChain.indices.map( index => handles[ index ] ), false );
 		if ( ! this.pen && this.selectionMode !== 'vertex' && this.elements?.size ) {
 
-			ctx.strokeStyle = '#ffba62';
-			ctx.fillStyle = '#ff9a3038';
-			ctx.lineWidth = 2.5;
+			ctx.fillStyle = '#ff9d4538';
 			for ( const element of this.elements.values() ) {
 
 				const points = element.map( i => handles[ i ] );
@@ -1410,10 +1415,13 @@ export class ModelViewport {
 
 			}
 
-		} else if ( this.indices.length > 1 ) {
+		} else if ( data.faces && selected.size > 1 ) {
 
-			ctx.strokeStyle = '#ffba62';
-			stroke( this.indices.map( index => handles[ index ] ), false );
+			for ( const [ a, b ] of meshEdges( data ) ) {
+
+				if ( selected.has( a ) && selected.has( b ) && handles[ a ] && handles[ b ] ) stroke( [ handles[ a ], handles[ b ] ], false );
+
+			}
 
 		}
 		if ( interactive && this.pen && this.penHover && ! this.drag ) {
@@ -1421,21 +1429,21 @@ export class ModelViewport {
 			ctx.strokeStyle = '#ffd481';
 			ctx.lineWidth = 3;
 			stroke( [ handles[ this.penHover.a ], handles[ this.penHover.b ] ], false );
-			ctx.lineWidth = 1.5;
 
 		}
-		const selected = new Set( state?.cap || this.indices );
 		const dots = ! this.pen && this.selectionMode === 'face' ? ( this.selectThrough ?
 			selectionCandidates( data, 'face' ).map( face => [ project( elementCenter( data, face ) ), this.elements?.has( elementKey( face ) ) ] ) : [] ) :
-			handles.map( ( point, i ) => [ point, selected.has( i ) ] );
+			handles.flatMap( ( point, i ) => this.pen || this.selectionMode === 'vertex' || ! data.faces || data.profile || selected.has( i ) ?
+				[ [ point, selected.has( i ) ] ] : [] );
+		ctx.lineWidth = 1;
 		for ( const [ point, active ] of dots ) {
 
 			if ( ! point ) continue;
 			ctx.beginPath();
-			ctx.arc( ...point, active ? 5 : 3.5, 0, Math.PI * 2 );
-			ctx.fillStyle = active ? '#ffba62' : '#6cd4f2';
+			ctx.arc( ...point, active ? 2.5 : 1.75, 0, Math.PI * 2 );
+			ctx.fillStyle = active ? editSelectionColor : editWireColor;
 			ctx.fill();
-			ctx.strokeStyle = '#101922';
+			ctx.strokeStyle = active ? editWireColor : '#8c929a';
 			ctx.stroke();
 
 		}
@@ -2031,7 +2039,7 @@ export class ModelViewport {
 	pointerDown( event ) {
 
 		if ( this.editor.viewportShading === 'preview' ) return;
-		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.mode &&
+		if ( this.editMode && ! this.canEdit() && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
 			event.button === 0 && ! event.altKey && event.target === this.editor.renderer?.domElement ) {
 
 			event.preventDefault(); event.stopImmediatePropagation();
@@ -2047,7 +2055,7 @@ export class ModelViewport {
 
 		}
 
-		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.mode || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
+		if ( ! this.canEdit() || this.editor.viewTools?.mode || this.editor.editWorkspace?.exclusive || this.drag || event.button !== 0 || event.altKey && ! this.pen && ( this.adding || this.brush || this.selectionMode !== 'edge' ) || event.metaKey && ! this.pen || event.target !== this.editor.renderer?.domElement ) return;
 		if ( this.gesture || ! this.editor.viewLayout.navigation || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
 		this.lastPointer = event;
 		if ( this.knife ) { this.beginKnife( event ); return; }

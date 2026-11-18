@@ -148,13 +148,13 @@ class Keymap {
  }
  get overEditableViewport() {
   const target = this.pointerTarget;
-  if ( this.editor.editWorkspace?.mode || target && ! target.closest( '#viewport, #toolbar' ) ) return false;
+  if ( this.editor.editWorkspace?.exclusive || target && ! target.closest( '#viewport, #toolbar' ) ) return false;
   return ! this.editor.viewportSplit || this.viewFrame?.director !== false;
  }
  inArea( action ) {
   const { category, id } = action;
   const target = this.pointerTarget;
-  const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) ) && ! this.editor.editWorkspace?.mode;
+  const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) ) && ! this.editor.editWorkspace?.exclusive;
   const inOutliner = !! target?.closest( '#outliner' ) && ! this.editor.modeling?.editMode && ! this.editor.viewTools?.mode;
   const inSourcePane = this.editor.viewportSplit && this.viewFrame?.director === false;
   if ( category === 'Navigation' ) return this.overEditableViewport;
@@ -181,7 +181,7 @@ class Keymap {
   if ( id === 'addComponent' ) return !! e.selected && e.selected !== e.camera && ! e.streams?.playing;
   if ( Object.hasOwn( topologySelectionActions, id ) ) {
 
-   if ( ! m?.canSelectTopology || e.editWorkspace?.mode || e.streams?.playing || e.flyControls?.active ) return false;
+   if ( ! m?.canSelectTopology || e.editWorkspace?.exclusive || e.streams?.playing || e.flyControls?.active ) return false;
    return id.endsWith( 'UnderPointer' ) ? !! this.pointer && this.viewFrame === m.frame : m.indices.length > 0;
 
   }
@@ -199,7 +199,7 @@ class Keymap {
   if ( id === 'toggleXRay' ) return e.viewportShading === 'solid';
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   if(!elementSelect&&!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
-  if(!m||e.editWorkspace?.mode||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
+  if(!m||e.editWorkspace?.exclusive||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
   if(elementSelect)return m.editMode&&m.canEdit()&&!e.viewTools.mode;
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;

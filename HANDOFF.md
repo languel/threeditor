@@ -68,6 +68,7 @@ The unified workspace stores the 3D Cursor in the editor snapshot as `cursor`. P
 ### Docked 2D editing
 
 - `modeling/EditWorkspace.js` mounts Mask, Image & Vector, UV, and Warp. UV and Image & Vector default to a resizable split with the live 3D view when the available workspace is at least 640 pixels wide. All four can use the split through its header button. The 3D camera and any existing 3D split are retained on exit. UV follows another selected mesh after the current draft is applied. The modeling inspector can open the same modes. Apply saves the current draft and keeps the mode open.
+- The 3D Edit Mode overlay redraws from the current camera while the 2D workspace is split. Clicking the 3D canvas releases focus from the 2D controls so shortcuts work in the viewport. The workspace browser check samples an orange vertex before and after divider movement and camera orbit, and checks selection and Escape in the 3D pane.
 - Image & Vector reuses the drawing workspace in `MaskEditor.js`. It saves the vector contours in `scene.userData.vectorDrawing`. The local reference image is held in memory during editing. SVG exports the vectors, and PNG renders the shape and reference composite.
 - Smoke-test by opening Mask from the viewport toolbar and applying a multi-shape mask, switching to UV on a selected mesh, then loading a reference in Image & Vector. Apply a colored contour, export SVG and PNG, and reopen the mode to confirm the contour persists. Use **3D View** to return, then test the projector in Play.
 
