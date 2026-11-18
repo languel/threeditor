@@ -20,7 +20,7 @@ Both areas share object and mesh selection. Frame Selection and double-click fra
 
 ## Workspaces
 
-The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens Code, and **Projection** opens a split light view when a projector or spotlight is selected. Small windows use workspace glyphs with tooltips.
+The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens Code, and **Projection** opens a split light view when a projector or spotlight is selected. Compact mode uses workspace glyphs with tooltips. Clean and Default modes show workspace names.
 
 Use the viewport mode picker for **Object**, **Edit**, **Sculpt**, and **Paint**. Workspace tabs arrange tools and editors for a task.
 

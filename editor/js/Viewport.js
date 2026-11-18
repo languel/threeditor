@@ -1,6 +1,6 @@
-import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js';
+import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=brush-shortcuts';
-import { transformSnapStep } from './TransformSettings.js?v=top-toolbar';
+import { transformSnapStep } from './TransformSettings.js?v=unified-sync';
 import { cleanShading, withViewportShading } from './ViewportShading.js';
 import { isProjector } from './assets/Projector.js';
 import * as THREE from 'three';
@@ -10,13 +10,13 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { UIPanel } from './libs/ui.js';
 
-import { EditorControls } from './EditorControls.js?v=edit-pointer-routing';
+import { EditorControls } from './EditorControls.js?v=unified-sync';
 
-import { ViewportLabels } from './Viewport.Labels.js';
-import { ViewportControls } from './Viewport.Controls.js?v=area-splits';
+import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
+import { ViewportControls } from './Viewport.Controls.js?v=unified-sync';
 import { FlyControls } from './FlyControls.js';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
-import { ViewportInfo } from './Viewport.Info.js';
+import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
 import { ViewportSidebar } from './Viewport.Sidebar.js';
 
 import { ViewHelper } from './Viewport.ViewHelper.js?v=viewport-tools';
@@ -29,12 +29,12 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 
 import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { ViewportPathtracer } from './Viewport.Pathtracer.js';
+import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=brush-shortcuts';
-import { ViewLayout } from './modeling/ViewLayout.js?v=area-splits';
-import { ModelViewport } from './modeling/ModelViewport.js?v=area-splits';
+import { ViewportTools } from './modeling/ViewportTools.js?v=unified-sync';
+import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
+import { ModelViewport } from './modeling/ModelViewport.js?v=unified-sync';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

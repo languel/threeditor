@@ -209,7 +209,7 @@ class Keymap {
  }
 
  registerMenu(menu){
-  for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu')].entries()){
+  for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu, :scope > .app-menus > .menu')].entries()){
    const category=group.querySelector(':scope > .title')?.textContent.trim();if(!category)continue;
    let i=0;
    for(const el of group.querySelectorAll('.options .option, .options .inactive')){

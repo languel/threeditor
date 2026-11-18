@@ -1,10 +1,10 @@
-import { WorkspaceTabs } from './WorkspaceTabs.js';
+import { WorkspaceTabs } from './WorkspaceTabs.js?v=unified-sync';
 import { UIPanel } from './libs/ui.js';
 
-import { MenubarAdd } from './Menubar.Add.js?v=cursor-3d';
-import { MenubarEdit } from './Menubar.Edit.js?v=area-shortcuts';
+import { MenubarAdd } from './Menubar.Add.js?v=unified-sync';
+import { MenubarEdit } from './Menubar.Edit.js?v=unified-sync';
 import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
-import { MenubarView } from './Menubar.View.js?v=mode-shelves';
+import { MenubarView } from './Menubar.View.js?v=unified-sync';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
 import { formatCombo } from './Keymap.js';

@@ -1,9 +1,9 @@
 import { UITabbedPanel } from './libs/ui.js';
 
-import { SidebarScene } from './Sidebar.Scene.js?v=properties-areas';
-import { SidebarProperties } from './Sidebar.Properties.js?v=contour-editing';
+import { SidebarScene } from './Sidebar.Scene.js?v=unified-sync';
+import { SidebarProperties } from './Sidebar.Properties.js?v=unified-sync';
 import { SidebarProject } from './Sidebar.Project.js';
-import { SidebarSettings } from './Sidebar.Settings.js?v=selection-outline';
+import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';
 import { SidebarStreams } from './Sidebar.Streams.js';
 import { SidebarAssets } from './Sidebar.Assets.js?v=local-view';
 

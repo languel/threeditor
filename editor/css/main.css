@@ -866,7 +866,6 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		--sidebar-size: 100%;
 	}
 	body.menubar-auto-hide { --menubar-height: 0px; }
-	body.menubar-auto-hide #menubar { height: 68px; }
 
 	body:not([data-maximized-area="viewport"]):has(#code-panel[data-dock="open"]) { --left-dock: 0px; }
 	body:not([data-maximized-area="viewport"]):has(#sidebar[data-dock="open"]) {
@@ -3205,10 +3204,78 @@ body[data-maximized-area="viewport"] .panel-toggles > :not(.workspace-area-resto
 	display: none;
 }
 
-body.menubar-auto-hide[data-maximized-area] { --menubar-height: 36px; }
-body.menubar-auto-hide[data-maximized-area][data-ui-style="compact"] { --menubar-height: 32px; }
-body.menubar-auto-hide[data-maximized-area] #menubar { height: var(--menubar-height); transform: none; }
+body.menubar-auto-hide[data-maximized-area] { --menubar-height: var(--app-bar-height); }
+body.menubar-auto-hide[data-maximized-area] #menubar { transform: none; }
+
+/* Workspaces share one application header and keep their own scroll lane. */
+#menubar, body.menubar-auto-hide #menubar {
+	display: grid;
+	grid-template-areas: "menus workspaces controls";
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-auto-rows: var(--app-row-height);
+}
+.app-menus { grid-area: menus; display: flex; align-items: stretch; }
+#menubar .panel-toggles {
+	grid-area: controls;
+	position: static;
+	justify-self: end;
+	height: var(--app-row-height);
+}
+.workspace-tabs {
+	grid-area: workspaces;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding-inline: 5px;
+	border-inline-start: 1px solid color-mix(in srgb, var(--theme-text) 16%, transparent);
+	overflow: auto hidden;
+	scrollbar-width: none;
+}
+.workspace-tabs button {
+	appearance: none;
+	flex: 0 0 auto;
+	height: 24px;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 0 7px;
+	border: 0;
+	border-radius: 4px;
+	box-shadow: none;
+	text-shadow: none;
+	background: transparent;
+	color: var(--theme-text);
+	font: inherit;
+	white-space: nowrap;
+	opacity: .78;
+	cursor: pointer;
+}
+.workspace-tabs button svg { display: none; }
+body[data-ui-style="compact"] .workspace-tabs button {
+	width: 28px;
+	justify-content: center;
+	padding: 0;
+}
+body[data-ui-style="compact"] .workspace-tabs button svg { display: block; }
+body[data-ui-style="compact"] .workspace-tabs button span { display: none; }
+.workspace-tabs button:disabled { opacity: .35; cursor: default; }
+.workspace-tabs button:is([aria-pressed="true"],:hover:not(:disabled)) {
+	opacity: 1;
+	background-color: color-mix(in srgb, var(--theme-text) 11%, var(--theme-background));
+}
+@media (max-width: 960px) {
+	body { --app-bar-height: calc(2 * var(--app-row-height)); }
+	#menubar, body.menubar-auto-hide #menubar {
+		grid-template-areas: "menus controls" "workspaces workspaces";
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+	.workspace-tabs { border-inline-start: 0; border-block-start: 1px solid var(--theme-surface); }
+}
 @media (max-width: 600px) {
-	body.menubar-auto-hide[data-maximized-area] { --menubar-height: 68px; }
-	body.menubar-auto-hide[data-maximized-area][data-ui-style="compact"] { --menubar-height: 64px; }
+	body { --app-bar-height: calc(3 * var(--app-row-height)); }
+	#menubar, body.menubar-auto-hide #menubar {
+		grid-template-areas: "menus" "controls" "workspaces";
+		grid-template-columns: minmax(0, 1fr);
+	}
 }

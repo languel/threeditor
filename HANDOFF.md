@@ -38,7 +38,7 @@ The topology pen turns on when a mesh profile closes. Subsequent empty-space cli
 
 ### Workspace tabs
 
-`WorkspaceTabs.js` opens the existing modes, docks, and editors from the application header or command palette. Layout starts with a short timeline, Animation expands it, and Projection can put the selected projector or spotlight alongside the Director. The header wraps onto separate rows and uses compact glyphs on phones. It shares one height with viewport positioning and top-menu auto-hide.
+`WorkspaceTabs.js` opens the existing modes, docks, and editors from the application header or command palette. Layout starts with a short timeline, Animation expands it, and Projection can put the selected projector or spotlight alongside the Director. The header wraps onto separate rows as space gets tight. Compact mode uses glyphs and all appearances share the flat active-tab fill. It shares one height with viewport positioning and top-menu auto-hide.
 
 ### Outliner and Properties
 
@@ -52,7 +52,7 @@ Object and Edit modes share region geometry and selection operations through `mo
 
 Local View and temporary hides live in `modeling/ViewportVisibility.js`. The Director draw scopes visibility and restores it in a `finally` block, including ancestor layers used to keep selected child meshes visible. Selection, measurement, snapping, paint, and asset drops use the same filter. Optical views and Play continue to render the authored scene. Realistic Director mode uses raster preview while a filter is active.
 
-The 3D Cursor is saved in the editor snapshot as `cursor3D`. `modeling/ViewportCursor.js` projects placement into the active Director pane and reuses viewport visibility for surface hits. Add-menu commands use the cursor as their placement offset. The Shift+S menu shares commands with F3, and the cursor pivot anchors the existing object group and mesh transform proxies. Selection-to-cursor uses the normal history for both modes.
+The unified workspace stores the 3D Cursor in the editor snapshot as `cursor`. Projects saved by the earlier build with `cursor3D` are restored through the same loader. `ViewportTools.js` places the cursor, and `modeling/CursorSnap.js` supplies Shift+S snapping. The cursor pivot anchors the object group and mesh transform proxies.
 
 ### Profile building and extrusion
 

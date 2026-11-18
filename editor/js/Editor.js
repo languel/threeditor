@@ -4,19 +4,19 @@ import { isProjector, upgradeProjectorScript } from './assets/Projector.js?v=mas
 import { createCameraHelper, createProjectorHelper } from './modeling/OpticsHelpers.js';
 import { upgradeMediaScript } from './assets/MediaObjects.js';
 import { hasRestriction, withoutRuntimeChildren } from './ObjectRestrictions.js';
-import { ViewportVisibility } from './ViewportVisibility.js';
+import { ViewportVisibility } from './ViewportVisibility.js?v=unified-sync';
 import { upgradeMathScript } from './assets/MathObjects.js';
 import { upgradeSplatScript } from './assets/SplatObjects.js';
 import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=selection-outline';
+import { Config } from './Config.js?v=unified-sync';
 import { Loader } from './Loader.js';
-import { History as _History } from './History.js?v=look-controls';
+import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
-import { Selector } from './Selector.js?v=bottom-pivot';
+import { Selector } from './Selector.js?v=unified-sync';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );
@@ -953,8 +953,8 @@ Editor.prototype = {
 		this.backgroundType = json.backgroundType || 'Default';
 		this.environmentType = json.environmentType || 'Default';
 
-		const cursor = json.cursor;
-		this.cursor.fromArray( Array.isArray( cursor ) && cursor.length === 3 && cursor.every( Number.isFinite ) ? cursor : [ 0, 0, 0 ] );
+		const cursor = [ json.cursor, json.cursor3D ].find( value => Array.isArray( value ) && value.length === 3 && value.every( Number.isFinite ) );
+		this.cursor.fromArray( cursor || [ 0, 0, 0 ] );
 		this.viewportVisibility.local = null;
 		this.viewportVisibility.hidden = new Set( Array.isArray( json.viewportHidden ) ? json.viewportHidden : [] );
 		this.setScene( scene );

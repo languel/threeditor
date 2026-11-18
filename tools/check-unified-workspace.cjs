@@ -748,7 +748,7 @@ async function checkAddPrimitives( page ) {
 		editor.addObject( group );
 		group.add( cube );
 		const slots = [ cube.material, new THREE.MeshStandardMaterial( { color: '#ef8a44' } ) ];
-		const { SetMeshMaterialsCommand } = await import( '/editor/js/commands/SetMeshMaterialsCommand.js' );
+		const { SetMeshMaterialsCommand } = await import( new URL( 'js/commands/SetMeshMaterialsCommand.js', document.baseURI ).href );
 		editor.execute( new SetMeshMaterialsCommand( editor, cube, slots ) );
 		cube.geometry.addGroup( 0, 18, 0 );
 		cube.geometry.addGroup( 18, 18, 1 );
@@ -795,7 +795,7 @@ async function checkAddPrimitives( page ) {
 	assert.deepEqual( await page.evaluate( () => editor.modeling.selectedSurfaceFaces() ), [ 6 ] );
 	const base = await page.evaluate( async () => {
 
-		const { createModifier, setModifierStack } = await import( '/editor/js/modeling/Modifiers.js?v=poly-context' );
+		const { createModifier, setModifierStack } = await import( new URL( 'js/modeling/Modifiers.js?v=poly-context', document.baseURI ).href );
 		const array = createModifier( 'ARRAY' );
 		array.params.count = 2;
 		setModifierStack( editor, editor.selected, [ array ] );
@@ -832,6 +832,37 @@ async function check() {
 		page.on( 'pageerror', error => errors.push( error.message ) );
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( () => window.editor?.renderer );
+		const chrome = await page.evaluate( () => {
+
+			const original = editor.config.getKey( 'settings/uiStyle' );
+			const tab = document.querySelector( '.workspace-tabs button[aria-pressed="true"]' );
+			const appearance = style => {
+
+				editor.config.setKey( 'settings/uiStyle', style );
+				editor.signals.uiStyleChanged.dispatch();
+				const computed = getComputedStyle( tab );
+				return [ getComputedStyle( tab.querySelector( 'svg' ) ).display, getComputedStyle( tab.querySelector( 'span' ) ).display,
+					computed.boxShadow, computed.backgroundImage ];
+
+			};
+			const result = [ appearance( 'compact' ), appearance( 'clean' ) ];
+			editor.config.setKey( 'settings/uiStyle', original );
+			editor.signals.uiStyleChanged.dispatch();
+			return result;
+
+		} );
+		assert.deepEqual( chrome, [ [ 'block', 'none', 'none', 'none' ], [ 'none', 'block', 'none', 'none' ] ] );
+		assert.deepEqual( await page.evaluate( async () => {
+
+			const legacy = JSON.parse( JSON.stringify( editor.toJSON() ) );
+			delete legacy.cursor;
+			legacy.cursor3D = [ 1, 2, 3 ];
+			await editor.fromJSON( legacy );
+			const migrated = editor.toJSON().cursor;
+			editor.clear();
+			return migrated;
+
+		} ), [ 1, 2, 3 ] );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );
@@ -1101,7 +1132,7 @@ async function check() {
 		const svg = await fs.readFile( await ( await vectorDownload ).path(), 'utf8' );
 		assert.match( svg, /<path fill="#e4572e"[^>]+ Z"/ );
 		assert.match( svg, /<path fill="none" stroke="#72cbef"[^>]+ [ML][^>]+"/ );
-		await page.getByLabel( 'Image & Vector', { exact: true } ).click();
+		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );
 		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
@@ -1289,7 +1320,7 @@ async function check() {
 			const receiver = editor.scene.getObjectByName( 'Receiver' );
 			editor.select( receiver );
 			editor.viewportVisibility.hide();
-			const { exportPlayableScene } = await import( '/editor/js/Publish.js' );
+			const { exportPlayableScene } = await import( new URL( 'js/Publish.js', document.baseURI ).href );
 			const { zip } = await exportPlayableScene( editor );
 			const a = document.createElement( 'a' );
 			a.href = URL.createObjectURL( zip );

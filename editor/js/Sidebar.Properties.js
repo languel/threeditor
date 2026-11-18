@@ -3,14 +3,14 @@ import { canModify } from './modeling/Modifiers.js?v=poly-context';
 import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UITabbedPanel } from './libs/ui.js';
 
-import { SidebarObject } from './Sidebar.Object.js?v=mask-editor';
+import { SidebarObject } from './Sidebar.Object.js?v=unified-sync';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=contour-editing';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=unified-sync';
 import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
-import { SidebarScript } from './Sidebar.Script.js?v=dda-cinema';
+import { SidebarScript } from './Sidebar.Script.js?v=unified-sync';
 import { icon } from './Glyphs.js?v=mode-shelves';
 
 function SidebarProperties( editor, sceneSettings ) {
