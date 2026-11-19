@@ -1,3 +1,4 @@
+import { hitPencilStroke, isPencilStroke } from './modeling/PencilSelection.js';
 import { worldMeasurePoints } from './modeling/Measurements.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
@@ -165,6 +166,28 @@ class Selector {
 		const frame = this.editor.viewLayout?.frames.find( frame => frame.camera === camera );
 		const rect = frame?.rect || this.editor.renderer.domElement.getBoundingClientRect();
 		const cursor = new THREE.Vector2( point.x * rect.width, point.y * rect.height );
+		const exact = new Set( hits.map( hit => hit.object ) );
+		const pencilHits = [];
+		this.editor.scene.traverseVisible( object => {
+
+			if ( exact.has( object ) || object.userData.runtimeOnly || ! isPencilStroke( object ) ||
+				! isVisible( object ) || hasRestriction( object, 'unselectable' ) ) return;
+			const at = hitPencilStroke( object, camera, rect.width, rect.height, cursor.toArray() );
+			if ( ! at ) return;
+			let distance = _vector.subVectors( at, raycaster.ray.origin ).dot( raycaster.ray.direction );
+			// A brush mark follows the surface it was drawn on. Let the mark
+			// win against its receiver when their projected depths coincide.
+			const receiver = hits.find( hit => hit.object === object.parent );
+			if ( receiver && Math.abs( distance - receiver.distance ) < Math.max( .002, receiver.distance * .002 ) ) distance = receiver.distance - 1e-6;
+			pencilHits.push( { object, point: at, distance } );
+
+		} );
+		if ( pencilHits.length ) {
+
+			hits.push( ...pencilHits );
+			hits.sort( ( a, b ) => a.distance - b.distance );
+
+		}
 		this.editor.scene.traverseVisible( object => {
 
 			const data = object.userData.measurement;

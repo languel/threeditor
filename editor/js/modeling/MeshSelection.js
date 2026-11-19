@@ -125,6 +125,25 @@ export function selectionRegionContains( { tool, polygon, start, end }, point, r
 		point[ 1 ] >= Math.min( start[ 1 ], end[ 1 ] ) && point[ 1 ] <= Math.max( start[ 1 ], end[ 1 ] );
 
 }
+export function selectionRegionIntersectsSegment( region, a, b, radius ) {
+
+	if ( selectionRegionContains( region, a, radius ) || selectionRegionContains( region, b, radius ) ) return true;
+	const { tool, polygon, start, end } = region;
+	const cross = ( p, q, r ) => ( q[ 0 ] - p[ 0 ] ) * ( r[ 1 ] - p[ 1 ] ) - ( q[ 1 ] - p[ 1 ] ) * ( r[ 0 ] - p[ 0 ] );
+	const intersects = ( c, d ) => [ 0, 1 ].every( i => Math.max( a[ i ], b[ i ] ) >= Math.min( c[ i ], d[ i ] ) &&
+		Math.max( c[ i ], d[ i ] ) >= Math.min( a[ i ], b[ i ] ) ) &&
+		cross( a, b, c ) * cross( a, b, d ) <= 0 && cross( c, d, a ) * cross( c, d, b ) <= 0;
+	if ( tool === 'circle' ) {
+
+		return projectToSegment( start, a, b ).distance <= radius || polygon.some( ( point, i ) =>
+			projectToSegment( point, a, b ).distance <= radius || i > 0 && intersects( polygon[ i - 1 ], point ) );
+
+	}
+	const boundary = tool === 'lasso' ? polygon : [ start, [ end[ 0 ], start[ 1 ] ], end, [ start[ 0 ], end[ 1 ] ] ];
+	return boundary.some( ( point, i ) => intersects( point, boundary[ ( i + 1 ) % boundary.length ] ) );
+
+}
+
 export function edgeLoop( data, start, ring = false ) {
 
 	const edges = meshEdges( data ), result = new Map( [ [ elementKey( start ), start ] ] );

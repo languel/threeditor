@@ -34,7 +34,7 @@ import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=color-sampler';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=pencil-grain';
+import { ModelViewport } from './modeling/ModelViewport.js?v=pencil-selection';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

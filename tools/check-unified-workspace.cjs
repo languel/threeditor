@@ -124,6 +124,53 @@ async function checkSelectionShelf( page ) {
 
 }
 
+async function checkPencilObjectSelection( page ) {
+
+	const [ x, y ] = await page.evaluate( () => {
+
+		const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 10, 10 ), new THREE.MeshBasicMaterial() );
+		receiver.name = 'Pencil selection receiver';
+		editor.addObject( receiver );
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		editor.config.setKey( 'settings/modelPlacement', 'surface' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+		const { left, top, width, height } = editor.modeling.rect();
+		return [ left + width / 2, top + height / 2 ];
+
+	} );
+	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
+	const pencil = shelf.getByRole( 'button', { name: 'Pencil', exact: true } );
+	await pencil.click();
+	await page.getByLabel( 'Brush size (px)', { exact: true } ).fill( '2' );
+	await page.getByLabel( 'Brush size (px)', { exact: true } ).press( 'Tab' );
+	await page.mouse.move( x + 45, y );
+	await page.mouse.down();
+	await page.mouse.move( x + 140, y, { steps: 12 } );
+	await page.mouse.up();
+	await pencil.click();
+	await page.mouse.click( x + 88, y + 5 );
+	assert.equal( await page.evaluate( () => editor.selected?.name ), 'Pencil stroke' );
+	await page.evaluate( () => { editor.deselect(); editor.viewTools.chooseSelectionTool( 'box' ); } );
+	await page.mouse.move( x + 83, y - 7 );
+	await page.mouse.down();
+	await page.mouse.move( x + 93, y + 7, { steps: 4 } );
+	await page.mouse.up();
+	assert.deepEqual( await page.evaluate( () => editor.selector.selection.map( object => object.name ) ), [ 'Pencil stroke' ] );
+	await page.evaluate( () => {
+
+		editor.selected.userData.threeditor = { unselectable: true };
+		editor.deselect();
+		editor.viewTools.chooseSelectionTool( 'select' );
+
+	} );
+	await page.mouse.click( x + 88, y + 5 );
+	assert.equal( await page.evaluate( () => editor.selected?.name ), 'Pencil selection receiver' );
+	await page.evaluate( () => { editor.pencilBrush.size = 8; editor.clear(); } );
+
+}
+
 async function checkPencil( page ) {
 
 	const center = await page.evaluate( () => {
@@ -1880,6 +1927,7 @@ async function check() {
 
 		} ), [ 1, 2, 3 ] );
 		await checkSelectionShelf( page );
+		await checkPencilObjectSelection( page );
 		await checkPencil( page );
 		await checkPencilSplats( page );
 		await checkCompactPencil( page );

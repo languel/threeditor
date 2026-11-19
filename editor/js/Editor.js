@@ -16,7 +16,7 @@ import { Loader } from './Loader.js?v=splat-filters';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
-import { Selector } from './Selector.js?v=unified-sync';
+import { Selector } from './Selector.js?v=pencil-selection';
 import { serializeScript } from './ScriptParams.js';
 
 var _DEFAULT_CAMERA = new THREE.PerspectiveCamera( 50, 1, 0.001, 1e10 );

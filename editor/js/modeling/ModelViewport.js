@@ -1,3 +1,4 @@
+import { isPencilStroke, regionHitsPencilStroke } from './PencilSelection.js';
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
 import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, selectionRegionContains, meshEdges, combineSelection } from './MeshSelection.js?v=shape-selection';
 import { evaluateModifiers, modifierSource, modifierStackCommands, setModifierStack } from './Modifiers.js?v=poly-context';
@@ -852,6 +853,12 @@ export class ModelViewport {
 
 				const isSelectable = object.geometry || object.isLight || object.isCamera || object.userData.assetObject?.type === 'projector' || object.userData.hasSplat;
 				if ( ! isSelectable || object.userData.runtimeOnly || hasRestriction( object, 'unselectable' ) || ! isVisible( object ) ) return;
+				if ( isPencilStroke( object ) ) {
+
+					if ( regionHitsPencilStroke( object, camera, width, height, drag, this.brushRadius ) ) hits.set( object.uuid, object );
+					return;
+
+				}
 				point.setFromMatrixPosition( object.matrixWorld ).project( camera );
 				if ( point.z < -1 || point.z > 1 ) return;
 				const pixel = [ ( point.x + 1 ) * width / 2, ( 1 - point.y ) * height / 2 ];
