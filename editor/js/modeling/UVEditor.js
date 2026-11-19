@@ -10,14 +10,14 @@ import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=pr
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { modelButton, modelField } from './ModelControls.js?v=color-sampler';
+import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
 import { closestPointOnSegment } from './Contour.js';
-import { linkedUVVertices, uvFaceAt } from './UVIslands.js';
+import { linkedUVVertices, uvCornerTopology, uvFaceAt } from './UVIslands.js?v=uv-anchors';
 import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
 import { layoutUV } from './UVLayout.js?v=uv-sculpt';
 
@@ -148,9 +148,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		}
 		if ( ! changed ) return 0;
-		undo.push( { points, dirty, seams } );
-		if ( undo.length > 30 ) undo.shift();
-		redo.length = 0;
+		saveUndo();
 		seams = next;
 		dirty = true;
 		return changed;
@@ -190,6 +188,39 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 	}
 	let points = reset();
+	const readPins = () => new Set( warp ? [] : ( geometry.userData.uvPins || [] ).filter( i => Number.isInteger( i ) && points[ i ] ) );
+	let pins = readPins();
+	const snapshot = () => ( { points: points.slice(), dirty, seams, pins } );
+
+	function changePins( pinned ) {
+
+		if ( dragging || ! selected.length ) throw new Error( 'Select UV vertices first.' );
+		const next = new Set( pins );
+		const { indices } = cornerTopology();
+		const groups = new Set( selected.map( i => indices[ i ] ) );
+		let changed = false;
+		indices.forEach( ( root, i ) => {
+
+			if ( ! groups.has( root ) || next.has( i ) === pinned ) return;
+			if ( pinned ) next.add( i );
+			else next.delete( i );
+			changed = true;
+
+		} );
+		if ( ! changed ) return;
+		saveUndo();
+		pins = next;
+		dirty = true;
+
+	}
+
+	function saveUndo( before = snapshot() ) {
+
+		undo.push( before );
+		if ( undo.length > 30 ) undo.shift();
+		redo.length = 0;
+
+	}
 	const margin = 25, span = canvas.width - margin * 2;
 	const pixel = ( [ u, v ] ) => [ margin + u * span, margin + v * span ];
 	const pointUV = point => point.map( value => ( value - margin ) / span );
@@ -219,6 +250,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	sculptControls.className = 'canvas-pencil-settings';
 	const sizeControl = ! warp && modelField( sculptControls, 'UV sculpt radius (px)', 'brushWidth', 'number', 48 );
 	const strengthControl = ! warp && modelField( sculptControls, 'UV sculpt strength', 'opacity', 'number', .5 );
+	const preserveBorders = ! warp && modelField( sculptControls, 'Protect UV island borders', 'uvIsland', 'checkbox', false );
 	if ( ! warp ) {
 
 		Object.assign( sizeControl, { min: 4, max: 240, step: 1, onchange: draw } );
@@ -275,10 +307,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		editor.scene.traverse( candidate => { if ( isProjector( candidate ) ) projectors.push( [ candidate.uuid, candidate.name || 'Projector' ] ); } );
 		if ( projectors.length ) options( 'Projectors', projectors );
 		toolbar.append( layout );
+		modelButton( toolbar, 'Pin UV vertices (P)', 'uvPin', () => run( () => changePins( true ) ) );
+		modelButton( toolbar, 'Unpin UV vertices (Alt+P)', 'uvUnpin', () => run( () => changePins( false ) ) );
 		modelButton( toolbar, 'Mark selected 3D edges as seams', 'uvSeam', () => run( () => selectedMeshSeams( true ) ) );
 		modelButton( toolbar, 'Clear seams on selected 3D edges', 'erase', () => run( () => selectedMeshSeams( false ) ) );
 		modelButton( toolbar, 'Auto layout', 'toolGrid', () => run( () => {
 
+			if ( pins.size ) throw new Error( 'Unpin the UV vertices before replacing the layout.' );
 			const mode = layout.value;
 			let next;
 			if ( mode === 'smart' || mode === 'lightmap' ) {
@@ -426,6 +461,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
 			if ( uv ) uv.needsUpdate = true;
 			next.userData = { ...geometry.userData };
+			if ( pins.size ) next.userData.uvPins = [ ...pins ];
+			else delete next.userData.uvPins;
 			if ( seams.size ) next.userData.uvSeams = [ ...seams ];
 			else delete next.userData.uvSeams;
 			if ( object.userData.modifiers?.length ) {
@@ -563,6 +600,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		} );
 		points.forEach( ( point, index ) => {
 
+			if ( pins.has( index ) ) {
+
+				ctx.strokeStyle = '#ee7c92';
+				ctx.lineWidth = 1 / view.scale;
+				ctx.beginPath(); ctx.arc( ...pixel( point ), 4.6 / view.scale, 0, Math.PI * 2 ); ctx.stroke();
+
+			}
 			ctx.fillStyle = selection.has( index ) ? '#ffae62' : '#8ba4bb';
 			ctx.beginPath(); ctx.arc( ...pixel( point ), 2.5 / view.scale, 0, Math.PI * 2 ); ctx.fill();
 
@@ -664,8 +708,9 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	function restore( from, to ) {
 
 		if ( ! from.length || dragging ) return;
-		to.push( { points, dirty, seams } );
-		( { points, dirty, seams } = from.pop() );
+		to.push( snapshot() );
+		( { points, dirty, seams, pins } = from.pop() );
+		draw();
 
 	}
 
@@ -674,34 +719,34 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( ! selected.length ) return;
 		const center = [ 0, 1 ].map( axis => selected.reduce( ( sum, index ) => sum + points[ index ][ axis ], 0 ) / selected.length );
 		dragging = { mode, at: pointUV( point ), center: pivotSelect.value === 'cursor' ? pivot.slice() : center,
-			before: { points: points.slice(), dirty, seams }, modal };
+			before: snapshot(), modal };
+
+	}
+
+	function cornerTopology( triangles = [] ) {
+
+		eachTriangle( face => triangles.push( face ) );
+		return uvCornerTopology( triangles, points.length, pointKey );
 
 	}
 
 	function beginSculpt( point, event ) {
 
-		const groups = new Map(), indices = [];
-		const selectedVertices = new Set( selected );
-		const allowed = new Set();
-		for ( let i = 0; i < points.length; i ++ ) {
-
-			const key = pointKey( i );
-			if ( ! groups.has( key ) ) groups.set( key, i );
-			indices[ i ] = groups.get( key );
-			if ( selectedVertices.has( i ) ) allowed.add( indices[ i ] );
-
-		}
 		const faces = [];
-		eachTriangle( face => faces.push( face.map( i => indices[ i ] ) ) );
-		dragging = { sculpt: true, last: point, indices, allowed, neighbors: sculptNeighbors( { points, faces } ),
-			before: { points: points.slice(), dirty, seams } };
+		const { indices, boundary } = cornerTopology( faces );
+		const allowed = new Set( selected.map( i => indices[ i ] ) );
+		const protectedCorners = new Set( [ ...pins ].map( i => indices[ i ] ) );
+		if ( preserveBorders.checked ) for ( const i of boundary ) protectedCorners.add( i );
+		dragging = { sculpt: true, last: point, indices, allowed, protectedCorners,
+			neighbors: sculptNeighbors( { points, faces: faces.map( face => face.map( i => indices[ i ] ) ) } ),
+			before: snapshot() };
 		sculptAt( point, event );
 
 	}
 
 	function sculptAt( point, event ) {
 
-		const { last, indices, allowed, neighbors } = dragging;
+		const { last, indices, allowed, protectedCorners, neighbors } = dragging;
 		const brush = event.shiftKey ? 'smooth' : tool;
 		const cursor = pointUV( point );
 		const delta = point.map( ( value, axis ) => ( value - last[ axis ] ) / span );
@@ -709,17 +754,23 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		const strength = THREE.MathUtils.clamp( strengthControl.valueAsNumber || .5, .01, 1 ) * brushPressure( event );
 		const move = brush === 'smooth' ? null : ( p, _, weight ) => p.map( ( value, axis ) =>
 			value + weight * ( brush === 'pinch' ? ( cursor[ axis ] - value ) * .25 : delta[ axis ] ) );
-		const pixels = points.map( ( p, i ) => indices[ i ] === i && ( ! allowed.size || allowed.has( i ) ) ? pixel( p ) : null );
+		const pixels = points.map( ( p, i ) => indices[ i ] === i && ! protectedCorners.has( i ) && ( ! allowed.size || allowed.has( i ) ) ? pixel( p ) : null );
 		const result = sculptPoints( points, pixels, point, brushRadius(), strength * ( brush === 'smooth' ? .5 : 1 ), { tool: brush, move, neighbors } );
 		if ( ! result.some( ( p, i ) => p[ 0 ] !== points[ i ][ 0 ] || p[ 1 ] !== points[ i ][ 1 ] ) ) return;
-		points = indices.map( i => result[ i ] );
+		points = points.map( ( point, i ) => {
+
+		const root = indices[ i ];
+		if ( root === i ) return result[ i ];
+		return point.map( ( value, axis ) => value + ( result[ root ][ axis ] - points[ root ][ axis ] ) );
+
+	} );
 		dirty = dragging.changed = true;
 
 	}
 
 	function cancelDrag() {
 
-		if ( dragging?.before ) ( { points, dirty, seams } = dragging.before );
+		if ( dragging?.before ) ( { points, dirty, seams, pins } = dragging.before );
 		if ( dragging?.paint ) {
 
 			dragging.paint.finish( false );
@@ -741,13 +792,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			return;
 
 		}
-		if ( dragging?.changed ) {
-
-			undo.push( dragging.before );
-			if ( undo.length > 30 ) undo.shift();
-			redo.length = 0;
-
-		}
+		if ( dragging?.changed ) saveUndo( dragging.before );
 		dragging = null;
 		draw();
 
@@ -833,8 +878,14 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			const hit = nearest( point );
 			if ( tool === 'select' || ! selected.length ) {
 
-				const key = hit >= 0 ? pointKey( hit ) : null;
-				select( key === null ? [] : points.flatMap( ( _, i ) => pointKey( i ) === key ? [ i ] : [] ), event );
+				let hits = hit >= 0 ? [ hit ] : [];
+				if ( hits.length && ! warp ) {
+
+					const { indices } = cornerTopology();
+					hits = indices.flatMap( ( root, i ) => root === indices[ hit ] ? [ i ] : [] );
+
+				}
+				select( hits, event );
 
 			}
 			if ( tool !== 'select' || hit >= 0 && ! event.ctrlKey ) beginTransform( tool === 'select' ? 'move' : tool, point );
@@ -925,7 +976,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 			select( linkedSelection( lastPoint, ! event.shiftKey ), { ctrlKey: event.shiftKey, shiftKey: ! event.shiftKey } );
 
-		} else if ( ! dragging && key === 'escape' && selected.length ) selected = [];
+		} else if ( ! dragging && ! warp && key === 'p' && ! event.ctrlKey && ! event.metaKey && ! event.shiftKey ) run( () => changePins( ! event.altKey ) );
+		else if ( ! dragging && key === 'escape' && selected.length ) selected = [];
 		else if ( ! dragging && key === 'home' ) view.fit();
 		else if ( ! dragging && ! warp && key === 'd' && ! event.ctrlKey && ! event.metaKey ) { tool = 'pencil'; palette.refresh(); }
 		else if ( ! dragging && modes[ key ] && ! event.ctrlKey && ! event.metaKey && selected.length ) beginTransform( modes[ key ], lastPoint || pixel( [ .5, .5 ] ), true );
@@ -952,6 +1004,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		original = geometry = source();
 		points = reset();
 		seams = new Set( geometry.userData.uvSeams || [] );
+		pins = readPins();
 		undo.length = redo.length = 0;
 		selected = [];
 		draw();

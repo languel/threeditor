@@ -639,7 +639,7 @@ async function checkUVSeams( page ) {
 
 async function checkUVIslands( page ) {
 
-	const coordinates = [ [ .10, .15 ], [ .40, .15 ], [ .10, .45 ], [ .40, .15 ], [ .40, .45 ], [ .10, .45 ],
+	const coordinates = [ [ .10, .15 ], [ .40, .15 ], [ .40, .45 ], [ .10, .15 ], [ .40, .45 ], [ .10, .45 ],
 		[ .40, .45 ], [ .70, .45 ], [ .70, .75 ] ];
 	await page.evaluate( coordinates => {
 
@@ -654,7 +654,7 @@ async function checkUVIslands( page ) {
 	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
 	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
 	const grid = uv.getByLabel( 'UV grid', { exact: true } );
-	const bounds = await grid.boundingBox();
+	let bounds = await grid.boundingBox();
 	const pixel = ( u, v ) => [ bounds.x + bounds.width * ( 25 + 590 * u ) / 640, bounds.y + bounds.height * ( 25 + 590 * v ) / 640 ];
 	const values = () => page.evaluate( () => {
 
@@ -675,6 +675,19 @@ async function checkUVIslands( page ) {
 	await page.waitForFunction( previous => document.querySelector( '[aria-label="UV grid"]' ).toDataURL() !== previous, initial );
 	await grid.press( 'Home' );
 	assert.equal( await frame(), initial );
+	// Moving one corner must move the actual welded duplicate and leave
+	// the separate island's coincident corner at its original coordinate.
+	await uv.getByRole( 'button', { name: 'Edit UV vertices', exact: true } ).click();
+	bounds = await grid.boundingBox();
+	await page.mouse.move( ...pixel( .40, .45 ) );
+	await page.mouse.down();
+	await page.mouse.move( ...pixel( .45, .45 ), { steps: 5 } );
+	await page.mouse.up();
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	await check( coordinates.map( ( [ u, v ], i ) => [ u + ( i === 2 || i === 4 ? .05 : 0 ), v ] ) );
+	await page.evaluate( () => editor.undo() );
+	await check( coordinates );
+
 	await uv.getByRole( 'button', { name: 'Select UV islands', exact: true } ).click();
 	await page.mouse.move( ...pixel( .22, .28 ) );
 	await page.mouse.down();
@@ -711,6 +724,39 @@ async function checkUVIslands( page ) {
 	assert.ok( afterSculpt[ 7 ][ 0 ] > beforeSculpt[ 7 ][ 0 ] + .015 );
 	await page.evaluate( () => editor.undo() );
 	assert.deepEqual( await values(), beforeSculpt );
+
+	await uv.getByRole( 'button', { name: 'Edit UV vertices', exact: true } ).click();
+	await page.mouse.click( ...pixel( ...beforeSculpt[ 7 ] ) );
+	await grid.press( 'p' );
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => new THREE.ObjectLoader().parse( editor.selected.toJSON() ).geometry.userData.uvPins ), [ 7 ] );
+	await uv.getByRole( 'button', { name: 'Auto layout', exact: true } ).click();
+	assert.match( await uv.getByRole( 'status' ).textContent(), /Unpin the UV vertices/ );
+	await grid.press( 'Escape' );
+	await uv.getByRole( 'button', { name: 'Push UV vertices', exact: true } ).click();
+	async function pushPinnedCorner() {
+
+		await page.mouse.move( ...pixel( .68, .50 ) );
+		await page.mouse.down();
+		await page.mouse.move( ...pixel( .75, .50 ), { steps: 5 } );
+		await page.mouse.up();
+
+	}
+	await pushPinnedCorner();
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.deepEqual( ( await values() )[ 7 ], beforeSculpt[ 7 ] );
+	await uv.getByRole( 'button', { name: 'Edit UV vertices', exact: true } ).click();
+	await page.mouse.click( ...pixel( ...beforeSculpt[ 7 ] ) );
+	await grid.press( 'Alt+p' );
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.equal( await page.evaluate( () => editor.selected.geometry.userData.uvPins ), undefined );
+	await grid.press( 'Escape' );
+	await uv.getByRole( 'button', { name: 'Push UV vertices', exact: true } ).click();
+	await uv.getByLabel( 'Protect UV island borders', { exact: true } ).check();
+	const beforeProtectedStroke = await values();
+	await pushPinnedCorner();
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.deepEqual( await values(), beforeProtectedStroke );
 
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );

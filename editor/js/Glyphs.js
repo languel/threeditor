@@ -34,6 +34,8 @@ const ICONS = {
 	shapeDraw: svg( '<path d="M3 17 5 5l12-2 4 12-10 6-8-4Z"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/>' ),
 	meshBuild: svg( '<path d="m3 7 9-4 9 4v11l-9 3-9-4V7Zm0 0 9 5 9-5m-9 5v9"/><path d="M17 13h6m-3-3v6"/>' ),
 	uvIsland: svg( '<path d="m4 7 7-4 8 4-2 12-9 2-4-6Z" stroke-dasharray="2 2"/><path d="m8 9 4-2 3 3-1 6-4 1-2-3Z"/>' ),
+	uvPin: svg( '<path d="M9 3h6l-1 6 3 4v2H7v-2l3-4-1-6Zm3 12v6"/>' ),
+	uvUnpin: svg( '<path d="M9 3h6l-1 6 3 4v2h-2m-4 0H7v-2l2-2m3 5v5M4 4l16 16"/>' ),
 	uvSeam: svg( '<path d="M4 19 19 4M7 5l3 3m2 2 2 2m2 2 3 3"/><circle cx="4" cy="19" r="1.4"/><circle cx="19" cy="4" r="1.4"/>' ),
 	eyedropper: svg( '<path d="m15 4 5 5m-3-7 5 5-2 2-1-1-9 9-5 2 2-5 9-9-1-1 2-2ZM4 20l1-1"/>' ),
 	pencilSplats: svg( '<path d="M3 19c4-8 7-11 15-14" stroke-dasharray="1 4"/><circle cx="5" cy="13" r="1.2"/><circle cx="12" cy="15" r="1.5"/><circle cx="15" cy="7" r="1.6"/><circle cx="20" cy="5" r="1.1"/>' ),

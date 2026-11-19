@@ -86,3 +86,55 @@ export function linkedUVVertices( triangles, pointKey, seeds ) {
 	return [ ...selected ];
 
 }
+
+// Separate corner records weld only across a shared edge. An island
+// touching another at a single point still has its own editable corner.
+export function uvCornerTopology( triangles, count, pointKey ) {
+
+	const indices = Array.from( { length: count }, ( _, index ) => index );
+	const keys = indices.map( pointKey );
+	const edges = new Map();
+	function root( index ) {
+
+		while ( indices[ index ] !== index ) {
+
+			indices[ index ] = indices[ indices[ index ] ];
+			index = indices[ index ];
+
+		}
+		return index;
+
+	}
+	function weld( a, b ) {
+
+		a = root( a );
+		b = root( b );
+		indices[ Math.max( a, b ) ] = Math.min( a, b );
+
+	}
+	for ( const face of triangles ) for ( let i = 0; i < face.length; i ++ ) {
+
+		let a = face[ i ], b = face[ ( i + 1 ) % face.length ];
+		if ( keys[ a ] === keys[ b ] ) continue;
+		if ( keys[ a ] > keys[ b ] ) [ a, b ] = [ b, a ];
+		const key = keys[ a ] + ';' + keys[ b ];
+		const edge = edges.get( key );
+		if ( edge ) {
+
+			weld( a, edge.a );
+			weld( b, edge.b );
+			edge.count ++;
+
+		} else edges.set( key, { a, b, count: 1 } );
+
+	}
+	const boundary = new Set();
+	for ( const { a, b, count } of edges.values() ) if ( count !== 2 ) {
+
+		boundary.add( root( a ) );
+		boundary.add( root( b ) );
+
+	}
+	return { indices: indices.map( ( _, i ) => root( i ) ), boundary };
+
+}

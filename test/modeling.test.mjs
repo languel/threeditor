@@ -10,6 +10,7 @@ import { fitDrawingContour, insertContourPoint, segmentCount } from '../editor/j
 import { StrokeSampler } from '../editor/js/modeling/StrokeSampler.js';
 import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
+import { uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 import { separateMesh } from '../editor/js/modeling/MeshSeparation.js';
 import { joinMeshGeometry } from '../editor/js/modeling/MeshJoin.js';
@@ -404,5 +405,15 @@ test( 'Relax keeps smoothing tangential and preserves open path endpoints', () =
 	assert.ok( Math.abs( relax[ 1 ][ 0 ] - .1 ) < 1e-8 );
 	assert.equal( relax[ 0 ], points[ 0 ] );
 	assert.equal( relax[ 2 ], points[ 2 ] );
+
+} );
+
+test( 'UV corner topology protects borders and keeps point-contact islands separate', () => {
+
+	const triangles = [ [ 0, 1, 2 ], [ 3, 4, 5 ], [ 6, 7, 8 ], [ 9, 10, 11 ], [ 12, 13, 14 ] ];
+	const keys = [ 'center', 'a', 'b', 'center', 'b', 'c', 'center', 'c', 'd', 'center', 'd', 'a', 'a', 'e', 'f' ];
+	const { indices, boundary } = uvCornerTopology( triangles, keys.length, i => keys[ i ] );
+	assert.deepEqual( indices, [ 0, 1, 2, 0, 2, 5, 0, 5, 8, 0, 8, 1, 12, 13, 14 ] );
+	assert.deepEqual( [ ...boundary ].sort( ( a, b ) => a - b ), [ 1, 2, 5, 8, 12, 13, 14 ] );
 
 } );
