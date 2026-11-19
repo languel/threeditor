@@ -30,16 +30,13 @@ export function addTransformSettings( editor, toolbar ) {
 			label: 'Interaction mode',
 			choices: () => {
 
-				const model = editor.modeling;
-				const current = editor.viewTools.mode === 'paint' ? 'paint' : model.editMode ?
-					( model.brush && model.brush !== 'freehand' ? 'sculpt' : 'edit' ) : 'object';
+				const current = editor.viewTools.modeSelect.value;
 				return [
 					[ 'Object Mode', 'objectMode', 'object' ],
 					[ 'Edit Mode', 'editMode', 'edit' ],
 					[ 'Sculpt Mode', 'sculptTool', 'sculpt' ],
 					[ 'Surface Paint', 'surfaceBrush', 'paint' ]
-				].map( ( [ label, glyph, mode ] ) => [ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode,
-					mode === 'sculpt' && ! model.canEditTarget( editor.selected ) ] );
+				].map( ( [ label, glyph, mode ] ) => [ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode ] );
 
 			}
 		},

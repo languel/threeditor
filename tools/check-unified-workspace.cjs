@@ -32,7 +32,7 @@ async function checkTextureProjection( page ) {
 		return [ bounds.left + bounds.width / 2, bounds.top + bounds.height / 2 ];
 
 	} );
-	await page.getByLabel( 'Interaction mode', { exact: true } ).selectOption( 'paint' );
+	await page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } ).selectOption( 'paint' );
 	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush output' ).selectOption( 'texture' );
 	const width = page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush (px)' );
 	await width.fill( '60' );
@@ -164,7 +164,7 @@ async function checkPencilObjectSelection( page ) {
 		editor.modeling.selectionMode = 'face';
 
 	} );
-	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 	await mode.selectOption( 'edit' );
 	assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'vertex' );
 	const state = () => page.evaluate( () => editor.selected.geometry.userData.modeling );
@@ -248,7 +248,7 @@ async function checkSculptTargets( page ) {
 		return [ left + width / 2, top + height / 2 ];
 
 	} );
-	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 	const positions = () => page.evaluate( () => editor.scene.children.filter( object => object.name.startsWith( 'Sculpt target' ) )
 		.map( object => [ ...object.geometry.attributes.position.array ] ) );
 	const gesture = async ( cancel = false ) => {
@@ -263,7 +263,12 @@ async function checkSculptTargets( page ) {
 	const before = await positions();
 	const history = () => page.evaluate( () => editor.history.undos.length );
 	const initial = await history();
-	await mode.selectOption( 'sculpt' );
+	await page.mouse.move( ...center );
+	await page.keyboard.press( 'F3' );
+	const palette = page.getByRole( 'dialog', { name: 'Command palette' } );
+	await palette.getByRole( 'searchbox' ).fill( 'Switch interaction mode' );
+	await palette.getByRole( 'button', { name: /Switch interaction mode/ } ).click();
+	await page.getByRole( 'dialog', { name: 'Interaction mode', exact: true } ).getByRole( 'button', { name: 'Sculpt Mode', exact: true } ).click();
 	assert.equal( await mode.inputValue(), 'sculpt' );
 	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush radius (px)' ).waitFor();
 	await gesture( true );
@@ -397,7 +402,7 @@ async function checkPencil( page ) {
 
 	} ), [ 'Pencil receiver', true ] );
 	await page.evaluate( () => editor.undo() );
-	await page.getByLabel( 'Interaction mode', { exact: true } ).selectOption( 'sculpt' );
+	await page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } ).selectOption( 'sculpt' );
 	await page.keyboard.press( 'd' );
 	await page.getByRole( 'button', { name: 'Placement', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'View plane', exact: true } ).click();
@@ -409,7 +414,7 @@ async function checkPencil( page ) {
 
 	} ), [ true, 'path', 'grab' ] );
 	await page.keyboard.press( 'Escape' );
-	assert.equal( await page.getByLabel( 'Interaction mode', { exact: true } ).inputValue(), 'sculpt' );
+	assert.equal( await page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } ).inputValue(), 'sculpt' );
 	await page.evaluate( () => {
 
 		editor.undo();
@@ -1953,7 +1958,7 @@ async function checkPaintGestures( page ) {
 		} );
 
 	} );
-	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 	await mode.selectOption( 'paint' );
 	const output = page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush output' );
 	const [ start, end ] = ends;
@@ -3555,7 +3560,7 @@ async function check() {
 		const edited = await page.evaluate( () => Array.from( editor.selected.geometry.attributes.position.array ) );
 		assert.ok( Math.max( ...edited ) > .65, 'Edit-mode transform changed mesh coordinates' );
 		await page.keyboard.press( 'Tab' );
-		const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+		const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
 		await mode.selectOption( 'paint' );
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'materials' );
 		const center = await page.evaluate( () => {
