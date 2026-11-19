@@ -131,7 +131,7 @@ Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projec
 
 - Choose **Pack existing islands → Auto layout** to fit the current UV islands into the texture square after editing. Set the margin in pixels at 1024 × 1024. Packing preserves orientation, shape, and relative scale and applies one common scale across the atlas. Unpin vertices before packing, and choose **Apply** to commit.
 
-- In **UV Editing → Texture Bake**, choose **Light and shadow guide**, **Scene appearance**, or **Masked projector frame**. Pick the 3D view, a scene camera, or suitable light or projector, and bake at 256, 512, or 1024 pixels. The UV editor previews the result. Download a PNG or add an undoable unlit guide mesh. Use packed UVs for unique surface coverage. The bake is a snapshot of what the source view sees, with occluded texels left transparent. Use WebGL and apply any mesh modifiers first.
+- In **UV Editing → Texture Bake**, choose **Light and shadow guide**, **Scene appearance**, **Masked projector frame**, or **Pencil and surface marks**. Pick the 3D view, a scene camera, or suitable light or projector, and bake at 256, 512, or 1024 pixels. The marks pass captures Pencil ribbons, surface paths, and geometry paint with their transparency. Occluded and unpainted texels in that pass stay transparent. Preview the result in the UV editor, download the PNG, save it to **Assets → Project**, or add an undoable unlit guide mesh. Use packed UVs for unique surface coverage. The bake is a snapshot of what the source view sees. Use WebGL and apply any mesh modifiers first.
 
 ### Measure and draw on receivers
 

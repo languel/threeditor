@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-pack';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
-import { bakeTexture } from './TextureBake.js';
+import { bakeTexture } from './TextureBake.js?v=stroke-bake';
 import { addProjectorCoverageControl } from './ProjectorCoverage.js?v=coverage-overlay';
 import { lightViewCamera } from './LightView.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -11,6 +11,7 @@ import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=pr
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
+import { storeSourceFiles } from '../ProjectAssets.js';
 import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
 import { elementKey, selectionRegionContains } from './MeshSelection.js?v=shape-selection';
@@ -443,7 +444,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		const bakeMode = document.createElement( 'select' );
 		bakeMode.setAttribute( 'aria-label', 'Bake pass' );
 		bakeMode.append( new Option( 'Light and shadow guide', 'guide' ), new Option( 'Scene appearance', 'scene' ),
-			new Option( 'Masked projector frame', 'projector' ) );
+			new Option( 'Masked projector frame', 'projector' ), new Option( 'Pencil and surface marks', 'strokes' ) );
 		const bakeSource = document.createElement( 'select' );
 		bakeSource.setAttribute( 'aria-label', 'Bake source view' );
 		const updateSources = () => {
@@ -497,9 +498,9 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 			} catch ( error ) { target.dispose(); throw error; }
 			showBake = true;
-			guide.disabled = download.disabled = addGuide.disabled = false;
+			guide.disabled = download.disabled = saveAsset.disabled = addGuide.disabled = false;
 			guide.setAttribute( 'aria-pressed', 'true' );
-			status.textContent = 'Bake ready. Preview it here, download the PNG, or add a guide mesh.';
+			status.textContent = 'Bake ready. Preview it here, save or download the PNG, or add a guide mesh.';
 
 		} ) );
 		const guide = modelButton( controls, 'Show baked UV guide', 'viewportOverlays', () => {
@@ -512,6 +513,21 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		const download = modelButton( controls, 'Download bake PNG', 'save', () => {
 
 			bake.image.toBlob( blob => { if ( blob ) editor.utils.save( blob, ( object.name || 'mesh' ) + ' bake.png' ); }, 'image/png' );
+
+		}, true );
+		const saveAsset = modelButton( controls, 'Save bake to Project assets', 'assets', () => {
+
+			const files = editor.sourceFiles;
+			const name = ( object.name || 'Mesh' ) + ' - ' + bake.label + '.png';
+			bake.image.toBlob( blob => {
+
+				if ( editor.sourceFiles !== files || ! workspacePanel.isConnected ) return;
+				if ( ! blob ) { status.textContent = 'The bake could not be encoded as PNG.'; return; }
+				const file = new File( [ blob ], name, { type: 'image/png' } );
+				const path = storeSourceFiles( editor, { [ name ]: file } ).get( file );
+				status.textContent = 'Saved ' + path + ' to Project assets.';
+
+			}, 'image/png' );
 
 		}, true );
 		const addGuide = modelButton( controls, 'Add baked guide mesh', 'add', () => run( () => {

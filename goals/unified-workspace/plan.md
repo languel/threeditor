@@ -57,3 +57,12 @@ Object Mode now has Box, Lasso, and Circle Select, selection operations, and fra
 Local View and temporary hide/reveal now filter Director panes, their selection and their surface tools. A scene-camera split regression checks that render and save preserve authored visibility. A DDA Gallery check also verifies Gaussian rendering in the optical pane and Play while the Director is isolated.
 
 The saved 3D Cursor now supports surface placement in Director panes, Add-menu placement, cursor pivots, and Shift+S snapping in Object and Edit modes. The browser test covers placement, parented transforms, undo, and reopening a saved cursor.
+
+UV Editing now follows mesh component selection across seams when sync is enabled. The Texture Bake panel can isolate Pencil ribbons, surface paths and geometry paint into a transparent, depth-tested map and save bake outputs directly to Project assets.
+
+## Next on the workspace backlog
+
+- Give Gaussian Pencil and splat paint the same bake workflow. Verify that imported scans remain separate from the paint layer and that masked projector, shadow and marks passes agree on which surfaces block the source view. Exercise the results on the DDA Gallery projection scene.
+- Add UV stitch and align operations to the selection and seam workflow. Check large meshes, split-view focus, synced selection and undo through unwrap, sculpt and repack.
+- Extend Image & Vector with editable raster layers and transforms. Verify that drawing, painting, masking and material or projector assignment share the existing brush and asset workflows.
+- Complete the legacy-scene and publishing audit. Reopen the DDA Gallery, lesson and Fox examples and compare editor, Play and standalone output. Check workspace controls at compact widths and component editing, parameter keyframes and scripts after save and reopen.

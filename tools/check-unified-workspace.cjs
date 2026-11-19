@@ -1275,6 +1275,45 @@ async function checkTextureBake( page ) {
 	const [ blocked, projected ] = await bake( 'projector', 'Masked projector frame', rigId );
 	assert.equal( blocked[ 3 ], 0, 'Occluders block the projector bake' );
 	assert.ok( projected[ 0 ] > 235 && projected[ 1 ] < 45 && projected[ 3 ] === 255, 'The bake uses the projector frame' );
+	const strokeCamera = await page.evaluate( () => {
+
+		const receiver = editor.scene.getObjectByName( 'Bake Receiver' );
+		for ( const x of [ 0, 1.08 ] ) {
+
+			const mark = new THREE.Mesh( new THREE.PlaneGeometry( .8, .8 ), new THREE.MeshBasicMaterial( {
+				color: 0x44ff33, opacity: .5, transparent: true
+			} ) );
+			mark.userData.surfaceMark = true;
+			mark.position.set( x, 0, .2 );
+			editor.addObject( mark, receiver );
+
+		}
+		const camera = new THREE.OrthographicCamera( -2, 2, 2, -2, .1, 15 );
+		camera.name = 'Stroke bake camera';
+		camera.position.z = 5;
+		editor.addObject( camera );
+		return camera.uuid;
+
+	} );
+	const [ hiddenMark, visibleMark ] = await bake( 'strokes', 'Pencil and surface marks', strokeCamera );
+	assert.equal( hiddenMark[ 3 ], 0, 'A blocker occludes marks in the stroke bake' );
+	assert.ok( visibleMark[ 1 ] > 245 && visibleMark[ 0 ] < 85 && Math.abs( visibleMark[ 3 ] - 128 ) < 5,
+		'The stroke bake keeps straight color and partial alpha: ' + JSON.stringify( visibleMark ) );
+	await page.getByRole( 'button', { name: 'Save bake to Project assets', exact: true } ).click();
+	const path = 'Bake Receiver - Pencil and surface marks.png';
+	await page.getByText( 'Saved ' + path + ' to Project assets.', { exact: true } ).waitFor();
+	const [ fileWidth, painted, unpainted ] = await page.evaluate( async path => {
+
+		const bitmap = await createImageBitmap( editor.sourceFiles.get( path ).file );
+		const canvas = new OffscreenCanvas( bitmap.width, bitmap.height ), context = canvas.getContext( '2d' );
+		context.drawImage( bitmap, 0, 0 );
+		return [ bitmap.width, context.getImageData( 197, 128, 1, 1 ).data[ 3 ], context.getImageData( 40, 128, 1, 1 ).data[ 3 ] ];
+
+	}, path );
+	assert.equal( fileWidth, 256 );
+	assert.equal( painted, visibleMark[ 3 ] );
+	assert.equal( unpainted, 0, 'The saved texture leaves unpainted UVs transparent' );
+	assert.equal( await page.evaluate( () => editor.scene.getObjectByName( 'Bake Receiver' ).children[ 0 ].material.depthWrite ), true );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 

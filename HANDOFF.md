@@ -87,6 +87,8 @@ The UV workspace stages edits before Apply. Unwrap from seams, Smart unwrap, and
 
 `modeling/TextureBake.js` adapts ThreeGrease’s camera-to-UV bake to a WebGL source render and a depth-tested UV-space pass. The neutral lighting guide uses authored lamp and shadow flags with neutral surfaces and ambient light. The projector pass samples the current masked and warped output and tests visibility against scene geometry. The PNG and optional unlit guide mesh use the current UV draft. A bake captures one view and one instant. Use an atlas without overlaps and apply mesh modifiers before baking. The browser check measures a lit pixel, a shadowed pixel, and the alpha under a projector occluder.
 
+The **Pencil and surface marks** pass renders scene depth first, then draws the vector and geometry marks over that depth into a transparent color layer. The UV pass converts its premultiplied linear color to straight sRGB for PNG export. Gaussian paint batches still need a bake render path. All bake passes can save a reusable PNG to Project assets. The browser check verifies occlusion, opacity, and transparent unpainted texels in the stored PNG.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

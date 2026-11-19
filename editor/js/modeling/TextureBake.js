@@ -17,6 +17,7 @@ const fragmentShader = /* glsl */`
 	uniform vec2 depthScale;
 	uniform vec4 projectionCrop;
 	uniform bool projectorFrame;
+	uniform bool strokeLayer;
 	uniform bool reversed;
 	varying vec3 worldPoint;
 
@@ -48,7 +49,14 @@ const fragmentShader = /* glsl */`
 		if ( error > ( perspective ? max( 0.002, depth * 0.002 ) : 0.0002 ) ) return;
 
 		vec2 uv = projectorFrame ? projectionCrop.xy + px * projectionCrop.zw : px;
-		gl_FragColor = vec4( toSRGB( texture2D( sourceColor, uv ).rgb ), 1.0 );
+		vec4 color = texture2D( sourceColor, uv );
+		if ( strokeLayer ) {
+			if ( color.a == 0.0 ) return;
+			// Normal blending accumulated premultiplied color in the source target.
+			gl_FragColor = vec4( toSRGB( color.rgb / color.a ), color.a );
+		} else {
+			gl_FragColor = vec4( toSRGB( color.rgb ), 1.0 );
+		}
 	}
 `;
 
@@ -86,7 +94,48 @@ function withWhiteSurfaces( scene, draw ) {
 
 }
 
-function toCanvas( pixels, size ) {
+function drawStrokeLayer( renderer, scene, camera ) {
+
+	const strokes = [], surfaces = [];
+	const writingMaterials = new Set();
+	scene.traverseVisible( object => {
+
+		if ( ! object.isMesh && ! object.isLine && ! object.isPoints && ! object.isSprite ) return;
+		if ( object.userData.surfaceMark || object.userData.pencilStroke ) {
+
+			strokes.push( [ object, object.layers.mask ] );
+			for ( const material of [].concat( object.material ) ) if ( material?.depthWrite ) writingMaterials.add( material );
+
+		} else surfaces.push( [ object, object.layers.mask ] );
+
+	} );
+	const setLayers = ( objects, visible ) => {
+
+		for ( const [ object, mask ] of objects ) object.layers.mask = visible ? mask : 0;
+
+	};
+	try {
+
+		// Keep the receiver depth for the UV lookup and use it to occlude marks.
+		setLayers( strokes, false );
+		renderer.render( scene, camera );
+		renderer.clearColor();
+		setLayers( strokes, true );
+		setLayers( surfaces, false );
+		for ( const material of writingMaterials ) material.depthWrite = false;
+		renderer.render( scene, camera );
+
+	} finally {
+
+		setLayers( strokes, true );
+		setLayers( surfaces, true );
+		for ( const material of writingMaterials ) material.depthWrite = true;
+
+	}
+
+}
+
+function toCanvas( pixels, size, emptyMessage ) {
 
 	// A small gutter prevents bilinear sampling from pulling in empty texels.
 	const filled = [];
@@ -100,7 +149,7 @@ function toCanvas( pixels, size ) {
 			for ( const src of [ x > 0 ? dst - 4 : -1, x + 1 < size ? dst + 4 : -1,
 				y > 0 ? dst - size * 4 : -1, y + 1 < size ? dst + size * 4 : -1 ] ) {
 
-				if ( src < 0 || pixels[ src + 3 ] !== 255 ) continue;
+				if ( src < 0 || ! pixels[ src + 3 ] ) continue;
 				filled.push( dst, src );
 				break;
 
@@ -128,7 +177,7 @@ function toCanvas( pixels, size ) {
 		image.data.set( row, ( size - 1 - y ) * size * 4 );
 
 	}
-	if ( ! coverage ) throw new Error( 'The source view could not see any of the UV surface.' );
+	if ( ! coverage ) throw new Error( emptyMessage );
 	context.putImageData( image, 0, 0 );
 	return canvas;
 
@@ -147,6 +196,7 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 	const source = new THREE.WebGLRenderTarget( width, height, { depthTexture: new THREE.DepthTexture( width, height ) } );
 	const atlas = new THREE.WebGLRenderTarget( size, size, { depthBuffer: false } );
 	const projectorTexture = mode === 'projector' ? new THREE.CanvasTexture( output.canvas ) : null;
+	const strokeLayer = mode === 'strokes';
 	const crop = new THREE.Vector4( 0, 0, 1, 1 );
 	if ( projectorTexture ) {
 
@@ -160,7 +210,8 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 		uniforms: {
 			sourceColor: { value: projectorTexture || source.texture }, sourceDepth: { value: source.depthTexture },
 			sourceViewProjection: { value: new THREE.Matrix4() }, depthScale: { value: new THREE.Vector2() },
-			projectionCrop: { value: crop }, projectorFrame: { value: Boolean( projectorTexture ) }, reversed: { value: false }
+			projectionCrop: { value: crop }, projectorFrame: { value: Boolean( projectorTexture ) },
+			strokeLayer: { value: strokeLayer }, reversed: { value: false }
 		}
 	} );
 	const proxy = new THREE.Mesh( geometry, material );
@@ -184,6 +235,7 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 			renderer.shadowMap.enabled = true;
 
 		}
+		if ( strokeLayer ) renderer.shadowMap.enabled = false;
 		renderer.autoClear = false;
 		renderer.shadowMap.needsUpdate = renderer.shadowMap.enabled;
 		renderer.setClearColor( 0x000000, 0 );
@@ -193,6 +245,7 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 
 			const draw = () => renderer.render( scene, camera );
 			if ( mode === 'guide' ) withWhiteSurfaces( scene, draw );
+			else if ( strokeLayer ) drawStrokeLayer( renderer, scene, camera );
 			else draw();
 
 		} );
@@ -206,7 +259,8 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 		renderer.render( uvScene, new THREE.OrthographicCamera() );
 		const pixels = new Uint8Array( size * size * 4 );
 		renderer.readRenderTargetPixels( atlas, 0, 0, size, size, pixels );
-		return toCanvas( pixels, size );
+		return toCanvas( pixels, size, strokeLayer ? 'No Pencil or surface marks were visible over the UV surface.' :
+			'The source view could not see any of the UV surface.' );
 
 	} finally {
 
