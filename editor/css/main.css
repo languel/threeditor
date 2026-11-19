@@ -322,7 +322,6 @@ body {
 	--app-bar-height: var(--app-row-height);
 	--menubar-height: var(--app-bar-height);
 	--sidebar-size: clamp(335px, var(--sidebar-width, 350px), 50vw);
-	--code-size: min(var(--code-width, 520px), calc(100vw - var(--right-dock) - 100px));
 	--animation-height: 36px;
 	--left-dock: 0px;
 	--right-dock: 0px;
@@ -330,7 +329,6 @@ body {
 	--sidebar-bottom: 0px;
 }
 
-body:not([data-maximized-area="viewport"]):has(#code-panel[data-dock="open"]) { --left-dock: var(--code-size); }
 body:not([data-maximized-area="viewport"]):has(#sidebar[data-dock="open"]) { --right-dock: var(--sidebar-size); }
 body:not([data-maximized-area="viewport"]):has(#animation[data-dock="open"]) { --timeline-h: var(--animation-height); }
 
@@ -510,7 +508,7 @@ body.presenting .presentation-exit { display: block; }
 	.presentation-exit:hover { opacity: 1; }
 }
 
-body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resizer, #code-panel, #animation, #animation-resizer, .panel-edge) {
+body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resizer, #animation, #animation-resizer, .panel-edge) {
 	visibility: hidden;
 }
 
@@ -862,18 +860,16 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 
 @media (max-width: 600px) {
 	body {
-		--code-size: min(var(--code-width, 520px), 90vw);
 		--sidebar-size: 100%;
 	}
 	body.menubar-auto-hide { --menubar-height: 0px; }
 
-	body:not([data-maximized-area="viewport"]):has(#code-panel[data-dock="open"]) { --left-dock: 0px; }
 	body:not([data-maximized-area="viewport"]):has(#sidebar[data-dock="open"]) {
 		--right-dock: 0px;
 		--sidebar-bottom: min(320px, 40dvh);
 	}
 
-	#resizer, #code-resizer { display: none; }
+	#resizer { display: none; }
 
 	.panel-edge.right {
 		top: auto;
@@ -1212,20 +1208,20 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 
 /* three.js code panel (experiment addition) */
 
-#code-panel {
-	position: absolute;
-	left: 0;
-	top: var(--menubar-height);
-	bottom: var(--timeline-h);
-	width: var(--code-size);
+#script-window {
 	display: flex;
 	flex-direction: column;
-	background: #eee;
-	color: #555;
-	z-index: 3;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+}
+#editor-2d[data-editor-mode="script"] > .viewport-edit-content {
+	flex: 1;
+	padding: 0;
+	overflow: hidden;
 }
 
-	#code-panel .code-bar {
+	#script-window .code-bar {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px;
@@ -1235,7 +1231,7 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		text-transform: uppercase;
 	}
 
-	#code-panel .code-bar label {
+	#script-window .code-bar label {
 		cursor: pointer;
 		padding: 0 4px;
 		display: inline-flex;
@@ -1243,7 +1239,7 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		gap: 4px;
 	}
 
-	#code-panel .code-target {
+	#script-window .code-target {
 		display: flex;
 		gap: 6px;
 		align-items: center;
@@ -1251,25 +1247,25 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		font-size: 12px;
 	}
 
-	#code-panel .code-target select {
+	#script-window .code-target select {
 		font-size: 12px;
 	}
 
-	#code-panel .code-focus {
+	#script-window .code-focus {
 		background: #08f2;
 	}
 
-	#code-panel .errorLine {
+	#script-window .errorLine {
 		background: #f442;
 	}
 
-	#code-panel .esprima-error {
+	#script-window .esprima-error {
 		color: #f44;
 		font-size: 12px;
 		padding: 0 4px;
 	}
 
-	#code-panel .code-status {
+	#script-window .code-status {
 		padding: 3px 8px;
 		font-size: 12px;
 		color: #888;
@@ -1277,43 +1273,21 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		border-top: 1px solid #ddd;
 	}
 
-	#code-panel .code-status.error {
+	#script-window .code-status.error {
 		color: #f44;
 	}
 
-	#code-panel .code-host {
+	#script-window .code-host {
 		flex: 1;
 		min-height: 0;
 		position: relative;
 	}
 
-	#code-panel .CodeMirror {
+	#script-window .CodeMirror {
 		position: absolute;
 		inset: 0;
 		height: auto;
 		font-size: 12px;
-	}
-
-#code-resizer {
-	position: absolute;
-	z-index: 4;
-	top: 0;
-	bottom: 0;
-	right: -2px;
-	width: 5px;
-	cursor: col-resize;
-	touch-action: none;
-}
-
-	#code-resizer:hover {
-		background-color: #08f8;
-		transition-property: background-color;
-		transition-delay: 0.1s;
-		transition-duration: 0.2s;
-	}
-
-	#code-resizer.active {
-		background-color: #08f;
 	}
 
 /* CodeMirror theme matching the editor (light) */
@@ -1337,11 +1311,11 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 
 :root[data-theme="dark"] {
 
-	#code-panel { background: #111; color: #aaa; }
+	#script-window { background: #111; color: #aaa; }
 	.panel-toggles { color: #aaa; }
 	.panel-toggles button[aria-pressed="true"] { color: #75bfff; }
-	#code-panel .code-status { color: #888; border-top-color: #222; }
-	#code-panel .code-status.error { color: #f66; }
+	#script-window .code-status { color: #888; border-top-color: #222; }
+	#script-window .code-status.error { color: #f66; }
 
 	.cm-s-editor.CodeMirror { background: #1b1b1b; color: #bbb; }
 	.cm-s-editor .CodeMirror-gutters { background: #151515; border-right: 1px solid #222; }
@@ -1379,11 +1353,11 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 /* Docked panels sit outside the viewport, so their translucent colors need a
    theme-colored backdrop rather than the browser's default page color. */
 body { min-height: 100dvh; background: var(--theme-viewport); }
-#menubar, #sidebar, #animation, #toolbar, #code-panel,
+#menubar, #sidebar, #animation, #toolbar, #script-window,
 #menubar .menu .options { background-color: var(--theme-background); }
 
 #sidebar .Panel, #sidebar .Row .Label, #menubar .menu .title,
-#menubar .menu .options .option, #animation .Panel, #code-panel,
+#menubar .menu .options .option, #animation .Panel, #script-window,
 .settings-section > summary, .panel-toggles { color: var(--theme-text); }
 
 .TabbedPanel .Tabs, #tabs { background-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 9%); }
@@ -1406,7 +1380,7 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 }
 #toolbar { border-color: var(--theme-background); }
 #animation, #animation .Panel, #sidebar .Panel, #tabs, #tabs span,
-.TabbedPanel .Tabs, .TabbedPanel .Tab, #code-panel .code-status,
+.TabbedPanel .Tabs, .TabbedPanel .Tab, #script-window .code-status,
 #menubar .menu .options hr, #menubar .menu .key { border-color: color-mix(in srgb, var(--theme-background), var(--theme-text) 18%); }
 .Dialog-content { background: var(--theme-background); color: var(--theme-text); }
 .Dialog-title, .Dialog-body .Row .Label { color: var(--theme-text); }
@@ -1420,8 +1394,8 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .Button.selected, #menubar .menu .options .option:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 85%); color: var(--theme-text); }
 .panel-toggles button[aria-pressed="true"] { color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent), transparent 85%); }
 .panel-toggles button:hover, .settings-section > summary:hover { background: color-mix(in srgb, var(--theme-accent), transparent 90%); }
-#resizer:hover, #animation-resizer:hover, #code-resizer:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 45%); }
-#resizer:active, #animation-resizer:active, #code-resizer.active { background-color: var(--theme-accent); }
+#resizer:hover, #animation-resizer:hover { background-color: color-mix(in srgb, var(--theme-accent), transparent 45%); }
+#resizer:active, #animation-resizer:active { background-color: var(--theme-accent); }
 #animation input[type="range"], input[type="checkbox"] { accent-color: var(--theme-accent); }
 .cm-s-editor .CodeMirror-gutters { background: color-mix(in srgb, var(--theme-surface), var(--theme-text) 5%); border-color: color-mix(in srgb, var(--theme-surface), var(--theme-text) 20%); }
 .cm-s-editor .CodeMirror-cursor { border-color: var(--theme-accent); }
@@ -1433,7 +1407,7 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .CodeMirror-hints.editor .CodeMirror-hint-active {
 	background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%);
 }
-.cm-s-editor .CodeMirror-selected, #code-panel .code-focus { background: color-mix(in srgb, var(--theme-accent), transparent 80%); }
+.cm-s-editor .CodeMirror-selected, #script-window .code-focus { background: color-mix(in srgb, var(--theme-accent), transparent 80%); }
 .cm-s-editor .CodeMirror-matchingbracket { color: var(--theme-accent) !important; outline-color: var(--theme-accent); }
 .cm-s-editor .cm-keyword, .cm-s-editor .cm-atom, .cm-s-editor .cm-number, .cm-s-editor .cm-meta { color: var(--theme-keyword); }
 .cm-s-editor .cm-string, .cm-s-editor .cm-string-2 { color: var(--theme-string); }
@@ -1543,7 +1517,7 @@ body.translucent-panels .primitive-adjust-trigger {
 .context-menu-key { float: right; opacity: .65; font-size: 11px; margin-left: 8px; }
 
 /* Shared code editor preferences */
-#code-panel .CodeMirror, #code-panel textarea {
+#script-window .CodeMirror, #script-window textarea {
 	font-family: var(--code-font, monospace);
 	font-size: var(--code-font-size, 13px);
 	font-variant-ligatures: var(--code-ligatures, none);
@@ -1756,8 +1730,8 @@ body[data-ui-style="compact"] #menubar .menu .title,
 body[data-ui-style="clean"] #menubar .menu .title,
 body[data-ui-style="compact"] .Dialog-title,
 body[data-ui-style="clean"] .Dialog-title,
-body[data-ui-style="compact"] #code-panel .code-bar,
-body[data-ui-style="clean"] #code-panel .code-bar,
+body[data-ui-style="compact"] #script-window .code-bar,
+body[data-ui-style="clean"] #script-window .code-bar,
 body[data-ui-style="compact"] .shortcut-category,
 body[data-ui-style="clean"] .shortcut-category,
 body[data-ui-style="compact"] .context-menu-section,
@@ -1788,8 +1762,8 @@ body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab,
 body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab,
 body[data-ui-style="compact"] #tabs span,
 body[data-ui-style="clean"] #tabs span,
-body[data-ui-style="compact"] #code-panel .code-bar,
-body[data-ui-style="clean"] #code-panel .code-bar {
+body[data-ui-style="compact"] #script-window .code-bar,
+body[data-ui-style="clean"] #script-window .code-bar {
 	font-family: inherit;
 	font-weight: 400;
 }
@@ -1810,9 +1784,9 @@ body[data-ui-style="compact"] .Outliner,
 body[data-ui-style="compact"] #menubar .menu .options .option,
 body[data-ui-style="compact"] .TabbedPanel .Tabs .Tab,
 body[data-ui-style="compact"] #tabs span,
-body[data-ui-style="compact"] #code-panel .code-bar,
-body[data-ui-style="compact"] #code-panel .code-target,
-body[data-ui-style="compact"] #code-panel .code-status {
+body[data-ui-style="compact"] #script-window .code-bar,
+body[data-ui-style="compact"] #script-window .code-target,
+body[data-ui-style="compact"] #script-window .code-status {
 	font-size: 12px;
 }
 
@@ -1824,9 +1798,9 @@ body[data-ui-style="clean"] .Outliner,
 body[data-ui-style="clean"] #menubar .menu .options .option,
 body[data-ui-style="clean"] .TabbedPanel .Tabs .Tab,
 body[data-ui-style="clean"] #tabs span,
-body[data-ui-style="clean"] #code-panel .code-bar,
-body[data-ui-style="clean"] #code-panel .code-target,
-body[data-ui-style="clean"] #code-panel .code-status {
+body[data-ui-style="clean"] #script-window .code-bar,
+body[data-ui-style="clean"] #script-window .code-target,
+body[data-ui-style="clean"] #script-window .code-status {
 	font-size: 13px;
 }
 
@@ -3284,16 +3258,16 @@ body input.Input.script-param-toggle[type="checkbox"]:checked {
 }
 #properties .script-add-component .model-control-label { display: inline; }
 
-body[data-maximized-area] :is(.panel-edge, .menubar-edge, #resizer, #code-resizer, #animation-resizer),
-body[data-maximized-area="viewport"] :is(#sidebar, #code-panel, #animation, #viewport #info, .viewport-split-button),
-body[data-maximized-area="sidebar"] :is(#viewport, #code-panel, #animation),
-body[data-maximized-area="code-panel"] :is(#viewport, #sidebar, #animation),
-body[data-maximized-area="animation"] :is(#viewport, #sidebar, #code-panel) {
+body[data-maximized-area] :is(.panel-edge, .menubar-edge, #resizer, #animation-resizer),
+body[data-maximized-area="viewport"] :is(#sidebar, #editor-2d, #animation, #viewport #info, .viewport-split-button),
+body[data-maximized-area="sidebar"] :is(#viewport, #editor-2d, #animation),
+body[data-maximized-area="editor-2d"] :is(#viewport, #sidebar, #animation, .editor-2d-divider),
+body[data-maximized-area="animation"] :is(#viewport, #sidebar, #editor-2d) {
 	display: none !important;
 }
 
 body[data-maximized-area="sidebar"] #sidebar,
-body[data-maximized-area="code-panel"] #code-panel,
+body[data-maximized-area="editor-2d"] #editor-2d,
 body[data-maximized-area="animation"] #animation {
 	inset: var(--menubar-height) 0 0;
 	width: auto;

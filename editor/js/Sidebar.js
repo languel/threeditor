@@ -1,6 +1,6 @@
 import { UITabbedPanel } from './libs/ui.js';
 
-import { SidebarScene } from './Sidebar.Scene.js?v=unified-sync';
+import { SidebarScene } from './Sidebar.Scene.js?v=script-window';
 import { SidebarProperties } from './Sidebar.Properties.js?v=pencil-guides';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';

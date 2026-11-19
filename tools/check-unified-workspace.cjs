@@ -492,7 +492,7 @@ async function checkUVSelection( page ) {
 	assert.deepEqual( split.color, orange );
 	assert.notDeepEqual( split.fringe, orange, 'Vertex selection uses a small dot' );
 
-	const divider = page.getByRole( 'separator', { name: 'Resize 2D and 3D areas' } );
+	const divider = page.getByRole( 'separator', { name: 'Resize editor and 3D areas' } );
 	await divider.press( 'ArrowLeft' );
 	assert.deepEqual( ( await vertex( 0 ) ).color, orange );
 	await divider.press( 'ArrowRight' );
@@ -1274,8 +1274,25 @@ async function checkComponents( page ) {
 	assert.equal( await previous.isVisible(), true );
 	await header.getByRole( 'button', { name: 'Edit', exact: true } ).click();
 	assert.equal( await previous.isVisible(), false );
-	await page.locator( '#code-panel .code-target' ).getByText( /Component target.*Spin/ ).waitFor();
-	await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
+	await page.locator( '#script-window .code-target' ).getByText( /Component target.*Spin/ ).waitFor();
+	await page.evaluate( () => {
+
+		const cm = document.querySelector( '#script-window .CodeMirror' ).CodeMirror;
+		cm.setValue( cm.getValue() + '\n// Script Window draft' );
+		cm.setCursor( 2, 3 );
+		// Switch editors before the debounced autosave runs.
+		document.querySelector( '.workspace-tabs [aria-label="Layout"]' ).click();
+
+	} );
+	assert.ok( await page.evaluate( () => editor.scripts[ editor.selected.uuid ][ 0 ].source.endsWith( '// Script Window draft' ) ) );
+	await page.getByRole( 'button', { name: 'Scripting', exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => {
+
+		const { line, ch } = document.querySelector( '#script-window .CodeMirror' ).CodeMirror.getCursor();
+		return [ line, ch ];
+
+	} ), [ 2, 3 ] );
+	await page.getByRole( 'button', { name: 'Close editor area' } ).click();
 	await page.getByRole( 'checkbox', { name: 'Enable Spin' } ).uncheck();
 	const reloaded = await page.evaluate( async () => {
 
@@ -1845,17 +1862,31 @@ async function check() {
 		assert.ok( await page.evaluate( () => editor.camera.position.y < editor.controls.getCenter( editor.camera ).y ) );
 		await page.keyboard.press( '0' );
 		assert.equal( await page.evaluate( () => editor.viewportCamera === editor.camera ), true );
-		await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
-		const code = page.locator( '#code-panel' );
+		await page.getByRole( 'button', { name: 'Scripting', exact: true } ).click();
+		const code = page.locator( '#script-window' );
+		const scriptWindow = page.getByRole( 'region', { name: 'Script Window', exact: true } );
+		assert.equal( await scriptWindow.isVisible(), true );
+		assert.equal( await page.locator( '#viewport' ).isVisible(), false );
+		assert.equal( await page.locator( '#code-resizer' ).count(), 0 );
+		const preview = scriptWindow.getByRole( 'button', { name: 'Show 3D view alongside', exact: true } );
+		await preview.click();
+		assert.equal( await page.locator( '#viewport' ).isVisible(), true );
+		assert.equal( await preview.getAttribute( 'aria-pressed' ), 'true' );
 		await code.locator( '.CodeMirror' ).click( { position: { x: 100, y: 20 } } );
 		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '.CodeMirror' ) ), true );
 		await page.keyboard.press( 'Control+Space' );
 		assert.equal( ( await code.boundingBox() ).width, 1440 );
 		assert.equal( await page.locator( '#viewport' ).isVisible(), false );
-		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '#code-panel' ) ), true );
+		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '#script-window' ) ), true );
 		await page.keyboard.press( 'Control+Space' );
 		assert.ok( ( await code.boundingBox() ).width < 1440 );
-		await page.getByRole( 'button', { name: 'Toggle Code panel' } ).click();
+		await preview.click();
+		await scriptWindow.getByRole( 'button', { name: 'Close editor area' } ).click();
+		await page.getByLabel( 'Editor Type', { exact: true } ).click();
+		await page.getByRole( 'button', { name: 'Script Window', exact: true } ).click();
+		assert.equal( await scriptWindow.isVisible(), true );
+		assert.equal( await page.getByRole( 'button', { name: 'Scripting', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
+		await scriptWindow.getByRole( 'button', { name: 'Close editor area' } ).click();
 		for ( const area of [ '#sidebar', '#animation' ] ) {
 
 			const bounds = await page.locator( area ).boundingBox();
@@ -1967,7 +1998,7 @@ async function check() {
 			editor.select( light );
 
 		} );
-		await page.getByLabel( '2D Editors', { exact: true } ).click();
+		await page.getByLabel( 'Editor Type', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Mask mode', exact: true } ).click();
 		const maskFrame = await page.getByLabel( 'Projection frame', { exact: true } ).boundingBox();
 		for ( const [ start, end ] of [ [ .31, .69 ], [ .42, .58 ] ] ) {
@@ -1986,7 +2017,7 @@ async function check() {
 		await page.getByLabel( 'Mask', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		await page.evaluate( () => editor.clear() );
-		await page.getByLabel( '2D Editors', { exact: true } ).click();
+		await page.getByLabel( 'Editor Type', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Image and vector mode' } ).click();
 		await page.getByRole( 'button', { name: 'Draw rectangle' } ).click();
 		const canvas = page.getByLabel( 'Vector drawing canvas' );
@@ -2246,7 +2277,7 @@ async function check() {
 		].join( '\n' );
 		await page.evaluate( source => {
 
-			const cm = document.querySelector( '#code-panel .CodeMirror' )?.CodeMirror;
+			const cm = document.querySelector( '#script-window .CodeMirror' )?.CodeMirror;
 			if ( cm ) cm.setValue( source );
 			else {
 

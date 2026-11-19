@@ -45,7 +45,7 @@ const definitions = [
  ['renameObject','Rename Object','Hierarchy','f2','f2'],
  ['parentObject','Set Parent','Hierarchy','',control+'+p'],
  ['clearParent','Clear Parent','Hierarchy','','alt+p'],
- ['code','Toggle code panel','Workspace','',''], ['sidebar','Toggle right dock','Workspace','',''], ['timeline','Toggle timeline','Workspace','',''],
+ ['code','Open Script Window','Workspace','',''], ['sidebar','Toggle right dock','Workspace','',''], ['timeline','Toggle timeline','Workspace','',''],
  ['viewportSidebar','Toggle Viewport Sidebar','View','','n'],
  ['viewportToolbar','Toggle Viewport Toolbar','View','','t'],
  ['viewportOverlays','Toggle Viewport Overlays','View','','alt+shift+z'],
@@ -346,7 +346,8 @@ class Keymap {
    }
    case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;
    case 'presentation':e.player?.present();break;
-   case 'code':case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={code:'Toggle Code panel',sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
+   case 'code':e.codePanel.open();break;
+   case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}
    case 'duplicate':e.viewTools.run(()=>duplicateObjects(e,this.preset==='blender'&&this.overEditableViewport));break;
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;

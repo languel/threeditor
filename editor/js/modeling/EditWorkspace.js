@@ -26,7 +26,7 @@ export function createEditWorkspace( editor, viewport ) {
 	divider.className = 'editor-2d-divider';
 	divider.tabIndex = 0;
 	divider.setAttribute( 'role', 'separator' );
-	divider.setAttribute( 'aria-label', 'Resize 2D and 3D areas' );
+	divider.setAttribute( 'aria-label', 'Resize editor and 3D areas' );
 	divider.setAttribute( 'aria-orientation', 'vertical' );
 	divider.setAttribute( 'aria-controls', 'editor-2d viewport' );
 	divider.setAttribute( 'aria-valuemin', '25' );
@@ -37,8 +37,8 @@ export function createEditWorkspace( editor, viewport ) {
 	picker.className = 'editor-picker';
 	const summary = document.createElement( 'summary' );
 	summary.innerHTML = icon( 'editorTypes' );
-	summary.title = '2D Editors';
-	summary.setAttribute( 'aria-label', '2D Editors' );
+	summary.title = 'Editor Type';
+	summary.setAttribute( 'aria-label', 'Editor Type' );
 	picker.append( summary );
 	const modes = document.createElement( 'div' );
 	modes.className = 'viewport-edit-modes';
@@ -50,7 +50,7 @@ export function createEditWorkspace( editor, viewport ) {
 	picker.append( modes );
 	let current;
 	let split = false, ratio = .5;
-	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp' };
+	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window' };
 	const splitPreference = new Map( [ [ 'uv', true ], [ 'image', true ] ] );
 	const light = () => [ editor.selected, editor.viewportSource, current?.object ].find( canEditLightMask );
 	const mesh = () => [ editor.selected, current?.object ].find( object => editableMesh( object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) );
@@ -60,7 +60,8 @@ export function createEditWorkspace( editor, viewport ) {
 	const imageButton = modelButton( modes, 'Image and vector mode', 'surface', () => switchMode( 'image', null, () => openMaskEditor( editor, null, false, true ) ) );
 	const uvButton = modelButton( modes, 'UV mode', 'toolGrid', () => switchMode( 'uv', mesh(), openUVEditor ) );
 	const warpButton = modelButton( modes, 'Projection warp mode', 'placePlane', () => switchMode( 'warp', projector(), openUVEditor ) );
-	const buttons = { mask: maskButton, image: imageButton, uv: uvButton, warp: warpButton };
+	const scriptButton = modelButton( modes, 'Script Window', 'code', () => editor.codePanel.open() );
+	const buttons = { mask: maskButton, image: imageButton, uv: uvButton, warp: warpButton, script: scriptButton };
 	function switchMode( mode, object, open ) {
 
 		picker.open = false;
@@ -85,12 +86,8 @@ export function createEditWorkspace( editor, viewport ) {
 	}
 	function syncLayout() {
 
-		const occupied = [ 'code-panel', 'sidebar' ].reduce( ( width, id ) => {
-
-			const panel = document.getElementById( id );
-			return width + ( panel?.dataset.dock === 'open' ? panel.offsetWidth : 0 );
-
-		}, 0 );
+		const sidebar = document.getElementById( 'sidebar' );
+		const occupied = sidebar?.dataset.dock === 'open' ? sidebar.offsetWidth : 0;
 		const canSplit = window.innerWidth - occupied >= 640;
 		split = !! ( current && canSplit && splitPreference.get( current.mode ) );
 		splitButton.disabled = ! canSplit;
@@ -142,10 +139,12 @@ export function createEditWorkspace( editor, viewport ) {
 		uvButton.disabled = ! mesh();
 		warpButton.disabled = ! projector();
 		sceneButton.hidden = ! current;
-		summary.title = current ? names[ current.mode ] : '2D Editors';
+		summary.title = current ? names[ current.mode ] : 'Editor Type';
 		summary.setAttribute( 'aria-label', summary.title );
 		title.textContent = current ? names[ current.mode ] : '';
-		dock.setAttribute( 'aria-label', current ? title.textContent + ' editor area' : '2D editor area' );
+		if ( current ) dock.dataset.editorMode = current.mode;
+		else delete dock.dataset.editorMode;
+		dock.setAttribute( 'aria-label', current?.mode === 'script' ? title.textContent : current ? title.textContent + ' editor area' : '2D editor area' );
 		target.textContent = current?.object?.name || current?.object?.type || '';
 		target.title = target.textContent;
 		for ( const [ mode, button ] of Object.entries( buttons ) ) button.setAttribute( 'aria-pressed', String( current?.mode === mode ) );
@@ -195,7 +194,7 @@ export function createEditWorkspace( editor, viewport ) {
 	dock.addEventListener( 'keydown', event => {
 
 		event.stopPropagation();
-		if ( event.key === 'Escape' && ! event.defaultPrevented ) close();
+		if ( event.key === 'Escape' && ! event.defaultPrevented && ! event.target.closest?.( '.CodeMirror' ) ) close();
 
 	} );
 	refresh();

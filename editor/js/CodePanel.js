@@ -1,4 +1,4 @@
-// Docked, live "three.js code" panel (experiment addition).
+// Script Window for generated scene source, object scripts, and shader programs.
 // Scene -> code: regenerated whenever the scene changes (unless you have unapplied edits).
 // Code -> scene: Apply (or Auto-apply) re-runs the "Scene contents" section and swaps the editor scene.
 
@@ -9,7 +9,6 @@
 
 import { Color } from 'three';
 import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCodeExporter.js';
-import { PanelDock } from './PanelDock.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 import { codeEditorSettings, setCodeEditorSettings } from './CodeEditorSettings.js';
@@ -22,7 +21,7 @@ function CodePanel( editor ) {
 	const strings = editor.strings;
 
 	const dom = document.createElement( 'div' );
-	dom.id = 'code-panel';
+	dom.id = 'script-window';
 
 	const bar = document.createElement( 'div' );
 	bar.className = 'code-bar';
@@ -82,7 +81,6 @@ function CodePanel( editor ) {
 	let ranges = {};
 	let focusMark = null;
 	let saveTimer = 0;
-	let preserveOnReveal = false;
 	const textarea = document.createElement( 'textarea' );
 	textarea.id = 'code-text';
 	textarea.spellcheck = false;
@@ -207,7 +205,7 @@ function CodePanel( editor ) {
 	} );
 	const sceneOnly = [ applyBtn, autoLabel, regenBtn ];
 	const sceneCode = () => target.kind === 'scene' ? getCode() : sceneText;
-	const isOpen = () => dock.isVisible();
+	const isOpen = () => editor.editWorkspace.mode === 'script';
 
 	// --- scene script (generated code mirrored onto the Scene) ---
 
@@ -307,7 +305,7 @@ function CodePanel( editor ) {
 
 		}
 
-		clearTimeout( saveTimer );
+		flushTarget();
 		clearErrors();
 
 	}
@@ -316,7 +314,7 @@ function CodePanel( editor ) {
 
 		if ( target.kind !== 'scene' ) {
 
-			clearTimeout( saveTimer );
+			flushTarget();
 			clearErrors();
 			target = { kind: 'scene' };
 			setMode( 'javascript' );
@@ -375,7 +373,10 @@ function CodePanel( editor ) {
 	function follow( object, force ) {
 
 		if ( ! isOpen() ) return;
-		if ( ! force && target.kind !== 'scene' && object && target.object === object ) return;
+		if ( ! force && object && target.object === object && (
+			target.kind === 'script' ? editor.scripts[ object.uuid ]?.includes( target.script ) :
+				target.material && editor.getObjectMaterial( object, target.slot ) === target.material
+		) ) return;
 
 		if ( ! object || object === editor.scene || object === editor.camera ) return showScene( null );
 
@@ -655,7 +656,7 @@ function CodePanel( editor ) {
 		if ( target.kind !== 'scene' ) {
 
 			clearTimeout( saveTimer );
-			saveTimer = setTimeout( saveTarget, 300 );
+			saveTimer = setTimeout( flushTarget, 300 );
 			return;
 
 		}
@@ -891,16 +892,45 @@ function CodePanel( editor ) {
 
 	} );
 
+	function open( { followSelection = true } = {} ) {
+
+		if ( isOpen() ) return;
+		editor.workspaceArea?.reveal( editor.editWorkspace.dock );
+		editor.editWorkspace.mount( 'script', null, dom, flushTarget );
+		if ( followSelection ) {
+
+			if ( ! dirty ) regenerate( false );
+			follow( editor.selected );
+
+		}
+		cm?.refresh();
+
+	}
+
+	function close() {
+
+		if ( isOpen() ) editor.editWorkspace.close();
+
+	}
+
+	function flushTarget() {
+
+		if ( ! saveTimer ) return;
+		clearTimeout( saveTimer );
+		saveTimer = 0;
+		if ( target.kind === 'script' && ! editor.scripts[ target.object.uuid ]?.includes( target.script ) ) return;
+		if ( target.kind !== 'scene' ) saveTarget();
+
+	}
+
 	function toggleScript( object, script ) {
 
 		const sameTarget = editor.selected === object && ( script.generated ? target.kind === 'scene' :
 			target.kind === 'script' && target.object === object && target.script === script );
 		if ( sameTarget ) {
 
-			// Keep the current text and cursor when reopening the same glyph,
-			// including drafts that have not passed validation yet.
-			preserveOnReveal = ! isOpen();
-			dock.toggle( ! isOpen() );
+			if ( isOpen() ) close();
+			else open( { followSelection: false } );
 			return;
 
 		}
@@ -911,13 +941,11 @@ function CodePanel( editor ) {
 
 	signals.editScript.add( ( object, script, materialSlot ) => {
 
-		editor.workspaceArea?.reveal( dom );
-		dock.toggle( true );
-
+		open( { followSelection: false } );
 		if ( typeof script === 'object' ) {
 
 			if ( script.generated ) showScene( object );
-			else showScript( object, script );
+			else if ( target.script !== script || target.object !== object ) showScript( object, script );
 
 		} else {
 
@@ -942,55 +970,6 @@ function CodePanel( editor ) {
 	for ( const s of [ 'objectChanged', 'scriptChanged', 'materialChanged' ] ) signals[ s ].add( () => { if ( isOpen() ) refreshHead(); } );
 
 	setTimeout( syncClosed, 0 );
-
-	// Layout: the panel docks to the left of the viewport.
-	const MIN_WIDTH = 280;
-	let WIDTH = Math.max( MIN_WIDTH, ( ! editor.portable && parseInt( localStorage.getItem( 'threejs-editor/code-panel-width' ) ) ) || 520 );
-	document.body.style.setProperty( '--code-width', WIDTH + 'px' );
-
-	const handle = document.createElement( 'div' );
-	handle.id = 'code-resizer';
-	dom.appendChild( handle );
-
-	handle.addEventListener( 'pointerdown', ( e ) => {
-
-		if ( e.isPrimary === false || e.button !== 0 ) return;
-		e.preventDefault();
-		handle.setPointerCapture( e.pointerId );
-		handle.classList.add( 'active' );
-		const move = ( ev ) => {
-
-			const sidebar = document.getElementById( 'sidebar' );
-			const right = sidebar?.dataset.dock === 'open' && window.innerWidth > 600 ? sidebar.offsetWidth : 0;
-			const max = Math.max( MIN_WIDTH, window.innerWidth - right - 100 );
-			WIDTH = Math.round( Math.min( max, Math.max( MIN_WIDTH, ev.clientX ) ) );
-			document.body.style.setProperty( '--code-width', WIDTH + 'px' );
-			signals.windowResize.dispatch();
-
-		};
-
-		const up = () => {
-
-			handle.classList.remove( 'active' );
-			handle.removeEventListener( 'pointermove', move );
-			handle.removeEventListener( 'lostpointercapture', up );
-			if ( ! editor.portable ) localStorage.setItem( 'threejs-editor/code-panel-width', String( WIDTH ) );
-
-		};
-
-		handle.addEventListener( 'pointermove', move );
-		handle.addEventListener( 'lostpointercapture', up );
-
-	} );
-
-	const dock = new PanelDock( editor, dom, handle, 'left', false, () => {
-
-		if ( preserveOnReveal ) { preserveOnReveal = false; refreshHead(); return; }
-		regenerate( false );
-		follow( editor.selected, true );
-
-	} );
-
 
 	const getPublishInputs = async () => {
 
@@ -1023,7 +1002,7 @@ function CodePanel( editor ) {
 
 	}
 
-	return { dom, dock, getPublishInputs, toggle: dock.toggle, toggleScript, apply, applySceneSource, regenerate, isOpen, getSceneSource: sceneCode };
+	return { dom, open, close, getPublishInputs, toggleScript, apply, applySceneSource, regenerate, isOpen, getSceneSource: sceneCode };
 
 }
 

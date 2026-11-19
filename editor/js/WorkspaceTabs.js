@@ -12,7 +12,6 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 	function show3D( mode ) {
 
 		flat.close();
-		editor.codePanel.toggle( false );
 		if ( mode ) view.setWorkspaceMode( mode );
 
 	}
@@ -41,7 +40,6 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		[ 'Sculpting', 'sculptTool', () => show3D( 'sculpt' ) ],
 		[ 'UV Editing', 'toolGrid', () => {
 
-			editor.codePanel.toggle( false );
 			if ( flat.mode !== 'uv' ) {
 
 				view.setWorkspaceMode( 'edit' );
@@ -50,7 +48,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 			}
 
 		} ],
-		[ 'Image & Vector', 'pathDraw', () => { editor.codePanel.toggle( false ); flat.open( 'image' ); } ],
+		[ 'Image & Vector', 'pathDraw', () => flat.open( 'image' ) ],
 		[ 'Paint', 'surfaceBrush', () => show3D( 'paint' ) ],
 		[ 'Shading', 'shadingMaterial', () => {
 
@@ -66,12 +64,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 			editor.signals.animationPanelResized.dispatch( Math.min( 240, Math.round( window.innerHeight * .3 ) ) );
 
 		} ],
-		[ 'Scripting', 'code', () => {
-
-			flat.close();
-			editor.codePanel.toggle( true );
-
-		} ],
+		[ 'Scripting', 'code', () => flat.open( 'script' ) ],
 		[ 'Projection', 'toolMask', () => {
 
 			show3D( 'object' );
@@ -87,6 +80,13 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		} ]
 	];
 	const buttons = new Map();
+	let lastWorkspace = 'Layout';
+	function syncWorkspace() {
+
+		const active = flat.mode === 'script' ? 'Scripting' : lastWorkspace;
+		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( name === active ) );
+
+	}
 	for ( const [ label, glyph, open ] of workspaces ) {
 
 		const button = document.createElement( 'button' );
@@ -101,8 +101,9 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		button.onclick = () => {
 
 			if ( label === 'Sculpting' && ! editor.modeling.canEditTarget( editor.selected ) ) return;
+			if ( label !== 'Scripting' ) lastWorkspace = label;
 			open();
-			for ( const other of buttons.values() ) other.setAttribute( 'aria-pressed', String( button === other ) );
+			syncWorkspace();
 			const room = strip.getBoundingClientRect();
 			const bounds = button.getBoundingClientRect();
 			if ( bounds.left < room.left ) strip.scrollLeft -= room.left - bounds.left;
@@ -125,6 +126,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		button.title = button.disabled ? 'Sculpting · Select an editable mesh' : 'Sculpting';
 
 	}
+	editor.signals.windowResize.add( syncWorkspace );
 	editor.signals.objectSelected.add( updateAvailability );
 	editor.signals.objectChanged.add( updateAvailability );
 	updateAvailability();

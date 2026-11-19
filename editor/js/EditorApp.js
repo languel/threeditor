@@ -2,25 +2,25 @@ import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=splat-filters';
-import { Keymap } from './Keymap.js?v=pencil-ribbon';
+import { Keymap } from './Keymap.js?v=script-window';
 import { ModalTransform } from './ModalTransform.js?v=held-alt-constraint';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=unified-sync';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=pencil-splats';
+import { Viewport } from './Viewport.js?v=script-window';
 import { Toolbar } from './Toolbar.js?v=pencil-placement';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=pencil-guides';
-import { Menubar } from './Menubar.js?v=unified-sync';
+import { Sidebar } from './Sidebar.js?v=script-window';
+import { Menubar } from './Menubar.js?v=script-window';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=held-alt-constraint';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
-import { Resizer } from './Resizer.js';
+import { Resizer } from './Resizer.js?v=script-window';
 import { PanelDock } from './PanelDock.js';
-import { WorkspaceArea } from './WorkspaceArea.js';
+import { WorkspaceArea } from './WorkspaceArea.js?v=script-window';
 import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
-import { CodePanel } from './CodePanel.js?v=unified-sync';
+import { CodePanel } from './CodePanel.js?v=script-window';
 import { AnimationResizer } from './AnimationResizer.js';
 import { Animation } from './Animation.js?v=workspace-tabs';
 
@@ -92,7 +92,6 @@ async function startEditor( portable = null ) {
 	document.body.appendChild( sidebar.dom );
 
 	const codePanel = new CodePanel( editor );
-	document.body.appendChild( codePanel.dom );
 	editor.codePanel = codePanel;
 
 	const resizer = new Resizer( editor );
@@ -114,7 +113,7 @@ async function startEditor( portable = null ) {
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
-	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, viewport.dom, sidebar.dom, codePanel.dom, animation.dom );
+	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, viewport.dom, sidebar.dom, editor.editWorkspace.dock, animation.dom );
 	editor.openComponentPicker = () => {
 
 		editor.workspaceArea.reveal( sidebar.dom );

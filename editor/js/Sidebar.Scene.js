@@ -269,7 +269,7 @@ function SidebarScene( editor ) {
 
 		if ( editor.scripts[ uuid ].length === 0 ) return '';
 
-		return ` <button type="button" class="type Script" aria-label="Toggle script" title="Toggle script editor" aria-controls="code-panel">${ glyph( 'Script' ) }</button>`;
+		return ` <button type="button" class="type Script" aria-label="Toggle script" title="Toggle Script Window" aria-controls="editor-2d">${ glyph( 'Script' ) }</button>`;
 
 	}
 

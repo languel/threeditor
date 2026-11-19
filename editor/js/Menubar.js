@@ -1,4 +1,4 @@
-import { WorkspaceTabs } from './WorkspaceTabs.js?v=unified-sync';
+import { WorkspaceTabs } from './WorkspaceTabs.js?v=script-window';
 import { UIPanel } from './libs/ui.js';
 
 import { MenubarAdd } from './Menubar.Add.js?v=unified-sync';
@@ -7,7 +7,7 @@ import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
 import { MenubarView } from './Menubar.View.js?v=unified-sync';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
-import { formatCombo } from './Keymap.js';
+import { formatCombo } from './Keymap.js?v=script-window';
 
 function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 
@@ -22,16 +22,6 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 	menus.add( new MenubarView( editor ) );
 	menus.add( new MenubarRender( editor ) );
 
-	const code = new UIPanel();
-	code.setClass( 'menu' );
-	const codeTitle = new UIPanel();
-	codeTitle.setClass( 'title' );
-	codeTitle.setTextContent( 'Code' );
-	codeTitle.dom.id = 'menu-code';
-	codeTitle.dom.style.cursor = 'pointer';
-	codeTitle.dom.addEventListener( 'click', () => editor.codePanel.toggle() );
-	code.add( codeTitle );
-	menus.add( code );
 	menus.add( new MenubarHelp( editor ) );
 	container.dom.append( WorkspaceTabs( editor, sidebar, sidebarDock ) );
 
@@ -78,7 +68,6 @@ function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 	iconButton( 'Open asset browser', '<path d="M2 6h6l2-3h8v14H2z"/><path d="M2 7h16"/>' ).addEventListener( 'click', () => editor.assetBrowser.reveal() );
 
 	const frame = '<rect x="2.5" y="3.5" width="15" height="13" rx="2"/>';
-	editor.codePanel.dock.bindToggle( iconButton( 'Toggle Code panel', frame + '<path d="M7.5 4v12"/>' ) );
 	sidebarDock.bindToggle( iconButton( 'Toggle right sidebar', frame + '<path d="M12.5 4v12"/>' ) );
 	timelineDock.bindToggle( iconButton( 'Toggle animation timeline', frame + '<path d="M3 12h14"/>' ) );
 

@@ -63,7 +63,7 @@ function WorkspaceArea( editor, menubar, ...areas ) {
 
 	}
 
-	editor.signals.windowResize.add( () => { if ( current?.dataset.dock === 'closed' ) restore(); } );
+	editor.signals.windowResize.add( () => { if ( current && ( current.hidden || current.dataset.dock === 'closed' ) ) restore(); } );
 	editor.signals.startPlayer.add( restore );
 	editor.signals.projectLoaded.add( restore );
 	editor.signals.editorCleared.add( restore );
