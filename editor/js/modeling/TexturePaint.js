@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { brushDab, brushGrainFill, drawBrushTip } from './PencilBrush.js?v=brush-response';
+import { brushDab, brushGrainFill, drawBrushTip } from './PencilBrush.js?v=brush-presets';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { SetMaterialCommand } from '../commands/SetMaterialCommand.js';
 

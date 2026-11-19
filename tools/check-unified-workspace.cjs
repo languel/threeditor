@@ -2414,6 +2414,61 @@ async function checkDrawingAssets( page ) {
 
 }
 
+async function checkBrushPresets( browser ) {
+
+	const page = await browser.newPage( { viewport: { width: 1440, height: 900 } } );
+	try {
+
+		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
+		await page.waitForFunction( () => window.editor?.renderer );
+		await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+		const viewport = page.getByRole( 'group', { name: 'Pencil brush palette', exact: true } );
+		const dialog = page.getByRole( 'dialog', { name: 'Save brush preset', exact: true } );
+		const adjust = async ( palette, label, value ) => {
+
+			const field = palette.getByLabel( label, { exact: true } );
+			await field.fill( value );
+			await field.press( 'Tab' );
+
+		};
+		await adjust( viewport, 'Brush tip angle (°)', '33' );
+		await adjust( viewport, 'Brush tip aspect', '.45' );
+		await viewport.getByLabel( 'Use pen pressure for opacity' ).check();
+		await viewport.getByRole( 'button', { name: 'Save brush preset', exact: true } ).click();
+		await dialog.getByLabel( 'Preset name' ).fill( 'Fine wash' );
+		await dialog.getByRole( 'button', { name: 'Save preset', exact: true } ).click();
+		assert.equal( await viewport.getByLabel( 'Saved brush presets' ).inputValue(), 'Fine wash' );
+
+		await adjust( viewport, 'Brush tip angle (°)', '10' );
+		await viewport.getByRole( 'button', { name: 'Restore saved brush preset' } ).click();
+		assert.equal( await viewport.getByLabel( 'Brush tip angle (°)' ).inputValue(), '33' );
+		await adjust( viewport, 'Brush tip angle (°)', '40' );
+		await viewport.getByRole( 'button', { name: 'Save brush preset', exact: true } ).click();
+		await dialog.getByRole( 'button', { name: 'Update preset', exact: true } ).click();
+
+		await page.reload();
+		await page.waitForFunction( () => window.editor?.renderer );
+		await page.getByRole( 'button', { name: 'Image & Vector', exact: true } ).click();
+		const drawing = page.getByRole( 'region', { name: 'Image and vector editor', exact: true } );
+		await drawing.getByRole( 'button', { name: 'Brush', exact: true } ).click();
+		const saved = drawing.getByLabel( 'Saved brush presets' );
+		await saved.selectOption( 'Fine wash' );
+		assert.equal( await drawing.getByLabel( 'Brush tip angle (°)' ).inputValue(), '40' );
+		assert.equal( Number( await drawing.getByLabel( 'Brush tip aspect' ).inputValue() ), .45 );
+		assert.equal( await drawing.getByLabel( 'Use pen pressure for opacity' ).isChecked(), true );
+		await drawing.getByRole( 'button', { name: 'Delete saved brush preset' } ).click();
+		assert.equal( await saved.isVisible(), false );
+		assert.equal( await drawing.getByLabel( 'Brush tip angle (°)' ).inputValue(), '40' );
+		assert.deepEqual( await page.evaluate( () => editor.config.getKey( 'settings/pencilPresets' ) ), [] );
+
+	} finally {
+
+		await page.close();
+
+	}
+
+}
+
 async function check() {
 
 	const browser = await chromium.launch( { channel: process.env.CHROME_CHANNEL || 'chrome', args: [ '--enable-unsafe-swiftshader' ] } );
@@ -2456,6 +2511,7 @@ async function check() {
 			return migrated;
 
 		} ), [ 1, 2, 3 ] );
+		await checkBrushPresets( browser );
 		await checkSelectionShelf( page );
 		await checkPencilObjectSelection( page );
 		await checkPencil( page );

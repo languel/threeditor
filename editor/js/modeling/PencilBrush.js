@@ -157,6 +157,73 @@ export function useBrushShortcut( editor, event ) {
 
 }
 
+const brushPresetsKey = 'settings/pencilPresets';
+
+function drawBrushSample( canvas, brush ) {
+
+	const context = canvas.getContext( '2d' );
+	const style = { ...brush, size: Math.min( 17, brush.size * .58 ) };
+	context.clearRect( 0, 0, canvas.width, canvas.height );
+	const dab = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => brushDab( context, x, y, pressure, style ) );
+	for ( let x = 8; x < 38; x ++ ) dab( x, 12 + Math.sin( x / 5 ) * 4, .35 + .65 * Math.sin( x / 15 ) );
+
+}
+
+function nameBrushPreset( suggested, exists, savePreset ) {
+
+	const dialog = document.createElement( 'dialog' );
+	dialog.className = 'project-save-dialog';
+	dialog.setAttribute( 'aria-label', 'Save brush preset' );
+	const form = document.createElement( 'form' );
+	const title = document.createElement( 'h2' );
+	title.textContent = 'Save brush preset';
+	const label = document.createElement( 'label' );
+	label.textContent = 'Preset name';
+	const name = document.createElement( 'input' );
+	Object.assign( name, { required: true, maxLength: 48, value: suggested } );
+	label.append( name );
+	const cancel = document.createElement( 'button' );
+	cancel.type = 'button';
+	cancel.textContent = 'Cancel';
+	cancel.onclick = () => dialog.close();
+	const save = document.createElement( 'button' );
+	save.type = 'submit';
+	const update = () => {
+
+		name.setCustomValidity( '' );
+		save.textContent = exists( name.value.trim() ) ? 'Update preset' : 'Save preset';
+
+	};
+	name.addEventListener( 'input', update );
+	form.onsubmit = event => {
+
+		event.preventDefault();
+		const value = name.value.trim();
+		if ( ! value || tips.some( ( [ name ] ) => name.toLowerCase() === value.toLowerCase() ) ) {
+
+			name.setCustomValidity( value ? 'Choose a different name from the built-in presets.' : 'Enter a preset name.' );
+			name.reportValidity();
+			return;
+
+		}
+		savePreset( value );
+		dialog.close();
+
+	};
+	const actions = document.createElement( 'div' );
+	actions.className = 'project-save-actions';
+	actions.append( cancel, save );
+	form.append( title, label, actions );
+	dialog.append( form );
+	dialog.onclose = () => dialog.remove();
+	dialog.addEventListener( 'keydown', event => event.stopPropagation() );
+	update();
+	document.body.append( dialog );
+	dialog.showModal();
+	name.select();
+
+}
+
 export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, addStrokeControls } = {} ) {
 
 	const brush = pencilBrush( editor );
@@ -206,6 +273,46 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 	}
 	palette.append( fieldRow );
+	const emptyPresets = [];
+	const savedBrushes = () => editor.config.getKey( brushPresetsKey ) || emptyPresets;
+	const findPreset = name => savedBrushes().find( item => item.name.toLowerCase() === name.toLowerCase() );
+	const recallPreset = name => {
+
+		const saved = findPreset( name );
+		if ( ! saved ) return;
+		Object.assign( brush, saved );
+		refresh(); changed();
+
+	};
+	const userPresets = document.createElement( 'select' );
+	userPresets.setAttribute( 'aria-label', 'Saved brush presets' );
+	userPresets.title = 'Saved brush presets';
+	userPresets.onchange = () => recallPreset( userPresets.value );
+	fieldRow.append( userPresets );
+	modelButton( fieldRow, 'Save brush preset', 'save', () => {
+
+		const stored = findPreset( brush.name );
+		nameBrushPreset( stored?.name || brush.name + ' custom', value => Boolean( findPreset( value ) ), value => {
+
+			const existing = findPreset( value );
+			const snapshot = { ...brush, name: existing?.name || value };
+			const records = savedBrushes();
+			editor.config.setKey( brushPresetsKey, existing ? records.map( item => item === existing ? snapshot : item ) : [ ...records, snapshot ] );
+			brush.name = snapshot.name;
+			refresh(); changed();
+
+		} );
+
+	} );
+	const restorePreset = modelButton( fieldRow, 'Restore saved brush preset', 'undo', () => recallPreset( brush.name ) );
+	const removePreset = modelButton( fieldRow, 'Delete saved brush preset', 'delete', () => {
+
+		editor.config.setKey( brushPresetsKey, savedBrushes().filter( item => item.name !== brush.name ) );
+		refresh(); changed();
+
+	} );
+	palette.addEventListener( 'focusin', refresh );
+
 	const tipOptions = new Set( [ 'spacing', 'aspect', 'angle', 'pressureSize', 'pressureOpacity' ] );
 	const displayValue = key => key === 'angle' ? Math.round( brush.angle * 180 / Math.PI ) : brush[ key ];
 	const fields = [
@@ -320,13 +427,11 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		sample.height = 24;
 		sample.setAttribute( 'aria-hidden', 'true' );
 		button.prepend( sample );
-		const context = sample.getContext( '2d' );
-		const style = { size: Math.min( 17, size * .58 ), strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern, color: '#263449' };
-		const draw = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => brushDab( context, x, y, pressure, style ) );
-		for ( let x = 8; x < 38; x ++ ) draw( x, 12 + Math.sin( x / 5 ) * 4, .35 + .65 * Math.sin( x / 15 ) );
-		return [ name, button, sample ];
+		drawBrushSample( sample, { size, strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern, color: '#263449' } );
+		return [ name, button ];
 
 	} );
+	let renderedPresets, lastPreview;
 	function refresh() {
 
 		for ( const [ key, input ] of fields ) {
@@ -339,15 +444,27 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		}
 		if ( guide ) guide.value = brush.guide;
 		pattern.value = brush.grainPattern;
-		for ( const [ name, button, sample ] of buttons ) {
+		const records = savedBrushes();
+		if ( renderedPresets !== records ) {
 
-			button.setAttribute( 'aria-pressed', String( brush.name === name ) );
-			if ( summaryCanvas && brush.name === name ) {
+			renderedPresets = records;
+			userPresets.replaceChildren( new Option( 'Saved brushes', '' ), ...records.map( item => new Option( item.name, item.name ) ) );
+			userPresets.hidden = ! records.length;
 
-				const context = summaryCanvas.getContext( '2d' );
-				context.clearRect( 0, 0, summaryCanvas.width, summaryCanvas.height );
-				context.drawImage( sample, 0, 0 );
-				summaryCanvas.parentElement.title = 'Brush presets · ' + name;
+		}
+		const saved = records.some( item => item.name === brush.name );
+		if ( userPresets.value !== ( saved ? brush.name : '' ) ) userPresets.value = saved ? brush.name : '';
+		restorePreset.style.display = removePreset.style.display = saved ? '' : 'none';
+		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( brush.name === name ) );
+		if ( summaryCanvas ) {
+
+			const preview = [ brush.name, brush.color, brush.size, brush.strength, brush.hardness, brush.spacing, brush.aspect, brush.angle,
+				brush.grain, brush.grainScale, brush.grainPattern, brush.pressureSize, brush.pressureOpacity ].join( '/' );
+			if ( preview !== lastPreview ) {
+
+				lastPreview = preview;
+				drawBrushSample( summaryCanvas, brush );
+				summaryCanvas.parentElement.title = 'Brush presets · ' + brush.name;
 
 			}
 

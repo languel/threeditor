@@ -50,6 +50,7 @@ function Config( persist = true ) {
 		'settings/theme': 'studio',
 		'settings/userThemes': {},
 		'settings/uiStyle': 'compact',
+		'settings/pencilPresets': [],
 		'settings/uiFont': 'system',
 		'settings/glyphTabs': true,
 		'settings/glyphButtons': true,
