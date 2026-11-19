@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=uv-anchors';
+import { icon } from '../Glyphs.js?v=coverage-overlay';
 
 function labelContent( node, label, glyph ) {
 

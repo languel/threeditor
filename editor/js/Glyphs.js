@@ -155,6 +155,7 @@ const ICONS = {
 	chat: svg( '<path d="M4 5h16v11H9l-5 4z"/>' ),
 	menu: svg( '<path d="M4 7h16M4 12h16M4 17h16"/>' ),
 	undo: svg( '<path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 010 10h-2"/>' ),
+	refresh: svg( '<path d="M20 5v5h-5m5 0a8 8 0 1 0 .1 5"/>' ),
 	redo: svg( '<path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 000 10h2"/>' ),
 	up: svg( '<path d="M6 14l6-6 6 6"/>' ),
 	down: svg( '<path d="M6 10l6 6 6-6"/>' ),

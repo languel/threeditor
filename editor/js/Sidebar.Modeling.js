@@ -1,4 +1,4 @@
-import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=projector-coverage';
+import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=coverage-overlay';
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';

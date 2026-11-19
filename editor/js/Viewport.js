@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=projector-coverage';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=coverage-overlay';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -33,6 +33,7 @@ import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=brush-presets';
+import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
 import { ModelViewport } from './modeling/ModelViewport.js?v=brush-response';
 import { PostProcessingHost } from './PostProcessing.js';
@@ -83,6 +84,7 @@ function Viewport( editor ) {
 
 	let renderer = null;
 	const layout = editor.viewLayout = new ViewLayout( editor, container.dom );
+	const coverage = new ProjectorCoverageOverlay( editor, container.dom );
 	// Route shortcuts and pointer tools to the Director area under the mouse
 	// before the modeling and transform controls process the event.
 	for ( const type of [ 'pointerdown', 'pointermove', 'wheel' ] ) container.dom.addEventListener( type, event => {
@@ -1368,6 +1370,7 @@ function Viewport( editor ) {
 		const tiled = frames.length > 1 || !! layout.optical;
 		const clean = cleanShading( editor.viewportShading );
 		const overlays = editor.viewportOverlays;
+		coverage.update( layout.optical, overlays && ! clean );
 		container.dom.dataset.cleanView = String( clean );
 		container.dom.dataset.overlays = String( overlays );
 		container.dom.dataset.shading = editor.viewportShading;

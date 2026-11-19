@@ -1016,14 +1016,59 @@ async function checkProjectorCoverage( page ) {
 		return [ ...context.getImageData( 0, 0, 1, 1 ).data, ...context.getImageData( canvas.width - 1, 0, 1, 1 ).data ];
 
 	} ), [ 239, 155, 88, 255, 94, 195, 154, 255 ] );
+	await page.evaluate( () => {
+
+		editor.setViewportShading( 'solid' );
+		editor.setViewportSource( editor.selected );
+		editor.setViewportSplit( true, 'vertical', .5 );
+
+	} );
+	const toggle = page.getByRole( 'button', { name: 'Projector coverage overlay' } );
+	const coverageStatus = page.getByLabel( 'Projector coverage status', { exact: true } );
+	await toggle.click();
+	await coverageStatus.getByText( '50% blocked', { exact: true } ).waitFor();
+	const overlay = page.locator( '.viewport-projector-coverage' );
+	const frameMatches = () => overlay.evaluate( canvas => {
+
+		const { rect } = editor.viewLayout.optical;
+		const actual = canvas.getBoundingClientRect();
+		const viewport = document.querySelector( '#viewport' ).getBoundingClientRect();
+		return actual.left === viewport.left + rect.x && actual.top === viewport.top + rect.y &&
+			actual.width === rect.width && actual.height === rect.height && getComputedStyle( canvas ).pointerEvents === 'none';
+
+	} );
+	assert.ok( await frameMatches() );
+	await page.evaluate( () => editor.setViewportSplit( true, 'horizontal', .6 ) );
+	assert.ok( await frameMatches() );
+	await page.evaluate( () => editor.setViewportShading( 'preview' ) );
+	assert.equal( await overlay.isVisible(), false );
+	await page.evaluate( () => editor.setViewportShading( 'solid' ) );
+	await overlay.waitFor();
+	assert.equal( await toggle.getAttribute( 'aria-pressed' ), 'true' );
+
 	await panel.getByRole( 'button', { name: 'Coverage blocker · 50%', exact: true } ).click();
 	assert.equal( await page.evaluate( () => editor.selected.name ), 'Coverage blocker' );
+	await page.evaluate( async () => {
+
+		const { SetPositionCommand } = await import( new URL( './js/commands/SetPositionCommand.js', document.baseURI ) );
+		const blocker = editor.selected;
+		editor.execute( new SetPositionCommand( editor, blocker, new THREE.Vector3( -10, 0, -3 ) ) );
+
+	} );
+	await coverageStatus.getByText( '0% blocked', { exact: true } ).waitFor();
+	await page.evaluate( () => editor.selected.position.x = -1 );
+	await page.getByRole( 'button', { name: 'Refresh projector coverage' } ).click();
+	await coverageStatus.getByText( '50% blocked', { exact: true } ).waitFor();
 	await page.evaluate( () => {
 
 		editor.selected.position.x = -10;
+		editor.setViewportCamera( editor.camera.uuid );
+		editor.setViewportSplit( false );
 		editor.select( editor.scene.getObjectByName( 'Coverage projector' ) );
 
 	} );
+	assert.equal( await toggle.isVisible(), false );
+	assert.equal( await overlay.isVisible(), false );
 	await page.locator( '#properties > .Tabs > #modelingTab' ).click();
 	await check.click();
 	await panel.getByText( /^0% blocked/ ).waitFor();

@@ -24,7 +24,7 @@ function opaqueSurface( hit ) {
 
 }
 
-export function inspectProjectorCoverage( THREE, scene, projector, receiver ) {
+export function inspectProjectorCoverage( THREE, scene, projector, receiver, width = 40 ) {
 
 	scene.updateMatrixWorld( true );
 	const camera = lightViewCamera( THREE, projector );
@@ -40,7 +40,7 @@ export function inspectProjectorCoverage( THREE, scene, projector, receiver ) {
 
 	} );
 
-	const width = 40, height = THREE.MathUtils.clamp( Math.round( width / camera.aspect ), 10, 40 );
+	const height = THREE.MathUtils.clamp( Math.round( width / camera.aspect ), width / 4, width );
 	const cells = new Uint8Array( width * height );
 	const counts = new Map();
 	const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -76,6 +76,22 @@ export function inspectProjectorCoverage( THREE, scene, projector, receiver ) {
 
 }
 
+export function drawProjectorCoverage( canvas, { width, height, cells }, overlay = false ) {
+
+	canvas.width = width;
+	canvas.height = height;
+	const context = canvas.getContext( '2d' );
+	if ( ! context ) return;
+	const colors = [ overlay ? 'transparent' : '#232830', '#5ec39a', '#ef9b58' ];
+	for ( let i = 0; i < cells.length; i ++ ) {
+
+		context.fillStyle = colors[ cells[ i ] ];
+		context.fillRect( i % width, Math.floor( i / width ), 1, 1 );
+
+	}
+
+}
+
 export function addProjectorCoverageControl( THREE, editor, projector, host ) {
 
 	const report = document.createElement( 'div' );
@@ -103,18 +119,9 @@ export function addProjectorCoverageControl( THREE, editor, projector, host ) {
 			return;
 
 		}
-		const { width, height, aspect, cells, targetSamples, blockedSamples } = coverage;
-		preview.width = width;
-		preview.height = height;
-		Object.assign( preview.style, { height: 'auto', aspectRatio: String( aspect ) } );
-		const context = preview.getContext( '2d' );
-		const colors = [ '#232830', '#5ec39a', '#ef9b58' ];
-		if ( context ) for ( let i = 0; i < cells.length; i ++ ) {
-
-			context.fillStyle = colors[ cells[ i ] ];
-			context.fillRect( i % width, Math.floor( i / width ), 1, 1 );
-
-		}
+		const { aspect, targetSamples, blockedSamples } = coverage;
+		preview.style.aspectRatio = String( aspect );
+		drawProjectorCoverage( preview, coverage );
 		const percent = count => Number( ( count / targetSamples * 100 ).toFixed( 1 ) ) + '%';
 		status.textContent = percent( blockedSamples ) + ' blocked · ' + blockedSamples + ' of ' + targetSamples + ' receiver samples';
 		for ( const [ object, count ] of coverage.blockers ) {

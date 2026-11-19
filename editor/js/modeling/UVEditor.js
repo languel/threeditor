@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-pack';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { bakeTexture } from './TextureBake.js';
-import { addProjectorCoverageControl } from './ProjectorCoverage.js';
+import { addProjectorCoverageControl } from './ProjectorCoverage.js?v=coverage-overlay';
 import { lightViewCamera } from './LightView.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
