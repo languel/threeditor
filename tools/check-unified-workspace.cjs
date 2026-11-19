@@ -985,6 +985,52 @@ async function checkConformalSeamUnwrap( page ) {
 
 }
 
+async function checkProjectorCoverage( page ) {
+
+	await page.evaluate( () => {
+
+		const projector = new THREE.Group();
+		const receiver = new THREE.Mesh( new THREE.PlaneGeometry( 20, 20 ), new THREE.MeshBasicMaterial() );
+		receiver.position.z = -6;
+		receiver.name = 'Coverage receiver';
+		const obstruction = new THREE.Mesh( new THREE.PlaneGeometry( 2, 20 ), new THREE.MeshBasicMaterial() );
+		obstruction.position.set( -1, 0, -3 );
+		obstruction.name = 'Coverage blocker';
+		projector.userData = { assetObject: { type: 'projector' }, projectorTarget: receiver.uuid };
+		projector.name = 'Coverage projector';
+		editor.addObject( projector );
+		editor.addObject( receiver );
+		editor.addObject( obstruction );
+		editor.select( projector );
+
+	} );
+	await page.locator( '#properties > .Tabs > #modelingTab' ).click();
+	const panel = page.locator( '.modeling-panel' );
+	const check = panel.getByRole( 'button', { name: 'Check projector coverage' } );
+	await check.click();
+	await panel.getByText( /^50% blocked/ ).waitFor();
+	const map = panel.getByRole( 'img', { name: /^Projector coverage map/ } );
+	assert.deepEqual( await map.evaluate( canvas => {
+
+		const context = canvas.getContext( '2d' );
+		return [ ...context.getImageData( 0, 0, 1, 1 ).data, ...context.getImageData( canvas.width - 1, 0, 1, 1 ).data ];
+
+	} ), [ 239, 155, 88, 255, 94, 195, 154, 255 ] );
+	await panel.getByRole( 'button', { name: 'Coverage blocker · 50%', exact: true } ).click();
+	assert.equal( await page.evaluate( () => editor.selected.name ), 'Coverage blocker' );
+	await page.evaluate( () => {
+
+		editor.selected.position.x = -10;
+		editor.select( editor.scene.getObjectByName( 'Coverage projector' ) );
+
+	} );
+	await page.locator( '#properties > .Tabs > #modelingTab' ).click();
+	await check.click();
+	await panel.getByText( /^0% blocked/ ).waitFor();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkProjectorEdgeBlend( page ) {
 
 	await page.evaluate( async () => {
@@ -2523,6 +2569,7 @@ async function check() {
 		await checkUVSeams( page );
 		await checkUVIslands( page );
 		await checkTextureBake( page );
+		await checkProjectorCoverage( page );
 		await checkProjectorEdgeBlend( page );
 		await checkOrthographicFly( page );
 		await checkModalTransforms( page );

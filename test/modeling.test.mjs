@@ -4,6 +4,7 @@ import * as THREE from '../build/three.module.js';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, pokeFace, readModelGeometry, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
+import { inspectProjectorCoverage } from '../editor/js/modeling/ProjectorCoverage.js';
 import { sculptNeighbors, sculptPoints } from '../editor/js/modeling/SculptBrush.js';
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
 import { fitDrawingContour, insertContourPoint, segmentCount } from '../editor/js/modeling/Contour.js';
@@ -462,5 +463,39 @@ test( 'Pencil ribbons keep per-sample opacity and default to full pressure for o
 	assert.ok( Math.abs( color.getW( 1 ) - .2 ) < 1e-6 );
 	assert.ok( Math.abs( color.getW( 5 ) - .8 ) < 1e-6 );
 	assert.ok( Math.abs( color.getW( 8 ) - .2 ) < 1e-6 );
+
+} );
+
+test( 'Projector coverage counts only the closest opaque mesh in front of the receiver', () => {
+
+	const scene = new THREE.Scene();
+	const projector = new THREE.Group();
+	projector.userData.assetObject = { type: 'projector' };
+	scene.add( projector );
+	const plane = ( x, z, width, options ) => {
+
+		const mesh = new THREE.Mesh( new THREE.PlaneGeometry( width, 20 ), new THREE.MeshBasicMaterial( options ) );
+		mesh.position.set( x, 0, z );
+		scene.add( mesh );
+		return mesh;
+
+	};
+	const receiver = plane( 0, -6, 20 );
+	const opaque = plane( -1, -3, 2 );
+	const behind = plane( 0, -7, 20 );
+	const glass = plane( 0, -2, 20, { transparent: true, opacity: .4 } );
+	const disabled = plane( 0, -1, 20 );
+	disabled.userData.threeditor = { disabled: true };
+	const nearer = plane( -1, -2.5, 2 );
+	const result = inspectProjectorCoverage( THREE, scene, projector, receiver );
+	assert.equal( result.targetSamples, result.cells.length );
+	assert.equal( result.blockedSamples, result.targetSamples / 2 );
+	assert.deepEqual( result.blockers, [ [ nearer, result.blockedSamples ] ] );
+	const blockerCount = () => inspectProjectorCoverage( THREE, scene, projector, receiver ).blockedSamples;
+	nearer.visible = opaque.visible = false;
+	assert.equal( blockerCount(), 0 );
+	assert.ok( behind.visible && glass.visible );
+	projector.rotation.y = Math.PI;
+	assert.equal( inspectProjectorCoverage( THREE, scene, projector, receiver ).targetSamples, 0 );
 
 } );

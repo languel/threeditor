@@ -79,7 +79,9 @@ The unified workspace stores the 3D Cursor in the editor snapshot as `cursor`. P
 - Image & Vector reuses the drawing workspace in `MaskEditor.js`. It saves the vector contours in `scene.userData.vectorDrawing`. The local reference image is held in memory during editing. SVG exports the vectors, and PNG renders the shape and reference composite.
 - Smoke-test by opening Mask from the viewport toolbar and applying a multi-shape mask, switching to UV on a selected mesh, then loading a reference in Image & Vector. Apply a colored contour, export SVG and PNG, and reopen the mode to confirm the contour persists. Use **3D View** to return, then test the projector in Play.
 
-### UV unwrap and texture baking
+### Projection coverage, UV unwrap, and texture baking
+
+Projector coverage in Modeling samples the current projector lens against the auto-mask receiver and visible opaque meshes. The inspector reports the nearest blocker per receiver sample and provides selection and framing from the report. The check is on demand and uses authored scene visibility before masking and warp.
 
 The UV workspace stages edits before Apply. Unwrap from seams, Smart unwrap, and Lightmap pack reuse the bundled `unwrapUVs` utility. The seam-driven mode uses connected face components and the existing conformal solver across material boundaries. An unflattenable chart reports an error and leaves the staged layout intact. Browser checks open a curved two-material tube into one island and verify that a closed box needs seams or Smart unwrap. Pack existing islands uses the UV island selection topology and the same padded rectangle packer as unwrap. It moves and uniformly scales the staged coordinates with local undo, preserving buffer indices and edited island shape. Cube projection packs six directions, cylindrical projection separates flat caps, and sphere, planar, current-view and projector projections are available. Applying UVs to a mesh with a modifier stack updates its source and reevaluates the stack.
 
