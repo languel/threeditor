@@ -1,4 +1,5 @@
 import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
+import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
 import { StrokeSampler } from './StrokeSampler.js';
 
 // Size, strength and tip hardness from ThreeGrease's natural-media set.
@@ -30,7 +31,7 @@ export function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0 };
+	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
 
 }
 
@@ -103,36 +104,66 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 
 			if ( type === 'color' ) brush.color = input.value;
 			else if ( Number.isFinite( input.valueAsNumber ) ) brush[ key ] = Math.max( min, Math.min( max, input.valueAsNumber ) );
+			input.value = brush[ key ];
 			refresh(); changed();
 
 		};
 		return [ key, input ];
 
 	} );
-	const options = [];
+	let settings, guide;
 	if ( strokeOptions ) {
 
-		const stabilizer = modelField( palette, 'Stabilize strokes', 'toolPath', 'checkbox', brush.stabilize );
+		settings = document.createElement( 'details' );
+		settings.className = 'pencil-stroke-settings';
+		const summary = document.createElement( 'summary' );
+		summary.innerHTML = icon( 'toolActions' );
+		summary.title = 'Pencil stroke settings';
+		summary.setAttribute( 'aria-label', summary.title );
+		const controls = document.createElement( 'div' );
+		controls.className = 'pencil-stroke-options';
+		settings.append( summary, controls );
+		settings.addEventListener( 'keydown', event => {
+
+			if ( ! settings.open || event.key !== 'Escape' ) return;
+			event.preventDefault();
+			event.stopPropagation();
+			settings.open = false;
+			summary.focus();
+
+		} );
+		palette.append( settings );
+		const stabilizer = modelField( controls, 'Stabilize strokes', 'toolPath', 'checkbox', brush.stabilize );
 		stabilizer.onchange = () => { brush.stabilize = stabilizer.checked; refresh(); changed(); };
-		for ( const [ key, label, icon, min, max, step ] of [
+
+		guide = document.createElement( 'select' );
+		guide.setAttribute( 'aria-label', 'Pencil drawing guide' );
+		guide.title = 'Pencil drawing guide';
+		for ( const [ id, label ] of [
+			[ 'off', 'Freehand' ], [ 'circle', 'Circular' ], [ 'radial', 'Radial' ],
+			[ 'parallel', 'Parallel' ], [ 'grid', 'Grid axes' ], [ 'iso', 'Isometric' ]
+		] ) guide.append( new Option( label, id ) );
+		guide.onchange = () => { brush.guide = guide.value; refresh(); changed(); };
+		controls.append( guide );
+		for ( const [ key, label, glyph, min, max, step ] of [
+			[ 'guideAngle', 'Guide angle (°)', 'rotate', -180, 180, 1 ],
 			[ 'stabilizeRadius', 'Stabilizer radius (px)', 'brushWidth', 1, 100, 1 ],
 			[ 'smoothing', 'Stroke smoothing', 'sculptSmooth', 0, 1, .05 ],
 			[ 'simplify', 'Simplify tolerance (px)', 'toolPath', 0, 10, .25 ]
 		] ) {
 
-			const input = modelField( palette, label, icon, 'number', brush[ key ] );
+			const input = modelField( controls, label, glyph, 'number', brush[ key ] );
 			Object.assign( input, { min, max, step } );
 			input.onchange = () => {
 
 				if ( Number.isFinite( input.valueAsNumber ) ) brush[ key ] = Math.max( min, Math.min( max, input.valueAsNumber ) );
+				input.value = brush[ key ];
 				refresh(); changed();
 
 			};
 			fields.push( [ key, input ] );
-			options.push( input.parentElement );
 
 		}
-		options.push( stabilizer.parentElement );
 		fields.push( [ 'stabilize', stabilizer ] );
 
 	}
@@ -162,14 +193,16 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 		for ( const [ key, input ] of fields ) {
 
 			if ( input.type === 'checkbox' ) input.checked = brush[ key ];
-			else input.value = brush[ key ];
+			else if ( document.activeElement !== input ) input.value = brush[ key ];
 			if ( key === 'stabilizeRadius' ) input.disabled = ! brush.stabilize;
+			if ( key === 'guideAngle' ) input.disabled = brush.guide !== 'parallel';
 
 		}
+		if ( guide ) guide.value = brush.guide;
 		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( brush.name === name ) );
 
 	}
 	refresh();
-	return { element: palette, refresh, showStrokeOptions( visible ) { for ( const option of options ) option.hidden = ! visible; } };
+	return { element: palette, refresh, showStrokeOptions( visible ) { if ( settings ) settings.hidden = ! visible; } };
 
 }

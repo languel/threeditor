@@ -1,9 +1,9 @@
-import { brushPalette, pencilBrush } from './PencilBrush.js?v=pencil-stabilizer';
-import { simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js';
+import { brushPalette, pencilBrush } from './PencilBrush.js?v=pencil-guides';
+import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
 import { placementModes } from './PlacementModes.js';
 import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
 import { splatStrokeCommands } from './SplatPaint.js?v=splat-filters';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-stabilizer';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-guides';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js?v=pencil-stroke-depth';
@@ -18,7 +18,7 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-stabilizer';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-guides';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -1022,6 +1022,10 @@ export class ViewportTools {
 				if ( pencil && output === 'vector' ) {
 
 					this.stroke.style = { ...style };
+					const cursor = this.project( this.editor.cursor, frame );
+					const bounds = this.layout.clientRect( frame );
+					this.stroke.guideCenter = cursor ? [ bounds.left + cursor[ 0 ] - frame.rect.x, bounds.top + cursor[ 1 ] - frame.rect.y ] :
+						[ bounds.left + bounds.width / 2, bounds.top + bounds.height / 2 ];
 					if ( style.stabilize ) this.stroke.stabilizer = [ x, y ];
 
 				}
@@ -1118,6 +1122,8 @@ export class ViewportTools {
 		const stroke = this.stroke;
 		const paint = ( px, py, force ) => {
 
+			if ( stroke.guideCenter ) [ px, py ] = guidePencilPoint( [ px, py ], stroke.startPixel, stroke.guideCenter,
+				stroke.style.guide, THREE.MathUtils.degToRad( stroke.style.guideAngle ) );
 			if ( this.layout.at( px, py ) === frame ) this.paintDab( frame, px, py, force );
 			else stroke.segment = null;
 

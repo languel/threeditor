@@ -3,8 +3,8 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
-import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stabilizer';
-import { simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js';
+import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-guides';
+import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
 import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
@@ -22,6 +22,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	let initial = saved();
 	let reference, referenceURL;
 	let referenceVisible = true;
+	let guideCenter = [ .5, .5 ];
 	let shapes = maskShapes( initial ), active = shapes.length - 1, vertex = -1, tool = 'edit', draft = [], gesture;
 	const undo = [], redo = [];
 	let brushStrokes = vectorMode ? structuredClone( initial?.brushStrokes || [] ) : [];
@@ -64,6 +65,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		addTool( 'stroke', 'Pencil', 'freehandDraw' );
 		addTool( 'raster', 'Brush', 'brush' );
 		addTool( 'erase', 'Erase Brush Marks', 'erase' );
+		addTool( 'guideCenter', 'Set drawing guide center', 'pivotOrigin' );
 		for ( const [ id, label, glyph ] of transformTools2D ) addTool( id, label, glyph );
 
 	}
@@ -557,6 +559,18 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.beginPath(); ctx.arc( ...pixel( draft[ 0 ] ), 4, 0, Math.PI * 2 ); ctx.fill();
 
 		}
+		if ( tool === 'guideCenter' || tool === 'stroke' && [ 'circle', 'radial' ].includes( pencilBrush( editor ).guide ) ) {
+
+			const [ cx, cy ] = pixel( guideCenter );
+			const size = 5 / view.scale;
+			ctx.strokeStyle = '#ffae66';
+			ctx.lineWidth = 1 / view.scale;
+			ctx.beginPath();
+			ctx.moveTo( cx - size, cy ); ctx.lineTo( cx + size, cy );
+			ctx.moveTo( cx, cy - size ); ctx.lineTo( cx, cy + size );
+			ctx.stroke();
+
+		}
 		if ( cursor && gesture?.stabilizer ) {
 
 			ctx.strokeStyle = '#ffae66';
@@ -622,6 +636,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( event.button !== 0 ) return;
 		const point = pointer( event );
 		if ( uv( point ).some( value => value < 0 || value > 1 ) ) return;
+		if ( tool === 'guideCenter' ) { guideCenter = uv( point ); tool = 'stroke'; draw(); return; }
 		canvas.focus( { preventScroll: true } );
 		if ( tool === 'polygon' ) {
 
@@ -669,6 +684,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( ! gesture ) { draw(); return; }
 		if ( distance( point, gesture.last ) < 3 ) return;
+		if ( gesture.brush ) point = guidePencilPoint( point, gesture.start, pixel( guideCenter ), gesture.brush.guide,
+			THREE.MathUtils.degToRad( gesture.brush.guideAngle ) );
 		const start = bounded( gesture.start ), end = bounded( point );
 		const delta = end.map( ( value, i ) => value - start[ i ] );
 		const shape = shapes[ active ];

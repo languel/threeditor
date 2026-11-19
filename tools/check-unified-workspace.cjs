@@ -247,10 +247,13 @@ async function checkPencil( page ) {
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'off' );
+	const strokeOptions = page.getByLabel( 'Pencil stroke settings', { exact: true } );
+	await strokeOptions.click();
 	await page.getByLabel( 'Stabilize strokes' ).check();
 	const simplify = page.getByLabel( 'Simplify tolerance (px)' );
 	await simplify.fill( '1' );
 	await simplify.press( 'Tab' );
+	await strokeOptions.click();
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
 	await page.mouse.move( ax + 10, ay, { steps: 5 } );
@@ -258,7 +261,19 @@ async function checkPencil( page ) {
 	await page.mouse.move( ax + 110, ay, { steps: 14 } );
 	await page.mouse.up();
 	assert.equal( await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points.length ), 2 );
-	await page.evaluate( () => Object.assign( editor.pencilBrush, { stabilize: false, simplify: 0 } ) );
+	await strokeOptions.click();
+	await page.getByLabel( 'Stabilize strokes' ).uncheck();
+	await simplify.fill( '0' );
+	await simplify.press( 'Tab' );
+	await page.getByLabel( 'Pencil drawing guide' ).selectOption( 'parallel' );
+	await strokeOptions.click();
+	await page.mouse.move( ax, ay );
+	await page.mouse.down();
+	await page.mouse.move( ax + 95, ay + 28, { steps: 9 } );
+	await page.mouse.up();
+	const guided = await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points );
+	assert.ok( guided.length > 2 && guided.every( point => Math.abs( point[ 1 ] - guided[ 0 ][ 1 ] ) < 1e-6 ), JSON.stringify( guided ) );
+	await page.evaluate( () => { editor.pencilBrush.guide = 'off'; } );
 
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 

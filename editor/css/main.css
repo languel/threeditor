@@ -3419,3 +3419,29 @@ body[data-ui-style="compact"] .workspace-tabs button span { display: none; }
 .pencil-brush-presets .model-control-button > :not(canvas) { display: none; }
 .pencil-brush-presets canvas { display: block; width: 38px; height: 22px; border-radius: 2px; background: #dedfe2; }
 .pencil-brush-palette input[type=number] { width: 48px; }
+
+.pencil-stroke-settings { position: relative; pointer-events: auto; }
+.pencil-stroke-settings[hidden] { display: none !important; }
+.pencil-stroke-settings > summary {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	cursor: pointer;
+	border-radius: 3px;
+}
+.pencil-stroke-settings > summary::-webkit-details-marker { display: none; }
+.pencil-stroke-settings > summary svg { width: 14px; height: 14px; }
+.pencil-stroke-settings[open] > summary { background: color-mix(in srgb, var(--theme-accent), transparent 84%); }
+.pencil-stroke-options {
+	position: absolute;
+	z-index: 5;
+	inset: 100% auto auto 0;
+	display: grid;
+	gap: 4px;
+	padding: 6px;
+	background: var(--theme-background);
+	border: 1px solid var(--theme-surface);
+	border-radius: 4px;
+}
+.viewport-edit-content .pencil-stroke-options { inset: auto auto 100% 0; }

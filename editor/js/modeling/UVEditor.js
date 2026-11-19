@@ -13,8 +13,8 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
 import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
-import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stabilizer';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-stabilizer';
+import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-guides';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-guides';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {

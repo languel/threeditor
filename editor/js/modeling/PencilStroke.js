@@ -56,3 +56,41 @@ export function simplifyPencilStroke( points, project, tolerance, closed = false
 	return closed && keep.size < 3 ? points : points.filter( ( _, index ) => keep.has( index ) );
 
 }
+
+const isometricAxes = [ Math.PI / 6, Math.PI / 2, 5 * Math.PI / 6 ];
+
+// Drawing guides constrain the screen point before placement into the scene.
+export function guidePencilPoint( point, start, center, type, angle = 0 ) {
+
+	if ( ! type || type === 'off' ) return point;
+	if ( type === 'circle' || type === 'radial' ) {
+
+		const reference = start.map( ( value, i ) => value - center[ i ] );
+		const delta = point.map( ( value, i ) => value - center[ i ] );
+		const radius = Math.hypot( ...reference );
+		if ( radius < 1e-6 ) return start;
+		if ( type === 'circle' ) {
+
+			const length = Math.hypot( ...delta );
+			return length < 1e-6 ? start : center.map( ( value, i ) => value + delta[ i ] * radius / length );
+
+		}
+		const projection = ( delta[ 0 ] * reference[ 0 ] + delta[ 1 ] * reference[ 1 ] ) / ( radius * radius );
+		return center.map( ( value, i ) => value + reference[ i ] * projection );
+
+	}
+	const dx = point[ 0 ] - start[ 0 ], dy = point[ 1 ] - start[ 1 ];
+	if ( type === 'grid' ) return Math.abs( dx ) > Math.abs( dy ) ? [ point[ 0 ], start[ 1 ] ] : [ start[ 0 ], point[ 1 ] ];
+	let offset = [ 0, 0 ], distance = -1;
+	for ( const heading of type === 'iso' ? isometricAxes : [ angle ] ) {
+
+		const x = Math.cos( heading ), y = Math.sin( heading );
+		const along = dx * x + dy * y;
+		if ( Math.abs( along ) <= distance ) continue;
+		distance = Math.abs( along );
+		offset = [ along * x, along * y ];
+
+	}
+	return [ start[ 0 ] + offset[ 0 ], start[ 1 ] + offset[ 1 ] ];
+
+}
