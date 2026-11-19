@@ -132,6 +132,7 @@ async function checkPencil( page ) {
 		receiver.name = 'Pencil receiver';
 		editor.addObject( receiver );
 		editor.select( receiver );
+		editor.config.setKey( 'settings/modelPlacement', 'surface' );
 		editor.camera.position.set( 0, 0, 6 );
 		editor.camera.lookAt( 0, 0, 0 );
 		editor.signals.cameraChanged.dispatch( editor.camera );
@@ -176,7 +177,26 @@ async function checkPencil( page ) {
 	} ), [ true, 'path', 'grab' ] );
 	await page.keyboard.press( 'Escape' );
 	assert.equal( await page.getByLabel( 'Interaction mode', { exact: true } ).inputValue(), 'sculpt' );
-	await page.evaluate( () => editor.clear() );
+	await page.evaluate( () => {
+
+		editor.undo();
+		editor.camera.position.set( 0, 5, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		editor.config.setKey( 'settings/modelPlacement', 'ground' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+
+	} );
+	await page.keyboard.press( 'd' );
+	assert.equal( await page.getByLabel( 'Pencil placement' ).inputValue(), 'ground' );
+	await draw( false );
+	assert.equal( await page.evaluate( () => {
+
+		const path = editor.scene.getObjectByName( 'Pencil stroke' );
+		return path?.parent === editor.scene && path.geometry.userData.modeling.points.every( point => Math.abs( point[ 1 ] ) < 1e-7 );
+
+	} ), true );
+	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 
 }
 

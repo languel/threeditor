@@ -1,3 +1,4 @@
+import { placementModes } from './modeling/PlacementModes.js';
 import { shadingModes } from './ViewportShading.js?v=live-preview';
 import { icon } from './Glyphs.js?v=poly-context';
 
@@ -58,10 +59,7 @@ export function addTransformSettings( editor, toolbar ) {
 		},
 		placement: {
 			label: 'Placement', glyph: 'placePlane',
-			choices: () => [
-				[ 'object', 'Object plane', 'placePlane' ], [ 'view', 'View plane', 'preview' ],
-				[ 'ground', 'Ground plane', 'groundPlane' ], [ 'surface', 'Mesh surface', 'snapFace' ], [ 'surfacePerpendicular', 'Surface perpendicular', 'surfacePerpendicular' ]
-			].map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'modelPlacement', value ),
+			choices: () => placementModes.map( ( [ value, label, glyph ] ) => [ label, glyph, () => change( 'modelPlacement', value ),
 				( config.getKey( 'settings/modelPlacement' ) || 'object' ) === value ] )
 		},
 		grid: {
