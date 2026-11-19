@@ -301,7 +301,7 @@ A reported orbit-on-selection failure was reproduced on an Editable shape: `penH
 
 ### Outliner code toggle
 
-The outliner script button calls `CodePanel.toggleScript(object, script)` before changing selection. It closes when the same target is already visible and opens/switches otherwise, including the generated Scene script. A same-target reveal skips regenerating/following so unsaved or invalid draft text and cursor positions survive the toggle. Other `editScript` callers retain their open-editor behavior. Browser verification covers open/close/reopen, switching between object scripts, generated Scene code, and an invalid unsaved draft with its cursor retained.
+The outliner script button calls `CodePanel.toggleScript(object, script)` before changing selection. It closes when the same target is already visible and opens/switches otherwise, including the generated Scene script. Switching documents caches draft text, selection, scroll, and CodeMirror history by script or shader identity. Successful autosaves update live source, and external source edits refresh a clean document. WebGL shader edits compile against a disposable candidate before they commit through history. Scene auto-apply runs only in the active scene document, and project changes reset editor buffers and cached scene assets. Other `editScript` callers retain their open-editor behavior. Browser verification covers open/close/reopen, switching between object scripts, generated Scene code, and an invalid unsaved draft with its cursor retained.
 
 
 ### Viewport areas

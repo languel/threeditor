@@ -2505,6 +2505,96 @@ async function checkDrawingAssets( page ) {
 
 }
 
+async function checkScriptDocuments( page ) {
+
+	const initial = 'function update() {}';
+	const draft = initial + '\nconst incomplete = ;';
+	await page.evaluate( source => {
+
+		const object = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.ShaderMaterial() );
+		object.name = 'Script document owner';
+		editor.addObject( object );
+		const scripts = [ { name: 'First script', source }, { name: 'Second script', source } ];
+		for ( const script of scripts ) editor.addScript( object, script );
+		editor.select( object );
+		editor.signals.editScript.dispatch( object, scripts[ 0 ] );
+
+	}, initial );
+	const code = page.locator( '#script-window' );
+	const scriptPicker = code.getByLabel( 'Object script' );
+	const source = () => code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.getValue() );
+	await code.locator( '.CodeMirror' ).evaluate( element => {
+
+		const cm = element.CodeMirror;
+		cm.replaceRange( '\nconst incomplete = ;', { line: 0, ch: 20 } );
+		cm.setSelection( { line: 1, ch: 6 }, { line: 1, ch: 16 } );
+
+	} );
+	await scriptPicker.selectOption( { label: 'Second script' } );
+	assert.equal( await source(), initial );
+	assert.equal( await page.evaluate( () => editor.scripts[ editor.selected.uuid ][ 0 ].source ), initial );
+	await scriptPicker.selectOption( { label: 'First script' } );
+	assert.equal( await source(), draft );
+	assert.equal( await code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.getSelection() ), 'incomplete' );
+	await code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.undo() );
+	assert.equal( await source(), initial );
+	await code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.redo() );
+	assert.equal( await source(), draft );
+
+	const uuid = await page.evaluate( () => editor.selected.uuid );
+	const valid = initial + '\n// corrected';
+	await code.locator( '.CodeMirror' ).evaluate( ( element, value ) => {
+
+		element.CodeMirror.setValue( value );
+		element.CodeMirror.focus();
+
+	}, valid );
+	await page.keyboard.press( 'Control+Enter' );
+	assert.deepEqual( await page.evaluate( () => [ editor.selected.uuid, editor.scripts[ editor.selected.uuid ][ 0 ].source ] ), [ uuid, valid ] );
+
+	const originalShader = await page.evaluate( () => {
+
+		const object = editor.selected;
+		editor.signals.editScript.dispatch( object, 'fragmentShader', 0 );
+		return object.material.fragmentShader;
+
+	} );
+	const invalidShader = 'void main() { gl_FragColor = ; }';
+	await code.locator( '.CodeMirror' ).evaluate( ( element, value ) => element.CodeMirror.setValue( value ), invalidShader );
+	await page.evaluate( () => editor.signals.editScript.dispatch( editor.selected, editor.scripts[ editor.selected.uuid ][ 0 ] ) );
+	assert.equal( await page.evaluate( () => editor.selected.material.fragmentShader ), originalShader );
+	await page.evaluate( () => editor.signals.editScript.dispatch( editor.selected, 'fragmentShader', 0 ) );
+	assert.equal( await source(), invalidShader );
+	await code.locator( '.CodeMirror' ).evaluate( element => {
+
+		element.CodeMirror.setValue( 'void main() { gl_FragColor = vec4(1.0); }' );
+		element.CodeMirror.focus();
+
+	} );
+	await page.keyboard.press( 'Control+Enter' );
+	assert.equal( await page.evaluate( () => editor.selected.material.fragmentShader ), 'void main() { gl_FragColor = vec4(1.0); }' );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.selected.material.fragmentShader ), originalShader );
+	assert.equal( await source(), originalShader );
+
+	await code.getByRole( 'button', { name: '← Scene', exact: true } ).click();
+	await code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.setValue( '// draft from the previous project' ) );
+	await page.evaluate( () => {
+
+		editor.clear();
+		const object = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+		object.name = 'Clean project object';
+		editor.addObject( object );
+
+	} );
+	await page.getByRole( 'button', { name: 'Scripting', exact: true } ).click();
+	assert.match( await source(), /Clean project object/ );
+	assert.doesNotMatch( await source(), /draft from the previous project/ );
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkBrushPresets( browser ) {
 
 	const page = await browser.newPage( { viewport: { width: 1440, height: 900 } } );
@@ -2812,6 +2902,7 @@ async function check() {
 		await page.evaluate( () => editor.clear() );
 		await checkTextureProjection( page );
 		await checkPaintGestures( page );
+		await checkScriptDocuments( page );
 		await checkComponents( page );
 		await checkScriptParameterLayout( page );
 		await checkSplatFilters( page );

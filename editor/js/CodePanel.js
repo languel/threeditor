@@ -37,6 +37,7 @@ function CodePanel( editor ) {
 	backBtn.title = 'Back to the scene code';
 	const label = document.createElement( 'span' );
 	const select = document.createElement( 'select' );
+	select.setAttribute( 'aria-label', 'Object script' );
 	head.append( backBtn, label, select );
 	dom.append( bar, head, host, status );
 
@@ -81,6 +82,10 @@ function CodePanel( editor ) {
 	let ranges = {};
 	let focusMark = null;
 	let saveTimer = 0;
+	let targetDirty = false;
+	let documents = new WeakMap();
+	let sceneView;
+	let projectRevision = 0;
 	const textarea = document.createElement( 'textarea' );
 	textarea.id = 'code-text';
 	textarea.spellcheck = false;
@@ -137,6 +142,7 @@ function CodePanel( editor ) {
 
 		}
 		const before = getCode();
+		const currentTarget = target;
 		const selected = cm ? cm.somethingSelected() : textarea.selectionStart !== textarea.selectionEnd;
 		const from = cm ? cm.indexFromPos( cm.getCursor( 'from' ) ) : textarea.selectionStart;
 		const to = cm ? cm.indexFromPos( cm.getCursor( 'to' ) ) : textarea.selectionEnd;
@@ -152,6 +158,7 @@ function CodePanel( editor ) {
 				result = selected ? before.slice( 0, from ) + minimized + before.slice( to ) : minimized;
 
 			}
+			if ( target !== currentTarget ) return;
 			if ( getCode() !== before ) { setStatus( 'Code changed while the operation was running; try again.', true ); return; }
 			if ( cm ) cm.replaceRange( result, { line: 0, ch: 0 }, cm.posFromIndex( before.length ), '+input' );
 			else { textarea.value = result; onEdit(); }
@@ -166,6 +173,7 @@ function CodePanel( editor ) {
 
 	function setCode( value ) {
 
+		if ( getCode() === value ) return;
 		setting = true;
 		if ( cm ) cm.setValue( value ); else textarea.value = value;
 		setting = false;
@@ -188,7 +196,7 @@ function CodePanel( editor ) {
 	auto.addEventListener( 'change', () => {
 
 		clearTimeout( applyTimer );
-		if ( auto.checked && dirty ) applyTimer = setTimeout( autoApply, 700 );
+		scheduleAutoApply();
 
 	} );
 	const autoText = document.createElement( 'span' );
@@ -295,17 +303,73 @@ function CodePanel( editor ) {
 
 	}
 
-	function leaveScene() {
+	function captureView() {
 
-		if ( target.kind === 'scene' ) sceneText = getCode();
+		const text = getCode();
+		const view = cm ? {
+			selection: cm.listSelections(), history: cm.getHistory(), scroll: cm.getScrollInfo()
+		} : {
+			selection: [ textarea.selectionStart, textarea.selectionEnd, textarea.selectionDirection ],
+			scroll: { left: textarea.scrollLeft, top: textarea.scrollTop }
+		};
+		return { text, ...view };
+
+	}
+
+	function restoreView( view ) {
+
+		if ( cm ) {
+
+			cm.clearHistory();
+			if ( view ) {
+
+				if ( view.text === getCode() ) cm.setHistory( view.history );
+				cm.setSelections( view.selection );
+				cm.scrollTo( view.scroll.left, view.scroll.top );
+
+			} else cm.setCursor( 0, 0 );
+
+		} else if ( view ) {
+
+			textarea.setSelectionRange( ...view.selection );
+			textarea.scrollLeft = view.scroll.left;
+			textarea.scrollTop = view.scroll.top;
+
+		} else textarea.setSelectionRange( 0, 0 );
+
+	}
+
+	function sourceViews( entry ) {
+
+		const owner = entry.script || entry.material;
+		if ( ! documents.has( owner ) ) documents.set( owner, new Map() );
+		return documents.get( owner );
+
+	}
+
+	function leaveDocument() {
+
+		clearTimeout( applyTimer );
+		if ( target.kind === 'scene' ) {
+
+			sceneText = getCode();
+			sceneView = captureView();
+
+		} else {
+
+			flushTarget();
+			sourceViews( target ).set( target.key || 'source', {
+				view: captureView(), base: readTargetSource( target ), dirty: targetDirty,
+				status: status.textContent, error: status.classList.contains( 'error' )
+			} );
+
+		}
 		if ( focusMark ) {
 
 			focusMark.clear();
 			focusMark = null;
 
 		}
-
-		flushTarget();
 		clearErrors();
 
 	}
@@ -314,13 +378,15 @@ function CodePanel( editor ) {
 
 		if ( target.kind !== 'scene' ) {
 
-			flushTarget();
-			clearErrors();
+			leaveDocument();
 			target = { kind: 'scene' };
+			targetDirty = false;
 			setMode( 'javascript' );
 			setCode( sceneText );
-			if ( cm ) cm.clearHistory();
+			restoreView( sceneView );
 			setStatus( dirty ? 'Edited.' : 'In sync with the scene.' );
+			scheduleAutoApply();
+			scheduleLint();
 
 		}
 
@@ -329,22 +395,39 @@ function CodePanel( editor ) {
 
 	}
 
-	function showSource( next, mode, source, message ) {
+	function readTargetSource( entry ) {
 
-		leaveScene();
+		if ( entry.kind === 'script' ) return entry.script.source;
+		if ( entry.kind === 'glsl' ) return entry.material[ entry.key ] || '';
+		const { material } = entry;
+		const uniforms = Object.fromEntries( Object.entries( material.uniforms ).map( ( [ name, uniform ] ) => [
+			name, uniform.value?.isColor ? { ...uniform, value: '#' + uniform.value.getHexString() } : uniform
+		] ) );
+		return JSON.stringify( { defines: material.defines, uniforms, attributes: material.attributes }, null, '\t' );
+
+	}
+
+	function showSource( next, mode, message ) {
+
+		leaveDocument();
 		target = next;
+		const source = readTargetSource( target );
+		const stored = sourceViews( target ).get( target.key || 'source' );
+		targetDirty = Boolean( stored?.dirty );
 		setMode( mode );
-		setCode( source );
-		if ( cm ) cm.clearHistory();
+		setCode( targetDirty ? stored.view.text : source );
+		restoreView( stored?.view );
 		refreshHead();
-		setStatus( message );
+		if ( targetDirty && stored.base !== source ) setStatus( 'Saved source changed. Your draft is still open.', true );
+		else if ( targetDirty ) setStatus( stored.status || 'Unapplied draft.', stored.error );
+		else setStatus( message );
 		scheduleLint();
 
 	}
 
 	function showScript( object, script ) {
 
-		showSource( { kind: 'script', object, script }, 'javascript', script.source, 'Script: changes are saved as you type.' );
+		showSource( { kind: 'script', object, script }, 'javascript', 'Script: changes are saved as you type.' );
 
 	}
 
@@ -353,20 +436,9 @@ function CodePanel( editor ) {
 		const m = editor.getObjectMaterial( object, slot );
 		if ( ! m?.isShaderMaterial ) return;
 
-		if ( key === 'programInfo' ) {
-
-			const uniforms = Object.fromEntries( Object.entries( m.uniforms ).map( ( [ name, uniform ] ) => [
-				name, uniform.value?.isColor ? { ...uniform, value: '#' + uniform.value.getHexString() } : uniform
-			] ) );
-			const json = { defines: m.defines, uniforms, attributes: m.attributes };
-			showSource( { kind: 'json', object, key, slot, material: m }, 'json', JSON.stringify( json, null, '\t' ), 'Program info: changes are saved as you type.' );
-
-		} else {
-
-			showSource( { kind: 'glsl', object, key, slot, material: m }, 'glsl', m[ key ] || '', 'Shader: changes are compiled as you type.' );
-
-		}
-
+		const kind = key === 'programInfo' ? 'json' : 'glsl';
+		showSource( { kind, object, key, slot, material: m }, kind,
+			kind === 'json' ? 'Program info: changes are saved as you type.' : 'Shader: changes are compiled as you type.' );
 	}
 
 	// Selection follows: nothing -> scene; object with a script -> that script; otherwise the object's lines in the scene code.
@@ -404,45 +476,51 @@ function CodePanel( editor ) {
 	const errorLines = [];
 	const widgets = [];
 
+	function shaderDiagnostics( object, material, key, source ) {
+
+		if ( ! viewportRenderer?.isWebGLRenderer || ! object.isMesh ) return null;
+		const candidate = material.clone();
+		candidate[ key ] = source;
+		const probe = object.clone( false );
+		probe.material = candidate;
+		const debug = viewportRenderer.debug;
+		const onError = debug.onShaderError;
+		debug.onShaderError = () => {};
+		try {
+
+			viewportRenderer.compile( probe, editor.viewportCamera, editor.scene );
+			const program = viewportRenderer.properties.get( candidate ).currentProgram;
+			program?.getUniforms();
+			return program?.diagnostics || null;
+
+		} finally {
+
+			debug.onShaderError = onError;
+			candidate.dispose();
+
+		}
+
+	}
+
 	function validate( string ) {
 
-		if ( ! cm ) return true;
+		const check = () => {
 
-		return cm.operation( () => {
-
-			let valid;
-			let errors = [];
+			let valid = true;
+			const errors = [];
 			clearErrors();
 
-			if ( target.kind === 'script' ) {
+			if ( target.kind === 'script' || target.kind === 'json' ) {
 
 				try {
 
-					parse( string, { ecmaVersion: 'latest', allowReturnOutsideFunction: true } );
+					if ( target.kind === 'json' ) JSON.parse( string );
+					else parse( string, { ecmaVersion: 'latest', allowReturnOutsideFunction: true } );
 
 				} catch ( error ) {
 
 					errors.push( { lineNumber: ( error.loc?.line || 1 ) - 1, message: error.message } );
-
-				}
-
-				for ( const error of errors ) error.message = error.message.replace( /Line [0-9]+: /, '' );
-
-			} else if ( target.kind === 'json' ) {
-
-				window.jsonlint.parseError = ( message, info ) => {
-
-					errors.push( { lineNumber: info.loc.first_line - 1, message: message.split( '\n' )[ 3 ] } );
-
-				};
-
-				try {
-
-					window.jsonlint.parse( string );
-
-				} catch ( error ) {
-
-					// ignore failed error recovery
+					valid = false;
 
 				}
 
@@ -450,58 +528,69 @@ function CodePanel( editor ) {
 
 				const { object, key, slot, material } = target;
 				if ( editor.getObjectMaterial( object, slot ) !== material ) return false;
-				material[ key ] = string;
-				material.needsUpdate = true;
-				signals.materialChanged.dispatch( object, slot );
+				try {
 
-				valid = true;
-				const parseMessage = /^(?:ERROR|WARNING): \d+:(\d+): (.*)/g;
+					const diagnostics = shaderDiagnostics( object, material, key, string );
+					valid = ! diagnostics || diagnostics.runnable;
+					if ( ! valid ) {
 
-				for ( const program of viewportRenderer ? viewportRenderer.info.programs : [] ) {
+						const info = diagnostics[ key ];
+						const offset = info.prefix.split( /\r\n|\r|\n/ ).length;
+						for ( const match of info.log.matchAll( /^ERROR: \d+:(\d+):\s*(.*)/gm ) ) {
 
-					const diagnostics = program.diagnostics;
-					if ( diagnostics === undefined || diagnostics.material !== material ) continue;
-					if ( ! diagnostics.runnable ) valid = false;
+							errors.push( { lineNumber: Number( match[ 1 ] ) - offset, message: match[ 2 ] } );
 
-					const info = diagnostics[ key ];
-					const lineOffset = info.prefix.split( /\r\n|\r|\n/ ).length;
-					let parsed;
-					while ( ( parsed = parseMessage.exec( info.log ) ) !== null ) errors.push( { lineNumber: parsed[ 1 ] - lineOffset, message: parsed[ 2 ] } );
-					break;
+						}
+						if ( ! errors.length ) errors.push( { lineNumber: 0, message: diagnostics.programLog || 'Shader compilation failed.' } );
+
+					}
+
+				} catch ( error ) {
+
+					valid = false;
+					errors.push( { lineNumber: 0, message: error.message } );
 
 				}
 
 			}
 
-			for ( const error of errors ) {
+			if ( cm ) for ( const error of errors ) {
 
 				const message = document.createElement( 'div' );
 				message.className = 'esprima-error';
 				message.textContent = error.message;
-				const line = Math.max( error.lineNumber, 0 );
+				const line = Math.max( 0, Math.min( cm.lastLine(), error.lineNumber ) );
 				errorLines.push( line );
 				cm.addLineClass( line, 'background', 'errorLine' );
 				widgets.push( cm.addLineWidget( line, message ) );
 
 			}
-
 			if ( errors.length > 0 ) setStatus( errors[ 0 ].message + ( errors.length > 1 ? ` (+${ errors.length - 1 } more)` : '' ), true );
-			return valid !== undefined ? valid : errors.length === 0;
+			return valid;
 
-		} );
+		};
+		return cm ? cm.operation( check ) : check();
 
 	}
 
 	function saveTarget() {
 
 		const value = getCode();
-		if ( ! validate( value ) ) return;
+		if ( ! validate( value ) ) {
+			if ( ! status.classList.contains( 'error' ) ) setStatus( 'Source could not be applied. The draft is kept.', true );
+			return;
+		}
 
 		const { kind, object } = target;
 
 		if ( kind === 'script' ) {
 
 			if ( value !== target.script.source ) editor.execute( new SetScriptValueCommand( editor, object, target.script, 'source', value ) );
+
+		} else if ( kind === 'glsl' ) {
+
+			const { material, slot, key } = target;
+			if ( value !== material[ key ] ) editor.execute( new SetMaterialValueCommand( editor, object, key, value, slot ) );
 
 		} else if ( kind === 'json' ) {
 
@@ -533,6 +622,7 @@ function CodePanel( editor ) {
 
 		}
 
+		targetDirty = false;
 		setStatus( 'Saved ✓ ' + new Date().toLocaleTimeString() );
 
 	}
@@ -639,7 +729,8 @@ function CodePanel( editor ) {
 		if ( ( e.metaKey || e.ctrlKey ) && e.key === 'Enter' ) {
 
 			e.preventDefault();
-			apply();
+			if ( target.kind === 'scene' ) apply();
+			else flushTarget( true );
 
 		}
 
@@ -655,6 +746,7 @@ function CodePanel( editor ) {
 
 		if ( target.kind !== 'scene' ) {
 
+			targetDirty = true;
 			clearTimeout( saveTimer );
 			saveTimer = setTimeout( flushTarget, 300 );
 			return;
@@ -666,7 +758,7 @@ function CodePanel( editor ) {
 		clearTimeout( applyTimer );
 		clearTimeout( timer );
 		timer = 0;
-		if ( auto.checked ) applyTimer = setTimeout( autoApply, 700 );
+		scheduleAutoApply();
 
 	}
 
@@ -690,8 +782,10 @@ function CodePanel( editor ) {
 		sceneText = result.code;
 		ranges = result.ranges;
 		ensureSceneScript( result.code );
+		const revision = projectRevision;
 		assetsReady = assetsToBlobs( result.assets, store ).then( ( map ) => {
 
+			if ( revision !== projectRevision ) return new Map();
 			for ( const [ p, b ] of map ) {
 
 				if ( store.get( p ) !== b ) {
@@ -707,7 +801,7 @@ function CodePanel( editor ) {
 
 		} ).catch( ( e ) => {
 
-			setStatus( 'Asset export failed: ' + e.message, true );
+			if ( revision === projectRevision && target.kind === 'scene' ) setStatus( 'Asset export failed: ' + e.message, true );
 			return new Map();
 
 		} );
@@ -728,9 +822,16 @@ function CodePanel( editor ) {
 
 	}
 
+	function scheduleAutoApply() {
+
+		clearTimeout( applyTimer );
+		if ( isOpen() && target.kind === 'scene' && auto.checked && dirty ) applyTimer = setTimeout( autoApply, 700 );
+
+	}
+
 	function autoApply() {
 
-		if ( auto.checked && dirty ) apply( true );
+		if ( isOpen() && target.kind === 'scene' && auto.checked && dirty ) apply( true );
 
 	}
 
@@ -896,7 +997,12 @@ function CodePanel( editor ) {
 
 		if ( isOpen() ) return;
 		editor.workspaceArea?.reveal( editor.editWorkspace.dock );
-		editor.editWorkspace.mount( 'script', null, dom, flushTarget );
+		editor.editWorkspace.mount( 'script', null, dom, () => {
+
+			clearTimeout( applyTimer );
+			flushTarget();
+
+		} );
 		if ( followSelection ) {
 
 			if ( ! dirty ) regenerate( false );
@@ -904,6 +1010,7 @@ function CodePanel( editor ) {
 
 		}
 		cm?.refresh();
+		scheduleAutoApply();
 
 	}
 
@@ -913,9 +1020,9 @@ function CodePanel( editor ) {
 
 	}
 
-	function flushTarget() {
+	function flushTarget( retry = false ) {
 
-		if ( ! saveTimer ) return;
+		if ( ! saveTimer && ! ( retry && targetDirty ) ) return;
 		clearTimeout( saveTimer );
 		saveTimer = 0;
 		if ( target.kind === 'script' && ! editor.scripts[ target.object.uuid ]?.includes( target.script ) ) return;
@@ -961,9 +1068,53 @@ function CodePanel( editor ) {
 
 	} );
 
-	signals.editorCleared.add( () => {
+	function resetDocuments() {
 
-		if ( target.kind !== 'scene' ) showScene( null );
+		clearTimeout( saveTimer );
+		clearTimeout( applyTimer );
+		saveTimer = 0;
+		projectRevision ++;
+		assetsReady = Promise.resolve( new Map() );
+		for ( const url of urls.values() ) URL.revokeObjectURL( url );
+		urls.clear();
+		store.clear();
+		dirty = targetDirty = false;
+		sceneText = '';
+		sceneView = undefined;
+		documents = new WeakMap();
+		target = { kind: 'scene' };
+		clearErrors();
+		setMode( 'javascript' );
+		setCode( '' );
+		restoreView();
+		scheduleLint();
+		schedule();
+
+	}
+	signals.editorCleared.add( resetDocuments );
+	signals.projectLoaded.add( resetDocuments );
+
+	function syncActiveSource() {
+
+		if ( ! isOpen() || targetDirty || target.kind === 'scene' ) return;
+		const source = readTargetSource( target );
+		if ( source === getCode() ) return;
+		const view = captureView();
+		clearErrors();
+		setCode( source );
+		restoreView( view );
+		setStatus( 'Source updated.' );
+		scheduleLint();
+
+	}
+	signals.scriptChanged.add( ( script, attribute ) => {
+
+		if ( target.kind === 'script' && target.script === script && attribute === 'source' ) syncActiveSource();
+
+	} );
+	signals.materialChanged.add( () => {
+
+		if ( target.material && editor.getObjectMaterial( target.object, target.slot ) === target.material ) syncActiveSource();
 
 	} );
 
