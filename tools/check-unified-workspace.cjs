@@ -160,6 +160,62 @@ async function checkPencilObjectSelection( page ) {
 	assert.deepEqual( await page.evaluate( () => editor.selector.selection.map( object => object.name ) ), [ 'Pencil stroke' ] );
 	await page.evaluate( () => {
 
+		editor.viewTools.chooseSelectionTool( 'select' );
+		editor.modeling.selectionMode = 'face';
+
+	} );
+	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	await mode.selectOption( 'edit' );
+	assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'vertex' );
+	const state = () => page.evaluate( () => editor.selected.geometry.userData.modeling );
+	const pointPixel = index => page.evaluate( i => {
+
+		const model = editor.modeling, { left, top, width, height } = model.rect();
+		const [ x, y ] = model.project( model.data.points[ i ], width, height );
+		return [ left + x, top + y ];
+
+	}, index );
+	const before = await state();
+	const [ vx, vy ] = await pointPixel( 5 );
+	await page.mouse.move( vx, vy );
+	await page.mouse.down();
+	await page.mouse.move( vx + 5, vy - 24, { steps: 5 } );
+	await page.mouse.up();
+	assert.deepEqual( await page.evaluate( () => editor.modeling.indices ), [ 5 ] );
+	const moved = await state();
+	assert.notDeepEqual( moved.points[ 5 ], before.points[ 5 ] );
+	assert.deepEqual( moved.points[ 4 ], before.points[ 4 ] );
+	assert.deepEqual( moved.pencilBrush.samples, before.pencilBrush.samples );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await state(), before );
+
+	await mode.selectOption( 'sculpt' );
+	const properties = page.getByRole( 'region', { name: 'Tool properties' } );
+	const [ sx, sy ] = await pointPixel( 5 );
+	await page.mouse.move( sx, sy );
+	await page.mouse.down();
+	await page.mouse.move( sx, sy + 20, { steps: 5 } );
+	await page.mouse.up();
+	assert.notDeepEqual( ( await state() ).points[ 5 ], before.points[ 5 ] );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await state(), before );
+	await properties.getByLabel( 'Sculpt brush', { exact: true } ).selectOption( 'thickness' );
+	await page.mouse.click( ...( await pointPixel( 5 ) ) );
+	const thickened = await state();
+	assert.deepEqual( thickened.points, before.points );
+	assert.ok( thickened.pencilBrush.samples[ 5 ].radius > before.pencilBrush.samples[ 5 ].radius );
+	await properties.getByLabel( 'Sculpt brush', { exact: true } ).selectOption( 'opacity' );
+	await page.keyboard.down( 'Control' );
+	await page.mouse.click( ...( await pointPixel( 5 ) ) );
+	await page.keyboard.up( 'Control' );
+	assert.ok( ( await state() ).pencilBrush.samples[ 5 ].opacity < 1 );
+	await page.evaluate( () => { editor.undo(); editor.undo(); } );
+	assert.deepEqual( await state(), before );
+	await mode.selectOption( 'object' );
+	assert.equal( await page.evaluate( () => editor.modeling.selectionMode ), 'face' );
+	await page.evaluate( () => { editor.modeling.selectionMode = 'vertex'; } );
+	await page.evaluate( () => {
+
 		editor.selected.userData.threeditor = { unselectable: true };
 		editor.deselect();
 		editor.viewTools.chooseSelectionTool( 'select' );

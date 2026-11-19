@@ -6,6 +6,10 @@ export const meshBrushes = [
 	[ 'relax', 'Relax', 'sculptRelax' ], [ 'pinch', 'Pinch', 'sculptPinch' ], [ 'twist', 'Twist', 'sculptTwist' ]
 ];
 
+export const strokeBrushes = [
+	...meshBrushes, [ 'thickness', 'Stroke thickness', 'brushWidth' ], [ 'opacity', 'Stroke opacity', 'opacity' ]
+];
+
 export function sculptPoints( points, pixels, cursor, radius, strength, { tool, move, neighbors, normals } ) {
 
 	return points.map( ( point, index ) => {

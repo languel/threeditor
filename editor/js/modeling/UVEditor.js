@@ -20,7 +20,7 @@ import { createBrushColorSampler } from './BrushColorSampler.js?v=pencil-referen
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-reference';
 import { closestPointOnSegment } from './Contour.js';
 import { linkedUVVertices, uvComponents, uvCornerTopology, uvFaceAt } from './UVIslands.js?v=uv-pack';
-import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=stroke-edit';
 import { uvSelectionCorrespondence } from './UVSelectionSync.js';
 import { packExistingUVs } from './UVPack.js';
 import { layoutUV } from './UVLayout.js?v=uv-sculpt';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, pokeFace, readModelGeometry, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
+import { addFace, boundaryEdge, extrudeEdge, extrudeFace, insertModelPoint, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, pokeFace, readModelGeometry, removePoints, splitEdge, weldPoints } from '../editor/js/modeling/ModelGeometry.js';
 import { applyProjectionMask, appendMaskShape, maskFromOutline, maskShapes } from '../editor/js/modeling/ProjectionMask.js';
 import { projectorScript, upgradeProjectorScript } from '../editor/js/assets/Projector.js';
 import { inspectProjectorCoverage } from '../editor/js/modeling/ProjectorCoverage.js';
@@ -84,6 +84,19 @@ test( 'UV selection maps seam copies, authored edges and full polygon faces', ()
 		geometry.dispose();
 
 	}
+
+} );
+
+test( 'Pencil point insertion and removal keep thickness and opacity aligned with vertices', () => {
+
+	const sample = ( radius, opacity ) => ( { radius, opacity, normal: [ 0, 0, 1 ], right: [ 1, 0, 0 ], up: [ 0, 1, 0 ] } );
+	const data = { kind: 'path', points: [ [ 0, 0, 0 ], [ 2, 0, 0 ], [ 3, 1, 0 ] ],
+		pencilBrush: { samples: [ sample( 1, 0 ), sample( 3, 1 ), sample( 4, .4 ) ] } };
+	assert.equal( insertModelPoint( data, 0, .5 ), 1 );
+	assert.deepEqual( data.points[ 1 ], [ 1, 0, 0 ] );
+	assert.deepEqual( data.pencilBrush.samples[ 1 ], sample( 2, .5 ) );
+	removePoints( data, [ 0, 2 ] );
+	assert.deepEqual( data.pencilBrush.samples, [ sample( 2, .5 ), sample( 4, .4 ) ] );
 
 } );
 

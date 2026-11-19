@@ -208,7 +208,7 @@ class Keymap {
   const elementSelect = ['selectVertex','selectEdge','selectFace'].includes(id);
   if(!elementSelect&&!['surfacePaintMode','meshEditMode','meshSculptMode','topologyPen','weldPoints','brushSmaller','brushLarger','brushWeaker','brushStronger'].includes(id))return true;
   if(!m||e.editWorkspace?.exclusive||e.streams?.playing||e.flyControls?.active||m.gesture||m.drag||e.viewTools.pointer)return false;
-  if(elementSelect)return m.editMode&&m.canEdit()&&!e.viewTools.mode;
+  if(elementSelect)return m.editMode&&m.canEdit()&&!e.viewTools.mode&&(!m.isPencilStroke||id==='selectVertex');
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return ['paint','pencil'].includes(e.viewTools.mode)||(m.brush&&m.brush!=='freehand');

@@ -1,6 +1,7 @@
 import { pencilRibbon } from './PencilRibbon.js?v=brush-response';
 import { pencilGrainTexture } from './PencilGrain.js';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
+import { insertContourPoint } from './Contour.js';
 
 export function modelData( kind ) {
 
@@ -148,9 +149,55 @@ export function weldPoints( data, indices ) {
 
 }
 
+export function pencilSamples( data ) {
+
+	const samples = data.pencilBrush.samples || [];
+	const fallback = { radius: .025, opacity: 1, normal: [ 0, 0, 1 ], right: [ 1, 0, 0 ], up: [ 0, 1, 0 ] };
+	return data.points.map( ( _, i ) => samples[ Math.round( i * ( samples.length - 1 ) / Math.max( 1, data.points.length - 1 ) ) ] || fallback );
+
+}
+
+export function insertModelPoint( data, after, fraction ) {
+
+	const samples = data.pencilBrush && pencilSamples( data );
+	if ( samples ) {
+
+		const first = samples[ after ], second = samples[ ( after + 1 ) % samples.length ];
+		samples.splice( after + 1, 0, {
+			...first,
+			radius: first.radius + ( second.radius - first.radius ) * fraction,
+			opacity: ( first.opacity ?? 1 ) * ( 1 - fraction ) + ( second.opacity ?? 1 ) * fraction
+		} );
+		data.pencilBrush.samples = samples;
+
+	}
+	return insertContourPoint( data.points, after, fraction );
+
+}
+
+export function appendModelPoint( data, point ) {
+
+	if ( data.pencilBrush ) {
+
+		const samples = pencilSamples( data );
+		if ( samples.length ) data.pencilBrush.samples = [ ...samples, samples.at( -1 ) ];
+		else data.pencilBrush.samples = ( data.pencilBrush.samples || [] ).slice( -1 );
+
+	}
+	return data.points.push( point ) - 1;
+
+}
+
 export function removePoints( data, indices ) {
 
 	const remove = new Set( indices );
+	if ( data.pencilBrush ) {
+
+		const samples = pencilSamples( data );
+		const remaining = samples.filter( ( _, i ) => ! remove.has( i ) );
+		data.pencilBrush.samples = remaining.length ? remaining : samples.slice( -1 );
+
+	}
 	const remap = new Map();
 	data.points = data.points.filter( ( point, index ) => {
 
@@ -310,9 +357,9 @@ export function modelGeometry( THREE, data ) {
 	} else {
 
 		const points = outlinePoints( THREE, data );
-		if ( data.kind === 'path' && data.pencilBrush?.samples?.length ) {
+		if ( data.kind === 'path' && data.pencilBrush ) {
 
-			geometry = pencilRibbon( THREE, points, Boolean( data.closed && points.length > 2 ), data.pencilBrush );
+			geometry = pencilRibbon( THREE, points, Boolean( data.closed && points.length > 2 ), { ...data.pencilBrush, samples: pencilSamples( data ) } );
 
 		} else if ( data.kind === 'shape' && isClosedOutline( data ) && points.length >= 3 ) {
 
@@ -345,7 +392,7 @@ function savedModeling( data ) {
 export function modelObject( THREE, data, name ) {
 
 	const geometry = modelGeometry( THREE, data );
-	const object = data.kind === 'path' && data.pencilBrush?.samples?.length ?
+	const object = data.kind === 'path' && data.pencilBrush ?
 		new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( {
 			vertexColors: true, map: pencilGrainTexture( THREE, data.pencilBrush ), side: THREE.DoubleSide, transparent: true, depthWrite: false,
 			polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, toneMapped: false

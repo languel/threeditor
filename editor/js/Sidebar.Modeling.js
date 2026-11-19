@@ -5,7 +5,7 @@ import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';
 import { openMaskEditor } from './modeling/MaskEditor.js?v=pencil-reference';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline } from './modeling/ModelGeometry.js?v=top-toolbar';
-import { editableMesh } from './modeling/ModelViewport.js?v=uv-selection-sync';
+import { editableMesh } from './modeling/ModelViewport.js?v=stroke-edit';
 import { modelButton, modelField } from './modeling/ModelControls.js?v=tool-layout';
 
 function element( tag, text, parent ) {

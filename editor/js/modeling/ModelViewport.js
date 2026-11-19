@@ -3,7 +3,7 @@ import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations
 import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, selectionRegionContains, meshEdges, combineSelection } from './MeshSelection.js?v=shape-selection';
 import { evaluateModifiers, modifierSource, modifierStackCommands, setModifierStack } from './Modifiers.js?v=poly-context';
 import { separateMesh } from './MeshSeparation.js';
-import { meshBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { meshBrushes, strokeBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=stroke-edit';
 import * as THREE from 'three';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { AddMeshPrimitiveCommand } from '../commands/AddMeshPrimitiveCommand.js';
@@ -13,14 +13,14 @@ import { SetRotationCommand } from '../commands/SetRotationCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { meshHit, paintSurfaces } from './SurfacePicking.js';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
-import { insertContourPoint, interpolatePoint, segmentCount } from './Contour.js';
+import { interpolatePoint, segmentCount } from './Contour.js';
 import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
 import { automaticAxis, constraintHint, createSnapBaseMarker, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase,
 	snapBaseHint, startConstraintDrag, trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=held-alt-constraint';
-import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=brush-response';
+import { addFace, appendModelPoint, insertModelPoint, pencilSamples, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=stroke-edit';
 
 
 const editSelectionColor = '#ff9d45';
@@ -348,6 +348,7 @@ export class ModelViewport {
 
 	setTarget( object ) {
 
+		const wasPencilStroke = this.isPencilStroke;
 		this.releaseDrag();
 		if ( this.gesture?.modal ) this.finishTransform( false );
 		else if ( this.gesture ) this.cancelGizmo?.();
@@ -358,6 +359,18 @@ export class ModelViewport {
 		this.elements = new Map();
 		this.adding = Boolean( this.data?.profile );
 		this.pen = this.editMode && Boolean( this.pen );
+		if ( this.isPencilStroke ) {
+
+			if ( ! wasPencilStroke ) this.preStrokeSelectionMode = this.selectionMode;
+			this.selectionMode = 'vertex';
+			this.pen = this.knife = false;
+
+		} else if ( wasPencilStroke ) {
+
+			this.selectionMode = this.preStrokeSelectionMode;
+			if ( [ 'thickness', 'opacity' ].includes( this.brush ) ) this.brush = '';
+
+		}
 		this.penHover = null;
 		this.penChain = null;
 		if ( ! this.editMode ) this.brush = '';
@@ -497,7 +510,8 @@ export class ModelViewport {
 		add( 'Remove selected', 'remove', () => this.edit( 'Remove modeling points', next => { removePoints( next, indices ); return []; } ), ! indices.length );
 		add( 'Clear points', 'delete', () => this.edit( 'Clear modeling points', next => {
 
-			next.points = [];
+			if ( next.pencilBrush ) removePoints( next, next.points.map( ( _, i ) => i ) );
+			else next.points = [];
 			if ( next.kind === 'shape' || next.kind === 'path' ) next.closed = false;
 			if ( next.faces ) next.faces = [];
 			return [];
@@ -524,11 +538,10 @@ export class ModelViewport {
 			add( 'Insert point', 'snapMidpoint', () => this.edit( 'Insert outline point', next => {
 
 				const i = indices[ 0 ];
-				if ( i < segmentCount( next.points, isClosedOutline( next ) ) ) return [ insertContourPoint( next.points, i, .5 ) ];
+				if ( i < segmentCount( next.points, isClosedOutline( next ) ) ) return [ insertModelPoint( next, i, .5 ) ];
 				const point = next.points[ i ];
 				const previous = next.points[ i - 1 ];
-				next.points.push( previous ? interpolatePoint( point, previous, -.5 ) : [ point[ 0 ] + .5, point[ 1 ], point[ 2 ] ] );
-				return [ i + 1 ];
+				return [ appendModelPoint( next, previous ? interpolatePoint( point, previous, -.5 ) : [ point[ 0 ] + .5, point[ 1 ], point[ 2 ] ] ) ];
 
 			} ), indices.length !== 1 );
 			if ( data.kind === 'path' ) add( 'Create shape from path', 'snapFace', () => {
@@ -632,6 +645,7 @@ export class ModelViewport {
 
 	setSelectionMode( mode ) {
 
+		if ( this.isPencilStroke && mode !== 'vertex' ) return;
 		this.selectionMode = mode;
 		this.knife = false;
 		this.pen = false;
@@ -910,9 +924,21 @@ export class ModelViewport {
 
 	}
 
+	get isPencilStroke() {
+
+		return this.data?.kind === 'path' && !! this.data.pencilBrush;
+
+	}
+
+	get sculptBrushes() {
+
+		return this.isPencilStroke ? strokeBrushes : meshBrushes;
+
+	}
+
 	setBrush( brush ) {
 
-		if ( ! this.canEdit() || this.drag || this.gesture || brush && ( ! this.data.points.length || ! meshBrushes.some( ( [ id ] ) => id === brush ) ) ) return;
+		if ( ! this.canEdit() || this.drag || this.gesture || brush && ( ! this.data.points.length || ! this.sculptBrushes.some( ( [ id ] ) => id === brush ) ) ) return;
 		this.pen = false;
 		this.brush = brush;
 		this.adding = false;
@@ -1017,9 +1043,10 @@ export class ModelViewport {
 
 	}
 
-	preview( state, points ) {
+	preview( state, points, pencilBrush = state.draft?.pencilBrush || this.data.pencilBrush ) {
 
 		const draft = { ...this.data, points };
+		if ( pencilBrush ) draft.pencilBrush = pencilBrush;
 		let geometry;
 		try { geometry = this.buildGeometry( draft, state.geometry ); }
 		catch { return; }
@@ -1870,8 +1897,7 @@ export class ModelViewport {
 
 			this.edit( 'Add modeling point', next => {
 
-				next.points.push( placement.point.toArray() );
-				return [ next.points.length - 1 ];
+				return [ appendModelPoint( next, placement.point.toArray() ) ];
 
 			} );
 			return;
@@ -2340,10 +2366,12 @@ export class ModelViewport {
 			return;
 
 		}
-		if ( ! this.pen && ! this.adding && ! this.brush ) {
+		const rect = this.rect();
+		const directStrokeDrag = this.isPencilStroke && this.selectionTool === 'select' && this.selectionOperation === 'set' &&
+			! ( event.shiftKey || event.ctrlKey || event.altKey ) && this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) >= 0;
+		if ( ! this.pen && ! this.adding && ! this.brush && ! directStrokeDrag ) {
 
 			// Geometry picks take precedence over large transform gizmo planes.
-			const rect = this.rect();
 			const onGeometry = this.selectionMode === 'vertex' ? this.pointUnder( event.clientX - rect.left, event.clientY - rect.top ) >= 0 : this.selectionMode === 'edge' ? !! this.penHit( event ).edge : !! this.faceUnder( event );
 			if ( ! onGeometry && ! event.shiftKey && this.selectionTool === 'select' && this.gizmoUnderPointer?.( event ) ) return;
 			event.preventDefault(); event.stopImmediatePropagation();
@@ -2412,7 +2440,8 @@ export class ModelViewport {
 				return;
 
 			}
-			if ( ! this.indices.includes( hit ) ) this.indices = [ hit ];
+			if ( directStrokeDrag ) this.applyElementSelection( this.indices.includes( hit ) ? this.indices.map( i => [ i ] ) : [ [ hit ] ], 'set' );
+			else if ( ! this.indices.includes( hit ) ) this.indices = [ hit ];
 
 		}
 		if ( hit < 0 ) {
@@ -2501,6 +2530,32 @@ export class ModelViewport {
 			const strength = this.brushStrength * pressure;
 			const step = cursor.map( ( value, axis ) => value - ( grab ? stroke.cursor : stroke.last )[ axis ] );
 			const invert = event.ctrlKey ? -1 : 1;
+			if ( tool === 'thickness' || tool === 'opacity' ) {
+
+				const draft = stroke.draft || this.data;
+				const samples = pencilSamples( draft );
+				const next = sculptPoints( samples, pixels, cursor, this.brushRadius, strength, {
+					tool, move: ( sample, _, weight ) => {
+
+						const key = tool === 'thickness' ? 'radius' : 'opacity';
+						const current = sample[ key ] ?? 1;
+						const value = tool === 'thickness' ? Math.max( 1e-6, current * Math.exp( invert * weight * .18 ) ) :
+							THREE.MathUtils.clamp( current + invert * weight * .12, .02, 1 );
+						return current === value ? sample : { ...sample, [ key ]: value };
+
+					}
+				} );
+				if ( next.some( ( sample, i ) => sample !== samples[ i ] ) ) {
+
+					this.preview( stroke, draft.points, { ...draft.pencilBrush, samples: next } );
+					stroke.changedBrush = true;
+
+				}
+				stroke.last = cursor;
+				this.render();
+				return;
+
+			}
 			const movement = ! [ 'smooth', 'relax' ].includes( tool ) && ( ( point, pixel, weight ) => {
 
 				let offset = step.map( value => value * weight );
@@ -2650,7 +2705,7 @@ export class ModelViewport {
 			return;
 
 		}
-		const changed = drag.brush === 'freehand' ? drag.draft?.points.length >= 2 : drag.brush ? drag.draft?.points.some( ( point, index ) =>
+		const changed = drag.brush === 'freehand' ? drag.draft?.points.length >= 2 : drag.brush ? drag.changedBrush || drag.draft?.points.some( ( point, index ) =>
 			point.some( ( value, axis ) => value !== this.data.points[ index ]?.[ axis ] ) ) : drag.draft && this.pointsChanged( drag );
 		if ( ! cancel && drag.geometry && this.canEdit() && changed ) {
 
@@ -2686,7 +2741,7 @@ export class ModelViewport {
 				}
 
 			}
-			this.commit( drag.brush === 'freehand' ? 'Draw freehand path' : drag.brush ? 'Sculpt mesh' : 'Move modeling points',
+			this.commit( drag.brush === 'freehand' ? 'Draw freehand path' : drag.brush ? this.isPencilStroke ? 'Sculpt Pencil stroke' : 'Sculpt mesh' : 'Move modeling points',
 				drag.draft, this.indices, drag.geometry );
 
 		}

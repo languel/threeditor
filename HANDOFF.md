@@ -93,6 +93,8 @@ Pencil reads the shared modeling Placement for the first point, then resolves th
 
 The Pencil reference lock stores a point in the source object's local coordinates and keeps the active plane through that point. A path lock restricts the nearby attachment picker to that path. The pointer cue marks the exact attachment candidate, and the diamond remains at the locked point. The right Tool properties tab follows Pencil, Measure, Surface Paint, and Sculpt. Pencil uses the same brush and placement values in the Tool tab and the compact viewport row. The viewport N sidebar links to the active tool's Properties tab.
 
+Pencil ribbons edit through the path's authored control points. Entering a Pencil ribbon selects vertex mode and leaving it restores the previous mesh selection mode. Point insertion and removal keep brush samples aligned with the contour. Sculpt preview supports the same point movement as meshes and can write per-sample thickness and opacity. These edits rebuild the ribbon with its existing material and commit through geometry history.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

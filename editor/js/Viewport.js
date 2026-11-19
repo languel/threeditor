@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=pencil-reference';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=stroke-edit';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -32,10 +32,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=dotted-cursor';
+import { ViewportTools } from './modeling/ViewportTools.js?v=stroke-edit';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=uv-selection-sync';
+import { ModelViewport } from './modeling/ModelViewport.js?v=stroke-edit';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
