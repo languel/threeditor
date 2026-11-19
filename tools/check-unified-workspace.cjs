@@ -413,6 +413,9 @@ async function checkModalTransforms( page ) {
 		const cube = new THREE.Mesh( new THREE.BoxGeometry( 2, 2, 2 ), new THREE.MeshStandardMaterial() );
 		const target = new THREE.Mesh( new THREE.BoxGeometry( .2, .2, .2 ), new THREE.MeshStandardMaterial() );
 		target.position.x = 2.15;
+		const source = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), new THREE.MeshStandardMaterial() );
+		source.position.set( -2.15, 0, -1 );
+		editor.addObject( source );
 		editor.addObject( cube );
 		editor.addObject( target );
 		editor.select( cube );
@@ -422,8 +425,8 @@ async function checkModalTransforms( page ) {
 		editor.config.setKey( 'settings/transformSnapTarget', 'object' );
 		editor.config.setKey( 'settings/transformSnap', null );
 		const { left, top, width, height } = editor.modeling.rect();
-		const point = new THREE.Vector3( 2.15, 0, 0 ).project( editor.camera );
-		return { x: left + width / 2, y: top + height / 2, targetX: left + ( point.x + 1 ) * width / 2 };
+		const projectX = ( x, z ) => left + ( new THREE.Vector3( x, 0, z ).project( editor.camera ).x + 1 ) * width / 2;
+		return { x: left + width / 2, y: top + height / 2, targetX: projectX( 2.15, 0 ), sourceX: projectX( -2.15, -.5 ) };
 
 	} );
 	const pose = () => page.evaluate( () => [ editor.selected.position.toArray(), editor.selected.rotation.toArray().slice( 0, 3 ) ] );
@@ -439,11 +442,24 @@ async function checkModalTransforms( page ) {
 	await page.keyboard.press( 'Escape' );
 
 	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'g' );
+	await page.keyboard.down( 'Alt' );
+	await page.mouse.down();
+	await page.mouse.move( view.x + 30, view.y, { steps: 4 } );
+	await page.keyboard.up( 'Alt' );
+	await page.mouse.up();
+	await page.mouse.move( view.x + 40, view.y + 20, { steps: 4 } );
+	const [ altConstrained ] = await pose();
+	assert.ok( altConstrained[ 0 ] > .1 );
+	assert.deepEqual( altConstrained.slice( 1 ), [ 0, 0 ] );
+	await page.keyboard.press( 'Escape' );
+
+	await page.mouse.move( view.x, view.y );
 	await page.keyboard.press( 'r' );
 	await page.keyboard.press( 'r' );
 	await page.mouse.move( view.x + 32, view.y + 21, { steps: 4 } );
 	const [ , rotation ] = await pose();
-	assert.ok( Math.abs( rotation[ 0 ] ) > .08 && Math.abs( rotation[ 1 ] ) > .08 );
+	assert.ok( rotation[ 0 ] > .08 && rotation[ 1 ] > .08 );
 	await page.keyboard.press( 'g' );
 	await page.keyboard.press( 'x' );
 	await page.keyboard.press( '1' );
@@ -455,14 +471,14 @@ async function checkModalTransforms( page ) {
 	await page.mouse.move( view.x, view.y );
 	await page.keyboard.press( 'g' );
 	await page.keyboard.press( 'b' );
-	await page.mouse.click( view.x, view.y );
+	await page.mouse.click( view.sourceX, view.y );
 	await page.mouse.move( view.targetX, view.y, { steps: 5 } );
 	const [ snapped ] = await pose();
-	assert.ok( Math.abs( snapped[ 0 ] - 2.15 ) < .01 && Math.abs( snapped[ 2 ] + 1 ) < .01 );
+	assert.ok( Math.abs( snapped[ 0 ] - 4.3 ) < .02 && Math.abs( snapped[ 2 ] - .5 ) < .01 );
 	await page.keyboard.down( 'Control' );
 	assert.ok( Math.abs( ( await pose() )[ 0 ][ 2 ] ) < .01 );
 	await page.keyboard.up( 'Control' );
-	assert.ok( Math.abs( ( await pose() )[ 0 ][ 2 ] + 1 ) < .01 );
+	assert.ok( Math.abs( ( await pose() )[ 0 ][ 2 ] - .5 ) < .01 );
 	await page.keyboard.press( 'Escape' );
 	await page.evaluate( () => {
 
@@ -472,6 +488,22 @@ async function checkModalTransforms( page ) {
 		editor.modeling.selectPoints( true );
 
 	} );
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'g' );
+	await page.keyboard.down( 'Alt' );
+	await page.keyboard.down( 'Shift' );
+	await page.mouse.down();
+	await page.mouse.move( view.x + 30, view.y, { steps: 4 } );
+	await page.mouse.up();
+	await page.keyboard.up( 'Shift' );
+	await page.keyboard.up( 'Alt' );
+	assert.equal( await page.evaluate( () => editor.modeling.gesture.axis ), 'XZ' );
+	await page.keyboard.press( 'b' );
+	await page.mouse.click( view.sourceX, view.y );
+	assert.ok( Math.abs( await page.evaluate( () => editor.modeling.gesture.snapBase.z ) + .5 ) < 1e-6 );
+	await page.keyboard.press( 'Escape' );
+	await page.evaluate( () => editor.config.setKey( 'settings/transformSnap', null ) );
+
 	await page.mouse.move( view.x, view.y );
 	await page.keyboard.press( 'r' );
 	await page.keyboard.press( 'r' );
@@ -485,7 +517,28 @@ async function checkModalTransforms( page ) {
 	await page.keyboard.press( 'Enter' );
 	const moved = await page.evaluate( () => editor.modeling.data.points );
 	assert.ok( moved.every( ( point, i ) => Math.abs( point[ 0 ] - draft[ i ][ 0 ] - 1 ) < 1e-6 ) );
-	await page.evaluate( () => { editor.undo(); editor.clear(); } );
+	await page.evaluate( () => { editor.undo(); editor.viewTools.setWorkspaceMode( 'object' ); } );
+
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.down( 'Control' );
+	await page.mouse.down();
+	await page.mouse.move( view.x + 30, view.y, { steps: 3 } );
+	await page.keyboard.up( 'Control' );
+	await page.mouse.up();
+	await page.evaluate( ( { x, y } ) => editor.renderer.domElement.dispatchEvent( new MouseEvent( 'contextmenu', {
+		bubbles: true, cancelable: true, button: 2, clientX: x + 30, clientY: y
+	} ) ), view );
+	const menu = page.locator( '.context-menu' );
+	assert.equal( await menu.isVisible(), false );
+	await page.mouse.move( view.x, view.y );
+	await page.mouse.down( { button: 'right' } );
+	await page.mouse.move( view.x + 20, view.y, { steps: 3 } );
+	await page.mouse.up( { button: 'right' } );
+	assert.equal( await menu.isVisible(), false );
+	await page.mouse.click( view.x, view.y, { button: 'right' } );
+	assert.equal( await menu.isVisible(), true );
+	await page.keyboard.press( 'Escape' );
+	await page.evaluate( () => editor.clear() );
 
 }
 

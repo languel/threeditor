@@ -15,16 +15,36 @@ function ContextMenu( editor, viewport ) {
 	let pointer = null;
 	let previousFocus = null;
 	let rightDown = null;
-	let rightDragged = false;
 	viewport.addEventListener( 'pointerdown', event => {
 
-		if ( event.button === 2 ) { rightDown = { x: event.clientX, y: event.clientY }; rightDragged = false; }
+		rightDown = event.button === 2 && event.buttons === 2 && ! event.ctrlKey && event.target === editor.renderer?.domElement ?
+			{ id: event.pointerId, x: event.clientX, y: event.clientY } : null;
 
 	}, true );
+	const moved = event => Math.hypot( event.clientX - rightDown.x, event.clientY - rightDown.y ) > 4;
+	window.addEventListener( 'pointerup', event => {
 
+		if ( rightDown?.id !== event.pointerId || event.button !== 2 ) return;
+		const directClick = ! moved( event ) && event.target === editor.renderer?.domElement && ! event.ctrlKey;
+		rightDown = null;
+		if ( ! directClick || editor.flyControls?.active || editor.modalTransform?.active || editor.modeling?.gesture ||
+			performance.now() < ( editor.suppressContextMenuUntil || 0 ) ) return;
+		pointer = { x: event.clientX, y: event.clientY };
+		openObject( pointer );
+
+	}, true );
+	window.addEventListener( 'pointercancel', event => {
+
+		if ( rightDown?.id === event.pointerId ) rightDown = null;
+
+	}, true );
+	window.addEventListener( 'pointermove', event => {
+
+		if ( rightDown?.id === event.pointerId && event.buttons & 2 && moved( event ) ) rightDown = null;
+
+	}, true );
 	viewport.addEventListener( 'pointermove', event => {
 
-		if ( rightDown && event.buttons & 2 && Math.hypot( event.clientX - rightDown.x, event.clientY - rightDown.y ) > 4 ) rightDragged = true;
 		if ( ! menu.hidden || event.target.closest( 'button, input, select' ) ) return;
 		pointer = { x: event.clientX, y: event.clientY };
 
@@ -273,12 +293,7 @@ function ContextMenu( editor, viewport ) {
 
 	viewport.addEventListener( 'contextmenu', event => {
 
-		if ( event.target.tagName !== 'CANVAS' || editor.flyControls?.active || editor.modalTransform?.active ) return;
-		event.preventDefault();
-		if ( rightDragged || performance.now() < ( editor.suppressContextMenuUntil || 0 ) ) { rightDown = null; return; }
-		rightDown = null;
-		pointer = { x: event.clientX, y: event.clientY };
-		openObject( pointer );
+		if ( event.target === editor.renderer?.domElement ) event.preventDefault();
 
 	} );
 	document.addEventListener( 'pointerdown', event => { if ( ! menu.hidden && ! menu.contains( event.target ) ) close( false ); }, true );

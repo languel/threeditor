@@ -15,8 +15,8 @@ export function trackballDelta( camera, dx, dy ) {
 	const orientation = camera.getWorldQuaternion( new THREE.Quaternion() );
 	const up = new THREE.Vector3( 0, 1, 0 ).applyQuaternion( orientation );
 	const right = new THREE.Vector3( 1, 0, 0 ).applyQuaternion( orientation );
-	return new THREE.Quaternion().setFromAxisAngle( right, -dy * .008 )
-		.multiply( new THREE.Quaternion().setFromAxisAngle( up, -dx * .008 ) );
+	return new THREE.Quaternion().setFromAxisAngle( right, dy * .008 )
+		.multiply( new THREE.Quaternion().setFromAxisAngle( up, dx * .008 ) );
 
 }
 
@@ -47,14 +47,51 @@ export function automaticAxis( frame, pivot, basis, start, pointer, plane ) {
 
 }
 
-export function transformFeature( editor, frame, event, mode, reference, allows ) {
+function transformRay( editor, frame, event ) {
 
 	const rect = editor.viewLayout.clientRect( frame );
 	const camera = frame.camera;
 	const cursor = new THREE.Vector2( event.clientX - rect.left, event.clientY - rect.top );
 	const ray = new THREE.Raycaster();
 	ray.setFromCamera( new THREE.Vector2( cursor.x * 2 / rect.width - 1, 1 - cursor.y * 2 / rect.height ), camera );
-	return snapMeshFeature( { mode, ray, scene: editor.scene, camera, rect, cursor, reference, allows } );
+	return { ray, scene: editor.scene, camera, rect, cursor };
+
+}
+
+export function transformFeature( editor, frame, event, mode, reference, allows ) {
+
+	return snapMeshFeature( { ...transformRay( editor, frame, event ), mode, reference, allows } );
+
+}
+
+export function pickTransformSnapBase( editor, frame, event, pivot, controlPoint ) {
+
+	const params = transformRay( editor, frame, event );
+	const nearby = snapMeshFeature( { ...params, mode: 'vertex' } );
+	const surface = snapMeshFeature( { ...params, mode: 'face' } );
+	if ( controlPoint && ( ! surface || params.ray.ray.origin.distanceToSquared( controlPoint ) <= params.ray.ray.origin.distanceToSquared( surface ) + 1e-6 ) ) return controlPoint;
+	return nearby || surface || snapMeshFeature( { ...params, mode: 'object' } ) ||
+		params.ray.ray.intersectPlane( new THREE.Plane().setFromNormalAndCoplanarPoint(
+			frame.camera.getWorldDirection( new THREE.Vector3() ), pivot ), new THREE.Vector3() );
+
+}
+
+export function isConstraintDrag( event ) {
+
+	return event.button === 1 || event.button === 0 && event.altKey;
+
+}
+
+export function startConstraintDrag( event, mode ) {
+
+	return { clientX: event.clientX, clientY: event.clientY, button: event.button, id: event.pointerId,
+		plane: event.shiftKey && mode !== 'rotate' };
+
+}
+
+export function endsConstraintDrag( drag, event ) {
+
+	return drag && drag.id === event.pointerId && ( drag.button === event.button || event.type === 'pointercancel' );
 
 }
 
@@ -67,4 +104,4 @@ export function transformNumber( value, key ) {
 
 }
 
-export const transformHints = 'G/R/S switch · R twice trackball · X/Y/Z axis · Shift+axis plane · middle drag auto constraint · Shift fine · Ctrl invert snap · Shift+Tab snap · Enter confirm · Esc cancel';
+export const transformHints = 'G/R/S switch · R twice trackball · X/Y/Z axis · Shift+axis plane · middle or Alt drag auto constraint · Shift fine · Ctrl invert snap · Shift+Tab snap · Enter confirm · Esc cancel';

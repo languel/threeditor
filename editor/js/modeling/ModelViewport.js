@@ -17,7 +17,8 @@ import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { automaticAxis, modalSnapMode, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './TransformGesture.js';
+import { automaticAxis, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, startConstraintDrag,
+	trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=transform-gestures';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
 
 
@@ -117,11 +118,9 @@ export class ModelViewport {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.button === 2 ) editor.suppressContextMenuUntil = performance.now() + 500;
-			if ( event.button === 1 ) {
+			if ( ! state.extrusion && isConstraintDrag( event ) ) {
 
-				if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ! state.pickingBase ) state.auto = {
-					clientX: event.clientX, clientY: event.clientY, plane: event.shiftKey && state.mode !== 'rotate'
-				};
+				if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ! state.pickingBase ) state.auto = startConstraintDrag( event, state.mode );
 				return;
 
 			}
@@ -136,9 +135,11 @@ export class ModelViewport {
 			this.finishTransform( event.button === 0 );
 
 		}, true );
-		window.addEventListener( 'pointerup', event => {
+		for ( const type of [ 'pointerup', 'pointercancel' ] ) window.addEventListener( type, event => {
 
-			if ( event.button === 1 && this.gesture?.auto ) this.gesture.auto = null;
+			if ( ! endsConstraintDrag( this.gesture?.auto, event ) ) return;
+			this.gesture.auto = null;
+			event.stopImmediatePropagation();
 
 		}, true );
 		window.addEventListener( 'keyup', event => {
@@ -1192,7 +1193,7 @@ export class ModelViewport {
 		}
 		const state = this.gesture;
 		const name = state.trackball ? 'Trackball' : { translate: 'Move points', rotate: 'Rotate points', scale: 'Scale points' }[ mode ];
-		const base = state.pickingBase ? 'Click a selected point or surface to set the snap base' : mode === 'translate' ?
+		const base = state.pickingBase ? 'Click in the scene to set the snap base' : mode === 'translate' ?
 			( state.snapBase ? 'B change snap base' : 'B set snap base' ) : '';
 		this.notice.textContent = [ name, axis, numeric, base, this.planar ? transformHints.replace( 'R twice trackball · ', '' ) : transformHints ].filter( Boolean ).join( ' · ' );
 
@@ -1232,7 +1233,7 @@ export class ModelViewport {
 			if ( error < distance ) { distance = error; base = this.object.localToWorld( new THREE.Vector3( ...point ) ); }
 
 		}
-		base ||= this.withPreview( () => transformFeature( this.editor, this.frame, event, 'face', null, object => object === this.object ) );
+		base = this.withPreview( () => pickTransformSnapBase( this.editor, this.frame, event, state.origin, base ) );
 		if ( ! base ) return;
 		this.lastPointer = event;
 		this.rebaseModal( event );
@@ -1639,11 +1640,17 @@ export class ModelViewport {
 		const constraint = this.penChain || state;
 		if ( constraint?.axis ) {
 
-			const axis = worldAxes[ 'XYZ'.indexOf( constraint.axis ) ];
 			const origin = constraint.origin || this.object.localToWorld( new THREE.Vector3( ...( this.penChain?.data.points[ this.penChain.indices.at( -1 ) ] || [ 0, 0, 0 ] ) ) );
 			const local = world => this.object.worldToLocal( world ).toArray();
-			ctx.strokeStyle = { X: '#ff6060', Y: '#92d760', Z: '#628fff' }[ constraint.axis ]; ctx.setLineDash( [ 5, 4 ] );
-			stroke( [ project( local( origin.clone().addScaledVector( axis, -100 ) ) ), project( local( origin.clone().addScaledVector( axis, 100 ) ) ) ], false );
+			ctx.setLineDash( [ 5, 4 ] );
+			for ( const name of constraint.axis ) {
+
+				const axis = worldAxes[ 'XYZ'.indexOf( name ) ].clone();
+				if ( constraint.rotation ) axis.applyQuaternion( constraint.rotation );
+				ctx.strokeStyle = { X: '#ff6060', Y: '#92d760', Z: '#628fff' }[ name ];
+				stroke( [ project( local( origin.clone().addScaledVector( axis, -100 ) ) ), project( local( origin.clone().addScaledVector( axis, 100 ) ) ) ], false );
+
+			}
 			ctx.setLineDash( [] );
 
 		}

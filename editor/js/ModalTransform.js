@@ -1,4 +1,5 @@
-import { automaticAxis, modalSnapMode, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js';
+import { automaticAxis, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, startConstraintDrag,
+ trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js?v=transform-gestures';
 import * as THREE from 'three';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
@@ -15,7 +16,7 @@ function ModalTransform( editor ) {
 
   const name = mode === 'translate' ? 'Grab' : mode === 'scale' ? 'Scale' : trackball ? 'Trackball' : 'Rotate';
   const constraint = axis && ( plane ? 'Plane excluding ' : '' ) + axis.toUpperCase() + ( local ? ' local' : ' global' );
-  const base = pickingBase ? 'Click a point on the selection to set the snap base' : mode === 'translate' ? ( snapBase ? 'B change snap base' : 'B set snap base' ) : '';
+  const base = pickingBase ? 'Click in the scene to set the snap base' : mode === 'translate' ? ( snapBase ? 'B change snap base' : 'B set snap base' ) : '';
   notice.textContent = [ name, constraint, numeric, base, transformHints ].filter( Boolean ).join( ' · ' );
 
  }
@@ -174,16 +175,15 @@ function ModalTransform( editor ) {
   e.preventDefault();e.stopImmediatePropagation();
   if(e.button===2)editor.suppressContextMenuUntil=performance.now()+500;
   const frame=editor.viewLayout.navigation;
-  if(e.button===1){
-   if(frame&&!pickingBase)auto={clientX:e.clientX,clientY:e.clientY,plane:e.shiftKey&&mode!=='rotate'};
+  if(isConstraintDrag(e)){
+   if(frame&&!pickingBase&&editor.viewLayout.at(e.clientX,e.clientY)===frame)auto=startConstraintDrag(e,mode);
    return;
   }
   if(pickingBase){
    if(e.button===2){pickingBase=false;label();return;}
    if(!frame||editor.viewLayout.at(e.clientX,e.clientY)!==frame)return;
-   const allows=object=>objects.some(root=>root===object||isAncestor(root,object));
-   const base=transformFeature(editor,frame,e,'vertex',null,allows)||transformFeature(editor,frame,e,'face',null,allows)||
-    transformFeature(editor,frame,e,'object',null,allows);
+   const pivot=states[0].o.getWorldPosition(new THREE.Vector3());
+   const base=pickTransformSnapBase(editor,frame,e,pivot);
    if(!base)return;
    snapBase=base;pickingBase=false;lastX=e.clientX;lastY=e.clientY;rebase();
    if(editor.config.getKey('settings/transformSnap')==null)editor.toggleTransformSnap?.();
@@ -191,7 +191,9 @@ function ModalTransform( editor ) {
   }
   finish(e.button===0);
  },true);
- window.addEventListener('pointerup',e=>{if(mode&&e.button===1){auto=null;e.stopImmediatePropagation();}},true);
+ for(const type of ['pointerup','pointercancel'])window.addEventListener(type,e=>{
+  if(mode&&endsConstraintDrag(auto,e)){auto=null;e.stopImmediatePropagation();}
+ },true);
  window.addEventListener('contextmenu',e=>{if(mode)e.preventDefault();},true);
  return {start,get active(){return mode!==null;}};
 }
