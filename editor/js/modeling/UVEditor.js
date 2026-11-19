@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=seam-unwrap';
+import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-pack';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { bakeTexture } from './TextureBake.js';
 import { lightViewCamera } from './LightView.js';
@@ -17,8 +17,9 @@ import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut
 import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
 import { closestPointOnSegment } from './Contour.js';
-import { linkedUVVertices, uvCornerTopology, uvFaceAt } from './UVIslands.js?v=uv-anchors';
+import { linkedUVVertices, uvComponents, uvCornerTopology, uvFaceAt } from './UVIslands.js?v=uv-pack';
 import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { packExistingUVs } from './UVPack.js';
 import { layoutUV } from './UVLayout.js?v=uv-sculpt';
 
 export function setProjectorMapping( editor, projector, key, value ) {
@@ -300,6 +301,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		};
 		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'seams', 'Unwrap from seams' ], [ 'boxNet', 'Connected cube net' ], [ 'lightmap', 'Lightmap pack' ] ] );
+		options( 'Arrange', [ [ 'pack', 'Pack existing islands' ] ] );
 		options( 'Projection', [ [ 'box', 'Cube projection' ], [ 'cylinder', 'Cylinder projection (Y)' ],
 			[ 'sphere', 'Sphere projection' ], [ 'view', 'Project from view' ],
 			[ 'xy', 'Planar XY' ], [ 'xz', 'Planar XZ' ], [ 'yz', 'Planar YZ' ] ] );
@@ -307,14 +309,37 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		editor.scene.traverse( candidate => { if ( isProjector( candidate ) ) projectors.push( [ candidate.uuid, candidate.name || 'Projector' ] ); } );
 		if ( projectors.length ) options( 'Projectors', projectors );
 		toolbar.append( layout );
+		const padding = modelField( toolbar, 'UV packing margin (px at 1024)', 'uvIsland', 'number', 4 );
+		Object.assign( padding, { min: 0, max: 64, step: 1 } );
+		layout.onchange = () => { padding.parentElement.hidden = layout.value !== 'pack'; };
+		layout.onchange();
+
 		modelButton( toolbar, 'Pin UV vertices (P)', 'uvPin', () => run( () => changePins( true ) ) );
 		modelButton( toolbar, 'Unpin UV vertices (Alt+P)', 'uvUnpin', () => run( () => changePins( false ) ) );
 		modelButton( toolbar, 'Mark selected 3D edges as seams', 'uvSeam', () => run( () => selectedMeshSeams( true ) ) );
 		modelButton( toolbar, 'Clear seams on selected 3D edges', 'erase', () => run( () => selectedMeshSeams( false ) ) );
 		modelButton( toolbar, 'Auto layout', 'toolGrid', () => run( () => {
 
-			if ( pins.size ) throw new Error( 'Unpin the UV vertices before replacing the layout.' );
+			if ( dragging ) throw new Error( 'Finish the current UV edit first.' );
 			const mode = layout.value;
+			if ( mode === 'pack' ) {
+
+				if ( pins.size ) throw new Error( 'Unpin the UV vertices before packing islands.' );
+				if ( ! points.length ) throw new Error( 'Create a UV layout before packing islands.' );
+				const triangles = [];
+				eachTriangle( face => triangles.push( face ) );
+				const islands = uvComponents( triangles, pointKey );
+				if ( ! islands.length ) throw new Error( 'There are no UV islands to pack.' );
+				const margin = THREE.MathUtils.clamp( Math.round( padding.valueAsNumber || 0 ), 0, 64 );
+				const packed = packExistingUVs( points, islands, margin );
+				saveUndo();
+				points = packed;
+				dirty = true;
+				status.textContent = 'Packed ' + islands.length + ( islands.length === 1 ? ' UV island.' : ' UV islands.' );
+				return;
+
+			}
+			if ( pins.size ) throw new Error( 'Unpin the UV vertices before replacing the layout.' );
 			let next;
 			if ( [ 'smart', 'seams', 'lightmap' ].includes( mode ) ) {
 

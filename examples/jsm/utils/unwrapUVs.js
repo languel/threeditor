@@ -1,6 +1,6 @@
 import { Box2, BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
 import { remapAttribute } from './BufferGeometryUtils.js';
-import { potpack } from '../libs/potpack.module.js';
+import { packUVRectangles } from './UVAtlasPacking.js';
 
 /**
  * Generates a unique UV atlas for the meshes in a hierarchy, measured in world space.
@@ -72,8 +72,13 @@ function unwrapUVs( root, options = {} ) {
 	let density;
 	for ( ; ; ) {
 
-		density = packCharts( charts, settings );
-		if ( density === null ) return null;
+		density = packUVRectangles( charts, settings );
+		if ( density === null ) {
+
+			console.error( 'THREE.unwrapUVs(): Charts do not fit the atlas. Increase the resolution, reduce the padding or partition the hierarchy.' );
+			return null;
+
+		}
 
 		const failed = [];
 		for ( let i = charts.length - 1; i >= 0; i -- ) {
@@ -597,94 +602,6 @@ function alignChart( uv ) {
 		for ( let i = 0; i < uv.length; i ++ ) uv[ i ] = rotated[ i ];
 
 	}
-
-}
-
-function packCharts( charts, settings ) {
-
-	if ( charts.length === 0 ) return 0;
-	// Half a pixel beyond the requested gutter protects the texel-center boundary.
-	const border = settings.padding + 0.5;
-	function pack( density ) {
-
-		const boxes = charts.map( chart => ( {
-			chart, w: Math.max( 1, Math.ceil( chart.width * density + border * 2 ) ),
-			h: Math.max( 1, Math.ceil( chart.height * density + border * 2 ) )
-		} ) );
-		const result = potpack( boxes );
-		if ( result.w > settings.resolution || result.h > settings.resolution ) return packShelves( boxes, settings.resolution );
-		return boxes;
-
-	}
-
-	let density = settings.texelsPerUnit, boxes = density > 0 ? pack( density ) : null;
-	if ( density > 0 && ! boxes ) console.warn( 'THREE.unwrapUVs(): Charts do not fit at the requested texelsPerUnit. Fitting the atlas instead.' );
-
-	if ( ! boxes ) {
-
-		const area = charts.reduce( ( sum, chart ) => sum + chart.width * chart.height, 0 );
-		let low = 0, high = settings.resolution / Math.sqrt( area );
-		for ( let iteration = 0; iteration < 24; iteration ++ ) {
-
-			const middle = ( low + high ) * 0.5, trial = pack( middle );
-			if ( trial ) {
-
-				low = middle; boxes = trial;
-
-			} else {
-
-				high = middle;
-
-			}
-
-		}
-
-		density = low;
-		if ( ! boxes ) {
-
-			console.error( 'THREE.unwrapUVs(): Charts do not fit the atlas. Increase the resolution, reduce the padding or partition the hierarchy.' );
-			return null;
-
-		}
-
-	}
-
-	for ( const box of boxes ) box.chart.box = { x: box.x, y: box.y, w: box.w, h: box.h };
-	return density;
-
-}
-
-// A fixed-width fallback avoids potpack's unconstrained container-width heuristic.
-function packShelves( boxes, resolution ) {
-
-	const shelves = [];
-	let height = 0;
-	for ( const box of boxes ) {
-
-		if ( box.w > resolution || box.h > resolution ) return null;
-		let best = null;
-		for ( const shelf of shelves ) {
-
-			if ( shelf.h >= box.h && shelf.x + box.w <= resolution && ( best === null || shelf.x > best.x ) ) best = shelf;
-
-		}
-
-		if ( best === null ) {
-
-			if ( height + box.h > resolution ) return null;
-			best = { x: 0, y: height, h: box.h };
-			shelves.push( best );
-			height += box.h;
-
-		}
-
-		box.x = best.x;
-		box.y = best.y;
-		best.x += box.w;
-
-	}
-
-	return boxes;
 
 }
 

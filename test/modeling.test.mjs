@@ -10,7 +10,8 @@ import { fitDrawingContour, insertContourPoint, segmentCount } from '../editor/j
 import { StrokeSampler } from '../editor/js/modeling/StrokeSampler.js';
 import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
-import { uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
+import { uvComponents, uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
+import { packExistingUVs } from '../editor/js/modeling/UVPack.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 import { separateMesh } from '../editor/js/modeling/MeshSeparation.js';
 import { joinMeshGeometry } from '../editor/js/modeling/MeshJoin.js';
@@ -415,5 +416,38 @@ test( 'UV corner topology protects borders and keeps point-contact islands separ
 	const { indices, boundary } = uvCornerTopology( triangles, keys.length, i => keys[ i ] );
 	assert.deepEqual( indices, [ 0, 1, 2, 0, 2, 5, 0, 5, 8, 0, 8, 1, 12, 13, 14 ] );
 	assert.deepEqual( [ ...boundary ].sort( ( a, b ) => a - b ), [ 1, 2, 5, 8, 12, 13, 14 ] );
+
+} );
+
+test( 'UV packing preserves island shape and relative scale with a texture gutter', () => {
+
+	const faces = [ [ 0, 1, 2 ], [ 3, 4, 5 ], [ 6, 7, 8 ] ];
+	const points = [ [ -1, 1 ], [ 1, 1 ], [ 1, 2 ], [ -1, 1 ], [ 1, 2 ], [ -1, 2 ], [ 1, 2 ], [ 2, 2 ], [ 2, 2.5 ] ];
+	const key = index => points[ index ].join( ',' );
+	const islands = uvComponents( faces, key );
+	assert.deepEqual( islands.map( vertices => vertices.length ), [ 6, 3 ] );
+
+	const packed = packExistingUVs( points, islands, 8 );
+	const scale = ( packed[ 1 ][ 0 ] - packed[ 0 ][ 0 ] ) / 2;
+	assert.ok( scale > 0 );
+	for ( const island of islands ) {
+
+		const first = island[ 0 ];
+		for ( const i of island ) for ( let axis = 0; axis < 2; axis ++ ) {
+
+			assert.ok( Math.abs( packed[ i ][ axis ] - packed[ first ][ axis ] - ( points[ i ][ axis ] - points[ first ][ axis ] ) * scale ) < 1e-12 );
+			assert.ok( packed[ i ][ axis ] >= 8 / 1024 && packed[ i ][ axis ] <= 1 - 8 / 1024 );
+
+		}
+
+	}
+	const separated = [ 0, 1 ].some( axis => islands.some( ( island, i ) =>
+		Math.min( ...islands[ 1 - i ].map( index => packed[ index ][ axis ] ) ) -
+		Math.max( ...island.map( index => packed[ index ][ axis ] ) ) >= 16 / 1024 ) );
+	assert.ok( separated );
+	assert.deepEqual( packed[ 0 ], packed[ 3 ] );
+	assert.deepEqual( packed[ 2 ], packed[ 4 ] );
+	assert.notDeepEqual( packed[ 2 ], packed[ 6 ] );
+	assert.deepEqual( points[ 0 ], [ -1, 1 ] );
 
 } );

@@ -33,6 +33,12 @@ export function uvFaceAt( point, triangles, points, tolerance ) {
 // actual buffer vertex together so moving one cannot stretch its neighbor.
 export function linkedUVVertices( triangles, pointKey, seeds ) {
 
+	return uvComponents( triangles, pointKey, seeds ).flat();
+
+}
+
+export function uvComponents( triangles, pointKey, seeds = triangles.keys() ) {
+
 	const edges = new Map(), vertices = new Map(), vertexFaces = new Map();
 	const faceEdges = triangles.map( ( face, index ) => {
 
@@ -56,34 +62,42 @@ export function linkedUVVertices( triangles, pointKey, seeds ) {
 		} );
 
 	} );
-	const queue = [ ...seeds ], reached = new Set( queue ), selected = new Set();
-	function addAdjacent( connections, key ) {
+	const reached = new Set(), components = [];
+	for ( const seed of seeds ) {
 
-		const adjacent = connections.get( key );
-		if ( ! adjacent ) return;
-		connections.delete( key );
-		for ( const next of adjacent ) {
+		if ( reached.has( seed ) ) continue;
+		reached.add( seed );
+		const queue = [ seed ], vertices = new Set();
+		const enqueueAdjacent = ( connections, key ) => {
 
-			if ( reached.has( next ) ) continue;
-			reached.add( next );
-			queue.push( next );
+			const adjacent = connections.get( key );
+			if ( ! adjacent ) return;
+			connections.delete( key );
+			for ( const next of adjacent ) {
+
+				if ( reached.has( next ) ) continue;
+				reached.add( next );
+				queue.push( next );
+
+			}
+
+		};
+		for ( let i = 0; i < queue.length; i ++ ) {
+
+			const face = queue[ i ];
+			for ( const vertex of triangles[ face ] ) {
+
+				vertices.add( vertex );
+				enqueueAdjacent( vertexFaces, vertex );
+
+			}
+			for ( const edge of faceEdges[ face ] ) enqueueAdjacent( edges, edge );
 
 		}
+		components.push( [ ...vertices ] );
 
 	}
-	for ( let i = 0; i < queue.length; i ++ ) {
-
-		const face = queue[ i ];
-		for ( const vertex of triangles[ face ] ) {
-
-			selected.add( vertex );
-			addAdjacent( vertexFaces, vertex );
-
-		}
-		for ( const edge of faceEdges[ face ] ) addAdjacent( edges, edge );
-
-	}
-	return [ ...selected ];
+	return components;
 
 }
 

@@ -128,6 +128,8 @@ Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projec
 
 - In **UV Editing**, use **Mark or clear UV seam** and click an edge in the UV view. You can also select edges in the 3D pane in Edit Mode and use **Mark selected 3D edges as seams** or **Clear seams on selected 3D edges**. Marked seams appear pink. Choose **Unwrap from seams → Auto layout** to flatten the connected surface across uncut edges, including across material boundaries. For example, one lengthwise seam opens a tube wall into a single UV island. If a chart cannot flatten within the overlap and stretch limits, add seams or use **Smart unwrap**. **Smart unwrap** and **Lightmap pack** honor marked seams and can add their own cuts. **Apply** saves the layout and seam marks with the mesh.
 
+- Choose **Pack existing islands → Auto layout** to fit the current UV islands into the texture square after editing. Set the margin in pixels at 1024 × 1024. Packing preserves orientation, shape, and relative scale and applies one common scale across the atlas. Unpin vertices before packing, and choose **Apply** to commit.
+
 - In **UV Editing → Texture Bake**, choose **Light and shadow guide**, **Scene appearance**, or **Masked projector frame**. Pick the 3D view, a scene camera, or suitable light or projector, and bake at 256, 512, or 1024 pixels. The UV editor previews the result. Download a PNG or add an undoable unlit guide mesh. Use packed UVs for unique surface coverage. The bake is a snapshot of what the source view sees, with occluded texels left transparent. Use WebGL and apply any mesh modifiers first.
 
 ### Measure and draw on receivers

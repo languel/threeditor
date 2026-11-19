@@ -758,6 +758,29 @@ async function checkUVIslands( page ) {
 	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
 	assert.deepEqual( await values(), beforeProtectedStroke );
 
+	const layout = uv.getByRole( 'combobox', { name: 'UV layout' } );
+	const margin = uv.getByLabel( 'UV packing margin (px at 1024)' );
+	assert.equal( await margin.isVisible(), false );
+	await layout.selectOption( 'pack' );
+	await margin.fill( '12' );
+	await uv.getByRole( 'button', { name: 'Edit UV vertices', exact: true } ).click();
+	const beforePack = await frame();
+	await uv.getByRole( 'button', { name: 'Auto layout', exact: true } ).click();
+	assert.equal( await uv.getByRole( 'status' ).textContent(), 'Packed 2 UV islands.' );
+	const packedFrame = await frame();
+	assert.notEqual( packedFrame, beforePack );
+	assert.deepEqual( await values(), beforeProtectedStroke );
+	await uv.getByRole( 'button', { name: 'Undo UV edit', exact: true } ).click();
+	assert.equal( await frame(), beforePack );
+	await uv.getByRole( 'button', { name: 'Redo UV edit', exact: true } ).click();
+	assert.equal( await frame(), packedFrame );
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	const packed = await values();
+	assert.ok( packed.flat().every( value => value > 12 / 1024 && value < 1 - 12 / 1024 ) );
+	assert.deepEqual( packed[ 2 ], packed[ 4 ] );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await values(), beforeProtectedStroke );
+
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
