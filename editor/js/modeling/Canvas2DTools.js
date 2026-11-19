@@ -1,4 +1,4 @@
-import { modelButton } from './ModelControls.js?v=color-sampler';
+import { modelButton } from './ModelControls.js?v=uv-seams';
 
 export const selectionTools2D = [
 	[ 'select', 'Select', 'toolSelect' ], [ 'box', 'Box Select', 'selectBox' ],

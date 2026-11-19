@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=projector-shadows';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=uv-seams';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';

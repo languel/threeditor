@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js';
+import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-seams';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { bakeTexture } from './TextureBake.js';
 import { lightViewCamera } from './LightView.js';
@@ -11,11 +11,12 @@ import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton } from './ModelControls.js?v=color-sampler';
-import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=color-sampler';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-seams';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
+import { closestPointOnSegment } from './Contour.js';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {
@@ -83,6 +84,101 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const undo = [], redo = [];
 	let bake, showBake = true;
 	let original = geometry;
+	let seams = new Set( geometry?.userData.uvSeams || [] );
+	let hoveredSeam, edgeGeometry, edges;
+	function edgeKeyFromPoints( a, b ) {
+
+		const first = a.map( Math.fround ).join( ',' ), second = b.map( Math.fround ).join( ',' );
+		return first < second ? first + ';' + second : second + ';' + first;
+
+	}
+
+	function edgeKey( mesh, a, b ) {
+
+		const position = mesh.attributes.position;
+		const point = index => [ position.getX( index ), position.getY( index ), position.getZ( index ) ];
+		return edgeKeyFromPoints( point( a ), point( b ) );
+
+	}
+
+	function eachEdge( visit ) {
+
+		if ( geometry !== edgeGeometry ) {
+
+			edgeGeometry = geometry;
+			edges = [];
+			eachTriangle( ( [ a, b, c ] ) => {
+
+				for ( const [ from, to ] of [ [ a, b ], [ b, c ], [ c, a ] ] ) edges.push( [ from, to, edgeKey( geometry, from, to ) ] );
+
+			} );
+
+		}
+		for ( const edge of edges ) visit( ...edge );
+
+	}
+
+	function seamAt( point ) {
+
+		let hit, distance = 8 / view.scale;
+		eachEdge( ( a, b, key ) => {
+
+			const candidate = closestPointOnSegment( point, pixel( points[ a ] ), pixel( points[ b ] ) ).distance;
+			if ( candidate >= distance ) return;
+			distance = candidate;
+			hit = key;
+
+		} );
+		return hit;
+
+	}
+
+	function updateSeams( keys, marked ) {
+
+		const next = new Set( seams );
+		let changed = 0;
+		for ( const key of keys ) {
+
+			if ( next.has( key ) === marked ) continue;
+			if ( marked ) next.add( key );
+			else next.delete( key );
+			changed ++;
+
+		}
+		if ( ! changed ) return 0;
+		undo.push( { points, dirty, seams } );
+		if ( undo.length > 30 ) undo.shift();
+		redo.length = 0;
+		seams = next;
+		dirty = true;
+		return changed;
+
+	}
+
+	function selectedMeshSeams( marked ) {
+
+		const model = editor.modeling;
+		if ( model.object !== object || ! model.editMode || model.selectionMode !== 'edge' || ! model.elements.size ) {
+
+			throw new Error( 'Select edges on this mesh in the 3D pane first.' );
+
+		}
+		const available = new Set();
+		eachEdge( ( _, __, key ) => available.add( key ) );
+		const selected = new Set();
+		for ( const [ a, b ] of model.elements.values() ) {
+
+			const key = edgeKeyFromPoints( model.data.points[ a ], model.data.points[ b ] );
+			if ( available.has( key ) ) selected.add( key );
+
+		}
+		if ( ! selected.size ) throw new Error( 'No selected edges belong to the UV mesh.' );
+		const count = updateSeams( selected, marked );
+		status.textContent = count ? ( marked ? 'Marked ' : 'Cleared ' ) + count + ( count === 1 ? ' UV seam.' : ' UV seams.' ) :
+			( marked ? 'These edges are already seams.' : 'These edges have no marked seams.' );
+
+	}
+
 	function reset() {
 
 		if ( warp ) return structuredClone( object.userData.projectorWarp?.points || Array.from( { length: size * size },
@@ -98,7 +194,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
 	const shelf = createCanvasShelf( canvas, [
 		...selectionTools2D, [ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
-		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ] ] ),
+		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ], [ 'seam', 'Mark or clear UV seam', 'uvSeam' ] ] ),
 		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
 	], id => {
 
@@ -108,6 +204,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 			if ( id === 'pickColor' && tool !== 'pickColor' ) beforeColorPick = paintTool() ? tool : 'pencil';
 			tool = id;
+			hoveredSeam = undefined;
 			draw();
 
 		}
@@ -160,6 +257,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		editor.scene.traverse( candidate => { if ( isProjector( candidate ) ) projectors.push( [ candidate.uuid, candidate.name || 'Projector' ] ); } );
 		if ( projectors.length ) options( 'Projectors', projectors );
 		toolbar.append( layout );
+		modelButton( toolbar, 'Mark selected 3D edges as seams', 'uvSeam', () => run( () => selectedMeshSeams( true ) ) );
+		modelButton( toolbar, 'Clear seams on selected 3D edges', 'erase', () => run( () => selectedMeshSeams( false ) ) );
 		modelButton( toolbar, 'Auto layout', 'toolGrid', () => run( () => {
 
 			const mode = layout.value;
@@ -171,7 +270,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 				proxy.matrixAutoUpdate = false;
 				proxy.matrix.copy( object.matrixWorld );
 				const atlas = unwrapUVs( proxy, { mode: mode === 'smart' ? 'normal' : 'lightmap', attribute: 'uv',
-					respectUVSeams: false } );
+					respectUVSeams: false, isSeam: seams.size ? ( mesh, a, b ) => seams.has( edgeKey( mesh, a, b ) ) : undefined } );
 				if ( ! atlas?.charts.length ) { if ( proxy.geometry !== original ) proxy.geometry.dispose(); throw new Error( 'No usable UV islands could be packed.' ); }
 				next = proxy.geometry;
 				if ( atlas.warnings.excludedFaces ) status.textContent = atlas.warnings.excludedFaces + ' degenerate faces were omitted.';
@@ -185,6 +284,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			}
 			if ( geometry !== original ) geometry.dispose();
 			geometry = next;
+			hoveredSeam = undefined;
 			points = reset();
 			undo.length = redo.length = 0;
 			selected = [];
@@ -302,11 +402,14 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		else {
 
 			if ( source() !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
-			if ( ! points.length ) throw new Error( 'Choose an automatic layout first.' );
+			if ( ! points.length && ! dirty ) throw new Error( 'Choose an automatic layout first.' );
 			const next = new THREE.BufferGeometry().copy( geometry );
 			const uv = next.attributes.uv;
 			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
-			uv.needsUpdate = true;
+			if ( uv ) uv.needsUpdate = true;
+			next.userData = { ...geometry.userData };
+			if ( seams.size ) next.userData.uvSeams = [ ...seams ];
+			else delete next.userData.uvSeams;
 			if ( object.userData.modifiers?.length ) {
 
 				try { setModifierStack( editor, object, object.userData.modifiers, next, 'Edit UVs' ); }
@@ -399,6 +502,14 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( active ) { ctx.fillStyle = '#ff9d4526'; ctx.fill(); }
 
 		} );
+		if ( ! warp && points.length && ( seams.size || hoveredSeam ) ) eachEdge( ( a, b, key ) => {
+
+			if ( ! seams.has( key ) && key !== hoveredSeam ) return;
+			ctx.strokeStyle = key === hoveredSeam ? '#ffdc97' : '#f28591';
+			ctx.lineWidth = 2 / view.scale;
+			line( [ a, b ] );
+
+		} );
 		points.forEach( ( point, index ) => {
 
 			ctx.fillStyle = selection.has( index ) ? '#ffae62' : '#8ba4bb';
@@ -440,7 +551,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		}
 		ctx.restore();
 		paintControls.hidden = ! paintTool() && tool !== 'pickColor';
-		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : '';
+		canvas.style.cursor = tool === 'pickColor' || tool === 'seam' ? 'crosshair' : '';
 		shelf.update( tool );
 
 	}
@@ -506,8 +617,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	function restore( from, to ) {
 
 		if ( ! from.length || dragging ) return;
-		to.push( { points, dirty } );
-		( { points, dirty } = from.pop() );
+		to.push( { points, dirty, seams } );
+		( { points, dirty, seams } = from.pop() );
 
 	}
 
@@ -516,13 +627,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( ! selected.length ) return;
 		const center = [ 0, 1 ].map( axis => selected.reduce( ( sum, index ) => sum + points[ index ][ axis ], 0 ) / selected.length );
 		dragging = { mode, at: pointUV( point ), center: pivotSelect.value === 'cursor' ? pivot.slice() : center,
-			before: { points: points.slice(), dirty }, modal };
+			before: { points: points.slice(), dirty, seams }, modal };
 
 	}
 
 	function cancelDrag() {
 
-		if ( dragging?.before ) ( { points, dirty } = dragging.before );
+		if ( dragging?.before ) ( { points, dirty, seams } = dragging.before );
 		if ( dragging?.paint ) {
 
 			dragging.paint.finish( false );
@@ -562,6 +673,17 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		canvas.focus( { preventScroll: true } );
 		if ( dragging?.modal ) { finishDrag(); return; }
 		const point = lastPoint = view.point( event );
+		if ( tool === 'seam' ) {
+
+			const key = points.length ? seamAt( point ) : undefined;
+			if ( ! key ) { status.textContent = points.length ? 'Click a UV edge to mark or clear its seam.' : 'Create a UV layout to pick seams.'; return; }
+			const marked = ! seams.has( key );
+			updateSeams( [ key ], marked );
+			status.textContent = marked ? 'Seam marked.' : 'Seam cleared.';
+			draw();
+			return;
+
+		}
 		if ( tool === 'pickColor' ) {
 
 			const material = editor.getObjectMaterial( object, materialSlot() );
@@ -619,7 +741,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	canvas.onpointermove = event => {
 
 		const point = lastPoint = view.point( event );
-		if ( ! dragging ) { if ( paintTool() ) draw(); return; }
+		if ( ! dragging ) {
+
+			if ( tool === 'seam' ) hoveredSeam = points.length ? seamAt( point ) : undefined;
+			if ( paintTool() || tool === 'seam' ) draw();
+			return;
+
+		}
 		if ( dragging.paint ) {
 
 			const uv = pointUV( point );
@@ -661,7 +789,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	};
 	canvas.onpointercancel = () => { cancelDrag(); draw(); };
 	canvas.onlostpointercapture = () => { if ( dragging && ! dragging.modal ) canvas.onpointercancel(); };
-	canvas.onpointerleave = () => { if ( ! dragging ) { lastPoint = null; draw(); } };
+	canvas.onpointerleave = () => { if ( ! dragging ) { lastPoint = null; hoveredSeam = undefined; draw(); } };
 	canvas.onkeydown = event => {
 
 		const key = event.key.toLowerCase();
@@ -702,6 +830,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( warp || changed !== object || source() === original || dirty ) return;
 		original = geometry = source();
 		points = reset();
+		seams = new Set( geometry.userData.uvSeams || [] );
 		undo.length = redo.length = 0;
 		selected = [];
 		draw();

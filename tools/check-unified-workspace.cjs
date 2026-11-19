@@ -565,6 +565,78 @@ async function checkUVSelection( page ) {
 
 }
 
+async function checkUVSeams( page ) {
+
+	await page.evaluate( () => {
+
+		const object = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), new THREE.MeshStandardMaterial() );
+		editor.addObject( object );
+		editor.select( object );
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
+	const apply = uv.getByRole( 'button', { name: 'Apply', exact: true } );
+	const unwrap = uv.getByRole( 'button', { name: 'Auto layout', exact: true } );
+	await unwrap.click();
+	await apply.click();
+	assert.equal( await page.evaluate( () => editor.selected.geometry.attributes.uv.count ), 4 );
+	await page.evaluate( () => editor.undo() );
+
+	const seam = uv.getByRole( 'button', { name: 'Mark or clear UV seam', exact: true } );
+	await seam.click();
+	const grid = uv.getByLabel( 'UV grid', { exact: true } );
+	const { x, y, width, height } = await grid.boundingBox();
+	const center = [ x + width / 2, y + height / 2 ];
+	await page.mouse.click( ...center );
+	assert.equal( await uv.getByRole( 'status' ).textContent(), 'Seam marked.' );
+	await page.mouse.click( ...center );
+	assert.equal( await uv.getByRole( 'status' ).textContent(), 'Seam cleared.' );
+	await uv.getByRole( 'button', { name: 'Undo UV edit', exact: true } ).click();
+	await unwrap.click();
+	await apply.click();
+
+	assert.deepEqual( await page.evaluate( () => {
+
+		const geometry = new THREE.ObjectLoader().parse( editor.selected.toJSON() ).geometry;
+		const { index, attributes: { uv } } = geometry;
+		const corners = [ 1, 2, 3, 5 ].map( offset => [ uv.getX( index.getX( offset ) ), uv.getY( index.getX( offset ) ) ].join( ',' ) );
+		return [ uv.count, geometry.userData.uvSeams.length, new Set( corners ).size ];
+
+	} ), [ 6, 1, 4 ] );
+	await unwrap.click();
+	await apply.click();
+	assert.equal( await page.evaluate( () => editor.selected.geometry.attributes.uv.count ), 6 );
+	await page.evaluate( () => {
+
+		editor.modeling.setSelectionMode( 'edge' );
+		const points = editor.modeling.data.points;
+		editor.modeling.applyElementSelection( [ [
+			points.findIndex( ( [ x, y ] ) => x === 1 && y === 1 ),
+			points.findIndex( ( [ x, y ] ) => x === -1 && y === -1 )
+		] ], 'set' );
+
+	} );
+	await uv.getByRole( 'button', { name: 'Clear seams on selected 3D edges', exact: true } ).click();
+	assert.equal( await uv.getByRole( 'status' ).textContent(), 'Cleared 1 UV seam.' );
+	await uv.getByRole( 'button', { name: 'Mark selected 3D edges as seams', exact: true } ).click();
+	assert.equal( await uv.getByRole( 'status' ).textContent(), 'Marked 1 UV seam.' );
+	await uv.getByRole( 'button', { name: 'Clear seams on selected 3D edges', exact: true } ).click();
+	await unwrap.click();
+	await apply.click();
+	assert.deepEqual( await page.evaluate( () => {
+
+		const geometry = editor.selected.geometry;
+		const { index, attributes: { uv } } = geometry;
+		const corners = [ 1, 2, 3, 5 ].map( offset => [ uv.getX( index.getX( offset ) ), uv.getY( index.getX( offset ) ) ].join( ',' ) );
+		return [ new Set( corners ).size, Boolean( geometry.userData.uvSeams?.length ) ];
+
+	} ), [ 2, false ] );
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkUVUnwrap( page ) {
 
 	await page.evaluate( () => {
@@ -1933,6 +2005,7 @@ async function check() {
 		await checkCompactPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
+		await checkUVSeams( page );
 		await checkTextureBake( page );
 		await checkProjectorEdgeBlend( page );
 		await checkOrthographicFly( page );

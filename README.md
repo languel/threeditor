@@ -124,6 +124,8 @@ Choose **Editor Type → Image and vector mode** to draw colored shapes and cuto
 
 Try these controls in **DDA Gallery · Lofts and cinema fragments**. Each projector already has a target assigned. To check the physical feed, make a projector the main camera and select **Masked texture** before starting Play. [Gallery walkthrough and sources](editor/examples/gallery/README.md)
 
+- In **UV Editing**, use **Mark or clear UV seam** and click an edge in the UV view. You can also select edges in the 3D pane in Edit Mode and use **Mark selected 3D edges as seams** or **Clear seams on selected 3D edges**. Marked seams appear pink. **Smart unwrap** and **Lightmap pack** cut at the marked edges when you choose **Auto layout**. **Apply** saves the seams with the mesh.
+
 - In **UV Editing → Texture Bake**, choose **Light and shadow guide**, **Scene appearance**, or **Masked projector frame**. Pick the 3D view, a scene camera, or suitable light or projector, and bake at 256, 512, or 1024 pixels. The UV editor previews the result. Download a PNG or add an undoable unlit guide mesh. Use packed UVs for unique surface coverage. The bake is a snapshot of what the source view sees, with occluded texels left transparent. Use WebGL and apply any mesh modifiers first.
 
 ### Measure and draw on receivers

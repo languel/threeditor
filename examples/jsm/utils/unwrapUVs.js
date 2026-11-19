@@ -19,6 +19,7 @@ import { potpack } from '../libs/potpack.module.js';
  * @param {number} [options.padding=4] - Nonnegative gutter in pixels; 2 * padding + 1 must be less than resolution.
  * @param {number} [options.texelsPerUnit=0] - Common world density; zero fits the atlas. Must be nonnegative.
  * @param {boolean} [options.respectUVSeams] - Cut discontinuities in existing uv (normal default).
+ * @param {Function} [options.isSeam] - Return true to cut an edge given its geometry and endpoint indices.
  * @param {boolean} [options.useInputUVs=false] - Preserve valid authored UV charts before trying LSCM.
  * @return {?Object} Atlas size, density, chart bounds, mesh vertex/face mappings and warning
  * counts (excluded faces, tiny faces under 0.01 atlas pixels squared and single-triangle
@@ -183,6 +184,27 @@ function readMesh( mesh, settings ) {
 	}
 
 	const uv = geometry.getAttribute( 'uv' );
+	// Explicit cuts can separate corners that share a buffer vertex, even inside
+	// one connected chart. Join only corners connected by an uncut half-edge.
+	const cornerParents = settings.isSeam && Int32Array.from( { length: count }, ( _, i ) => i );
+	const corner = ( face, slot ) => 3 * face + slot % 3;
+	function find( i ) {
+
+		while ( cornerParents[ i ] !== i ) {
+
+			cornerParents[ i ] = cornerParents[ cornerParents[ i ] ];
+			i = cornerParents[ i ];
+
+		}
+		return i;
+
+	}
+	function join( a, b ) {
+
+		const x = find( a ), y = find( b );
+		if ( x !== y ) cornerParents[ Math.max( x, y ) ] = Math.min( x, y );
+
+	}
 	for ( const edge of edges.values() ) {
 
 		// Pair opposite half-edges by closest normal, so duplicated double-sided shells
@@ -214,13 +236,20 @@ function readMesh( mesh, settings ) {
 
 		for ( const [ a, b ] of pairs ) {
 
+			const av = faces[ a.f ].vertices, bv = faces[ b.f ].vertices;
+			if ( settings.isSeam?.( geometry, av[ a.j ], av[ ( a.j + 1 ) % 3 ] ) ) continue;
 			if ( ( settings.respectUVSeams || settings.useInputUVs ) && uv ) {
 
-				const av = faces[ a.f ].vertices, bv = faces[ b.f ].vertices;
 				if ( ! equalUV( uv, av[ a.j ], bv[ ( b.j + 1 ) % 3 ] ) || ! equalUV( uv, av[ ( a.j + 1 ) % 3 ], bv[ b.j ] ) ) continue;
 
 			}
 
+			if ( cornerParents ) {
+
+				join( corner( a.f, a.j ), corner( b.f, b.j + 1 ) );
+				join( corner( a.f, a.j + 1 ), corner( b.f, b.j ) );
+
+			}
 			faces[ a.f ].neighbors.push( b.f );
 			faces[ b.f ].neighbors.push( a.f );
 
@@ -231,7 +260,9 @@ function readMesh( mesh, settings ) {
 	// UV discontinuities can be cuts inside a connected chart (e.g. a slit
 	// cylinder). Keep the two coincident seam endpoints distinct in the solver.
 	const vertexKeys = welds.map( ( weld, i ) => uv && ( settings.respectUVSeams || settings.useInputUVs ) ? `${ weld },${ uv.getX( i ) },${ uv.getY( i ) }` : weld );
-	return { mesh, original: geometry, points, faces, vertexKeys, faceCharts: new Int32Array( faces.length ).fill( - 1 ) };
+	for ( const [ f, face ] of faces.entries() ) face.keys = face.vertices.map( ( vertex, slot ) =>
+		cornerParents ? find( corner( f, slot ) ) : vertexKeys[ vertex ] );
+	return { mesh, original: geometry, points, faces, faceCharts: new Int32Array( faces.length ).fill( - 1 ) };
 
 }
 
@@ -289,9 +320,9 @@ function parameterize( record, faces, settings, charts ) {
 
 		const face = record.faces[ f ];
 		worldArea += face.area;
-		triangles.push( face.vertices.map( vertex => {
+		triangles.push( face.vertices.map( ( vertex, slot ) => {
 
-			const key = record.vertexKeys[ vertex ];
+			const key = face.keys[ slot ];
 			if ( ! vertexMap.has( key ) ) {
 
 				vertexMap.set( key, positions.length );
@@ -678,7 +709,7 @@ function validateFloat32Chart( chart, settings, density ) {
 function rebuildGeometry( record, charts, settings ) {
 
 	const original = record.original, lookup = new Map(), source = [], values = [], indices = [];
-	const chartUV = ( chart, vertex ) => chart.outputUV[ chart.vertexMap.get( record.vertexKeys[ vertex ] ) ];
+	const chartUV = ( chart, face, slot ) => chart.outputUV[ chart.vertexMap.get( face.keys[ slot ] ) ];
 
 	// Excluded faces collapse onto a welded neighbor's UV so they sample adjacent lighting
 	// rather than the gutter of whichever chart sits at (0, 0). Isolated ones keep (0, 0).
@@ -686,7 +717,7 @@ function rebuildGeometry( record, charts, settings ) {
 	for ( let f = 0; f < record.faces.length; f ++ ) {
 
 		const chart = charts[ record.faceCharts[ f ] ], face = record.faces[ f ];
-		if ( chart ) for ( let j = 0; j < 3; j ++ ) weldUVs.set( face.welds[ j ], chartUV( chart, face.vertices[ j ] ) );
+		if ( chart ) for ( let j = 0; j < 3; j ++ ) weldUVs.set( face.welds[ j ], chartUV( chart, face, j ) );
 
 	}
 
@@ -696,12 +727,12 @@ function rebuildGeometry( record, charts, settings ) {
 		const fallback = chart ? null : face.welds.map( weld => weldUVs.get( weld ) ).find( Boolean ) ?? [ 0, 0 ];
 		for ( let j = 0; j < 3; j ++ ) {
 
-			const vertex = face.vertices[ j ], key = chart ? `${ vertex },${ chartIndex }` : `${ vertex },${ fallback }`;
+			const vertex = face.vertices[ j ], key = chart ? `${ vertex },${ chartIndex },${ face.keys[ j ] }` : `${ vertex },${ fallback }`;
 			if ( ! lookup.has( key ) ) {
 
 				lookup.set( key, source.length );
 				source.push( vertex );
-				const p = chart ? chartUV( chart, vertex ) : fallback;
+				const p = chart ? chartUV( chart, face, j ) : fallback;
 				values.push( p[ 0 ], p[ 1 ] );
 
 			}
