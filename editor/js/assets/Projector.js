@@ -17,6 +17,52 @@ export function projectorOptics( throwRatio, aspect ) {
 
 }
 
+// Composite before the same canvas is uploaded to the light or sent to a display.
+function applyProjectorEdgeBlend( ctx, settings, x, y, width, height ) {
+
+	const percent = value => Math.max( 0, Math.min( 100, Number( value ) || 0 ) ) / 100;
+	const left = percent( settings.blendLeft ) * width;
+	const right = percent( settings.blendRight ) * width;
+	const top = percent( settings.blendTop ) * height;
+	const bottom = percent( settings.blendBottom ) * height;
+	if ( ! ( left || right || top || bottom ) ) return;
+	const gamma = Math.max( .1, Math.min( 5, Number( settings.blendGamma ) || 1 ) );
+	ctx.save();
+	ctx.globalCompositeOperation = 'multiply';
+	const ramp = ( x0, y0, x1, y1, rx, ry, rw, rh ) => {
+
+		const gradient = ctx.createLinearGradient( x0, y0, x1, y1 );
+		for ( let i = 0; i <= 16; i ++ ) {
+
+			const value = Math.round( 255 * ( i / 16 ) ** gamma );
+			gradient.addColorStop( i / 16, 'rgb(' + value + ',' + value + ',' + value + ')' );
+
+		}
+		ctx.fillStyle = gradient;
+		ctx.fillRect( rx, ry, rw, rh );
+
+	};
+	if ( left ) ramp( x, y, x + left, y, x, y, left, height );
+	if ( right ) ramp( x + width, y, x + width - right, y, x + width - right, y, right, height );
+	if ( top ) ramp( x, y, x, y + top, x, y, width, top );
+	if ( bottom ) ramp( x, y + height, x, y + height - bottom, x, y + height - bottom, width, bottom );
+	ctx.restore();
+
+}
+
+const edgeBlendParameters = [
+	'// @param blendLeft = 0 (0..100)',
+	'// @label blendLeft = "Edge blend left (%)"',
+	'// @param blendRight = 0 (0..100)',
+	'// @label blendRight = "Edge blend right (%)"',
+	'// @param blendTop = 0 (0..100)',
+	'// @label blendTop = "Edge blend top (%)"',
+	'// @param blendBottom = 0 (0..100)',
+	'// @label blendBottom = "Edge blend bottom (%)"',
+	'// @param blendGamma = 1 (0.1..5)',
+	'// @label blendGamma = "Edge blend gamma"'
+].join( '\n' );
+
 function projectorRuntime( THREE, root, player ) {
 
 	const canvas = document.createElement( 'canvas' );
@@ -111,6 +157,7 @@ function projectorRuntime( THREE, root, player ) {
 
 		}
 		applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );
+		applyProjectorEdgeBlend( ctx, settings, x, y, w, h );
 		root.projectorOutput = { canvas, source: settings.grid ? null : media, warpSource: root.userData.projectorWarp && warpScratch, x, y, width: w, height: h, tracking: media?.dataset.tracking,
 			trackingHeads: Number( media?.dataset.trackingHeads || 0 ), trackingHands: Number( media?.dataset.trackingHands || 0 ) };
 		texture.needsUpdate = true;
@@ -199,10 +246,12 @@ export function projectorScript( path, video = false, canvasSource = null ) {
 // @label shadows = "Cast shadows"
 // @param grid = ${ ! path && ! canvasSource }
 // @label grid = "Calibration grid"
+${ edgeBlendParameters }
 ${ video ? '// @param playing = true\n// @label playing = "Play video"' : '' }
 ${ canvasSource?.parameters || '' }
 ${ projectorOptics.toString() }
 ${ applyProjectionMask.toString() }
+${ applyProjectorEdgeBlend.toString() }
 ${ drawTargetAperture.toString() }
 ${ warpProjection.toString() }
 ${ projectorRuntime.toString() }
@@ -277,6 +326,22 @@ export function upgradeProjectorScript( script ) {
 			.replace( upload, '\n\t\tapplyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );' + upload );
 
 	}
+	const maskCall = 'applyProjectionMask( ctx, root.userData.projectionMask, x, y, w, h );';
+	const blendCall = 'applyProjectorEdgeBlend( ctx, settings, x, y, w, h );';
+	if ( script.source.includes( maskCall ) && script.source.includes( 'let settings, media;' ) ) {
+
+		if ( ! script.source.includes( 'function applyProjectorEdgeBlend(' ) ) script.source = script.source.replace( runtime, applyProjectorEdgeBlend.toString() + '\n' + runtime );
+		if ( ! script.source.includes( blendCall ) ) script.source = script.source.replace( maskCall, maskCall + '\n\t\t' + blendCall );
+		const missing = edgeBlendParameters.split( '\n' ).filter( line => {
+
+			const [ , annotation, parameter ] = line.split( ' ' );
+			return ! script.source.includes( '// ' + annotation + ' ' + parameter + ' ' );
+
+		} );
+		if ( missing.length ) script.source = missing.join( '\n' ) + '\n' + script.source;
+
+	}
+
 	const dispose = 'delete root.projectorFrame;';
 	if ( ! script.source.includes( 'root.projectorOutput =' ) && script.source.includes( dispose ) ) {
 

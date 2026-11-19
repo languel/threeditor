@@ -6,7 +6,7 @@ import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
 import { AssetLibrary, ASSET_MIME, fileKind, folderPath } from './assets/AssetLibrary.js';
 import { isProjector } from './assets/Projector.js';
-import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia } from './assets/AssetController.js?v=local-view';
+import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia } from './assets/AssetController.js?v=edge-blend';
 import { loadCatalog, mediathequeBase, search, facet, creditLine, state } from './assets/Mediatheque.js';
 import { textureEntries } from './AssetBrowser.js';
 

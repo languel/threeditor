@@ -86,7 +86,7 @@ In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragmen
 
 Select a projector and click **Object → Set as main camera** to use it for Play, presentation, and exports. **Projector output → Rendered lens view** renders the scene from the projector’s position and optics. **Masked texture** sends the fitted source image, video, or animation with its mask applied. Both modes preserve the lens aspect ratio.
 
-Use **Open texture output** on any projector to send its masked texture to a separate live window while you edit. Move the window to the physical projector’s display and double-click the image for fullscreen. The same masked texture continues to light the virtual scene.
+Use **Open texture output** on any projector to send its masked texture to a separate live window while you edit. Move the window to the physical projector’s display and double-click the image for fullscreen. The same masked texture continues to light the virtual scene. For overlapping projectors, set the four **Edge blend** widths and **Edge blend gamma** in the Projector component. Widths are percentages of the lens frame. The fades apply after warp and masks, so virtual lighting and physical texture outputs use the same picture.
 
 Use a lit mesh material such as MeshStandardMaterial for the projection surface. With renderer shadows enabled, turn on **Cast shadow** for blockers and **Receive shadow** for projection surfaces. The projector illuminates lit meshes. Point clouds and Gaussian splats can serve as spatial references.
 

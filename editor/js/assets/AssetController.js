@@ -5,7 +5,7 @@ import { storeSourceFiles, isImageAsset, isImportAsset, isTextureAsset } from '.
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { AddScriptCommand } from '../commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
-import { isProjector, projectorScript } from './Projector.js?v=mask-editor';
+import { isProjector, projectorScript } from './Projector.js?v=edge-blend';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { mathDefinition, mathScript } from './MathObjects.js';
 import { modelScript } from './ModelBehavior.js';

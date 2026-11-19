@@ -584,6 +584,77 @@ async function checkUVUnwrap( page ) {
 
 }
 
+async function checkProjectorEdgeBlend( page ) {
+
+	await page.evaluate( async () => {
+
+		const { projectorScript, upgradeProjectorScript } = await import( new URL( './js/assets/Projector.js?v=edge-blend', document.baseURI ) );
+		const rig = new THREE.Group();
+		rig.name = 'Blend projector';
+		rig.userData.assetObject = { type: 'projector' };
+		rig.userData.projectionMask = { shapes: [
+			{ mode: 'cutout', points: [ [ .68, .4 ], [ .76, .4 ], [ .76, .6 ], [ .68, .6 ] ] }
+		] };
+		const script = projectorScript( null, false, { create: function () {
+
+			const canvas = document.createElement( 'canvas' );
+			canvas.width = canvas.height = 64;
+			const context = canvas.getContext( '2d' );
+			context.fillStyle = '#fff';
+			context.fillRect( 0, 0, 64, 64 );
+			return { canvas, update() {} };
+
+		} } );
+		// Exercise the upgrade path for a saved generated projector.
+		script.source = script.source.replace( /^\/\/ @\w+ blend\w+.*\n/gm, '' )
+			.replace( /function applyProjectorEdgeBlend\([\s\S]*?\n}\n/, '' )
+			.replace( /^\s*applyProjectorEdgeBlend\( ctx, settings, x, y, w, h \);\n/m, '\n' );
+		upgradeProjectorScript( script );
+		const upgraded = script.source;
+		upgradeProjectorScript( script );
+		if ( script.source !== upgraded || ! upgraded.includes( '// @param blendGamma = ' ) ) throw new Error( 'Edge blend upgrade is not idempotent' );
+		script.paramValues = { blendLeft: 20, blendRight: 20, blendTop: 20, blendBottom: 20, blendGamma: 2 };
+		editor.addObject( rig );
+		editor.addScript( rig, script );
+		editor.select( rig );
+		editor.scene.userData.mainCamera = rig.uuid;
+		editor.scene.userData.mainCameraOutput = 'texture';
+
+	} );
+	await page.waitForFunction( () => editor.selected?.projectorOutput?.canvas );
+	const values = await page.evaluate( () => {
+
+		const projector = editor.selected;
+		const { canvas, x, y, width, height } = projector.projectorOutput;
+		const ctx = canvas.getContext( '2d' );
+		const pixel = ( u, v ) => ctx.getImageData( Math.floor( x + width * u ), Math.floor( y + height * v ), 1, 1 ).data[ 0 ];
+		const sample = [ pixel( .1, .5 ), pixel( .9, .5 ), pixel( .5, .1 ), pixel( .5, .9 ), pixel( .1, .1 ), pixel( .5, .5 ), pixel( .72, .5 ) ];
+		const light = projector.children.find( child => child.isSpotLight );
+		return { sample, shared: light.map.image === canvas };
+
+	} );
+	assert.equal( values.shared, true );
+	assert.ok( values.sample.slice( 0, 4 ).every( value => value >= 60 && value <= 68 ), JSON.stringify( values ) );
+	assert.ok( values.sample[ 4 ] >= 13 && values.sample[ 4 ] <= 19 );
+	assert.deepEqual( values.sample.slice( 5 ), [ 255, 0 ] );
+	await page.getByRole( 'button', { name: 'Play Scene', exact: true } ).click();
+	await page.waitForFunction( () => {
+
+		const canvas = document.querySelector( '#player canvas' );
+		if ( ! canvas?.width || ! canvas.height || ! canvas.getClientRects().length ) return false;
+		const side = Math.min( canvas.width, canvas.height );
+		const ctx = canvas.getContext( '2d' );
+		if ( ! ctx ) return false;
+		const x = ( canvas.width - side ) / 2, y = canvas.height / 2;
+		const pixel = u => ctx.getImageData( Math.floor( x + side * u ), Math.floor( y ), 1, 1 ).data[ 0 ];
+		return pixel( .1 ) >= 60 && pixel( .1 ) <= 68 && pixel( .5 ) === 255 && pixel( .72 ) === 0;
+
+	} );
+	await page.getByRole( 'button', { name: 'Stop Scene', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkTextureBake( page ) {
 
 	const rigId = await page.evaluate( () => {
@@ -1797,6 +1868,7 @@ async function check() {
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
 		await checkTextureBake( page );
+		await checkProjectorEdgeBlend( page );
 		await checkOrthographicFly( page );
 		await checkModalTransforms( page );
 		await checkViewportControls( page );

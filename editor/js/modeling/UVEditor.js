@@ -6,7 +6,7 @@ import { lightViewCamera } from './LightView.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
-import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=mask-editor';
+import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=edge-blend';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
