@@ -3,7 +3,7 @@ import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=edge-blend';
+import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=projector-shadows';
 import { applyProjectionMask, appendMaskShape } from './ProjectionMask.js?v=mask-editor';
 
 export function canMaskLight( object ) {

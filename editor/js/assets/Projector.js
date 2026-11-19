@@ -63,6 +63,30 @@ const edgeBlendParameters = [
 	'// @label blendGamma = "Edge blend gamma"'
 ].join( '\n' );
 
+function configureProjectorShadow( light, settings ) {
+
+	const shadow = light.shadow;
+	const size = Number( settings.shadowResolution );
+	shadow.mapSize.setScalar( [ 256, 512, 1024, 2048, 4096 ].includes( size ) ? size : 1024 );
+	shadow.bias = Math.max( -5000, Math.min( 5000, settings.shadowDepthBias ?? -200 ) ) / 1000000;
+	shadow.normalBias = Math.max( 0, Math.min( 1, settings.shadowNormalBias ?? 0 ) );
+	shadow.radius = Math.max( 0, Math.min( 12, settings.shadowRadius ?? 1 ) );
+	shadow.needsUpdate = true;
+
+}
+
+const projectorShadowParameters = [
+	'// @param shadowResolution = "1024"',
+	'// @label shadowResolution = "Shadow map resolution"',
+	'// @options shadowResolution = ["256","512","1024","2048","4096"]',
+	'// @param shadowDepthBias = -200 (-5000..5000)',
+	'// @label shadowDepthBias = "Shadow depth bias (millionths)"',
+	'// @param shadowNormalBias = 0 (0..1)',
+	'// @label shadowNormalBias = "Shadow normal bias"',
+	'// @param shadowRadius = 1 (0..12)',
+	'// @label shadowRadius = "Shadow filter radius"'
+].join( '\n' );
+
 function projectorRuntime( THREE, root, player ) {
 
 	const canvas = document.createElement( 'canvas' );
@@ -74,8 +98,6 @@ function projectorRuntime( THREE, root, player ) {
 	light.position.set( 0, 0, 0 );
 	light.map = texture;
 	light.penumbra = 0.005;
-	light.shadow.bias = - 0.0002;
-	light.shadow.mapSize.set( 1024, 1024 );
 	light.shadow.camera.near = 0.01;
 	light.userData.runtimeOnly = true;
 	light.target.position.z = - 1;
@@ -172,6 +194,7 @@ function projectorRuntime( THREE, root, player ) {
 		light.distance = Math.max( 0.1, next.range );
 		light.decay = next.decay;
 		light.castShadow = next.shadows;
+		configureProjectorShadow( light, next );
 		if ( media?.tagName === 'VIDEO' && next.playing !== wasPlaying ) {
 
 			if ( next.playing ) media.play().catch( () => {} );
@@ -244,6 +267,7 @@ export function projectorScript( path, video = false, canvasSource = null ) {
 // @label decay = "Distance falloff"
 // @param shadows = true
 // @label shadows = "Cast shadows"
+${ projectorShadowParameters }
 // @param grid = ${ ! path && ! canvasSource }
 // @label grid = "Calibration grid"
 ${ edgeBlendParameters }
@@ -252,6 +276,7 @@ ${ canvasSource?.parameters || '' }
 ${ projectorOptics.toString() }
 ${ applyProjectionMask.toString() }
 ${ applyProjectorEdgeBlend.toString() }
+${ configureProjectorShadow.toString() }
 ${ drawTargetAperture.toString() }
 ${ warpProjection.toString() }
 ${ projectorRuntime.toString() }
@@ -284,6 +309,18 @@ ${ canvasSource ? `function update( event ) {
 function stop() { projector?.dispose(); ${ canvasSource ? 'feed?.dispose?.();' : '' } }
 `
 	};
+
+}
+
+function addProjectorParameterDefaults( source, defaults ) {
+
+	const missing = defaults.split( '\n' ).filter( line => {
+
+		const [ , annotation, parameter ] = line.split( ' ' );
+		return ! source.includes( '// ' + annotation + ' ' + parameter + ' ' );
+
+	} );
+	return missing.length ? missing.join( '\n' ) + '\n' + source : source;
 
 }
 
@@ -332,13 +369,16 @@ export function upgradeProjectorScript( script ) {
 
 		if ( ! script.source.includes( 'function applyProjectorEdgeBlend(' ) ) script.source = script.source.replace( runtime, applyProjectorEdgeBlend.toString() + '\n' + runtime );
 		if ( ! script.source.includes( blendCall ) ) script.source = script.source.replace( maskCall, maskCall + '\n\t\t' + blendCall );
-		const missing = edgeBlendParameters.split( '\n' ).filter( line => {
+		script.source = addProjectorParameterDefaults( script.source, edgeBlendParameters );
 
-			const [ , annotation, parameter ] = line.split( ' ' );
-			return ! script.source.includes( '// ' + annotation + ' ' + parameter + ' ' );
+	}
+	const shadowCall = 'light.castShadow = next.shadows;';
+	const shadowSettings = 'configureProjectorShadow( light, next );';
+	if ( script.source.includes( shadowCall ) ) {
 
-		} );
-		if ( missing.length ) script.source = missing.join( '\n' ) + '\n' + script.source;
+		if ( ! script.source.includes( 'function configureProjectorShadow(' ) ) script.source = script.source.replace( runtime, configureProjectorShadow.toString() + '\n' + runtime );
+		if ( ! script.source.includes( shadowSettings ) ) script.source = script.source.replace( shadowCall, shadowCall + '\n\t\t' + shadowSettings );
+		script.source = addProjectorParameterDefaults( script.source, projectorShadowParameters );
 
 	}
 

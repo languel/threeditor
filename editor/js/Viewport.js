@@ -1,8 +1,8 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=edge-blend';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=projector-shadows';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
-import { isProjector } from './assets/Projector.js?v=edge-blend';
+import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 

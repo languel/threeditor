@@ -1,18 +1,18 @@
 import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=edge-blend';
+import { Editor } from './Editor.js?v=projector-shadows';
 import { Keymap } from './Keymap.js?v=script-window';
 import { ModalTransform } from './ModalTransform.js?v=held-alt-constraint';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=color-sampler';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=edge-blend';
+import { Viewport } from './Viewport.js?v=projector-shadows';
 import { Toolbar } from './Toolbar.js?v=pencil-placement';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=edge-blend';
-import { Menubar } from './Menubar.js?v=edge-blend';
+import { Sidebar } from './Sidebar.js?v=projector-shadows';
+import { Menubar } from './Menubar.js?v=projector-shadows';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=held-alt-constraint';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';

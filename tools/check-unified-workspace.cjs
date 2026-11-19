@@ -588,7 +588,7 @@ async function checkProjectorEdgeBlend( page ) {
 
 	await page.evaluate( async () => {
 
-		const { projectorScript, upgradeProjectorScript } = await import( new URL( './js/assets/Projector.js?v=edge-blend', document.baseURI ) );
+		const { projectorScript, upgradeProjectorScript } = await import( new URL( './js/assets/Projector.js?v=projector-shadows', document.baseURI ) );
 		const rig = new THREE.Group();
 		rig.name = 'Blend projector';
 		rig.userData.assetObject = { type: 'projector' };
@@ -606,13 +606,15 @@ async function checkProjectorEdgeBlend( page ) {
 
 		} } );
 		// Exercise the upgrade path for a saved generated projector.
-		script.source = script.source.replace( /^\/\/ @\w+ blend\w+.*\n/gm, '' )
+		script.source = script.source.replace( /^\/\/ @\w+ (?:blend|shadow(?:Resolution|DepthBias|NormalBias|Radius))\w*.*\n/gm, '' )
 			.replace( /function applyProjectorEdgeBlend\([\s\S]*?\n}\n/, '' )
 			.replace( /^\s*applyProjectorEdgeBlend\( ctx, settings, x, y, w, h \);\n/m, '\n' );
+		script.source = script.source.replace( /function configureProjectorShadow\([\s\S]*?\n}\n/, '' )
+			.replace( /^\s*configureProjectorShadow\( light, next \);\n/m, '\n' );
 		upgradeProjectorScript( script );
 		const upgraded = script.source;
 		upgradeProjectorScript( script );
-		if ( script.source !== upgraded || ! upgraded.includes( '// @param blendGamma = ' ) ) throw new Error( 'Edge blend upgrade is not idempotent' );
+		if ( script.source !== upgraded || ! upgraded.includes( '// @param blendGamma = ' ) || ! upgraded.includes( '// @options shadowResolution = ' ) ) throw new Error( 'Edge blend upgrade is not idempotent' );
 		script.paramValues = { blendLeft: 20, blendRight: 20, blendTop: 20, blendBottom: 20, blendGamma: 2 };
 		editor.addObject( rig );
 		editor.addScript( rig, script );
@@ -630,10 +632,26 @@ async function checkProjectorEdgeBlend( page ) {
 		const pixel = ( u, v ) => ctx.getImageData( Math.floor( x + width * u ), Math.floor( y + height * v ), 1, 1 ).data[ 0 ];
 		const sample = [ pixel( .1, .5 ), pixel( .9, .5 ), pixel( .5, .1 ), pixel( .5, .9 ), pixel( .1, .1 ), pixel( .5, .5 ), pixel( .72, .5 ) ];
 		const light = projector.children.find( child => child.isSpotLight );
-		return { sample, shared: light.map.image === canvas };
+		return { sample, shared: light.map.image === canvas, bias: light.shadow.bias, size: light.shadow.mapSize.x };
 
 	} );
 	assert.equal( values.shared, true );
+	assert.deepEqual( [ values.bias, values.size ], [ -.0002, 1024 ] );
+	await page.locator( '.Tab#scriptTab' ).click();
+	await page.getByLabel( 'Shadow map resolution', { exact: true } ).selectOption( '512' );
+	for ( const [ name, value ] of [ [ 'Shadow depth bias (millionths)', '-350' ], [ 'Shadow normal bias', '0.025' ], [ 'Shadow filter radius', '3' ] ] ) {
+
+		const control = page.getByLabel( name, { exact: true } );
+		await control.fill( value );
+		await control.press( 'Enter' );
+
+	}
+	assert.deepEqual( await page.evaluate( () => {
+
+		const { shadow } = editor.selected.children.find( child => child.isSpotLight );
+		return [ shadow.mapSize.toArray(), shadow.bias, shadow.normalBias, shadow.radius ];
+
+	} ), [ [ 512, 512 ], -.00035, .025, 3 ] );
 	assert.ok( values.sample.slice( 0, 4 ).every( value => value >= 60 && value <= 68 ), JSON.stringify( values ) );
 	assert.ok( values.sample[ 4 ] >= 13 && values.sample[ 4 ] <= 19 );
 	assert.deepEqual( values.sample.slice( 5 ), [ 255, 0 ] );

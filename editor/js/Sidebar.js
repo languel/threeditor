@@ -5,7 +5,7 @@ import { SidebarProperties } from './Sidebar.Properties.js?v=pencil-guides';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';
 import { SidebarStreams } from './Sidebar.Streams.js';
-import { SidebarAssets } from './Sidebar.Assets.js?v=edge-blend';
+import { SidebarAssets } from './Sidebar.Assets.js?v=projector-shadows';
 
 function Sidebar( editor ) {
 

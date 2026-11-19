@@ -88,7 +88,7 @@ Select a projector and click **Object → Set as main camera** to use it for Pla
 
 Use **Open texture output** on any projector to send its masked texture to a separate live window while you edit. Move the window to the physical projector’s display and double-click the image for fullscreen. The same masked texture continues to light the virtual scene. For overlapping projectors, set the four **Edge blend** widths and **Edge blend gamma** in the Projector component. Widths are percentages of the lens frame. The fades apply after warp and masks, so virtual lighting and physical texture outputs use the same picture.
 
-Use a lit mesh material such as MeshStandardMaterial for the projection surface. With renderer shadows enabled, turn on **Cast shadow** for blockers and **Receive shadow** for projection surfaces. The projector illuminates lit meshes. Point clouds and Gaussian splats can serve as spatial references.
+Use a lit mesh material such as MeshStandardMaterial for the projection surface. With renderer shadows enabled, turn on **Cast shadow** for blockers and **Receive shadow** for projection surfaces. The projector illuminates lit meshes. The Projector component also exposes **Shadow map resolution**, **Shadow depth bias (millionths)**, **Shadow normal bias**, and **Shadow filter radius**. The filter radius follows the shadow filter selected in Project renderer settings. Point clouds and Gaussian splats can serve as spatial references.
 
 Named browser saves and playable exports retain projector settings and source media. **Editable HTML** also retains source files for continued editing.
 
