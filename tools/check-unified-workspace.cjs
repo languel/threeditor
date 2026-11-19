@@ -406,6 +406,89 @@ async function checkOrthographicFly( page ) {
 
 }
 
+async function checkModalTransforms( page ) {
+
+	const view = await page.evaluate( () => {
+
+		const cube = new THREE.Mesh( new THREE.BoxGeometry( 2, 2, 2 ), new THREE.MeshStandardMaterial() );
+		const target = new THREE.Mesh( new THREE.BoxGeometry( .2, .2, .2 ), new THREE.MeshStandardMaterial() );
+		target.position.x = 2.15;
+		editor.addObject( cube );
+		editor.addObject( target );
+		editor.select( cube );
+		editor.camera.position.set( 0, 0, 9 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		editor.config.setKey( 'settings/transformSnapTarget', 'object' );
+		editor.config.setKey( 'settings/transformSnap', null );
+		const { left, top, width, height } = editor.modeling.rect();
+		const point = new THREE.Vector3( 2.15, 0, 0 ).project( editor.camera );
+		return { x: left + width / 2, y: top + height / 2, targetX: left + ( point.x + 1 ) * width / 2 };
+
+	} );
+	const pose = () => page.evaluate( () => [ editor.selected.position.toArray(), editor.selected.rotation.toArray().slice( 0, 3 ) ] );
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'g' );
+	await page.mouse.down( { button: 'middle' } );
+	await page.mouse.move( view.x + 26, view.y, { steps: 4 } );
+	await page.mouse.up( { button: 'middle' } );
+	await page.mouse.move( view.x + 43, view.y + 23, { steps: 4 } );
+	const [ constrained ] = await pose();
+	assert.ok( constrained[ 0 ] > .1 );
+	assert.equal( constrained[ 1 ], 0 );
+	await page.keyboard.press( 'Escape' );
+
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'r' );
+	await page.keyboard.press( 'r' );
+	await page.mouse.move( view.x + 32, view.y + 21, { steps: 4 } );
+	const [ , rotation ] = await pose();
+	assert.ok( Math.abs( rotation[ 0 ] ) > .08 && Math.abs( rotation[ 1 ] ) > .08 );
+	await page.keyboard.press( 'g' );
+	await page.keyboard.press( 'x' );
+	await page.keyboard.press( '1' );
+	await page.keyboard.press( 'Enter' );
+	assert.deepEqual( await pose(), [ [ 1, 0, 0 ], rotation ] );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await pose(), [ [ 0, 0, 0 ], [ 0, 0, 0 ] ] );
+
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'g' );
+	await page.keyboard.press( 'b' );
+	await page.mouse.click( view.x, view.y );
+	await page.mouse.move( view.targetX, view.y, { steps: 5 } );
+	const [ snapped ] = await pose();
+	assert.ok( Math.abs( snapped[ 0 ] - 2.15 ) < .01 && Math.abs( snapped[ 2 ] + 1 ) < .01 );
+	await page.keyboard.down( 'Control' );
+	assert.ok( Math.abs( ( await pose() )[ 0 ][ 2 ] ) < .01 );
+	await page.keyboard.up( 'Control' );
+	assert.ok( Math.abs( ( await pose() )[ 0 ][ 2 ] + 1 ) < .01 );
+	await page.keyboard.press( 'Escape' );
+	await page.evaluate( () => {
+
+		editor.config.setKey( 'settings/transformSnap', null );
+		editor.config.setKey( 'settings/transformSnapTarget', 'grid' );
+		editor.viewTools.setWorkspaceMode( 'edit' );
+		editor.modeling.selectPoints( true );
+
+	} );
+	await page.mouse.move( view.x, view.y );
+	await page.keyboard.press( 'r' );
+	await page.keyboard.press( 'r' );
+	await page.mouse.move( view.x + 30, view.y + 20, { steps: 4 } );
+	const draft = await page.evaluate( () => editor.modeling.gesture.draft.points );
+	assert.equal( await page.evaluate( () => editor.modeling.gesture.trackball ), true );
+	assert.ok( await page.evaluate( () => editor.modeling.pointsChanged( editor.modeling.gesture ) ) );
+	await page.keyboard.press( 'g' );
+	await page.keyboard.press( 'x' );
+	await page.keyboard.press( '1' );
+	await page.keyboard.press( 'Enter' );
+	const moved = await page.evaluate( () => editor.modeling.data.points );
+	assert.ok( moved.every( ( point, i ) => Math.abs( point[ 0 ] - draft[ i ][ 0 ] - 1 ) < 1e-6 ) );
+	await page.evaluate( () => { editor.undo(); editor.clear(); } );
+
+}
+
 async function checkViewportControls( page ) {
 
 	await page.evaluate( () => {
@@ -1313,6 +1396,7 @@ async function check() {
 		await checkUVUnwrap( page );
 		await checkTextureBake( page );
 		await checkOrthographicFly( page );
+		await checkModalTransforms( page );
 		await checkViewportControls( page );
 		await checkActiveSelection( page );
 		await checkAddPrimitives( page );

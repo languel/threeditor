@@ -34,7 +34,7 @@ import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=splat-filters';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=ortho-fly';
+import { ModelViewport } from './modeling/ModelViewport.js?v=modal-transform';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

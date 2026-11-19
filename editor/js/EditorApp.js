@@ -3,12 +3,12 @@ import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=splat-filters';
 import { Keymap } from './Keymap.js?v=pencil-layout';
-import { ModalTransform } from './ModalTransform.js?v=unified-sync';
+import { ModalTransform } from './ModalTransform.js?v=modal-transform';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=unified-sync';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=splat-filters';
+import { Viewport } from './Viewport.js?v=modal-transform';
 import { Toolbar } from './Toolbar.js?v=pencil-layout';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=component-layout';

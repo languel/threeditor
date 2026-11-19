@@ -17,6 +17,7 @@ import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
+import { automaticAxis, modalSnapMode, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './TransformGesture.js';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
 
 
@@ -109,12 +110,40 @@ export class ModelViewport {
 		}, true );
 		window.addEventListener( 'pointerdown', event => {
 
-			if ( ! this.gesture?.modal || ! [ 0, 2 ].includes( event.button ) || ! viewport.contains( event.target ) ) return;
+			const state = this.gesture;
+			if ( ! state?.modal || ! [ 0, 1, 2 ].includes( event.button ) || ! viewport.contains( event.target ) ) return;
+			if ( event.button === 1 && state.extrusion ) return;
 			if ( this.gesture.extrusion && ( event.target !== editor.renderer?.domElement || editor.viewLayout.at( event.clientX, event.clientY ) !== editor.viewLayout.navigation ) ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( event.button === 2 ) editor.suppressContextMenuUntil = performance.now() + 500;
+			if ( event.button === 1 ) {
+
+				if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ! state.pickingBase ) state.auto = {
+					clientX: event.clientX, clientY: event.clientY, plane: event.shiftKey && state.mode !== 'rotate'
+				};
+				return;
+
+			}
+			if ( state.pickingBase ) {
+
+				if ( event.button === 2 ) state.pickingBase = false;
+				else if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame ) this.pickModalSnapBase( event );
+				this.labelModal();
+				return;
+
+			}
 			this.finishTransform( event.button === 0 );
+
+		}, true );
+		window.addEventListener( 'pointerup', event => {
+
+			if ( event.button === 1 && this.gesture?.auto ) this.gesture.auto = null;
+
+		}, true );
+		window.addEventListener( 'keyup', event => {
+
+			if ( this.gesture?.modal && ! this.gesture.extrusion && [ 'Shift', 'Control' ].includes( event.key ) ) this.updateModal( this.modalPointer( event ) );
 
 		}, true );
 		signals.geometryChanged.add( object => {
@@ -1059,13 +1088,20 @@ export class ModelViewport {
 
 			const axes = [ 'X', 'Y', 'Z' ].filter( name => ( axis || 'XYZ' ).includes( name ) )
 				.map( name => new THREE.Vector3().setComponent( 'XYZ'.indexOf( name ), 1 ).applyQuaternion( state.rotation ) );
-			if ( axes.length && ! state.numeric ) this.proxy.position.copy( this.snapPoint( this.proxy.position, state.origin, pointer, axes, state ) );
+			if ( axes.length && ! state.numeric ) {
+
+				const base = state.snapBase || state.origin;
+				const offset = base.clone().sub( state.origin );
+				const target = this.snapPoint( this.proxy.position.clone().add( offset ), base, pointer, axes, state );
+				this.proxy.position.copy( target ).sub( offset );
+
+			}
 			else state.snap = null;
 
 		}
 		this.proxy.updateMatrix();
 		const delta = new THREE.Matrix4().multiplyMatrices( this.proxy.matrix, state.inverse );
-		const points = this.data.points.map( ( point, index ) => {
+		const points = ( state.basePoints || this.data.points ).map( ( point, index ) => {
 
 			if ( ! state.selected.has( index ) ) return point;
 			const world = this.object.localToWorld( new THREE.Vector3( ...point ) ).applyMatrix4( delta );
@@ -1154,28 +1190,103 @@ export class ModelViewport {
 			return;
 
 		}
-		const name = { translate: 'Move points', rotate: 'Rotate points', scale: 'Scale points' }[ mode ];
-		this.notice.textContent = [ name, axis, numeric, 'X/Y/Z axis · type a value · Enter accept · Esc cancel' ].filter( Boolean ).join( ' · ' );
+		const state = this.gesture;
+		const name = state.trackball ? 'Trackball' : { translate: 'Move points', rotate: 'Rotate points', scale: 'Scale points' }[ mode ];
+		const base = state.pickingBase ? 'Click a selected point or surface to set the snap base' : mode === 'translate' ?
+			( state.snapBase ? 'B change snap base' : 'B set snap base' ) : '';
+		this.notice.textContent = [ name, axis, numeric, base, this.planar ? transformHints.replace( 'R twice trackball · ', '' ) : transformHints ].filter( Boolean ).join( ' · ' );
+
+	}
+
+	modalPointer( event ) {
+
+		const pointer = this.lastPointer || this.gesture.pointer;
+		return pointer && { clientX: pointer.clientX, clientY: pointer.clientY, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey };
+
+	}
+
+	rebaseModal( pointer ) {
+
+		const state = this.gesture;
+		state.basePoints = state.draft?.points || this.data.points;
+		state.origin.copy( this.proxy.position );
+		this.proxy.quaternion.copy( state.rotation );
+		this.proxy.scale.setScalar( 1 );
+		this.proxy.updateMatrix();
+		state.inverse.copy( this.proxy.matrix ).invert();
+		state.pointer = pointer;
+		state.numeric = '';
+
+	}
+
+	pickModalSnapBase( event ) {
+
+		const state = this.gesture, rect = this.rect();
+		let distance = 14, base;
+		for ( const index of state.selected ) {
+
+			const point = ( state.draft || this.data ).points[ index ];
+			const pixel = this.project( point, rect.width, rect.height );
+			if ( ! pixel ) continue;
+			const error = Math.hypot( event.clientX - rect.left - pixel[ 0 ], event.clientY - rect.top - pixel[ 1 ] );
+			if ( error < distance ) { distance = error; base = this.object.localToWorld( new THREE.Vector3( ...point ) ); }
+
+		}
+		base ||= this.withPreview( () => transformFeature( this.editor, this.frame, event, 'face', null, object => object === this.object ) );
+		if ( ! base ) return;
+		this.lastPointer = event;
+		this.rebaseModal( event );
+		state.snapBase = base;
+		state.pickingBase = false;
+		if ( this.editor.config.getKey( 'settings/transformSnap' ) == null ) this.editor.toggleTransformSnap?.();
 
 	}
 
 	modalKey( event ) {
 
-		if ( [ 'Control', 'Shift', 'Alt', 'Meta' ].includes( event.key ) ) return;
+		if ( [ 'Alt', 'Meta' ].includes( event.key ) ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		const state = this.gesture, key = event.key.toLowerCase();
-		if ( key === 'enter' || key === 'escape' ) { this.finishTransform( key === 'enter' ); return; }
-		if ( key === 'n' && state.extrusion ) { state.axis = ''; state.free = ! state.free; }
-		else if ( 'xyz'.includes( key ) && key.length === 1 ) {
+		const pointer = this.modalPointer( event );
+		if ( key === 'enter' || key === 'escape' ) {
+
+			if ( state.pickingBase ) { state.pickingBase = false; this.labelModal(); return; }
+			this.finishTransform( key === 'enter' );
+			return;
+
+		}
+		if ( ! state.extrusion && ! event.repeat && transformModes.has( key ) ) {
+
+			const next = transformModes.get( key );
+			if ( next === state.mode && state.mode !== 'rotate' ) return;
+			state.trackball = ! this.planar && next === state.mode && state.mode === 'rotate' && ! state.trackball;
+			state.mode = next;
+			state.axis = '';
+			state.auto = state.snapBase = null;
+			state.pickingBase = false;
+			this.rebaseModal( pointer );
+			this.labelModal();
+			return;
+
+		} else if ( ! state.extrusion && key === 'b' && state.mode === 'translate' && ! event.repeat ) state.pickingBase = ! state.pickingBase;
+		else if ( ! state.extrusion && key === 'tab' && event.shiftKey && ! event.repeat ) this.editor.toggleTransformSnap?.();
+		else if ( key === 'n' && state.extrusion ) { state.axis = ''; state.free = ! state.free; }
+		else if ( 'xyz'.includes( key ) && key.length === 1 && ! event.repeat ) {
 
 			const axis = ! state.extrusion && event.shiftKey && state.mode !== 'rotate' ? 'XYZ'.replace( key.toUpperCase(), '' ) : key.toUpperCase();
 			state.axis = state.axis === axis ? '' : axis;
+			state.trackball = false;
 
-		} else if ( key === 'backspace' ) state.numeric = state.numeric.slice( 0, -1 );
-		else if ( /^[-.0-9]$/.test( key ) ) state.numeric += key;
+		} else {
+
+			const input = transformNumber( state.numeric, key );
+			if ( state.trackball && input !== state.numeric && input ) state.trackball = false;
+			state.numeric = input;
+
+		}
 		this.labelModal();
-		this.updateModal( this.lastPointer );
+		this.updateModal( pointer );
 
 	}
 
@@ -1183,14 +1294,28 @@ export class ModelViewport {
 
 		const state = this.gesture;
 		if ( state.extrusion ) { this.updateExtrusion( pointer ); return; }
+		if ( state.pickingBase ) return;
+		if ( state.auto ) {
+
+			const lock = automaticAxis( this.frame, state.origin, state.rotation, state.auto, pointer, state.auto.plane );
+			if ( lock ) {
+
+				state.axis = state.auto.plane ? 'XYZ'.replace( lock, '' ) : lock;
+				state.trackball = false;
+				this.labelModal();
+
+			}
+
+		}
 		const start = state.pointer;
-		const dx = pointer.clientX - start.clientX;
-		const dy = start.clientY - pointer.clientY;
+		const precision = pointer.shiftKey ? .1 : 1;
+		const dx = ( pointer.clientX - start.clientX ) * precision;
+		const dy = ( start.clientY - pointer.clientY ) * precision;
 		const value = state.numeric ? Number( state.numeric ) : NaN;
 		const view = this.frame.camera.getWorldDirection( new THREE.Vector3() );
 		const axis = state.axis.length === 1 ? new THREE.Vector3().setComponent( 'XYZ'.indexOf( state.axis ), 1 )
 			.applyQuaternion( state.rotation ) : null;
-		const snap = modelSnapMode( this.editor.config, pointer.ctrlKey );
+		const snap = modalSnapMode( this.editor.config, pointer.ctrlKey );
 		const step = Number.isFinite( snap ) || snap === 'grid' || snap === 'increment';
 		const nearest = ( value, increment ) => step ? Math.round( value / increment ) * increment : value;
 		this.proxy.position.copy( state.origin );
@@ -1202,7 +1327,7 @@ export class ModelViewport {
 			const from = this.pointerWorld( start.clientX, start.clientY, plane );
 			const to = this.pointerWorld( pointer.clientX, pointer.clientY, plane );
 			if ( ! from || ! to ) return;
-			const delta = to.sub( from ).applyQuaternion( state.rotation.clone().invert() );
+			const delta = to.sub( from ).multiplyScalar( precision ).applyQuaternion( state.rotation.clone().invert() );
 			if ( state.axis ) for ( const component of 'XYZ' ) {
 
 				if ( ! state.axis.includes( component ) ) delta[ component.toLowerCase() ] = 0;
@@ -1222,7 +1347,8 @@ export class ModelViewport {
 			const angle = Number.isFinite( value ) ? THREE.MathUtils.degToRad( value ) : nearest( dx * 0.01, Math.PI / 12 );
 			const normal = axis || ( this.planar ? new THREE.Vector3( 0, 0, 1 ).applyNormalMatrix(
 				new THREE.Matrix3().getNormalMatrix( this.object.matrixWorld ) ) : view.negate() );
-			this.proxy.quaternion.premultiply( new THREE.Quaternion().setFromAxisAngle( normal, angle ) );
+			const delta = state.trackball ? trackballDelta( this.frame.camera, dx, -dy ) : new THREE.Quaternion().setFromAxisAngle( normal, angle );
+			this.proxy.quaternion.premultiply( delta );
 
 		} else {
 
@@ -1573,8 +1699,8 @@ export class ModelViewport {
 	snapPoint( point, reference, event, axes, state ) {
 
 		const config = this.editor.config;
-		if ( this.pen && event.ctrlKey ) { state.snap = null; return point; }
-		const mode = modelSnapMode( config, event.ctrlKey );
+		if ( this.pen && event.ctrlKey && ! state.modal ) { state.snap = null; return point; }
+		const mode = state.modal && ! state.extrusion ? modalSnapMode( config, event.ctrlKey ) : modelSnapMode( config, event.ctrlKey );
 		if ( ! mode ) { state.snap = null; return point; }
 		if ( mode === 'grid' || mode === 'increment' || Number.isFinite( mode ) ) {
 
