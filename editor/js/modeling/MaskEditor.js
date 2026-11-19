@@ -25,7 +25,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	let reference, referenceFile, referenceRequest, referenceURL;
 	let referencePath = vectorMode ? initial?.referencePath : undefined;
 	let includeReference = vectorMode && initial?.includeReference === true;
-	let updateReferenceControls;
+	let updateReferenceControls, referencePicker;
 	let referenceVisible = true;
 	let guideCenter = [ .5, .5 ];
 	let shapes = maskShapes( initial ), active = shapes.length - 1, vertex = -1, tool = 'edit', draft = [], gesture;
@@ -211,7 +211,17 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		upload.type = 'file';
 		upload.accept = 'image/*';
 		upload.hidden = true;
-		modelButton( media, 'Open reference image', 'assets', () => upload.click() );
+		modelButton( media, 'Open reference image', 'page', () => upload.click() );
+		modelButton( media, 'Choose reference from assets', 'assets', () => {
+
+			const assets = editor.assetBrowser;
+			const picker = referencePicker = {
+				kind: 'reference',
+				onPick: ( { file, path } ) => loadReference( file, path, () => assets.picker === picker )
+			};
+			assets.open( picker );
+
+		} );
 		const toggle = modelButton( media, 'Show reference image', 'scene', () => {
 
 			referenceVisible = ! referenceVisible;
@@ -222,6 +232,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		toggle.setAttribute( 'aria-pressed', 'true' );
 		const clearReference = modelButton( media, 'Remove reference image', 'erase', () => {
 
+			cancelReferencePicker();
 			cancelReferenceLoad();
 			reference = referenceFile = referencePath = undefined;
 			includeReference = false;
@@ -232,19 +243,28 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		} );
 		const include = modelField( media, 'Include reference in output', 'export', 'checkbox', includeReference );
 		include.onchange = () => { includeReference = include.checked; };
+		const referenceName = node( 'small', media );
 		updateReferenceControls = () => {
 
 			toggle.disabled = ! reference;
 			clearReference.disabled = ! reference && ! referencePath;
 			include.disabled = ! reference;
 			include.checked = includeReference;
+			referenceName.textContent = referenceFile?.name || referencePath?.split( '/' ).pop() || '';
+			referenceName.title = referencePath || referenceName.textContent;
+			referenceName.hidden = ! referenceName.textContent;
 
 		};
 		updateReferenceControls();
 		upload.onchange = () => {
 
 			const file = upload.files[ 0 ];
-			if ( file ) loadReference( file );
+			if ( file ) {
+
+				cancelReferencePicker();
+				loadReference( file );
+
+			}
 			upload.value = '';
 
 		};
@@ -254,37 +274,48 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	}
 
+	function cancelReferencePicker() {
+
+		if ( referencePicker && editor.assetBrowser.picker === referencePicker ) editor.assetBrowser.cancelPicker();
+		referencePicker = undefined;
+
+	}
+
 	function cancelReferenceLoad() {
 
 		if ( ! referenceRequest ) return;
-		referenceRequest.onload = referenceRequest.onerror = null;
 		URL.revokeObjectURL( referenceURL );
 		referenceRequest = referenceURL = undefined;
 
 	}
 
-	function loadReference( file, path ) {
+	async function loadReference( file, path, canApply = () => true ) {
 
 		cancelReferenceLoad();
 		const image = referenceRequest = new Image();
-		image.onload = () => {
+		image.src = referenceURL = URL.createObjectURL( file );
+		try {
 
-			cancelReferenceLoad();
+			await image.decode();
+			if ( referenceRequest !== image || ! canApply() ) return false;
 			reference = image;
 			referenceFile = file;
 			referencePath = path;
 			updateReferenceControls();
 			status.textContent = 'Reference image loaded.';
 			draw();
+			return true;
 
-		};
-		image.onerror = () => {
+		} catch {
 
-			cancelReferenceLoad();
-			status.textContent = 'The reference image could not be decoded.';
+			if ( referenceRequest === image && canApply() ) status.textContent = 'The reference image could not be decoded.';
+			return false;
 
-		};
-		image.src = referenceURL = URL.createObjectURL( file );
+		} finally {
+
+			if ( referenceRequest === image ) cancelReferenceLoad();
+
+		}
 
 	}
 
@@ -987,6 +1018,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		clearInterval( tick );
 		cancelReferenceLoad();
+		cancelReferencePicker();
 
 	} );
 	refresh();

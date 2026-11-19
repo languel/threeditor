@@ -22,6 +22,7 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 export const isMovingAsset = record => [ 'video', 'webcam' ].includes( record.kind ) || ( record.kind === 'animation' && !! ( record.abs?.video || /\.(mp4|webm|mov)(?:$|[?#])/i.test( record.url || record.file?.name || '' ) ) );
 export const isMapAsset = record => isMovingAsset( record ) || [ 'image', 'texture', 'animation' ].includes( record.kind );
 export const isStillInput = record => [ 'image', 'texture' ].includes( record.kind ) && ( ! record.file || isImageAsset( record.file ) );
+export const isReferenceImage = record => ! record.texture && isStillInput( record );
 export const isProjectorMedia = record => record.kind !== 'webcam' && isMovingAsset( record ) ||
 	( [ 'image', 'texture', 'animation' ].includes( record.kind ) && ! record.texture && ( ! record.file || isImageAsset( record.file ) ) );
 export const isInputAsset = record => isMovingAsset( record ) || isStillInput( record ) || [ 'audio', 'microphone' ].includes( record.kind );
@@ -137,6 +138,7 @@ export class AssetController {
 		const epoch = this.epoch, picker = mode === 'texture' ? null : this.picker;
 		object ||= this.editor.selected;
 		const record = await this.record( id );
+		if ( picker?.kind === 'reference' && ! isReferenceImage( record ) ) throw new Error( 'Choose a still image file as the reference.' );
 		if ( record.kind === 'file' ) throw new Error( 'This format is available as a link or download; it has no scene importer.' );
 		const entry = await this.materialize( id );
 		const canCommit = () => epoch === this.epoch;
@@ -147,8 +149,9 @@ export class AssetController {
 			if ( picker.kind === 'projector' && ! isProjectorMedia( record ) ) throw new Error( 'Choose an image or video file for the projector.' );
 			if ( picker.kind === 'input' && ! isInputAsset( record ) ) throw new Error( 'Choose a media input asset.' );
 			if ( picker.kind === 'import' && ( ! entry.file || ! isImportAsset( entry.file ) ) ) throw new Error( 'Choose a supported scene file.' );
-			await picker.onPick( entry );
-			if ( picker === this.picker ) this.cancelPicker();
+			if ( picker.kind === 'reference' && ( ! entry.path || ! entry.file || ! isImageAsset( entry.file ) ) ) throw new Error( 'Choose a supported reference image file.' );
+			const accepted = await picker.onPick( entry );
+			if ( picker === this.picker && ( picker.kind !== 'reference' || accepted ) ) this.cancelPicker();
 			return;
 		}
 		if ( record.kind === 'microphone' ) return this.editor.assignMediaAsset( entry );

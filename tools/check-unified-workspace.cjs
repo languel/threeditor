@@ -2138,6 +2138,49 @@ async function checkDrawingAssets( page ) {
 	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
 	assert.equal( await page.evaluate( () => editor.scene.userData.vectorDrawing.referencePath ), undefined );
 
+	const pick = ui.getByRole( 'button', { name: 'Choose reference from assets' } );
+	const pickerPanel = page.locator( '.asset-picker' ).filter( { hasText: 'Choose a reference image' } );
+	const card = title => page.getByRole( 'listitem', { name: title, exact: true } );
+	await page.evaluate( () => {
+
+		for ( const [ name, type ] of [ [ 'broken.png', 'image/png' ], [ 'audio.wav', 'audio/wav' ] ] ) {
+
+			const file = new File( [ 'invalid data' ], name, { type } );
+			editor.sourceFiles.set( name, { file, batch: [ name ] } );
+
+		}
+		editor.signals.assetsChanged.dispatch();
+
+	} );
+	await pick.click();
+	await pickerPanel.waitFor();
+	await card( 'broken.png' ).waitFor();
+	assert.equal( await card( 'audio.wav' ).count(), 0 );
+	await card( 'broken.png' ).click();
+	await status.getByText( 'The reference image could not be decoded.', { exact: true } ).waitFor();
+	assert.equal( await pickerPanel.isVisible(), true );
+	const filesBeforePick = await page.evaluate( () => Array.from( editor.sourceFiles.keys() ) );
+	await card( 'reference.png' ).click();
+	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	await pickerPanel.waitFor( { state: 'hidden' } );
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	assert.deepEqual( await page.evaluate( () => [ editor.scene.userData.vectorDrawing.referencePath, Array.from( editor.sourceFiles.keys() ) ] ), [ 'reference.png', filesBeforePick ] );
+
+	await pick.click();
+	await pickerPanel.waitFor();
+	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await pickerPanel.waitFor( { state: 'hidden' } );
+	await page.getByLabel( 'Editor Type', { exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
+	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	await page.evaluate( () => {
+
+		editor.sourceFiles.delete( 'broken.png' );
+		editor.sourceFiles.delete( 'audio.wav' );
+		editor.signals.assetsChanged.dispatch();
+
+	} );
+
 	await page.waitForFunction( () => editor.assetBrowser.records.has( 'project:drawing.png' ) );
 	await page.evaluate( () => {
 
@@ -2171,6 +2214,7 @@ async function checkDrawingAssets( page ) {
 	} );
 	await page.waitForFunction( () => editor.scene.getObjectByName( 'Drawing asset projector' )?.projectorOutput?.source?.width === 1024 );
 	await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Drawing asset projector' ) ) );
+	await page.locator( '#sidebar > .Tabs > #scene' ).click();
 
 }
 
