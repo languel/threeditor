@@ -1924,10 +1924,13 @@ async function check() {
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Create filled scene shape' } ).click();
 		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Pencil', exact: true } ).click();
-		await page.mouse.move( drawing.x + drawing.width * .28, drawing.y + drawing.height * .28 );
+		await page.getByRole( 'region', { name: 'Image and vector editor' } ).getByRole( 'button', { name: 'Pencil Soft', exact: true } ).click();
+		await canvas.scrollIntoViewIfNeeded();
+		const vectorFrame = await canvas.boundingBox();
+		await page.mouse.move( vectorFrame.x + vectorFrame.width * .28, vectorFrame.y + vectorFrame.height * .28 );
 		await page.mouse.down();
-		await page.mouse.move( drawing.x + drawing.width * .34, drawing.y + drawing.height * .21, { steps: 4 } );
-		await page.mouse.move( drawing.x + drawing.width * .39, drawing.y + drawing.height * .27, { steps: 4 } );
+		await page.mouse.move( vectorFrame.x + vectorFrame.width * .34, vectorFrame.y + vectorFrame.height * .21, { steps: 4 } );
+		await page.mouse.move( vectorFrame.x + vectorFrame.width * .39, vectorFrame.y + vectorFrame.height * .27, { steps: 4 } );
 		await page.mouse.up();
 		const cyclic = page.getByRole( 'button', { name: 'Toggle Cyclic' } );
 		assert.equal( await cyclic.getAttribute( 'aria-pressed' ), 'false' );
@@ -1991,7 +1994,8 @@ async function check() {
 		const svg = await fs.readFile( await ( await vectorDownload ).path(), 'utf8' );
 		assert.match( svg, /<path fill="#e4572e"[^>]+ Z"/ );
 		assert.match( svg, /<image [^>]+data:image\/png;base64,/ );
-		assert.match( svg, /<path fill="none" stroke="#ffae66"[^>]+ [ML][^>]+"/ );
+		assert.match( svg, /<pattern id="brush-grain-0"[^>]*><image [^>]*data:image\/png;base64,/ );
+		assert.match( svg, /<path fill="none" stroke="url\(#brush-grain-0\)"[^>]+ [ML][^>]+"/ );
 		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );
