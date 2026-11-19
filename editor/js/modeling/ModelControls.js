@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=mode-shelves';
+import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
 
 function labelContent( node, label, glyph ) {
 

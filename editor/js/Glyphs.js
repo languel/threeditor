@@ -176,6 +176,7 @@ const ICONS = {
 	mask: svg( '<rect x="6" y="6" width="12" height="12"/><path d="M3 9h3M3 15h3M18 9h3M18 15h3M9 3v3M15 3v3M9 18v3M15 18v3"/>' ),
 	snap: svg( '<path d="M4 9h16M4 15h16M9 4v16M15 4v16" opacity=".55"/><circle cx="15" cy="9" r="2.6" fill="currentColor" stroke="none"/>' ),
 	mixer: svg( '<path d="M6 4v16M12 4v16M18 4v16" opacity=".5"/><rect x="4" y="13" width="4" height="3" rx=".8" fill="currentColor"/><rect x="10" y="7" width="4" height="3" rx=".8" fill="currentColor"/><rect x="16" y="11" width="4" height="3" rx=".8" fill="currentColor"/>' ),
+	erase: svg( '<path d="m4 13 7.5-8a2 2 0 0 1 2.8-.1l5.1 4.8a2 2 0 0 1 .1 2.8L13.5 19H9l-5-4.7a1 1 0 0 1 0-1.3ZM8.5 9.5l8.1 7.5M13 19h7"/>' ),
 	brush: svg( '<path d="M14 4l6 6-7.5 7.5-6-6z"/><path d="M6.5 11.5C4 12 3 14 3 16.5 3 18 2.5 19.5 1.5 20.5c3 0 6.5-.5 8-2 1.3-1.3 1.5-3 1-4.5"/>' ),
 	follow: svg( '<path d="M4 12a8 8 0 0113.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 01-13.7 5.7L4 15.5M4 20v-4.5h4.5"/>' ),
 	redraw: svg( '<rect x="3" y="4" width="8" height="7" fill="currentColor" fill-opacity=".3"/><path d="M14 4l7 7h-7z" fill="currentColor" fill-opacity=".3"/><circle cx="8" cy="17" r="4" fill="currentColor" fill-opacity=".3"/><path d="M14 15h7M14 19h5"/>' ),

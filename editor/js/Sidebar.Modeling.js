@@ -1,8 +1,8 @@
-import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=pencil-workspace';
+import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=pencil-stroke-depth';
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';
-import { openMaskEditor } from './modeling/MaskEditor.js?v=pencil-workspace';
+import { openMaskEditor } from './modeling/MaskEditor.js?v=pencil-stroke-depth';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { isClosedOutline } from './modeling/ModelGeometry.js?v=top-toolbar';
 import { editableMesh } from './modeling/ModelViewport.js?v=contour-editing';

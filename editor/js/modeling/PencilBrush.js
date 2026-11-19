@@ -1,4 +1,4 @@
-import { modelButton, modelField } from './ModelControls.js';
+import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
 import { StrokeSampler } from './StrokeSampler.js';
 
 // Size, strength and tip hardness from ThreeGrease's natural-media set.
@@ -63,6 +63,19 @@ export function brushStroke( brush, x, y, pressure, dab ) {
 export function brushPressure( event ) {
 
 	return event.pointerType === 'pen' ? event.pressure || .5 : 1;
+
+}
+
+export function useBrushShortcut( editor, event ) {
+
+	if ( event.metaKey || event.ctrlKey || event.altKey ) return false;
+	const smaller = event.code === 'BracketLeft' || [ '[', '{' ].includes( event.key );
+	const larger = event.code === 'BracketRight' || [ ']', '}' ].includes( event.key );
+	if ( ! smaller && ! larger ) return false;
+	const brush = pencilBrush( editor );
+	if ( event.shiftKey ) brush.strength = Math.round( Math.max( .01, Math.min( 1, brush.strength + ( smaller ? -.05 : .05 ) ) ) * 100 ) / 100;
+	else brush.size = Math.max( 1, Math.min( 256, Math.round( brush.size * ( smaller ? 1 / 1.2 : 1.2 ) ) ) );
+	return true;
 
 }
 

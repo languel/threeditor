@@ -30,7 +30,7 @@ Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open
 
 ### Pencil and 2D painting
 
-- Pencil uses shared placement settings. The viewport overlay resolves the same plane as the current stroke and follows the pointer. Mesh Surface follows the receiver and Surface Perpendicular locks at the first hit.
+- Pencil uses shared placement settings. The viewport overlay resolves the same plane as the current stroke and follows the pointer. Mesh Surface follows the receiver and Surface Perpendicular locks at the first hit. View Plane can also hold depth from a projected path segment or endpoint. The stroke eraser batches whole-stroke removals into one history action.
 - `PencilBrush.js` holds shared tip settings and the raster dab profile. `TexturePaint.js` uses the same material-copy and undo path for 3D and UV painting. Image & Vector records raster brush samples separately from editable contours and composites them for export.
 - `Canvas2DTools.js` supplies the shared pan, zoom and 2D transforms for the UV, Warp, Image & Vector, and Mask work areas. The browser smoke test checks guide visibility, texture paint and erase, UV moves, and SVG paint export.
 

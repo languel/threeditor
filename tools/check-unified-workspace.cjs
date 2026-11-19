@@ -212,6 +212,41 @@ async function checkPencil( page ) {
 	await page.getByRole( 'button', { name: 'Erase mesh texture', exact: true } ).click();
 	await draw( false );
 	assert.equal( await page.evaluate( () => editor.scene.getObjectByName( 'Pencil receiver' ).material.transparent ), true );
+	const anchorPixel = await page.evaluate( () => {
+
+		const source = new THREE.Line( new THREE.BufferGeometry().setFromPoints( [
+			new THREE.Vector3( -.6, 0, 2 ), new THREE.Vector3( .6, 0, 2 )
+		] ), new THREE.LineBasicMaterial() );
+		source.geometry.userData.modeling = { kind: 'path', closed: false, points: [ [ -.6, 0, 2 ], [ .6, 0, 2 ] ] };
+		source.name = 'Depth guide';
+		editor.addObject( source );
+		const bounds = editor.renderer.domElement.getBoundingClientRect();
+		return [ bounds.left + bounds.width / 2, bounds.top + bounds.height / 2 ];
+
+	} );
+	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
+	await page.getByLabel( 'Pencil placement' ).selectOption( 'view' );
+	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'segment' );
+	const [ ax, ay ] = anchorPixel;
+	await page.mouse.move( ax, ay );
+	await page.mouse.down();
+	assert.ok( await page.evaluate( () => editor.viewTools.stroke?.anchor?.distanceTo( new THREE.Vector3( 0, 0, 2 ) ) < 1e-6 ) );
+	await page.mouse.move( ax, ay + 60, { steps: 7 } );
+	await page.mouse.up();
+	const depthStroke = await page.evaluate( () => {
+
+		const stroke = editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 );
+		return { uuid: stroke.uuid, z: stroke.geometry.userData.modeling.points.map( point => point[ 2 ] ) };
+
+	} );
+	assert.ok( depthStroke.z.length > 2 && depthStroke.z.every( z => Math.abs( z - 2 ) < 1e-6 ), 'Keeps the initial stroke depth away from the anchor ' + JSON.stringify( depthStroke ) );
+	await page.getByRole( 'button', { name: 'Erase pencil strokes', exact: true } ).click();
+	await page.mouse.click( ax, ay + 45 );
+	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), false );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
+	await page.evaluate( () => editor.config.setKey( 'settings/pencilStrokeDepth', 'off' ) );
+
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 
 }

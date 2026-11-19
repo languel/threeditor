@@ -10,11 +10,11 @@ import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=ma
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { modelButton } from './ModelControls.js';
-import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js';
+import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
-import { brushPalette, brushPressure, brushStroke, pencilBrush } from './PencilBrush.js';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-workspace';
+import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stroke-depth';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-stroke-depth';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {
@@ -97,7 +97,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
 	const shelf = createCanvasShelf( canvas, [
 		...selectionTools2D, [ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
-		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'remove' ] ] ),
+		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ] ] ),
 		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
 	], id => {
 
@@ -645,7 +645,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		const key = event.key.toLowerCase();
 		const modes = { g: 'move', r: 'rotate', s: 'scale' };
-		if ( dragging && key === 'escape' ) cancelDrag();
+		if ( ! dragging && paintTool() && useBrushShortcut( editor, event ) ) palette.refresh();
+		else if ( dragging && key === 'escape' ) cancelDrag();
 		else if ( dragging?.modal && key === 'enter' ) finishDrag();
 		else if ( key === 'z' && ( event.ctrlKey || event.metaKey ) ) {
 

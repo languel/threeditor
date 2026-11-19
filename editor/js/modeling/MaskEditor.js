@@ -2,9 +2,9 @@ import { icon } from '../Glyphs.js?v=poly-context';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
-import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js';
-import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush } from './PencilBrush.js';
-import { modelButton } from './ModelControls.js';
+import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
+import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stroke-depth';
+import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=contour-editing';
@@ -29,6 +29,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	if ( raster ) raster.width = raster.height = rasterSize;
 	const rasterContext = raster?.getContext( '2d' );
 	const usesPalette = () => [ 'stroke', 'raster', 'erase' ].includes( tool );
+	const pencilRaster = () => tool === 'raster' || tool === 'erase';
 	const transforms = () => transformTools2D.some( ( [ id ] ) => id === tool );
 	const node = ( tag, parent, label ) => {
 
@@ -56,12 +57,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	} ) );
 	addTool( 'edit', 'Edit points', 'toolSelect' );
 	addTool( 'polygon', 'Draw polygon', 'toolMask' );
-	addTool( 'freehand', 'Freehand outline', 'toolPaint' );
+	addTool( 'freehand', 'Freehand outline', 'toolPath' );
 	if ( vectorMode ) {
 
 		addTool( 'stroke', 'Pencil', 'freehandDraw' );
 		addTool( 'raster', 'Brush', 'brush' );
-		addTool( 'erase', 'Erase Brush Marks', 'remove' );
+		addTool( 'erase', 'Erase Brush Marks', 'erase' );
 		for ( const [ id, label, glyph ] of transformTools2D ) addTool( id, label, glyph );
 
 	}
@@ -69,7 +70,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	modelButton( toolbar, 'Frame All', 'frame', () => view.fit() );
 	addTool( 'rectangle', 'Draw rectangle', 'toolGrid' );
 	addTool( 'ellipse', 'Draw ellipse', 'brushWidth' );
-	addTool( 'push', 'Push brush', 'brush' );
+	addTool( 'push', 'Push brush', 'sculptTool' );
 	addTool( 'smooth', 'Smooth brush', 'toolPath' );
 	const radiusLabel = node( 'label', toolbar, 'Brush radius ' );
 	const radius = node( 'input', radiusLabel );
@@ -401,6 +402,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		catch { /* Wait for a decoded image. */ }
 
 	}
+	function lineWidth( shape ) {
+
+		return Number.isFinite( shape.width ) ? Math.max( .001, Math.min( .25, shape.width ) ) : .004;
+
+	}
+	function lineOpacity( shape ) {
+
+		return Number.isFinite( shape.opacity ) ? Math.max( 0, Math.min( 1, shape.opacity ) ) : 1;
+
+	}
 	function drawVectors( target, width, height ) {
 
 		target.save();
@@ -413,7 +424,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( shape.closed === false ) {
 
 				target.strokeStyle = color( shape );
-				target.lineWidth = width * .004;
+				target.lineWidth = width * lineWidth( shape );
+				target.globalAlpha = lineOpacity( shape );
 				target.lineCap = target.lineJoin = 'round';
 				target.stroke();
 
@@ -421,6 +433,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 				target.fillStyle = color( shape );
 				target.closePath();
+				target.globalAlpha = 1;
 				target.fill( 'evenodd' );
 
 			}
@@ -451,7 +464,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape => {
 
 			const path = shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' );
-			if ( shape.closed === false ) return '<path fill="none" stroke="' + color( shape ) + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/>';
+			if ( shape.closed === false ) return '<path fill="none" stroke="' + color( shape ) + '" stroke-width="' + ( 1000 * lineWidth( shape ) ).toFixed( 2 ) +
+				'" stroke-opacity="' + lineOpacity( shape ) + '" stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/>';
 			return '<path fill="' + ( operation === 'cutout' ? 'black' : color( shape ) ) + '" fill-rule="evenodd" d="' + path + ' Z"/>';
 
 		} ).join( '' );
@@ -609,7 +623,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
 		if ( ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
-		if ( tool === 'raster' || tool === 'erase' ) {
+		if ( tool === 'stroke' ) gesture.brush = { ...pencilBrush( editor ) };
+		if ( pencilRaster() ) {
 
 			const stroke = { brush: { ...pencilBrush( editor ) }, erase: tool === 'erase', samples: [] };
 			gesture.paint = stroke;
@@ -675,7 +690,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			remember( gesture.before );
 			brushStrokes.push( gesture.paint );
 
-		} else if ( tool === 'stroke' && draft.length >= 2 ) addShape( { points: draft, closed: false, color: pencilBrush( editor ).color, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
+		} else if ( tool === 'stroke' && draft.length >= 2 ) {
+
+			const { color, size, strength } = gesture.brush;
+			addShape( { points: draft, closed: false, color, width: size / rasterSize, opacity: strength, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
+
+		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
 		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) ) remember( gesture.before );
 		gesture = null;
@@ -724,6 +744,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
+		if ( ! gesture && usesPalette() && useBrushShortcut( editor, event ) ) {
+
+			event.preventDefault();
+			event.stopPropagation();
+			draw();
+			return;
+
+		}
 		if ( key === 'home' ) { event.preventDefault(); view.fit(); return; }
 		if ( vectorMode && ! gesture && ! event.ctrlKey && ! event.metaKey && ! event.altKey ) {
 
