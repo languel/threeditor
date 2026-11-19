@@ -11,12 +11,13 @@ import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton } from './ModelControls.js?v=color-sampler';
-import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-seams';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-islands';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
 import { closestPointOnSegment } from './Contour.js';
+import { linkedUVVertices, uvFaceAt } from './UVIslands.js';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {
@@ -193,7 +194,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const pointUV = point => point.map( value => ( value - margin ) / span );
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
 	const shelf = createCanvasShelf( canvas, [
-		...selectionTools2D, [ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
+		...selectionTools2D, ...( warp ? [] : [ [ 'island', 'Select UV islands', 'uvIsland' ] ] ),
+		[ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
 		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ], [ 'seam', 'Mark or clear UV seam', 'uvSeam' ] ] ),
 		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
 	], id => {
@@ -586,31 +588,17 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 	}
 
-	function selectLinked() {
+	function linkedSelection( point, includeSelection ) {
 
-		if ( warp ) return;
-		const hit = lastPoint && nearest( lastPoint );
-		const seeds = hit >= 0 ? [ hit ] : selected;
-		const links = new Map();
-		eachTriangle( face => {
-
-			const keys = face.map( pointKey );
-			for ( const key of keys ) {
-
-				if ( ! links.has( key ) ) links.set( key, new Set() );
-				for ( const neighbor of keys ) links.get( key ).add( neighbor );
-
-			}
-
-		} );
-		const queue = seeds.map( pointKey ), reached = new Set( queue );
-		for ( let i = 0; i < queue.length; i ++ ) for ( const next of links.get( queue[ i ] ) || [] ) {
-
-			if ( reached.has( next ) ) continue;
-			reached.add( next ); queue.push( next );
-
-		}
-		selected = points.flatMap( ( _, index ) => reached.has( pointKey( index ) ) ? [ index ] : [] );
+		if ( ! points.length ) return [];
+		const triangles = [];
+		eachTriangle( face => triangles.push( face ) );
+		const hit = point ? uvFaceAt( pointUV( point ), triangles, points, 8 / ( span * view.scale ) ) : -1;
+		if ( hit >= 0 ) return linkedUVVertices( triangles, pointKey, [ hit ] );
+		if ( ! includeSelection || ! selected.length ) return [];
+		const current = new Set( selected );
+		const seeds = triangles.flatMap( ( face, index ) => face.some( vertex => current.has( vertex ) ) ? [ index ] : [] );
+		return linkedUVVertices( triangles, pointKey, seeds );
 
 	}
 
@@ -692,6 +680,20 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			const color = pickColor( material?.map?.image, u, v, material?.color && '#' + material.color.getHexString() );
 			status.textContent = color ? 'Picked ' + color + '.' : 'No readable color at this point.';
 			if ( color ) { tool = beforeColorPick; palette.refresh(); }
+			draw();
+			return;
+
+		}
+		if ( tool === 'island' ) {
+
+			const group = linkedSelection( point, false );
+			select( group, event );
+			if ( group.length && ! event.ctrlKey && ! event.shiftKey ) {
+
+				beginTransform( 'move', point );
+				if ( dragging ) canvas.setPointerCapture( event.pointerId );
+
+			}
 			draw();
 			return;
 
@@ -804,7 +806,11 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			else if ( ! dragging ) editor.undo();
 
 		} else if ( ! dragging && key === 'a' && ! event.ctrlKey && ! event.metaKey ) selected = event.altKey ? [] : points.map( ( _, i ) => i );
-		else if ( ! dragging && key === 'l' ) selectLinked();
+		else if ( ! dragging && ! warp && key === 'l' && ! event.ctrlKey && ! event.metaKey && ! event.altKey ) {
+
+			select( linkedSelection( lastPoint, ! event.shiftKey ), { ctrlKey: event.shiftKey, shiftKey: ! event.shiftKey } );
+
+		} else if ( ! dragging && key === 'escape' && selected.length ) selected = [];
 		else if ( ! dragging && key === 'home' ) view.fit();
 		else if ( ! dragging && ! warp && key === 'd' && ! event.ctrlKey && ! event.metaKey ) { tool = 'pencil'; palette.refresh(); }
 		else if ( ! dragging && modes[ key ] && ! event.ctrlKey && ! event.metaKey && selected.length ) beginTransform( modes[ key ], lastPoint || pixel( [ .5, .5 ] ), true );

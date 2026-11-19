@@ -637,6 +637,63 @@ async function checkUVSeams( page ) {
 
 }
 
+async function checkUVIslands( page ) {
+
+	const coordinates = [ [ .10, .15 ], [ .40, .15 ], [ .10, .45 ], [ .40, .15 ], [ .40, .45 ], [ .10, .45 ],
+		[ .40, .45 ], [ .70, .45 ], [ .70, .75 ] ];
+	await page.evaluate( coordinates => {
+
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( coordinates.flatMap( ( [ u, v ] ) => [ u * 3, -v * 3, 0 ] ), 3 ) );
+		geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( coordinates.flatMap( ( [ u, v ] ) => [ u, 1 - v ] ), 2 ) );
+		const mesh = new THREE.Mesh( geometry, new THREE.MeshStandardMaterial() );
+		editor.addObject( mesh );
+		editor.select( mesh );
+
+	}, coordinates );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
+	const grid = uv.getByLabel( 'UV grid', { exact: true } );
+	const bounds = await grid.boundingBox();
+	const pixel = ( u, v ) => [ bounds.x + bounds.width * ( 25 + 590 * u ) / 640, bounds.y + bounds.height * ( 25 + 590 * v ) / 640 ];
+	const values = () => page.evaluate( () => {
+
+		const coords = editor.selected.geometry.attributes.uv;
+		return Array.from( { length: coords.count }, ( _, i ) => [ coords.getX( i ), 1 - coords.getY( i ) ] );
+
+	} );
+	const check = async expected => {
+
+		const actual = await values();
+		assert.ok( actual.every( ( pair, i ) => pair.every( ( value, axis ) => Math.abs( value - expected[ i ][ axis ] ) < .002 ) ), JSON.stringify( actual ) );
+
+	};
+	await uv.getByRole( 'button', { name: 'Select UV islands', exact: true } ).click();
+	await page.mouse.move( ...pixel( .22, .28 ) );
+	await page.mouse.down();
+	await page.mouse.move( ...pixel( .27, .28 ), { steps: 5 } );
+	await page.mouse.up();
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	const first = coordinates.map( ( [ u, v ], i ) => [ u + ( i < 6 ? .05 : 0 ), v ] );
+	await check( first );
+
+	await grid.press( 'Escape' );
+	await page.mouse.move( ...pixel( .64, .52 ) );
+	await grid.press( 'l' );
+	await page.mouse.move( ...pixel( .24, .27 ) );
+	await grid.press( 'l' );
+	await grid.press( 'Shift+l' );
+	await page.mouse.move( ...pixel( .64, .52 ) );
+	await grid.press( 'g' );
+	await page.mouse.move( ...pixel( .64, .57 ), { steps: 5 } );
+	await grid.press( 'Enter' );
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	await check( first.map( ( [ u, v ], i ) => [ u, v + ( i >= 6 ? .05 : 0 ) ] ) );
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkUVUnwrap( page ) {
 
 	await page.evaluate( () => {
@@ -2006,6 +2063,7 @@ async function check() {
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
 		await checkUVSeams( page );
+		await checkUVIslands( page );
 		await checkTextureBake( page );
 		await checkProjectorEdgeBlend( page );
 		await checkOrthographicFly( page );

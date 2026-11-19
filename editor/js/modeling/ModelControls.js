@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=uv-seams';
+import { icon } from '../Glyphs.js?v=uv-islands';
 
 function labelContent( node, label, glyph ) {
 
