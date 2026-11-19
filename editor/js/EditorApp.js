@@ -2,7 +2,7 @@ import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=uv-selection-sync';
-import { Keymap } from './Keymap.js?v=sculpt-targets';
+import { Keymap } from './Keymap.js?v=mode-shortcut';
 import { ModalTransform } from './ModalTransform.js?v=held-alt-constraint';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';

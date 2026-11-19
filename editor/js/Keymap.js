@@ -52,7 +52,7 @@ const definitions = [
  ['viewportOverlays','Toggle Viewport Overlays','View','','alt+shift+z'],
  ['maximizeArea','Toggle Maximize Area','Workspace',control+'+space',control+'+space'],
  ['workspaceMode','Switch Object / Edit mode','Modeling','tab','tab'],
- ['modePie','Switch interaction mode','Modeling','',control+'+tab'],
+ ['modePie','Switch interaction mode','Modeling','shift+q','shift+q'],
  ['hideSelection','Hide selected in viewport','Visibility','','h'],
  ['hideUnselected','Hide unselected in viewport','Visibility','','shift+h'],
  ['revealHidden','Reveal hidden in viewport','Visibility','','alt+h'],

@@ -264,11 +264,16 @@ async function checkSculptTargets( page ) {
 	const history = () => page.evaluate( () => editor.history.undos.length );
 	const initial = await history();
 	await page.mouse.move( ...center );
+	await page.keyboard.press( 'Shift+Q' );
+	const pie = page.getByRole( 'dialog', { name: 'Interaction mode', exact: true } );
+	await pie.waitFor();
+	await page.keyboard.press( 'Escape' );
+	await pie.waitFor( { state: 'hidden' } );
 	await page.keyboard.press( 'F3' );
 	const palette = page.getByRole( 'dialog', { name: 'Command palette' } );
 	await palette.getByRole( 'searchbox' ).fill( 'Switch interaction mode' );
 	await palette.getByRole( 'button', { name: /Switch interaction mode/ } ).click();
-	await page.getByRole( 'dialog', { name: 'Interaction mode', exact: true } ).getByRole( 'button', { name: 'Sculpt Mode', exact: true } ).click();
+	await pie.getByRole( 'button', { name: 'Sculpt Mode', exact: true } ).click();
 	assert.equal( await mode.inputValue(), 'sculpt' );
 	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush radius (px)' ).waitFor();
 	await gesture( true );
