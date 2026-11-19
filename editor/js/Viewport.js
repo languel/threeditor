@@ -32,7 +32,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=pencil-reference';
+import { ViewportTools } from './modeling/ViewportTools.js?v=dotted-cursor';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
 import { ModelViewport } from './modeling/ModelViewport.js?v=uv-selection-sync';

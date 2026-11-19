@@ -2290,18 +2290,22 @@ function drawCursor( ctx, x, y ) {
 
 	ctx.save();
 	ctx.translate( x, y );
-	ctx.lineWidth = 1.5;
-	ctx.strokeStyle = '#e9e9e9';
-	ctx.beginPath();
-	ctx.moveTo( -12, 0 ); ctx.lineTo( 12, 0 );
-	ctx.moveTo( 0, -12 ); ctx.lineTo( 0, 12 );
-	ctx.stroke();
-	for ( let i = 0; i < 8; i ++ ) {
+	ctx.globalAlpha = .8;
+	for ( let i = 0; i < 12; i ++ ) {
 
-		ctx.strokeStyle = i % 2 ? '#f14b57' : '#ffffff';
+		const angle = ( i + .5 ) * Math.PI / 6;
+		ctx.fillStyle = i % 2 ? '#f14b57' : '#ffffff';
 		ctx.beginPath();
-		ctx.arc( 0, 0, 8, i * Math.PI / 4, ( i + 1 ) * Math.PI / 4 );
-		ctx.stroke();
+		ctx.arc( 8 * Math.cos( angle ), 8 * Math.sin( angle ), .9, 0, 2 * Math.PI );
+		ctx.fill();
+
+	}
+	ctx.fillStyle = '#e9e9e9';
+	for ( const [ dx, dy ] of [ [ -11, 0 ], [ 11, 0 ], [ 0, -11 ], [ 0, 11 ] ] ) {
+
+		ctx.beginPath();
+		ctx.arc( dx, dy, .75, 0, 2 * Math.PI );
+		ctx.fill();
 
 	}
 	ctx.restore();
