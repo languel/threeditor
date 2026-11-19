@@ -1,7 +1,7 @@
 import { UITabbedPanel } from './libs/ui.js';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=script-window';
-import { SidebarProperties } from './Sidebar.Properties.js?v=pencil-placement';
+import { SidebarProperties } from './Sidebar.Properties.js?v=pencil-reference';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';
 import { SidebarStreams } from './Sidebar.Streams.js';
@@ -83,6 +83,13 @@ function Sidebar( editor ) {
 	container.addTab( 'project', strings.getKey( 'sidebar/project' ), project, 'sidebar/project' );
 	container.addTab( 'settings', strings.getKey( 'sidebar/settings' ), settings, 'sidebar/settings' );
 	container.select( 'scene' );
+	editor.revealToolProperties = () => {
+
+		if ( ! editor.viewTools.toolPropertiesMode ) return;
+		container.select( 'scene' );
+		sidebarProperties.select( 'toolTab' );
+
+	};
 
 	// Reveal inspector tabs while an asset is being dragged, so texture slots
 	// remain reachable from the Assets tab without opening a separate window.

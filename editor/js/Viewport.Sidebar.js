@@ -11,6 +11,8 @@ export function ViewportSidebar( editor, viewport, header, layout, render ) {
 	viewport.appendChild( panel.dom );
 	const heading = new UIText( 'Item' ).addClass( 'viewport-item-heading' );
 	panel.add( heading );
+	const activeTool = modelButton( panel.dom, 'Open active tool properties', 'controls', () => editor.revealToolProperties?.() );
+	activeTool.hidden = true;
 
 	const transform = new ObjectTransformControls( editor, 'Location' );
 	const objectFields = new UIPanel().add( ...transform.rows );
@@ -58,6 +60,7 @@ export function ViewportSidebar( editor, viewport, header, layout, render ) {
 	function refresh() {
 
 		if ( panel.dom.hidden ) return;
+		activeTool.hidden = ! editor.viewTools?.toolPropertiesMode;
 		const model = editor.modeling;
 		const object = editor.selected;
 		const edit = model.editMode;

@@ -3553,6 +3553,45 @@ body.workspace-2d-split.translucent-panels #viewport .viewport-pencil-toolbox { 
 }
 .viewport-pencil-controls .pencil-stroke-options select { max-width: none; }
 .viewport-pencil-controls .pencil-tip-picker button { width: auto; height: auto; padding: 2px; }
+.pencil-tip-picker .pencil-brush-presets { grid-template-columns: repeat(2, max-content); }
+.pencil-tip-picker .pencil-brush-presets .model-control-button { display: flex; gap: 5px; }
+.pencil-tip-picker .pencil-brush-presets .model-control-label { display: inline; }
+.pencil-dropdown-menu:popover-open {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	display: grid;
+	gap: 2px;
+}
+#properties .active-tool-properties .pencil-brush-fields,
+#properties .active-tool-properties,
+#properties .active-tool-properties .pencil-inline-stroke-options {
+	display: grid;
+	gap: 6px;
+}
+#properties .active-tool-properties { padding: 8px; }
+#properties .active-tool-properties .pencil-brush-palette { display: grid; gap: 8px; min-width: 0; }
+#properties .active-tool-properties .pencil-brush-presets { order: 0; }
+#properties .active-tool-properties .pencil-inline-stroke-options { border: 0; padding: 0; }
+#properties .active-tool-properties label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 5px;
+}
+#properties .active-tool-properties label .model-control-label { display: inline; margin-inline-end: auto; }
+#properties .active-tool-properties label input[type="number"] { width: 65px; }
+#properties .active-tool-properties label input[type="checkbox"] { position: static; width: 1em; height: 1em; opacity: 1; }
+#properties .active-tool-properties label:has(input[type="checkbox"]) { width: auto; height: auto; }
+#properties .active-tool-properties select { max-width: 58%; }
+#properties .active-tool-properties .pencil-brush-fields > select { max-width: 100%; }
+#properties .active-tool-properties :is(.pencil-brush-fields, .pencil-brush-palette) > .model-control-button {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 5px;
+}
+#properties .active-tool-properties :is(.pencil-brush-fields, .pencil-brush-palette) > .model-control-button .model-control-label { display: inline; }
 @media (max-width: 850px) {
 	.viewport-pencil-controls > .Button.model-control-button { width: 22px; min-width: 22px; }
 	.viewport-pencil-controls .pencil-brush-palette input[type="number"] { width: 32px; }

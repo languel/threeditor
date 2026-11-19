@@ -1,6 +1,7 @@
 import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
 import { grainOpacity, grainTileSize } from './PencilGrain.js';
 import { StrokeSampler } from './StrokeSampler.js';
+import { icon } from '../Glyphs.js?v=pencil-reference';
 
 // Size, strength and tip hardness from ThreeGrease's natural-media set.
 const tips = [
@@ -224,7 +225,71 @@ function nameBrushPreset( suggested, exists, savePreset ) {
 
 }
 
-export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, addStrokeControls } = {} ) {
+export function pencilDropdown( host, label, choices, read, write ) {
+
+	const button = modelButton( host, label, choices[ 0 ][ 2 ], () => {
+
+		if ( menu.matches( ':popover-open' ) ) { menu.hidePopover(); return; }
+		const anchor = button.getBoundingClientRect();
+		menu.showPopover( { source: button } );
+		const { width, height } = menu.getBoundingClientRect();
+		menu.style.left = Math.max( 4, Math.min( anchor.left, window.innerWidth - width - 4 ) ) + 'px';
+		const top = anchor.top >= height + 4 ? anchor.top - height - 4 : Math.min( anchor.bottom + 4, window.innerHeight - height - 4 );
+		menu.style.top = Math.max( 4, top ) + 'px';
+		rows.find( row => row.getAttribute( 'aria-pressed' ) === 'true' )?.focus( { preventScroll: true } );
+
+	} );
+	button.setAttribute( 'aria-haspopup', 'true' );
+	button.setAttribute( 'aria-expanded', 'false' );
+	button.dataset.pencilChoice = '';
+	button.refreshPencilChoice = refresh;
+	const menu = document.createElement( 'div' );
+	menu.className = 'transform-dropdown pencil-dropdown-menu';
+	menu.setAttribute( 'popover', 'auto' );
+	menu.setAttribute( 'role', 'group' );
+	menu.setAttribute( 'aria-label', label + ' choices' );
+	host.append( menu );
+	const rows = choices.map( ( [ value, caption, glyph ] ) => {
+
+		const row = document.createElement( 'button' );
+		row.type = 'button';
+		row.className = 'transform-pie-choice';
+		row.innerHTML = icon( glyph );
+		const text = document.createElement( 'span' );
+		text.textContent = caption;
+		row.append( text );
+		row.onclick = () => { menu.hidePopover(); write( value ); refresh(); button.focus( { preventScroll: true } ); };
+		menu.append( row );
+		return row;
+
+	} );
+	menu.addEventListener( 'toggle', () => button.setAttribute( 'aria-expanded', String( menu.matches( ':popover-open' ) ) ) );
+	menu.onkeydown = event => {
+
+		const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+		if ( ! direction ) return;
+		event.preventDefault();
+		const index = rows.indexOf( document.activeElement );
+		rows[ ( index + direction + rows.length ) % rows.length ].focus();
+
+	};
+	function refresh() {
+
+		const value = read();
+		const [ , caption, glyph ] = choices.find( option => option[ 0 ] === value ) || choices[ 0 ];
+		button.querySelector( '.model-control-icon' ).innerHTML = icon( glyph );
+		button.title = label + ' · ' + caption;
+		rows.forEach( ( row, i ) => row.setAttribute( 'aria-pressed', String( choices[ i ][ 0 ] === value ) ) );
+
+	}
+	refresh();
+	return refresh;
+
+}
+
+export function brushPalette( editor, host, changed = () => {}, {
+	strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, quick = false, addPlacementControls, addStrokeControls
+} = {} ) {
 
 	const brush = pencilBrush( editor );
 	const palette = document.createElement( 'div' );
@@ -273,6 +338,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 	}
 	palette.append( fieldRow );
+	addPlacementControls?.( fieldRow );
 	const emptyPresets = [];
 	const savedBrushes = () => editor.config.getKey( brushPresetsKey ) || emptyPresets;
 	const findPreset = name => savedBrushes().find( item => item.name.toLowerCase() === name.toLowerCase() );
@@ -311,6 +377,8 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		refresh(); changed();
 
 	} );
+	if ( quick ) for ( const control of [ userPresets, restorePreset, removePreset ] ) control.remove();
+	if ( quick ) fieldRow.querySelector( '[aria-label="Save brush preset"]' ).remove();
 	palette.addEventListener( 'focusin', refresh );
 
 	const tipOptions = new Set( [ 'spacing', 'aspect', 'angle', 'pressureSize', 'pressureOpacity' ] );
@@ -327,7 +395,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		[ 'angle', 'Brush tip angle (°)', 'rotate', 'number', -180, 180 ],
 		[ 'pressureSize', 'Use pen pressure for size', 'brushWidth', 'checkbox' ],
 		[ 'pressureOpacity', 'Use pen pressure for opacity', 'opacity', 'checkbox' ]
-	].filter( ( [ key ] ) => dabSpacing || key !== 'spacing' ).map( ( [ key, name, glyph, type, min, max ] ) => {
+	].filter( ( [ key ] ) => quick ? [ 'color', 'size', 'strength' ].includes( key ) : dabSpacing || key !== 'spacing' ).map( ( [ key, name, glyph, type, min, max ] ) => {
 
 		const input = modelField( fieldRow, name, glyph, type, displayValue( key ) );
 		if ( type === 'number' ) {
@@ -359,7 +427,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 	pattern.title = 'Brush grain pattern';
 	for ( const [ id, label ] of [ [ 'paper', 'Paper' ], [ 'fiber', 'Fibers' ], [ 'speckle', 'Speckles' ] ] ) pattern.append( new Option( label, id ) );
 	pattern.onchange = () => { brush.grainPattern = pattern.value; refresh(); changed(); };
-	fieldRow.append( pattern );
+	if ( ! quick ) fieldRow.append( pattern );
 	let settings, guide;
 	if ( strokeOptions ) {
 
@@ -438,7 +506,6 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 			if ( input.type === 'checkbox' ) input.checked = brush[ key ];
 			else if ( document.activeElement !== input ) input.value = displayValue( key );
-			if ( key === 'stabilizeRadius' ) input.disabled = ! brush.stabilize;
 			if ( key === 'guideAngle' ) input.disabled = brush.guide !== 'parallel';
 
 		}

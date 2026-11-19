@@ -91,6 +91,8 @@ The **Pencil and surface marks** pass renders scene depth first, then draws the 
 
 Pencil reads the shared modeling Placement for the first point, then resolves the body using its own drawing-plane setting. Surface misses fall back to world Y = 0. The placement resolver is also used by the orientation and height guides, so they preview the same point. Attachment resolves against committed path geometry, and planar cleanup preserves snapped samples. Shift temporarily uses the configured stabilizer radius while drawing. Pointer-down on the viewport releases prior input focus so the Pencil brush shortcuts remain available after a stroke.
 
+The Pencil reference lock stores a point in the source object's local coordinates and keeps the active plane through that point. A path lock restricts the nearby attachment picker to that path. The pointer cue marks the exact attachment candidate, and the diamond remains at the locked point. The right Tool properties tab follows Pencil, Measure, Surface Paint, and Sculpt. Pencil uses the same brush and placement values in the Tool tab and the compact viewport row. The viewport N sidebar links to the active tool's Properties tab.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

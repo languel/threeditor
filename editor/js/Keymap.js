@@ -29,6 +29,7 @@ const definitions = [
  ['delete','Delete selection','Edit','delete','x'], ['deleteBack','Delete selection (Backspace)','Edit','backspace','delete'],
  ['clearSelection','Clear selection','Selection','escape','escape'],
  ['pencilTool','Toggle Pencil','Modeling','d','d'],
+ ['pencilReference','Lock or release Pencil reference','Modeling','b','b'],
  ['selectionCycle','Cycle selection tools','Modeling','','w'], ['selectionBox','Box select tool','Modeling','b','b'],
  ['selectionCircle','Circle select tool','Modeling','c','c'], ['selectionLasso','Lasso select tool','Modeling','shift+b','shift+b'],
  ['selectAll','Select all','Selection','a','a'], ['selectNone','Deselect all','Selection','','alt+a'],
@@ -199,6 +200,8 @@ class Keymap {
 
   }
   if(id==='setActiveCamera')return e.selected?.isCamera && e.selected!==e.camera && isVisible(e.selected);
+  if ( id === 'pencilReference' ) return !!e.viewTools?.canLockPencilReference;
+  if ( id === 'selectionBox' && e.viewTools?.canLockPencilReference ) return false;
   if ( [ 'pencilTool', 'selectionCycle', 'selectionBox', 'selectionCircle', 'selectionLasso' ].includes( id ) )
    return !m?.gesture && !m?.drag && !e.viewTools?.pointer && !e.modalTransform?.active && !e.flyControls?.active;
   if ( id === 'toggleXRay' ) return e.viewportShading === 'solid';
@@ -251,6 +254,7 @@ class Keymap {
    case 'invertMeshSelection':if(this.actionAvailable(id))e.modeling.invertElementSelection();break;
    case 'selectVertex':case 'selectEdge':case 'selectFace':e.modeling.setSelectionMode(id.slice(6).toLowerCase());break;
    case 'pencilTool':e.viewTools.togglePencil();break;
+   case 'pencilReference':e.viewTools.togglePencilReference(this.pointer);break;
    case 'selectionCycle':case 'selectionBox':case 'selectionCircle':case 'selectionLasso':
     e.viewTools.chooseSelectionTool(id.slice(9).toLowerCase());break;
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;

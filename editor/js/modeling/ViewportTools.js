@@ -1,11 +1,11 @@
-import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush } from './PencilBrush.js?v=pencil-placement';
+import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush, pencilDropdown } from './PencilBrush.js?v=pencil-reference';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-placement';
 import { modelObject, outlinePoints } from './ModelGeometry.js?v=brush-response';
-import { icon } from '../Glyphs.js?v=color-sampler';
+import { icon } from '../Glyphs.js?v=pencil-reference';
 import { splatStrokeCommands } from './SplatPaint.js?v=pencil-splats';
 import { addPencilSplatDab } from './PencilSplats.js?v=brush-response';
 import { grainOpacity } from './PencilGrain.js';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-placement';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-reference';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js?v=pencil-ribbon';
@@ -20,7 +20,7 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-placement';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-reference';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -242,7 +242,7 @@ export class ViewportTools {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if ( this.mode === 'path' ) this.pathClosed = true;
-			else this.measureClosed.checked = this.measure.closed = true;
+			else this.setMeasureClosed( true );
 			this.draw();
 
 		}, true );
@@ -255,9 +255,9 @@ export class ViewportTools {
 
 			if ( editor.flyControls?.active ) return;
 
-			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], #editor-2d' ) ) return;
+			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open], .pencil-dropdown-menu:popover-open' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], #editor-2d' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
-			if ( ! this.stroke && this.editor.keymap?.overEditableViewport === false ) return;
+			if ( ! this.stroke && ! ( event.key === 'Escape' && this.pencilReference ) && this.editor.keymap?.overEditableViewport === false ) return;
 			if ( [ 'cursor', 'pencil' ].includes( this.mode ) && event.key !== 'Escape' ) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
@@ -266,10 +266,13 @@ export class ViewportTools {
 				if ( this.mode === 'cursor' ) { this.setMode( '' ); return; }
 				if ( this.stroke ) {
 
-					this.release(); this.render(); this.draw();
+					this.release();
+					if ( this.pencilReference ) this.clearPencilReference();
+					this.render(); this.draw();
 					return;
 
 				}
+				if ( this.mode === 'pencil' && this.pencilReference ) { this.clearPencilReference(); return; }
 				this.points = []; this.selected = -1;
 				if ( this.mode === 'pencil' ) { this.togglePencil(); return; }
 				this.editor.select( null ); this.draw();
@@ -330,6 +333,7 @@ export class ViewportTools {
 
 			const includes = target => target && !! object.getObjectByProperty( 'uuid', target.uuid );
 			if ( includes( this.target ) || includes( this.ruler ) ) this.setMode( '' );
+			if ( includes( this.pencilReference?.object ) ) this.clearPencilReference();
 
 		} );
 		this.syncMaskControls();
@@ -432,6 +436,7 @@ export class ViewportTools {
 		this.sculptButton.disabled = ! model.canEdit() || ! model.data?.points.length;
 		this.editor.viewportSidebar?.refresh();
 		this.editor.primitiveAdjustment?.refresh();
+		this.editor.updateToolProperties?.();
 		if ( ! edit || this.mode ) return;
 		for ( const { label, glyph, run, disabled, pressed } of model.actions() ) {
 
@@ -440,17 +445,36 @@ export class ViewportTools {
 			if ( pressed !== undefined ) control.setAttribute( 'aria-pressed', String( pressed ) );
 
 		}
-		if ( sculpt ) {
+		if ( sculpt ) this.buildSculptProperties( this.brushSettings, false );
 
-			const choose = select( this.brushSettings, 'Sculpt brush', meshBrushes.map( ( [ id, label ] ) => [ id, label ] ) );
-			choose.value = model.brush;
-			choose.onchange = () => model.setBrush( choose.value );
-			const radius = modelField( this.brushSettings, 'Brush radius (px)', 'brushWidth', 'number', model.brushRadius );
-			radius.onchange = () => { model.brushRadius = THREE.MathUtils.clamp( radius.valueAsNumber || 50, 5, 250 ); radius.value = model.brushRadius; };
-			const strength = modelField( this.brushSettings, 'Brush strength', 'opacity', 'number', model.brushStrength );
-			strength.onchange = () => { model.brushStrength = THREE.MathUtils.clamp( strength.valueAsNumber || 0.5, 0.01, 1 ); strength.value = model.brushStrength; };
+	}
+
+	buildSculptProperties( host, detail ) {
+
+		const model = this.editor.modeling;
+		this.toolChoice( host, 'Sculpt brush', meshBrushes, () => model.brush, value => {
+
+			model.setBrush( value );
+			this.editor.updateToolProperties?.( true );
+
+		}, ! detail );
+		for ( const [ key, label, glyph, minimum, maximum, step, fallback ] of [
+			[ 'brushRadius', 'Brush radius (px)', 'brushWidth', 5, 250, 1, 50 ],
+			[ 'brushStrength', 'Brush strength', 'opacity', .01, 1, .05, .5 ]
+		] ) {
+
+			const field = modelField( host, label, glyph, 'number', model[ key ] );
+			Object.assign( field, { min: minimum, max: maximum, step } );
+			field.onchange = () => {
+
+				field.value = model[ key ] = THREE.MathUtils.clamp( field.valueAsNumber || fallback, minimum, maximum );
+				if ( detail ) this.refreshWorkspace();
+				else this.editor.updateToolProperties?.( true );
+
+			};
 
 		}
+
 	}
 
 	syncToolbar() {
@@ -500,6 +524,7 @@ export class ViewportTools {
 
 		}
 		this.mode = mode;
+		if ( mode !== 'pencil' ) this.pencilReference = this.pencilPointer = null;
 		if ( ! mode && ! wasPencil ) {
 
 			const model = this.editor.modeling;
@@ -644,19 +669,9 @@ export class ViewportTools {
 
 		} else if ( this.mode === 'measure' ) {
 
-			const unit = select( parent, 'Measurement units', Object.keys( lengthUnits ).map( name => [ name, name ] ) );
-			unit.value = this.measure.unit;
-			unit.onchange = () => { this.measure.unit = unit.value; if ( this.ruler ) this.finish(); this.draw(); };
-			this.measureClosed = modelField( parent, 'Closed', 'toolMask', 'checkbox', this.measure.closed );
-			this.measureClosed.onchange = event => { this.measure.closed = event.target.checked; if ( this.ruler ) this.finish(); this.draw(); };
-			modelField( parent, 'Bind to mesh', 'link', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
-			modelField( parent, 'Snap vertices', 'snapVertex', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
+			this.buildMeasureProperties( parent, true );
 			this.finishButton = modelButton( parent, 'Save ruler', 'save', () => this.run( () => this.finish() ) );
 			modelButton( parent, 'New ruler', 'add', () => { this.ruler = null; this.points = []; this.selected = - 1; this.draw(); } );
-			const known = modelField( parent, 'Known length', 'toolMeasure', 'number', '' );
-			known.min = '0';
-			known.step = 'any';
-			modelButton( parent, 'Calibrate units', 'calibrate', () => this.run( () => this.calibrate( known.valueAsNumber ) ) );
 
 		} else if ( this.mode === 'pencil' ) {
 
@@ -691,42 +706,29 @@ export class ViewportTools {
 				button.setAttribute( 'aria-pressed', String( this.pencilTool === tool ) );
 
 			}
-			brushPalette( this.editor, parent, () => this.draw(), {
-				strokeOptions: this.pencilUsesPlacement(), singleRow: true, curveCleanup: this.pencilTool === 'vector', dabSpacing: this.pencilTool !== 'vector',
-				addStrokeControls: controls => this.buildPencilStrokeControls( controls )
+			this.quickPencilPalette = brushPalette( this.editor, parent, () => { this.detailPencilPalette?.refresh(); this.draw(); }, {
+				singleRow: true, quick: true,
+				addPlacementControls: this.pencilUsesPlacement() ? controls => this.buildPencilAttachmentControls( controls, true ) : undefined
 			} );
 
 		} else {
 
-			modelField( parent, 'Color', 'color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
-			if ( this.mode === 'path' ) this.finishButton = modelButton( parent, 'Save path', 'save', () => this.run( () => this.finish() ) );
+			if ( this.mode === 'path' ) {
+
+				modelField( parent, 'Color', 'color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
+				this.finishButton = modelButton( parent, 'Save path', 'save', () => this.run( () => this.finish() ) );
+
+			}
 			else {
 
-				const output = select( parent, 'Brush output', [ [ 'surface', 'Surface dabs' ], [ 'vector', 'Vector stroke' ], [ 'texture', 'Texture paint' ], [ 'splat', 'Gaussian splats' ] ] );
-				output.value = this.brush.output;
-				output.onchange = () => { this.brush.output = output.value; this.buildOptions(); };
-				if ( this.brush.output === 'vector' || this.brush.output === 'splat' ) {
-
-					const placement = select( parent, 'Stroke placement', [ [ 'surface', 'Surface' ], [ 'view', 'View plane' ] ] );
-					placement.value = this.brush.placement;
-					placement.onchange = () => { this.brush.placement = placement.value; placement.blur(); };
-
-				}
-				const width = modelField( parent, this.brush.output === 'vector' ? 'Sample spacing (px)' : 'Brush (px)', 'brushWidth', 'number', this.brush.diameter );
-				width.min = '2';
-				width.max = '100';
-				width.onchange = () => { this.brush.diameter = THREE.MathUtils.clamp( width.valueAsNumber || 14, 2, 100 ); width.value = this.brush.diameter; };
-				const opacity = modelField( parent, 'Opacity', 'opacity', 'number', this.brush.opacity );
-				opacity.min = '0.05';
-				opacity.max = '1';
-				opacity.step = '.05';
-				opacity.onchange = () => { this.brush.opacity = THREE.MathUtils.clamp( opacity.valueAsNumber || 1, .05, 1 ); opacity.value = this.brush.opacity; };
+				this.buildPaintProperties( parent, true );
 
 			}
 
 		}
 		if ( this.mode !== 'paint' && this.mode !== 'pencil' ) this.removeButton = modelButton( parent, 'Remove point', 'remove', () => this.removePoint() );
 		if ( ! pencil ) modelButton( parent, 'Done', 'exitTool', () => this.setMode( '' ) );
+		this.editor.updateToolProperties?.( true );
 
 	}
 
@@ -736,26 +738,60 @@ export class ViewportTools {
 
 	}
 
-	buildPencilStrokeControls( controls ) {
+	pencilChoice( controls, label, key, options, quick ) {
 
-		const choice = ( label, key, options ) => {
+		const read = () => this.editor.config.getKey( key ) || options[ 0 ][ 0 ];
+		const write = value => {
 
-			const input = select( controls, label, options );
-			input.title = label;
-			input.value = this.editor.config.getKey( key ) || options[ 0 ][ 0 ];
-			input.onchange = () => { this.editor.config.setKey( key, input.value ); this.draw(); };
+			this.editor.config.setKey( key, value );
+			for ( const refresh of this.pencilChoiceControls.querySelectorAll( 'select, button[data-pencil-choice]' ) ) refresh.refreshPencilChoice?.();
+			for ( const refresh of this.pencilToolPanel?.querySelectorAll( 'select' ) || [] ) refresh.refreshPencilChoice?.();
+			this.draw();
 
 		};
-		choice( 'Pencil drawing plane', 'settings/pencilDrawingPlane', [
-			[ 'placement', 'Follow placement' ], [ 'view', 'View at start' ], [ 'upright', 'Upright from start' ],
-			[ 'top', 'Top from start' ], [ 'front', 'Front from start' ], [ 'side', 'Side from start' ],
-			[ 'strokeDepth', 'Follow stroke depth' ]
-		] );
-		choice( 'Pencil attachment target', 'settings/pencilStrokeDepth', [
-			[ 'off', 'No attachment' ], [ 'segment', 'Any segment' ],
-			[ 'first', 'Stroke starts' ], [ 'ends', 'Stroke ends' ]
-		] );
-		choice( 'Pencil attach points', 'settings/pencilAttachPoints', [
+		this.toolChoice( controls, label, options, read, write, quick );
+
+	}
+
+	toolChoice( controls, label, options, read, write, quick ) {
+
+		if ( quick ) return pencilDropdown( controls, label, options, read, write );
+		const field = element( 'label', controls );
+		const caption = label.replace( /^Pencil /, '' );
+		element( 'span', field, caption[ 0 ].toUpperCase() + caption.slice( 1 ) );
+		const input = select( field, label, options );
+		input.refreshPencilChoice = () => { input.value = read(); };
+		input.refreshPencilChoice();
+		input.onchange = () => { write( input.value ); input.blur(); };
+		return input.refreshPencilChoice;
+
+	}
+
+	buildPencilAttachmentControls( controls, quick = false ) {
+
+		if ( quick ) {
+
+			this.pencilChoiceControls = controls;
+			this.pencilReferenceButton = modelButton( controls, 'Lock or release Pencil reference', 'lock', () => this.togglePencilReference() );
+			this.refreshPencilReferenceButton();
+
+		}
+		this.pencilChoice( controls, 'Pencil attachment target', 'settings/pencilStrokeDepth', [
+			[ 'off', 'No attachment', 'unlink' ], [ 'segment', 'Any segment', 'link' ],
+			[ 'first', 'Stroke starts', 'pivotOrigin' ], [ 'ends', 'Stroke ends', 'splitTool' ]
+		], quick );
+		this.pencilChoice( controls, 'Pencil drawing plane', 'settings/pencilDrawingPlane', [
+			[ 'placement', 'Follow placement', 'placePlane' ], [ 'view', 'View at start', 'preview' ],
+			[ 'upright', 'Upright from start', 'orientGlobal' ], [ 'top', 'Top from start', 'toolGrid' ],
+			[ 'front', 'Front from start', 'faceSelect' ], [ 'side', 'Side from start', 'edgeSelect' ],
+			[ 'strokeDepth', 'Follow stroke depth', 'toolPath' ]
+		], quick );
+
+	}
+
+	buildPencilStrokeControls( controls ) {
+
+		this.pencilChoice( controls, 'Pencil attach points', 'settings/pencilAttachPoints', [
 			[ 'ends', 'Attach first and last' ], [ 'first', 'Attach first only' ], [ 'all', 'Attach all points' ]
 		] );
 		for ( const [ label, glyph, key ] of [
@@ -774,14 +810,175 @@ export class ViewportTools {
 
 	}
 
+	get toolPropertiesMode() {
+
+		if ( [ 'pencil', 'measure', 'paint' ].includes( this.mode ) ) return this.mode;
+		if ( ! this.mode && this.editor.modeling.brush && this.editor.modeling.brush !== 'freehand' ) return 'sculpt';
+		return '';
+
+	}
+
+	buildToolProperties( host ) {
+
+		this.pencilToolPanel = host;
+		this.detailPencilPalette = null;
+		host.replaceChildren();
+		const mode = this.toolPropertiesMode;
+		if ( ! mode ) return;
+		element( 'strong', host, { pencil: 'Pencil', measure: 'Measure', paint: 'Surface Paint', sculpt: 'Sculpt' }[ mode ] );
+		if ( mode === 'pencil' ) {
+
+			this.detailPencilPalette = brushPalette( this.editor, host, () => { this.quickPencilPalette?.refresh(); this.draw(); }, {
+				strokeOptions: this.pencilUsesPlacement(), curveCleanup: this.pencilTool === 'vector', dabSpacing: this.pencilTool !== 'vector',
+				addStrokeControls: controls => { this.buildPencilAttachmentControls( controls ); this.buildPencilStrokeControls( controls ); }
+			} );
+
+		} else if ( mode === 'measure' ) {
+
+			this.buildMeasureProperties( host, false );
+			modelField( host, 'Bind to mesh', 'link', 'checkbox', this.measure.bind ).onchange = event => { this.measure.bind = event.target.checked; };
+			modelField( host, 'Snap vertices', 'snapVertex', 'checkbox', this.measure.snap ).onchange = event => { this.measure.snap = event.target.checked; };
+			const known = modelField( host, 'Known length', 'toolMeasure', 'number', '' );
+			known.min = '0';
+			modelButton( host, 'Calibrate units', 'calibrate', () => this.run( () => this.calibrate( known.valueAsNumber ) ) );
+
+		} else if ( mode === 'paint' ) {
+
+			this.buildPaintProperties( host, false );
+			modelField( host, 'Color', 'color', 'color', this.brush.color ).oninput = event => { this.brush.color = event.target.value; };
+			const opacity = modelField( host, 'Opacity', 'opacity', 'number', this.brush.opacity );
+			Object.assign( opacity, { min: .05, max: 1, step: .05 } );
+			opacity.onchange = () => { this.brush.opacity = THREE.MathUtils.clamp( opacity.valueAsNumber || 1, .05, 1 ); opacity.value = this.brush.opacity; };
+			if ( [ 'vector', 'splat' ].includes( this.brush.output ) ) {
+
+				const field = element( 'label', host );
+				element( 'span', field, 'Stroke placement' );
+				const placement = select( field, 'Stroke placement', [ [ 'surface', 'Surface' ], [ 'view', 'View plane' ] ] );
+				placement.value = this.brush.placement;
+				placement.onchange = () => { this.brush.placement = placement.value; };
+
+			}
+
+		} else {
+
+			this.buildSculptProperties( host, true );
+
+		}
+
+	}
+
+	buildMeasureProperties( host, quick ) {
+
+		const sync = quick ? 'measureUnitsQuick' : 'measureUnitsDetail';
+		this[ sync ] = this.toolChoice( host, 'Measurement units', Object.keys( lengthUnits ).map( name => [ name, name, 'toolMeasure' ] ),
+			() => this.measure.unit, value => {
+
+				this.measure.unit = value;
+				this.measureUnitsQuick?.();
+				this.measureUnitsDetail?.();
+				if ( this.ruler ) this.finish();
+				this.draw();
+
+			}, quick );
+		const closed = modelField( host, 'Closed', 'toolMask', 'checkbox', this.measure.closed );
+		this[ quick ? 'measureClosed' : 'measureClosedDetail' ] = closed;
+		closed.onchange = () => { this.setMeasureClosed( closed.checked ); if ( this.ruler ) this.finish(); this.draw(); };
+
+	}
+
+	setMeasureClosed( value ) {
+
+		this.measure.closed = value;
+		if ( this.measureClosed ) this.measureClosed.checked = value;
+		if ( this.measureClosedDetail ) this.measureClosedDetail.checked = value;
+
+	}
+
+	buildPaintProperties( host, quick ) {
+
+		this.toolChoice( host, 'Brush output', [
+			[ 'surface', 'Surface dabs', 'surfaceBrush' ], [ 'vector', 'Vector stroke', 'freehandDraw' ],
+			[ 'texture', 'Texture paint', 'brush' ], [ 'splat', 'Gaussian splats', 'pencilSplats' ]
+		], () => this.brush.output, value => { this.brush.output = value; this.buildOptions(); }, quick );
+		const width = modelField( host, this.brush.output === 'vector' ? 'Sample spacing (px)' : 'Brush (px)', 'brushWidth', 'number', this.brush.diameter );
+		this[ quick ? 'paintWidthQuick' : 'paintWidthDetail' ] = width;
+		Object.assign( width, { min: 2, max: 100 } );
+		width.onchange = () => {
+
+			const value = THREE.MathUtils.clamp( width.valueAsNumber || 14, 2, 100 );
+			this.brush.diameter = this.paintWidthQuick.value = this.paintWidthDetail.value = value;
+			this.draw();
+
+		};
+
+	}
+
 	pencilPlacementSettings() {
 
 		const { config } = this.editor;
+		const target = config.getKey( 'settings/pencilStrokeDepth' ) || 'off';
 		return {
-			depthTarget: config.getKey( 'settings/pencilStrokeDepth' ) || 'off',
+			depthTarget: target === 'off' && this.pencilReference?.path ? 'segment' : target,
 			attachPoints: config.getKey( 'settings/pencilAttachPoints' ) || 'ends',
 			orientation: config.getKey( 'settings/pencilDrawingPlane' ) || 'placement'
 		};
+
+	}
+
+	get canLockPencilReference() {
+
+		return this.mode === 'pencil' && this.pencilUsesPlacement() && ! this.pointer &&
+			! this.editor.modalTransform?.active && ! this.editor.flyControls?.active && ! this.editor.editWorkspace?.exclusive;
+
+	}
+
+	refreshPencilReferenceButton() {
+
+		const button = this.pencilReferenceButton;
+		if ( ! button?.isConnected ) return;
+		const shortcut = this.editor.keymap?.combo( 'pencilReference' );
+		button.title = ( this.pencilReference ? 'Release Pencil reference' : 'Lock Pencil reference' ) + ( shortcut ? ' · ' + formatCombo( shortcut ) : '' );
+		button.setAttribute( 'aria-pressed', String( !! this.pencilReference ) );
+
+	}
+
+	clearPencilReference() {
+
+		this.pencilReference = null;
+		this.status.textContent = '';
+		this.refreshPencilReferenceButton();
+		this.draw();
+
+	}
+
+	togglePencilReference( pointer = this.pencilPointer ) {
+
+		if ( ! this.canLockPencilReference ) return;
+		if ( this.pencilReference ) { this.clearPencilReference(); return; }
+		const frame = pointer && this.layout.at( pointer.x, pointer.y );
+		if ( ! frame?.director ) return;
+		const { x, y } = pointer;
+		const { scene } = this.editor;
+		scene.updateMatrixWorld( true );
+		const surface = this.brushSurface( { surfaces: paintSurfaces( scene ), diameter: pencilBrush( this.editor ).size }, frame, x, y, true, true );
+		const path = this.pickPencilStroke( frame, x, y, 16, 'segment' );
+		const depth = point => -point.clone().applyMatrix4( frame.camera.matrixWorldInverse ).z;
+		const hit = path && ( ! surface || depth( path.point ) <= depth( surface.hit.point ) + .002 ) ? path : null;
+		if ( ! hit && ! surface ) {
+
+			this.status.textContent = 'Point at a surface or stroke to lock a reference.';
+			return;
+
+		}
+		const object = hit?.object || surface.source;
+		const normal = hit ? null : this.pencilSurfaceNormal( surface.hit, frame );
+		this.pencilReference = {
+			object, path: !! hit, point: object.worldToLocal( ( hit?.point || surface.hit.point ).clone() ),
+			normal: normal?.applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( object.matrixWorld.clone().invert() ) )
+		};
+		this.status.textContent = '';
+		this.refreshPencilReferenceButton();
+		this.draw();
 
 	}
 
@@ -804,6 +1001,7 @@ export class ViewportTools {
 
 			model.brushRadius = THREE.MathUtils.clamp( Math.round( model.brushRadius * factor ), 5, 250 );
 			this.refreshWorkspace();
+			this.editor.updateToolProperties?.( true );
 
 		}
 		this.draw();
@@ -829,6 +1027,7 @@ export class ViewportTools {
 
 			model.brushStrength = Math.round( THREE.MathUtils.clamp( model.brushStrength + delta, .01, 1 ) * 100 ) / 100;
 			this.refreshWorkspace();
+			this.editor.updateToolProperties?.( true );
 
 		}
 		this.draw(); model.draw();
@@ -1026,7 +1225,7 @@ export class ViewportTools {
 		if ( this.pointer || ! this.mode || event.button !== 0 || event.altKey || event.target !== this.editor.renderer?.domElement ) return;
 		const frame = this.layout.at( event.clientX, event.clientY );
 		if ( ! frame || this.mode === 'pencil' && ( ! frame.director || this.editor.editWorkspace?.exclusive || this.editor.modalTransform?.active || this.editor.flyControls?.active ) || this.mode === 'mask' && frame.source !== this.maskSource ) return;
-		if ( this.mode === 'pencil' ) document.activeElement.blur?.();
+		document.activeElement.blur?.();
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		const { clientX: x, clientY: y } = event;
@@ -1151,7 +1350,9 @@ export class ViewportTools {
 		if ( ! pointer && [ 'paint', 'pencil' ].includes( this.mode ) ) {
 
 			const frame = this.layout.at( event.clientX, event.clientY );
-			this.brushCursor = event.target === this.editor.renderer?.domElement && frame ? { x: event.clientX, y: event.clientY, frame } : null;
+			this.brushCursor = event.target === this.editor.renderer?.domElement && frame ?
+				{ x: event.clientX, y: event.clientY, frame, ignoreAnchor: event.ctrlKey || event.metaKey } : null;
+			if ( this.brushCursor?.frame.director ) this.pencilPointer = this.brushCursor;
 			this.draw();
 			return;
 
@@ -1180,7 +1381,7 @@ export class ViewportTools {
 
 		} else if ( this.stroke ) {
 
-			this.brushCursor = samePane ? { x, y, frame } : null;
+			this.brushCursor = samePane ? { x, y, frame, ignoreAnchor: event.ctrlKey || event.metaKey } : null;
 			const pressure = this.stroke.pencil ? brushPressure( event ) : Math.max( .12, brushPressure( event ) );
 			if ( this.sampleStroke( frame, x, y, pressure, event ) ) this.refreshPaintPreview();
 
@@ -1212,7 +1413,7 @@ export class ViewportTools {
 			const attach = stroke.depthTarget && stroke.depthTarget !== 'off' && stroke.attachPoints !== 'first';
 			const ignore = event.ctrlKey || event.metaKey;
 			const anchor = attach && ! ignore && this.layout.at( event.clientX, event.clientY ) === frame ?
-				this.pickPencilStroke( frame, event.clientX, event.clientY, 22, stroke.depthTarget ) : null;
+				this.pickStrokeAttachment( frame, event.clientX, event.clientY, 22, stroke.depthTarget ) : null;
 			if ( anchor ) this.paintDab( frame, event.clientX, event.clientY, pressure, 'end', false, anchor );
 			else if ( stroke.sampler.remainder >= 1 ) paint( x, y, pressure, 'end', true );
 
@@ -1230,17 +1431,53 @@ export class ViewportTools {
 		const followDepth = stroke.orientation === 'strokeDepth';
 		const allowAnchor = ! ignoreAnchor && ! ( starting && stroke.ignoreStartAnchor ) && stroke.depthTarget !== 'off' &&
 			( starting || stroke.attachPoints === 'all' || phase === 'end' && stroke.attachPoints === 'ends' );
-		const hit = anchor || ( allowAnchor ? this.pickPencilStroke( frame, x, y, 22, stroke.depthTarget ) : null );
-		const depth = followDepth && ! hit && ! ( starting && ( ignoreAnchor || stroke.ignoreStartAnchor ) ) ?
-			this.pickPencilStroke( frame, x, y, 70, stroke.depthTarget === 'off' ? 'segment' : stroke.depthTarget ) : null;
+		const reference = this.pencilReference;
+		const hit = anchor || ( allowAnchor ? this.pickStrokeAttachment( frame, x, y, 22, stroke.depthTarget ) : null );
+		const depth = ! reference && followDepth && ! hit && ! ( starting && ( ignoreAnchor || stroke.ignoreStartAnchor ) ) ?
+			this.pickStrokeAttachment( frame, x, y, 70, stroke.depthTarget === 'off' ? 'segment' : stroke.depthTarget ) : null;
 		const through = ( normal, point ) => new THREE.Plane().setFromNormalAndCoplanarPoint( normal, point );
 		const intersect = plane => ray.intersectPlane( plane, new THREE.Vector3() );
-		if ( followDepth && ( hit || depth ) ) stroke.depthPlane = through( viewNormal, ( hit || depth ).point );
+		if ( ! reference && followDepth && ( hit || depth ) ) stroke.depthPlane = through( viewNormal, ( hit || depth ).point );
 
 		let plane = stroke.plane || stroke.depthPlane;
 		let receiver = stroke.planeReceiver || scene;
 		let point = hit?.point ?? ( plane && intersect( plane ) );
 		let onSurface = false;
+		if ( ! plane && reference ) {
+
+			const followsSurface = ! reference.path && stroke.placement === 'surface' && stroke.orientation === 'placement';
+			const source = reference.object;
+			const parent = reference.path ? source.parent : source;
+			receiver = parent && ! hasRestriction( parent, 'locked' ) ? parent : scene;
+			const origin = source.localToWorld( reference.point.clone() );
+			const normal = reference.normal?.clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( source.matrixWorld ) );
+			const surface = followsSurface && this.brushSurface( stroke, frame, x, y, true, true, source );
+			if ( surface ) {
+
+				onSurface = true;
+				point = receiver.localToWorld( new THREE.Vector3( ...surface.point ) );
+
+			}
+			const orientation = stroke.orientation;
+			let axis = this.pencilOrientationNormal( orientation, viewNormal );
+			if ( orientation === 'placement' ) {
+
+				if ( stroke.placement === 'ground' ) axis.set( 0, 1, 0 );
+				if ( stroke.placement === 'object' && normal ) axis.copy( normal );
+				if ( followsSurface && normal ) axis.copy( surface ? this.pencilSurfaceNormal( surface.hit, frame ) : normal );
+				if ( stroke.placement === 'surfacePerpendicular' && normal ) axis.copy( this.pencilPerpendicularNormal( viewNormal, normal ) );
+
+			}
+			plane = through( axis, followsSurface && point ? point : origin );
+			point ||= intersect( plane );
+			if ( ! followsSurface ) {
+
+				stroke.plane = plane;
+				stroke.planeReceiver = receiver;
+
+			}
+
+		}
 		if ( starting && hit ) {
 
 			stroke.anchor = hit.point;
@@ -1259,12 +1496,10 @@ export class ViewportTools {
 				onSurface = true;
 				receiver = surface.object;
 				point = receiver.localToWorld( new THREE.Vector3( ...surface.point ) );
-				const normal = surface.hit.face ? ( surface.hit.normal || surface.hit.face.normal ).clone()
-					.applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( surface.hit.object.matrixWorld ) ) : viewNormal.clone();
+				const normal = this.pencilSurfaceNormal( surface.hit, frame );
 				if ( stroke.placement === 'surfacePerpendicular' && stroke.orientation === 'placement' ) {
 
-					const perpendicular = viewNormal.clone().addScaledVector( normal, -viewNormal.dot( normal ) );
-					plane = through( perpendicular.lengthSq() > 1e-6 ? perpendicular.normalize() : this.pencilUprightNormal( viewNormal ), point );
+					plane = through( this.pencilPerpendicularNormal( viewNormal, normal ), point );
 					stroke.plane = plane;
 					stroke.planeReceiver = receiver;
 
@@ -1294,12 +1529,9 @@ export class ViewportTools {
 
 		}
 		if ( ! point ) return;
-		if ( starting && stroke.orientation !== 'placement' && ! followDepth ) {
+		if ( ! reference && starting && stroke.orientation !== 'placement' && ! followDepth ) {
 
-			const normals = { top: [ 0, 1, 0 ], front: [ 0, 0, 1 ], side: [ 1, 0, 0 ] };
-			const normal = stroke.orientation === 'upright' ? this.pencilUprightNormal( viewNormal ) :
-				normals[ stroke.orientation ] ? new THREE.Vector3( ...normals[ stroke.orientation ] ) : viewNormal;
-			stroke.plane = plane = through( normal, point );
+			stroke.plane = plane = through( this.pencilOrientationNormal( stroke.orientation, viewNormal ), point );
 			stroke.planeReceiver = receiver;
 
 		}
@@ -1316,12 +1548,50 @@ export class ViewportTools {
 
 	}
 
-	pickPencilStroke( frame, x, y, radius, target, excluded ) {
+	pencilOrientationNormal( orientation, viewNormal ) {
+
+		if ( orientation === 'upright' ) return this.pencilUprightNormal( viewNormal );
+		const axes = { top: [ 0, 1, 0 ], front: [ 0, 0, 1 ], side: [ 1, 0, 0 ] };
+		return axes[ orientation ] ? new THREE.Vector3( ...axes[ orientation ] ) : viewNormal.clone();
+
+	}
+
+	pencilSurfaceNormal( hit, frame ) {
+
+		if ( ! hit.face ) return frame.camera.getWorldDirection( new THREE.Vector3() );
+		const matrix = hit.object.matrixWorld.clone();
+		if ( hit.instanceId !== undefined ) {
+
+			const instance = new THREE.Matrix4();
+			hit.object.getMatrixAt( hit.instanceId, instance );
+			matrix.multiply( instance );
+
+		}
+		return ( hit.normal || hit.face.normal ).clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( matrix ) );
+
+	}
+
+	pencilPerpendicularNormal( viewNormal, normal ) {
+
+		const perpendicular = viewNormal.clone().addScaledVector( normal, -viewNormal.dot( normal ) );
+		return perpendicular.lengthSq() > 1e-6 ? perpendicular.normalize() : this.pencilUprightNormal( viewNormal );
+
+	}
+
+	pickStrokeAttachment( frame, x, y, radius, target ) {
+
+		const reference = this.pencilReference;
+		if ( reference && ! reference.path ) return;
+		return this.pickPencilStroke( frame, x, y, radius, target, { only: reference?.object } );
+
+	}
+
+	pickPencilStroke( frame, x, y, radius, target, { excluded, only } = {} ) {
 
 		const bounds = this.layout.clientRect( frame );
 		const pixel = [ frame.rect.x + x - bounds.left, frame.rect.y + y - bounds.top ];
 		let best, threshold = radius, nearestDepth = Infinity;
-		this.editor.scene.traverseVisible( object => {
+		const visit = object => {
 
 			const data = object.geometry?.userData.modeling;
 			if ( data?.kind !== 'path' || ! data.points.length || object.userData.runtimeOnly || excluded?.has( object ) || ! isVisible( object ) ) return;
@@ -1365,17 +1635,21 @@ export class ViewportTools {
 
 			}
 
-		} );
+		};
+		if ( only ) visit( only );
+		else this.editor.scene.traverseVisible( visit );
 		return best;
 
 	}
 
-	brushSurface( stroke, frame, px, py, includeScans, allowLocked = false ) {
+	brushSurface( stroke, frame, px, py, includeScans, allowLocked = false, only ) {
 
+		stroke.surfaces ||= paintSurfaces( this.editor.scene );
 		const { triangles, scans, receivers } = stroke.surfaces;
+		const allows = hit => isVisible( hit.object ) && ( ! only || receivers.get( hit.object ) === only );
 		if ( this.layout.at( px, py ) !== frame ) return;
 		rayToView( this.ray, this.layout, frame, px, py );
-		let hit = this.ray.intersectObjects( triangles, false ).find( hit => hit.face && isVisible( hit.object ) );
+		let hit = this.ray.intersectObjects( triangles, false ).find( hit => hit.face && allows( hit ) );
 		if ( includeScans && scans.length ) {
 
 			const camera = frame.camera;
@@ -1383,14 +1657,14 @@ export class ViewportTools {
 			const visibleHeight = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / camera.zoom :
 				2 * Math.max( reference, camera.near ) * Math.tan( THREE.MathUtils.degToRad( camera.getEffectiveFOV() / 2 ) );
 			this.ray.params.Points.threshold = visibleHeight * Math.max( 4, stroke.diameter / 3 ) / frame.rect.height;
-			const scan = this.ray.intersectObjects( scans, false ).find( sample => isVisible( sample.object ) );
+			const scan = this.ray.intersectObjects( scans, false ).find( allows );
 			if ( scan && ( ! hit || scan.distance < hit.distance ) ) hit = scan;
 
 		}
 		const object = hit && receivers.get( hit.object );
 		if ( ! object || ! object.parent ) return;
 		const receiver = hasRestriction( object, 'locked' ) ? ( allowLocked ? this.editor.scene : null ) : object;
-		if ( receiver ) return { object: receiver, hit, point: localSurfacePoint( hit, this.ray, receiver ) };
+		if ( receiver ) return { object: receiver, source: object, hit, point: localSurfacePoint( hit, this.ray, receiver ) };
 
 	}
 
@@ -1402,7 +1676,7 @@ export class ViewportTools {
 		this.editor.scene.updateMatrixWorld( true );
 		if ( stroke.erased ) {
 
-			const hit = this.pickPencilStroke( frame, x, y, stroke.diameter * brushSizeFactor( stroke, pressure ) / 2 + 3, 'segment', stroke.erased );
+			const hit = this.pickPencilStroke( frame, x, y, stroke.diameter * brushSizeFactor( stroke, pressure ) / 2 + 3, 'segment', { excluded: stroke.erased } );
 			if ( hit ) stroke.erased.add( hit.object );
 			this.status.textContent = stroke.erased.size ? 'Release to erase ' + stroke.erased.size + ' stroke(s).' : '';
 			return;
@@ -1726,6 +2000,47 @@ export class ViewportTools {
 
 	}
 
+	drawPencilReference( ctx, frame ) {
+
+		const reference = this.pencilReference;
+		const locked = reference && this.project( reference.object.localToWorld( reference.point.clone() ), frame );
+		const cursor = this.brushCursor;
+		const { depthTarget, attachPoints } = this.stroke || this.pencilPlacementSettings();
+		const candidate = cursor?.frame.key === frame.key && ! cursor.ignoreAnchor && depthTarget !== 'off' &&
+			( ! this.stroke?.started || attachPoints !== 'first' ) ?
+			this.pickStrokeAttachment( frame, cursor.x, cursor.y, 22, depthTarget ) : null;
+		const anchor = candidate && this.project( candidate.point, frame );
+		if ( ! locked && ! anchor ) return;
+		ctx.save();
+		if ( locked ) {
+
+			const [ x, y ] = locked;
+			ctx.strokeStyle = '#ffae66';
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.moveTo( x, y - 7 ); ctx.lineTo( x + 7, y ); ctx.lineTo( x, y + 7 ); ctx.lineTo( x - 7, y );
+			ctx.closePath();
+			ctx.stroke();
+
+		}
+		if ( anchor ) {
+
+			const rect = this.layout.clientRect( frame );
+			ctx.strokeStyle = '#ffe098';
+			ctx.beginPath();
+			ctx.moveTo( frame.rect.x + cursor.x - rect.left, frame.rect.y + cursor.y - rect.top );
+			ctx.lineTo( ...anchor );
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.lineWidth = 1.6;
+			ctx.arc( ...anchor, 5, 0, Math.PI * 2 );
+			ctx.stroke();
+
+		}
+		ctx.restore();
+
+	}
+
 	drawPencilPlane( ctx, frame ) {
 
 		const pointer = this.brushCursor;
@@ -1794,16 +2109,6 @@ export class ViewportTools {
 			}
 
 		}
-		const anchor = preview.anchor && this.project( preview.anchor, frame );
-		if ( anchor ) {
-
-			ctx.setLineDash( [] );
-			ctx.fillStyle = '#ffae66';
-			ctx.beginPath();
-			ctx.arc( ...anchor, 4, 0, Math.PI * 2 );
-			ctx.fill();
-
-		}
 		ctx.restore();
 
 	}
@@ -1856,9 +2161,13 @@ export class ViewportTools {
 				this.strokePixels( ctx, this.points.map( point => this.visiblePoint( frame, point ) ), true, true );
 
 			}
-			if ( showCursor && this.mode === 'pencil' && this.pencilUsesPlacement() && frame.director &&
-				( this.editor.config.getKey( 'settings/pencilPlaneGuide' ) !== false ||
-				  this.editor.config.getKey( 'settings/pencilHeightGuide' ) !== false ) ) this.drawPencilPlane( ctx, frame );
+			if ( showCursor && this.mode === 'pencil' && this.pencilUsesPlacement() && frame.director ) {
+
+				if ( this.editor.config.getKey( 'settings/pencilPlaneGuide' ) !== false ||
+					this.editor.config.getKey( 'settings/pencilHeightGuide' ) !== false ) this.drawPencilPlane( ctx, frame );
+				this.drawPencilReference( ctx, frame );
+
+			}
 			if ( showCursor && frame.director && this.stroke?.stabilizer && this.brushCursor?.frame.key === frame.key ) {
 
 				const bounds = this.layout.clientRect( frame );

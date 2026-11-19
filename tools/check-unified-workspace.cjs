@@ -33,8 +33,8 @@ async function checkTextureProjection( page ) {
 
 	} );
 	await page.getByLabel( 'Interaction mode', { exact: true } ).selectOption( 'paint' );
-	await page.getByLabel( 'Brush output' ).selectOption( 'texture' );
-	const width = page.getByLabel( 'Brush (px)' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush output' ).selectOption( 'texture' );
+	const width = page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush (px)' );
 	await width.fill( '60' );
 	await width.press( 'Tab' );
 	await page.mouse.click( ...tip );
@@ -143,8 +143,8 @@ async function checkPencilObjectSelection( page ) {
 	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
 	const pencil = shelf.getByRole( 'button', { name: 'Pencil', exact: true } );
 	await pencil.click();
-	await page.getByLabel( 'Brush size (px)', { exact: true } ).fill( '2' );
-	await page.getByLabel( 'Brush size (px)', { exact: true } ).press( 'Tab' );
+	await page.locator( '.viewport-pencil-controls' ).getByLabel( 'Brush size (px)', { exact: true } ).fill( '2' );
+	await page.locator( '.viewport-pencil-controls' ).getByLabel( 'Brush size (px)', { exact: true } ).press( 'Tab' );
 	await page.mouse.move( x + 45, y );
 	await page.mouse.down();
 	await page.mouse.move( x + 140, y, { steps: 12 } );
@@ -205,8 +205,8 @@ async function checkPencil( page ) {
 	};
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
-	await page.getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
-	const size = page.getByLabel( 'Brush size (px)', { exact: true } );
+	await page.locator( '.viewport-pencil-controls' ).getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
+	const size = page.locator( '.viewport-pencil-controls' ).getByLabel( 'Brush size (px)', { exact: true } );
 	const field = await size.boundingBox();
 	await page.mouse.move( field.x + field.width / 2, field.y + field.height / 2 );
 	await page.keyboard.down( 'Meta' );
@@ -255,7 +255,7 @@ async function checkPencil( page ) {
 
 	} ), [ true, true, true, true, true, true, .9, 'speckle', true, true, true ] );
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
-	await page.getByRole( 'button', { name: 'Pen', exact: true } ).click();
+	await page.locator( '.viewport-pencil-controls' ).getByRole( 'button', { name: 'Pen', exact: true } ).click();
 	assert.deepEqual( await page.evaluate( () => {
 
 		const path = editor.scene.getObjectByName( 'Pencil stroke' );
@@ -362,7 +362,7 @@ async function checkPencil( page ) {
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Placement', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'View plane', exact: true } ).click();
-	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'segment' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil attachment target' ).selectOption( 'segment' );
 	const [ ax, ay ] = anchorPixel;
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
@@ -382,7 +382,7 @@ async function checkPencil( page ) {
 	await page.evaluate( () => editor.undo() );
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
-	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
 	assert.equal( await page.getByLabel( 'Stabilize strokes' ).isChecked(), false );
 	const simplify = page.getByLabel( 'Simplify tolerance (px)' );
 	await simplify.fill( '1' );
@@ -444,8 +444,8 @@ async function checkPencilAttachments( page ) {
 
 	} );
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
-	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'view' );
-	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'ends' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil drawing plane' ).selectOption( 'view' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil attachment target' ).selectOption( 'ends' );
 	const target = page.getByLabel( 'Pencil attach points' );
 	await target.selectOption( 'ends' );
 	const draw = async () => {
@@ -468,13 +468,56 @@ async function checkPencilAttachments( page ) {
 	const firstOnly = await draw();
 	assert.ok( firstOnly.every( point => Math.abs( point[ 2 ] - 1.6 ) < 1e-6 ) );
 	await page.evaluate( () => editor.undo() );
-	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'strokeDepth' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil drawing plane' ).selectOption( 'strokeDepth' );
 	const following = await draw();
 	assert.ok( following.slice( 1, -1 ).some( point => Math.abs( point[ 2 ] - 2.4 ) < 1e-6 ),
 		'Follow stroke depth can change the body depth as it approaches another stroke' );
-	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'placement' );
-	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil drawing plane' ).selectOption( 'placement' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
 	await target.selectOption( 'ends' );
+	await page.evaluate( () => editor.undo() );
+	const lock = page.getByRole( 'button', { name: 'Lock or release Pencil reference', exact: true } );
+	await page.mouse.move( ...start );
+	await page.keyboard.press( 'b' );
+	assert.equal( await lock.getAttribute( 'aria-pressed' ), 'true' );
+	const anchorGuide = await page.evaluate( () => editor.viewTools.overlay.toDataURL() );
+	await page.mouse.move( start[ 0 ] + 55, start[ 1 ] );
+	assert.notEqual( await page.evaluate( () => editor.viewTools.overlay.toDataURL() ), anchorGuide );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil drawing plane' ).selectOption( 'view' );
+	const lockedPath = await draw();
+	assert.ok( distance( lockedPath[ 0 ], [ -.95, .25, 1.6 ] ) < 1e-6, 'Locking a path enables attachment with the target dropdown off' );
+	assert.ok( lockedPath.every( point => Math.abs( point[ 2 ] - 1.6 ) < 1e-6 ), 'Other paths do not replace the locked reference' );
+	await page.keyboard.press( 'Escape' );
+	assert.equal( await lock.getAttribute( 'aria-pressed' ), 'false' );
+	assert.equal( await page.evaluate( () => editor.viewTools.mode ), 'pencil' );
+	const surface = await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 1, 1 ), new THREE.MeshBasicMaterial() );
+		mesh.position.set( 0, 0, 2.8 );
+		editor.addObject( mesh );
+		const frame = editor.viewLayout.frames.find( item => item.director );
+		const { left, top } = editor.viewLayout.clientRect( frame );
+		return { id: mesh.uuid, pixel: [ left + frame.rect.width / 2, top + frame.rect.height / 2 ] };
+
+	} );
+	await page.mouse.move( ...surface.pixel );
+	await page.keyboard.press( 'b' );
+	assert.equal( await page.evaluate( () => editor.viewTools.pencilReference?.object.uuid ), surface.id );
+	const [ sx, sy ] = surface.pixel;
+	await page.mouse.move( sx - 55, sy + 55 );
+	await page.mouse.down();
+	await page.mouse.move( sx + 55, sy + 60, { steps: 10 } );
+	await page.mouse.up();
+	assert.ok( await page.evaluate( id => {
+
+		const receiver = editor.scene.getObjectByProperty( 'uuid', id );
+		const mark = receiver.children.find( child => child.userData.pencilStroke );
+		return mark?.geometry.userData.modeling.points.every( point => Math.abs( point[ 2 ] ) < 1e-6 );
+
+	}, surface.id ), 'A locked mesh sets the view plane through the picked surface point' );
+	await page.keyboard.press( 'b' );
+	assert.equal( await lock.getAttribute( 'aria-pressed' ), 'false' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Pencil drawing plane' ).selectOption( 'placement' );
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 
 }
@@ -498,7 +541,7 @@ async function checkPencilSplats( page ) {
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Draw Pencil splats', exact: true } ).click();
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
-	await page.getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
+	await page.locator( '.viewport-pencil-controls' ).getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
 	const draw = async ( offset = 0 ) => {
 
 		await page.mouse.move( pixel[ 0 ] - 45, pixel[ 1 ] + offset );
@@ -560,7 +603,7 @@ async function checkPencilSplats( page ) {
 
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
-	await page.getByRole( 'button', { name: 'Pen', exact: true } ).click();
+	await page.locator( '.viewport-pencil-controls' ).getByRole( 'button', { name: 'Pen', exact: true } ).click();
 	await page.evaluate( async () => {
 
 		const project = JSON.parse( JSON.stringify( editor.toJSON() ) );
@@ -591,23 +634,26 @@ async function checkCompactPencil( page ) {
 	} );
 	await page.setViewportSize( { width: 640, height: 720 } );
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
-	await page.getByLabel( 'Stroke smoothing', { exact: true } ).scrollIntoViewIfNeeded();
+	const tool = page.getByRole( 'region', { name: 'Tool properties' } );
+	await tool.getByLabel( 'Stroke smoothing', { exact: true } ).scrollIntoViewIfNeeded();
+	const quick = page.locator( '.viewport-pencil-controls' );
+	assert.equal( await quick.getByLabel( 'Stroke smoothing', { exact: true } ).count(), 0 );
+	assert.equal( await quick.getByRole( 'button', { name: 'Pencil attachment target', exact: true } ).locator( 'svg' ).count(), 1 );
+	await quick.getByRole( 'button', { name: 'Pencil attachment target', exact: true } ).click();
+	const choices = quick.getByRole( 'group', { name: 'Pencil attachment target choices' } );
+	assert.equal( await choices.getByRole( 'button', { name: 'Any segment' } ).locator( 'svg' ).count(), 1 );
+	await choices.getByRole( 'button', { name: 'Any segment' } ).click();
+	assert.equal( await tool.getByLabel( 'Pencil attachment target' ).inputValue(), 'segment' );
+	await tool.getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
+	assert.match( await quick.getByRole( 'button', { name: 'Pencil attachment target', exact: true } ).getAttribute( 'title' ), /No attachment/ );
 	assert.deepEqual( await page.evaluate( () => {
 
 		const pane = document.querySelector( '#viewport' ).getBoundingClientRect();
-		const palette = document.querySelector( '.pencil-brush-palette' ).getBoundingClientRect();
-		const inline = document.querySelector( '.pencil-inline-stroke-options' );
-		const smoothing = inline.querySelector( '[aria-label="Stroke smoothing"]' ).getBoundingClientRect();
-		const scroller = document.querySelector( '.pencil-brush-fields' );
-		const scrollBounds = scroller.getBoundingClientRect();
 		const row = document.querySelector( '.viewport-pencil-controls' );
-		const toolbar = document.querySelector( '.viewport-geometry-tools' ).getBoundingClientRect();
 		const { x, right, bottom } = row.getBoundingClientRect();
-		return [ palette.right <= pane.right, inline.tagName === 'DIV' && inline.getBoundingClientRect().top >= row.getBoundingClientRect().top,
-			smoothing.left >= scrollBounds.left && smoothing.right <= scrollBounds.right, scroller.scrollLeft > 0,
-			x >= pane.left && right <= pane.right && bottom <= pane.bottom, getComputedStyle( row ).flexWrap === 'nowrap', toolbar.top < inline.getBoundingClientRect().top ];
+		return [ x >= pane.left && right <= pane.right && bottom <= pane.bottom, getComputedStyle( row ).flexWrap === 'nowrap' ];
 
-	} ), [ true, true, true, true, true, true, true ] );
+	} ), [ true, true ] );
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 	await page.setViewportSize( originalViewport );
 	await page.evaluate( style => {
@@ -1775,7 +1821,7 @@ async function checkPaintGestures( page ) {
 	} );
 	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
 	await mode.selectOption( 'paint' );
-	const output = page.getByLabel( 'Brush output' );
+	const output = page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush output' );
 	const [ start, end ] = ends;
 	const paint = async ( yOffset, cancel = false ) => {
 
@@ -2828,7 +2874,7 @@ async function checkBrushPresets( browser ) {
 		await page.goto( process.env.EDITOR_URL || 'http://127.0.0.1:5300/editor/' );
 		await page.waitForFunction( () => window.editor?.renderer );
 		await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
-		const viewport = page.getByRole( 'group', { name: 'Pencil brush palette', exact: true } );
+		const viewport = page.getByRole( 'region', { name: 'Tool properties' } ).getByRole( 'group', { name: 'Pencil brush palette', exact: true } );
 		const dialog = page.getByRole( 'dialog', { name: 'Save brush preset', exact: true } );
 		const adjust = async ( palette, label, value ) => {
 
@@ -3386,7 +3432,7 @@ async function check() {
 		} );
 		for ( const [ index, medium ] of [ 'texture', 'vector', 'splat' ].entries() ) {
 
-			await page.getByLabel( 'Brush output' ).selectOption( medium );
+			await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush output' ).selectOption( medium );
 			const [ x, y ] = center;
 			await page.mouse.move( x - 12, y + index * 4 );
 			await page.mouse.down();
