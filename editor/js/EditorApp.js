@@ -20,7 +20,7 @@ import { Resizer } from './Resizer.js?v=script-window';
 import { PanelDock } from './PanelDock.js';
 import { WorkspaceArea } from './WorkspaceArea.js?v=script-window';
 import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
-import { CodePanel } from './CodePanel.js?v=script-documents';
+import { CodePanel } from './CodePanel.js?v=document-picker';
 import { AnimationResizer } from './AnimationResizer.js';
 import { Animation } from './Animation.js?v=workspace-tabs';
 

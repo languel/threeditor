@@ -1247,7 +1247,16 @@ body.presenting :is(#viewport, #editor-2d, #menubar, #toolbar, #sidebar, #resize
 		font-size: 12px;
 	}
 
+	#script-window .code-document-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	#script-window .code-target select {
+		min-width: 0;
+		max-width: 35%;
 		font-size: 12px;
 	}
 

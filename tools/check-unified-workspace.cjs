@@ -2577,7 +2577,43 @@ async function checkScriptDocuments( page ) {
 	assert.equal( await page.evaluate( () => editor.selected.material.fragmentShader ), originalShader );
 	assert.equal( await source(), originalShader );
 
-	await code.getByRole( 'button', { name: '← Scene', exact: true } ).click();
+	const browse = code.getByRole( 'button', { name: 'Browse code documents' } );
+	const documents = page.getByRole( 'dialog', { name: 'Code documents', exact: true } );
+	const filter = documents.getByRole( 'searchbox', { name: 'Search Code documents' } );
+	const pin = code.getByRole( 'button', { name: 'Pin code document' } );
+	await pin.click();
+	await page.evaluate( () => {
+
+		const group = new THREE.Group();
+		group.name = 'Second code group';
+		editor.addObject( group );
+		const object = new THREE.Mesh( new THREE.BoxGeometry(), new THREE.MeshBasicMaterial() );
+		object.name = 'Another code owner';
+		editor.addObject( object, group );
+		editor.addScript( object, { name: 'Another script', source: 'function update() { /* viewport selection */ }' } );
+		editor.select( object );
+
+	} );
+	assert.equal( await source(), originalShader );
+	await browse.click();
+	await filter.fill( 'document owner first script' );
+	await filter.press( 'Enter' );
+	assert.equal( await source(), valid );
+	assert.equal( await page.evaluate( () => editor.selected.name ), 'Another code owner' );
+	await pin.click();
+	assert.match( await source(), /viewport selection/ );
+	await browse.click();
+	await filter.fill( 'document owner fragment shader' );
+	await filter.press( 'Enter' );
+	assert.equal( await source(), originalShader );
+	assert.equal( await page.evaluate( () => editor.selected.name ), 'Script document owner' );
+	await pin.click();
+	await page.evaluate( () => editor.removeObject( editor.selected ) );
+	assert.equal( await code.getByRole( 'button', { name: '← Scene', exact: true } ).isVisible(), false );
+
+	await browse.click();
+	await filter.fill( 'scene source' );
+	await filter.press( 'Enter' );
 	await code.locator( '.CodeMirror' ).evaluate( element => element.CodeMirror.setValue( '// draft from the previous project' ) );
 	await page.evaluate( () => {
 
@@ -2590,6 +2626,7 @@ async function checkScriptDocuments( page ) {
 	await page.getByRole( 'button', { name: 'Scripting', exact: true } ).click();
 	assert.match( await source(), /Clean project object/ );
 	assert.doesNotMatch( await source(), /draft from the previous project/ );
+	assert.equal( await pin.getAttribute( 'aria-pressed' ), 'false' );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 

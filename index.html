@@ -11,7 +11,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=coverage-overlay">
+		<link rel="stylesheet" href="css/main.css?v=document-picker">
 
 		<script type="importmap">
 			{
@@ -68,7 +68,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=script-documents';
+			import { startEditor } from './js/EditorApp.js?v=document-picker';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

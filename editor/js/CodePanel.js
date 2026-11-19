@@ -13,6 +13,7 @@ import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 import { codeEditorSettings, setCodeEditorSettings } from './CodeEditorSettings.js';
 import { createCodeLanguageService } from './CodeLanguageService.js';
+import { modelButton } from './modeling/ModelControls.js?v=coverage-overlay';
 import { parse } from './libs/acorn/acorn.mjs';
 
 function CodePanel( editor ) {
@@ -35,7 +36,19 @@ function CodePanel( editor ) {
 	backBtn.textContent = '← Scene';
 	backBtn.className = 'Button';
 	backBtn.title = 'Back to the scene code';
+	const browse = modelButton( head, 'Browse code documents', 'assets', browseDocuments );
+	browse.setAttribute( 'aria-haspopup', 'dialog' );
+	const pin = modelButton( head, 'Pin code document', 'uvPin', () => {
+
+		pinned = ! pinned;
+		pin.setAttribute( 'aria-pressed', String( pinned ) );
+		if ( ! pinned ) follow( editor.selected );
+		refreshHead();
+
+	} );
+	pin.setAttribute( 'aria-pressed', 'false' );
 	const label = document.createElement( 'span' );
+	label.className = 'code-document-label';
 	const select = document.createElement( 'select' );
 	select.setAttribute( 'aria-label', 'Object script' );
 	head.append( backBtn, label, select );
@@ -86,6 +99,8 @@ function CodePanel( editor ) {
 	let documents = new WeakMap();
 	let sceneView;
 	let projectRevision = 0;
+	let pinned = false;
+	let choosingDocument = false;
 	const textarea = document.createElement( 'textarea' );
 	textarea.id = 'code-text';
 	textarea.spellcheck = false;
@@ -260,7 +275,7 @@ function CodePanel( editor ) {
 		for ( const el of sceneOnly ) el.style.display = isScene ? '' : 'none';
 		select.style.display = 'none';
 
-		const sel = editor.selected;
+		const sel = pinned ? null : editor.selected;
 		if ( isScene ) {
 
 			label.textContent = sel && sel !== editor.scene && sel !== editor.camera ? 'Scene · ' + ( sel.name || sel.type ) : 'Scene';
@@ -284,6 +299,7 @@ function CodePanel( editor ) {
 			label.textContent = ( m && m.name || target.object.name || 'Material' ) + ' / ' + strings.getKey( what );
 
 		}
+		label.title = label.textContent;
 
 	}
 
@@ -441,16 +457,76 @@ function CodePanel( editor ) {
 			kind === 'json' ? 'Program info: changes are saved as you type.' : 'Shader: changes are compiled as you type.' );
 	}
 
+	function browseDocuments() {
+
+		const actions = [ { label: 'Scene source', section: 'Scene', run: () => chooseDocument( editor.scene ) } ];
+		const scripts = [], shaders = [];
+		const collect = object => {
+
+			if ( object.userData.runtimeOnly ) return;
+			const path = [];
+			for ( let parent = object; parent && parent !== editor.scene; parent = parent.parent ) path.unshift( parent.name || parent.type );
+			const name = path.join( ' / ' ) || object.name || 'Scene';
+			for ( const script of editor.scripts[ object.uuid ] || [] ) {
+
+				if ( script.generated ) continue;
+				scripts.push( { label: name + ' / ' + ( script.name || 'Script' ), section: 'Object scripts', run: () => chooseDocument( object, script ) } );
+
+			}
+			const materials = [].concat( object.material || [] );
+			materials.forEach( ( material, slot ) => {
+
+				if ( ! material?.isShaderMaterial ) return;
+				const slotName = materials.length > 1 ? ' / ' + ( material.name || 'Material ' + ( slot + 1 ) ) : '';
+				for ( const [ key, shader ] of [ [ 'vertexShader', 'Vertex shader' ], [ 'fragmentShader', 'Fragment shader' ], [ 'programInfo', 'Program info' ] ] ) {
+
+					shaders.push( { label: name + slotName + ' / ' + shader, section: 'Shaders', run: () => chooseDocument( object, key, slot ) } );
+
+				}
+
+			} );
+
+		};
+		editor.scene.traverse( collect );
+		if ( ! editor.camera.parent ) collect( editor.camera );
+		const bounds = browse.getBoundingClientRect();
+		browse.focus();
+		editor.contextMenu.show( 'Code documents', [ ...actions, ...scripts, ...shaders ], { x: bounds.left, y: bounds.bottom + 4 } );
+
+	}
+
+	function chooseDocument( object, script, slot ) {
+
+		if ( ! isOpen() ) return;
+		if ( object !== editor.scene && object !== editor.camera && editor.objectByUuid( object.uuid ) !== object ) return;
+		if ( ! script ) showScene( null );
+		else {
+
+			if ( typeof script === 'object' && ! editor.scripts[ object.uuid ]?.includes( script ) ) return;
+			if ( ! pinned ) {
+
+				choosingDocument = true;
+				try { editor.select( object ); }
+				finally { choosingDocument = false; }
+
+			}
+			signals.editScript.dispatch( object, script, slot );
+
+		}
+		if ( cm ) cm.focus(); else textarea.focus();
+
+	}
+
 	// Selection follows: nothing -> scene; object with a script -> that script; otherwise the object's lines in the scene code.
 	function follow( object, force ) {
 
-		if ( ! isOpen() ) return;
+		if ( ! isOpen() || choosingDocument || pinned && ! force ) return;
 		if ( ! force && object && target.object === object && (
 			target.kind === 'script' ? editor.scripts[ object.uuid ]?.includes( target.script ) :
 				target.material && editor.getObjectMaterial( object, target.slot ) === target.material
 		) ) return;
 
-		if ( ! object || object === editor.scene || object === editor.camera ) return showScene( null );
+		if ( pinned || ! object || object === editor.scene || object === editor.camera ) return showScene( null );
 
 		const scripts = ( editor.scripts[ object.uuid ] || [] ).filter( ( s ) => ! s.generated );
 		if ( scripts.length > 0 ) {
@@ -1032,7 +1108,7 @@ function CodePanel( editor ) {
 
 	function toggleScript( object, script ) {
 
-		const sameTarget = editor.selected === object && ( script.generated ? target.kind === 'scene' :
+		const sameTarget = ( pinned || editor.selected === object ) && ( script.generated ? target.kind === 'scene' :
 			target.kind === 'script' && target.object === object && target.script === script );
 		if ( sameTarget ) {
 
@@ -1062,6 +1138,12 @@ function CodePanel( editor ) {
 
 	} );
 
+	signals.objectRemoved.add( object => {
+
+		if ( target.object && object.getObjectById( target.object.id ) ) showScene( null );
+
+	} );
+
 	signals.scriptRemoved.add( ( script ) => {
 
 		if ( target.script === script ) follow( editor.selected, true );
@@ -1078,7 +1160,8 @@ function CodePanel( editor ) {
 		for ( const url of urls.values() ) URL.revokeObjectURL( url );
 		urls.clear();
 		store.clear();
-		dirty = targetDirty = false;
+		dirty = targetDirty = pinned = false;
+		pin.setAttribute( 'aria-pressed', 'false' );
 		sceneText = '';
 		sceneView = undefined;
 		documents = new WeakMap();
@@ -1114,7 +1197,9 @@ function CodePanel( editor ) {
 	} );
 	signals.materialChanged.add( () => {
 
-		if ( target.material && editor.getObjectMaterial( target.object, target.slot ) === target.material ) syncActiveSource();
+		if ( ! target.material ) return;
+		if ( editor.getObjectMaterial( target.object, target.slot ) === target.material ) syncActiveSource();
+		else showScene( null );
 
 	} );
 
