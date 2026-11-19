@@ -2082,6 +2082,98 @@ async function checkAddPrimitives( page ) {
 
 }
 
+async function checkDrawingAssets( page ) {
+
+	const ui = page.getByRole( 'region', { name: 'Image and vector editor', exact: true } );
+	const status = ui.getByRole( 'status' );
+	const saveAsset = ui.getByRole( 'button', { name: 'Save texture to Project assets' } );
+	const guide = await page.evaluate( () => {
+
+		const canvas = document.createElement( 'canvas' );
+		canvas.width = canvas.height = 4;
+		const ctx = canvas.getContext( '2d' );
+		ctx.fillStyle = '#0044ff';
+		ctx.fillRect( 0, 0, 4, 4 );
+		return canvas.toDataURL().split( ',' )[ 1 ];
+
+	} );
+	await ui.locator( 'input[type="file"]' ).setInputFiles( { name: 'reference.png', mimeType: 'image/png', buffer: Buffer.from( guide, 'base64' ) } );
+	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	const include = ui.getByLabel( 'Include reference in output', { exact: true } );
+	assert.equal( await include.isChecked(), false );
+	await saveAsset.click();
+	await status.getByText( 'Saved drawing.png to Project assets.', { exact: true } ).waitFor();
+	const sampleAsset = path => page.evaluate( async path => {
+
+		const image = await createImageBitmap( editor.sourceFiles.get( path ).file );
+		const canvas = document.createElement( 'canvas' );
+		canvas.width = image.width;
+		canvas.height = image.height;
+		const ctx = canvas.getContext( '2d' );
+		ctx.drawImage( image, 0, 0 );
+		image.close();
+		return [ ...ctx.getImageData( 10, 10, 1, 1 ).data ];
+
+	}, path );
+	assert.deepEqual( await sampleAsset( 'drawing.png' ), [ 0, 0, 0, 0 ] );
+	await include.check();
+	await ui.getByRole( 'button', { name: 'Show reference image' } ).click();
+	await saveAsset.click();
+	await status.getByText( 'Saved import-2/drawing.png to Project assets.', { exact: true } ).waitFor();
+	assert.deepEqual( await sampleAsset( 'import-2/drawing.png' ), [ 0, 68, 255, 255 ] );
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	assert.deepEqual( await page.evaluate( () => {
+
+		const scene = new THREE.ObjectLoader().parse( editor.scene.toJSON() );
+		const { referencePath, includeReference } = scene.userData.vectorDrawing;
+		return [ referencePath, includeReference, editor.sourceFiles.has( referencePath ) ];
+
+	} ), [ 'reference.png', true, true ] );
+	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await page.getByLabel( 'Editor Type', { exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
+	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	assert.equal( await include.isChecked(), true );
+	await ui.getByRole( 'button', { name: 'Remove reference image' } ).click();
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	assert.equal( await page.evaluate( () => editor.scene.userData.vectorDrawing.referencePath ), undefined );
+
+	await page.waitForFunction( () => editor.assetBrowser.records.has( 'project:drawing.png' ) );
+	await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial() );
+		mesh.name = 'Drawing asset receiver';
+		editor.addObject( mesh );
+		window.drawingMaterialAssignment = editor.assetBrowser.applyToObject( 'project:drawing.png', mesh );
+
+	} );
+	await page.getByRole( 'dialog', { name: 'Choose texture map' } ).getByRole( 'button', { name: 'Color map' } ).click();
+	await page.evaluate( () => window.drawingMaterialAssignment );
+	assert.deepEqual( await page.evaluate( () => {
+
+		const mesh = editor.scene.getObjectByName( 'Drawing asset receiver' );
+		const map = mesh.material.map;
+		editor.removeObject( mesh );
+		return [ map.userData.sourceAssetPath, map.image.width ];
+
+	} ), [ 'drawing.png', 1024 ] );
+
+	await page.evaluate( async () => {
+
+		const { projectorScript } = await import( new URL( './js/assets/Projector.js?v=projector-shadows', document.baseURI ) );
+		const projector = new THREE.Group();
+		projector.name = 'Drawing asset projector';
+		projector.userData.assetObject = { type: 'projector' };
+		editor.addObject( projector );
+		editor.addScript( projector, projectorScript() );
+		await editor.assetBrowser.applyToObject( 'project:import-2/drawing.png', projector );
+
+	} );
+	await page.waitForFunction( () => editor.scene.getObjectByName( 'Drawing asset projector' )?.projectorOutput?.source?.width === 1024 );
+	await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Drawing asset projector' ) ) );
+
+}
+
 async function check() {
 
 	const browser = await chromium.launch( { channel: process.env.CHROME_CHANNEL || 'chrome', args: [ '--enable-unsafe-swiftshader' ] } );
@@ -2462,6 +2554,7 @@ async function check() {
 		assert.match( svg, /<image [^>]+data:image\/png;base64,/ );
 		assert.match( svg, /<pattern id="brush-grain-0"[^>]*><image [^>]*data:image\/png;base64,/ );
 		assert.match( svg, /<path fill="none" stroke="url\(#brush-grain-0\)"[^>]+ [ML][^>]+"/ );
+		await checkDrawingAssets( page );
 		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );

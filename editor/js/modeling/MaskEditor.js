@@ -1,12 +1,13 @@
 import { icon } from '../Glyphs.js?v=color-sampler';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
+import { storeSourceFiles } from '../ProjectAssets.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
 import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
 import { createBrushColorSampler } from './BrushColorSampler.js';
-import { modelButton } from './ModelControls.js?v=color-sampler';
+import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-grain';
@@ -21,7 +22,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const scene = editor.scene;
 	const saved = () => vectorMode ? scene.userData.vectorDrawing : light.userData.projectionMask;
 	let initial = saved();
-	let reference, referenceURL;
+	let reference, referenceFile, referenceRequest, referenceURL;
+	let referencePath = vectorMode ? initial?.referencePath : undefined;
+	let includeReference = vectorMode && initial?.includeReference === true;
+	let updateReferenceControls;
 	let referenceVisible = true;
 	let guideCenter = [ .5, .5 ];
 	let shapes = maskShapes( initial ), active = shapes.length - 1, vertex = -1, tool = 'edit', draft = [], gesture;
@@ -216,22 +220,71 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} );
 		toggle.setAttribute( 'aria-pressed', 'true' );
+		const clearReference = modelButton( media, 'Remove reference image', 'erase', () => {
+
+			cancelReferenceLoad();
+			reference = referenceFile = referencePath = undefined;
+			includeReference = false;
+			updateReferenceControls();
+			status.textContent = 'Reference removed.';
+			draw();
+
+		} );
+		const include = modelField( media, 'Include reference in output', 'export', 'checkbox', includeReference );
+		include.onchange = () => { includeReference = include.checked; };
+		updateReferenceControls = () => {
+
+			toggle.disabled = ! reference;
+			clearReference.disabled = ! reference && ! referencePath;
+			include.disabled = ! reference;
+			include.checked = includeReference;
+
+		};
+		updateReferenceControls();
 		upload.onchange = () => {
 
 			const file = upload.files[ 0 ];
-			if ( ! file ) return;
-			if ( referenceURL ) URL.revokeObjectURL( referenceURL );
-			const image = new Image();
-			reference = image;
-			image.onload = draw;
-			image.onerror = () => { status.textContent = 'The image could not be decoded.'; };
-			image.src = referenceURL = URL.createObjectURL( file );
-			image.alt = file.name;
+			if ( file ) loadReference( file );
 			upload.value = '';
 
 		};
+		modelButton( footer, 'Save texture to Project assets', 'add', saveDrawingAsset );
 		modelButton( footer, 'Export SVG', 'code', exportSVG );
 		modelButton( footer, 'Export PNG', 'save', exportPNG );
+
+	}
+
+	function cancelReferenceLoad() {
+
+		if ( ! referenceRequest ) return;
+		referenceRequest.onload = referenceRequest.onerror = null;
+		URL.revokeObjectURL( referenceURL );
+		referenceRequest = referenceURL = undefined;
+
+	}
+
+	function loadReference( file, path ) {
+
+		cancelReferenceLoad();
+		const image = referenceRequest = new Image();
+		image.onload = () => {
+
+			cancelReferenceLoad();
+			reference = image;
+			referenceFile = file;
+			referencePath = path;
+			updateReferenceControls();
+			status.textContent = 'Reference image loaded.';
+			draw();
+
+		};
+		image.onerror = () => {
+
+			cancelReferenceLoad();
+			status.textContent = 'The reference image could not be decoded.';
+
+		};
+		image.src = referenceURL = URL.createObjectURL( file );
 
 	}
 
@@ -245,6 +298,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( vectorMode && brushStrokes.length ) value.brushStrokes = structuredClone( brushStrokes );
 			if ( vectorMode ) {
 
+				if ( referenceRequest ) throw new Error( 'Wait for the reference image to load.' );
+				if ( referenceFile && ! referencePath ) {
+
+					referencePath = storeSourceFiles( editor, { [ referenceFile.name ]: referenceFile } ).get( referenceFile );
+
+				}
+				if ( referencePath ) value.referencePath = referencePath;
+				if ( includeReference ) value.includeReference = true;
 				const command = new SetValueCommand( editor, scene, 'userData', { ...scene.userData, vectorDrawing: value } );
 				command.updatable = false;
 				editor.execute( command, 'Edit vector drawing' );
@@ -496,22 +557,68 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} ).join( '' );
 		const cutouts = layers( 'cutout' ), drawing = layers( 'inside' );
+		let base = brushStrokes.length ? raster : null;
+		if ( includeReference && reference ) base = drawingCanvas( false );
 		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs>' + patterns.join( '' ) +
 			'<mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' + cutouts + '</mask></defs><g mask="url(#cutouts)">' +
-			( brushStrokes.length ? '<image width="1000" height="1000" href="' + raster.toDataURL() + '"/>' : '' ) +
+			( base ? '<image width="1000" height="1000" href="' + base.toDataURL() + '"/>' : '' ) +
 			drawing + '</g></svg>';
 		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
 
 	}
-	function exportPNG() {
+	function drawingCanvas( vectors = true ) {
 
 		const output = document.createElement( 'canvas' );
-		const side = output.width = output.height = 1024;
+		const side = output.width = output.height = rasterSize;
 		const target = output.getContext( '2d' );
-		if ( referenceVisible ) drawImage( target, reference, 0, 0, side, side );
+		if ( includeReference ) drawImage( target, reference, 0, 0, side, side );
 		target.drawImage( raster, 0, 0 );
-		drawVectors( target, side, side );
-		output.toBlob( blob => { if ( blob ) editor.utils.save( blob, 'drawing.png' ); }, 'image/png' );
+		if ( vectors ) drawVectors( target, side, side );
+		return output;
+
+	}
+
+	function exportPNG() {
+
+		drawingCanvas().toBlob( blob => { if ( blob ) editor.utils.save( blob, 'drawing.png' ); }, 'image/png' );
+
+	}
+
+	function saveDrawingAsset() {
+
+		if ( referenceRequest ) {
+
+			status.textContent = 'Wait for the reference image to load.';
+			return;
+
+		}
+		if ( draft.length || gesture ) {
+
+			status.textContent = 'Finish the current stroke or contour before saving a texture.';
+			return;
+
+		}
+		if ( ! shapes.length && ! brushStrokes.length && ! ( includeReference && reference ) ) {
+
+			status.textContent = 'Draw something or include a reference image before saving a texture.';
+			return;
+
+		}
+		const projectFiles = editor.sourceFiles;
+		drawingCanvas().toBlob( blob => {
+
+			if ( editor.sourceFiles !== projectFiles || ! workspacePanel.isConnected ) return;
+			if ( ! blob ) {
+
+				status.textContent = 'The drawing could not be encoded as PNG.';
+				return;
+
+			}
+			const file = new File( [ blob ], 'drawing.png', { type: 'image/png' } );
+			const path = storeSourceFiles( editor, { [ file.name ]: file } ).get( file );
+			status.textContent = 'Saved ' + path + ' to Project assets.';
+
+		}, 'image/png' );
 
 	}
 
@@ -879,11 +986,17 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	editor.editWorkspace.mount( vectorMode ? 'image' : 'mask', light, workspacePanel, () => {
 
 		clearInterval( tick );
-		if ( reference ) reference.onload = reference.onerror = null;
-		if ( referenceURL ) URL.revokeObjectURL( referenceURL );
+		cancelReferenceLoad();
 
 	} );
 	refresh();
+	if ( referencePath ) {
+
+		const file = editor.sourceFiles.get( referencePath )?.file;
+		if ( file ) loadReference( file, referencePath );
+		else status.textContent = 'The saved reference image is missing from Project assets.';
+
+	}
 	if ( showPicker ) search.focus();
 	else canvas.focus( { preventScroll: true } );
 
