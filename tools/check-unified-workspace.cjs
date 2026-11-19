@@ -279,6 +279,40 @@ async function checkPencil( page ) {
 
 }
 
+async function checkCompactPencil( page ) {
+
+	const originalViewport = page.viewportSize();
+	const originalStyle = await page.evaluate( () => {
+
+		const style = editor.config.getKey( 'settings/uiStyle' );
+		editor.config.setKey( 'settings/uiStyle', 'compact' );
+		editor.signals.uiStyleChanged.dispatch();
+		return style;
+
+	} );
+	await page.setViewportSize( { width: 640, height: 720 } );
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.getByLabel( 'Pencil stroke settings', { exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => {
+
+		const pane = document.querySelector( '#viewport' ).getBoundingClientRect();
+		const palette = document.querySelector( '.pencil-brush-palette' ).getBoundingClientRect();
+		const menu = document.querySelector( '.pencil-stroke-options' ).getBoundingClientRect();
+		const presets = document.querySelector( '.pencil-brush-presets' );
+		return [ palette.right <= pane.right, menu.right <= pane.right && menu.bottom <= pane.bottom, presets.scrollWidth > presets.clientWidth ];
+
+	} ), [ true, true, true ] );
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.setViewportSize( originalViewport );
+	await page.evaluate( style => {
+
+		editor.config.setKey( 'settings/uiStyle', style );
+		editor.signals.uiStyleChanged.dispatch();
+
+	}, originalStyle );
+
+}
+
 async function checkUVSelection( page ) {
 
 	await page.evaluate( () => {
@@ -1594,6 +1628,7 @@ async function check() {
 		} ), [ 1, 2, 3 ] );
 		await checkSelectionShelf( page );
 		await checkPencil( page );
+		await checkCompactPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
 		await checkTextureBake( page );

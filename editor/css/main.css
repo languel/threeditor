@@ -2501,7 +2501,7 @@ body[data-ui-style="compact"] .viewport-split-label { display: none; }
 	color: var(--theme-text);
 	background-color: var(--theme-background);
 }
-.viewport-tool-options { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.viewport-tool-options { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; max-width: 100%; }
 .viewport-tool-options label {
 	display: inline-flex;
 	align-items: center;
