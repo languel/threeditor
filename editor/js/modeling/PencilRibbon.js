@@ -30,7 +30,7 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 		const aspect = brush.aspect || 1;
 		const nibWidth = Math.hypot( side.dot( new THREE.Vector3().fromArray( sample.right ).applyAxisAngle( normal, nibAngle ) ),
 			aspect * side.dot( new THREE.Vector3().fromArray( sample.up ).applyAxisAngle( normal, nibAngle ) ) );
-		return { tangent, side, radius: sample.radius * Math.max( .18, nibWidth ) };
+		return { tangent, side, radius: sample.radius * Math.max( .18, nibWidth ), opacity: sample.opacity ?? 1 };
 
 	};
 	if ( points.length > 1 ) {
@@ -42,14 +42,14 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 
 			const next = i % points.length;
 			const point = points[ next ];
-			const { side, radius } = frames[ next ];
+			const { side, radius, opacity } = frames[ next ];
 			if ( i ) {
 
 				const previous = ( i - 1 ) % points.length;
 				distance += point.distanceTo( points[ previous ] ) / Math.max( 1e-6, radius + frames[ previous ].radius );
 
 			}
-			for ( const [ u, alpha ] of rings ) add( point.clone().addScaledVector( side, u * radius ), alpha, distance, ( u + 1 ) / 2 );
+			for ( const [ u, alpha ] of rings ) add( point.clone().addScaledVector( side, u * radius ), alpha * opacity, distance, ( u + 1 ) / 2 );
 
 		}
 		const count = rings.length;
@@ -61,10 +61,10 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 		}
 		if ( ! closed ) for ( const end of [ 0, points.length - 1 ] ) {
 
-			const point = points[ end ], { tangent, side, radius } = frames[ end ];
+			const point = points[ end ], { tangent, side, radius, opacity } = frames[ end ];
 			const along = end ? distance : 0;
 			const directionSign = end ? 1 : -1;
-			const center = add( point, 1, along, .5 );
+			const center = add( point, opacity, along, .5 );
 			let previous;
 			for ( let i = 0; i <= 10; i ++ ) {
 
@@ -72,7 +72,7 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 				const x = Math.cos( angle ), y = directionSign * Math.sin( angle );
 				const direction = side.clone().multiplyScalar( x ).addScaledVector( tangent, y );
 				const core = 1 - fade;
-				const inner = add( point.clone().addScaledVector( direction, radius * core ), 1, along + y * core / 2, ( x * core + 1 ) / 2 );
+				const inner = add( point.clone().addScaledVector( direction, radius * core ), opacity, along + y * core / 2, ( x * core + 1 ) / 2 );
 				const outer = add( point.clone().addScaledVector( direction, radius ), 0, along + y / 2, ( x + 1 ) / 2 );
 				if ( previous ) indices.push( center, previous[ 0 ], inner, previous[ 0 ], previous[ 1 ], inner, inner, previous[ 1 ], outer );
 				previous = [ inner, outer ];

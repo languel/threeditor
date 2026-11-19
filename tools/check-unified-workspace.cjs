@@ -440,6 +440,20 @@ async function checkPencilSplats( page ) {
 	await page.evaluate( () => editor.redo() );
 	assert.equal( await saved(), second );
 	await initialized();
+	const pressureOpacity = page.getByLabel( 'Use pen pressure for opacity', { exact: true } );
+	await pressureOpacity.check();
+	const pen = await page.context().newCDPSession( page );
+	const position = { x: pixel[ 0 ], y: pixel[ 1 ] - 35, button: 'left', pointerType: 'pen', clickCount: 1 };
+	await pen.send( 'Input.dispatchMouseEvent', { ...position, type: 'mousePressed', buttons: 1, force: .25 } );
+	await pen.send( 'Input.dispatchMouseEvent', { ...position, type: 'mouseReleased', buttons: 0 } );
+	await pen.detach();
+	const third = await saved();
+	const alpha = Buffer.from( third, 'base64' ).subarray( Buffer.from( second, 'base64' ).length ).filter( ( _, index ) => index % 32 === 27 );
+	assert.ok( alpha.length > 0 && alpha.some( value => value > 0 ) && alpha.every( value => value <= 27 ) );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await saved(), second );
+	await pressureOpacity.uncheck();
+
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Pen', exact: true } ).click();
@@ -853,6 +867,54 @@ async function checkUVUnwrap( page ) {
 	assert.equal( await page.evaluate( () => editor.selected.material.map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data[ 3 ] ), 0 );
 	await page.evaluate( () => { editor.undo(); editor.undo(); } );
 	assert.equal( await page.evaluate( () => editor.selected.material.map === null ), true );
+	await tools.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
+	await uv.getByRole( 'button', { name: 'Pen', exact: true } ).click();
+	for ( const [ field, value ] of [ [ 'Brush size (px)', '40' ], [ 'Brush tip aspect', '.25' ],
+		[ 'Brush tip angle (°)', '90' ], [ 'Brush spacing (× size)', '.3' ] ] ) {
+
+		const input = uv.getByLabel( field, { exact: true } );
+		await input.fill( value );
+		await input.press( 'Tab' );
+
+	}
+	assert.deepEqual( await page.evaluate( () => {
+
+		const { size, aspect, angle, spacing } = editor.pencilBrush;
+		return [ size, aspect, angle, spacing ];
+
+	} ), [ 40, .25, Math.PI / 2, .3 ] );
+	const pressureSize = uv.getByLabel( 'Use pen pressure for size', { exact: true } );
+	const pressureOpacity = uv.getByLabel( 'Use pen pressure for opacity', { exact: true } );
+	const pen = await page.context().newCDPSession( page );
+	const penDab = async () => {
+
+		await grid.scrollIntoViewIfNeeded();
+		const { x, y, width, height } = await grid.boundingBox();
+		const position = { x: x + width / 2, y: y + height / 2, button: 'left', pointerType: 'pen', clickCount: 1 };
+		await pen.send( 'Input.dispatchMouseEvent', { ...position, type: 'mousePressed', buttons: 1, force: .25 } );
+		await pen.send( 'Input.dispatchMouseEvent', { ...position, type: 'mouseReleased', buttons: 0 } );
+
+	};
+	const sample = ( x, y ) => page.evaluate( ( { x, y } ) =>
+		[ ...editor.selected.material.map.image.getContext( '2d' ).getImageData( x, y, 1, 1 ).data ], { x, y } );
+	await pressureSize.check();
+	await pressureOpacity.check();
+	await penDab();
+	const lightDab = await sample( 512, 512 );
+	assert.ok( lightDab[ 1 ] > 210 && lightDab[ 1 ] < 246, String( lightDab ) );
+	assert.deepEqual( await sample( 512, 524 ), [ 255, 255, 255, 255 ] );
+	await page.evaluate( () => editor.undo() );
+	await pressureSize.uncheck();
+	await pressureOpacity.uncheck();
+	await penDab();
+	assert.deepEqual( await sample( 512, 524 ), [ 255, 174, 102, 255 ] );
+	assert.deepEqual( await sample( 524, 512 ), [ 255, 255, 255, 255 ] );
+	await page.evaluate( () => editor.undo() );
+	await pressureSize.check();
+	await uv.getByRole( 'button', { name: 'Pen', exact: true } ).click();
+	await pen.detach();
+
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 

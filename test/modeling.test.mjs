@@ -12,6 +12,7 @@ import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { uvComponents, uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
 import { packExistingUVs } from '../editor/js/modeling/UVPack.js';
+import { pencilRibbon } from '../editor/js/modeling/PencilRibbon.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 import { separateMesh } from '../editor/js/modeling/MeshSeparation.js';
 import { joinMeshGeometry } from '../editor/js/modeling/MeshJoin.js';
@@ -449,5 +450,17 @@ test( 'UV packing preserves island shape and relative scale with a texture gutte
 	assert.deepEqual( packed[ 2 ], packed[ 4 ] );
 	assert.notDeepEqual( packed[ 2 ], packed[ 6 ] );
 	assert.deepEqual( points[ 0 ], [ -1, 1 ] );
+
+} );
+
+test( 'Pencil ribbons keep per-sample opacity and default to full pressure for older strokes', () => {
+
+	const points = [ new THREE.Vector3(), new THREE.Vector3( 1, 0, 0 ) ];
+	const coordinates = { normal: [ 0, 0, 1 ], right: [ 1, 0, 0 ], up: [ 0, 1, 0 ], radius: .05 };
+	const { attributes: { color } } = pencilRibbon( THREE, points, false,
+		{ color: '#000000', hardness: 1, strength: .8, samples: [ { ...coordinates, opacity: .25 }, coordinates ] } );
+	assert.ok( Math.abs( color.getW( 1 ) - .2 ) < 1e-6 );
+	assert.ok( Math.abs( color.getW( 5 ) - .8 ) < 1e-6 );
+	assert.ok( Math.abs( color.getW( 8 ) - .2 ) < 1e-6 );
 
 } );

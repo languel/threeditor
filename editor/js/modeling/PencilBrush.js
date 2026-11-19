@@ -31,7 +31,7 @@ function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
+	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, spacing: .12, aspect: 1, angle: 0, pressureSize: true, pressureOpacity: false, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
 
 }
 
@@ -107,10 +107,10 @@ export function drawBrushTip( context, radius, brush ) {
 
 export function brushDab( context, x, y, pressure, brush, erase = false ) {
 
-	const radius = Math.max( .5, brush.size * Math.max( .2, pressure ) / 2 );
+	const radius = Math.max( .5, brush.size * brushSizeFactor( brush, pressure ) / 2 );
 	context.save();
 	context.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
-	context.globalAlpha = brush.strength;
+	context.globalAlpha = brush.strength * brushOpacityFactor( brush, pressure );
 	context.translate( x, y );
 	drawBrushTip( context, radius, brush );
 	context.restore();
@@ -128,7 +128,19 @@ export function brushStroke( brush, x, y, pressure, dab ) {
 
 export function brushPressure( event ) {
 
-	return event.pointerType === 'pen' ? event.pressure || .5 : 1;
+	return event.pointerType === 'pen' && Number.isFinite( event.pressure ) ? Math.max( 0, Math.min( 1, event.pressure ) ) : 1;
+
+}
+
+export function brushSizeFactor( brush, pressure ) {
+
+	return brush.pressureSize === false ? 1 : Math.max( .2, pressure );
+
+}
+
+export function brushOpacityFactor( brush, pressure ) {
+
+	return brush.pressureOpacity ? pressure : 1;
 
 }
 
@@ -145,7 +157,7 @@ export function useBrushShortcut( editor, event ) {
 
 }
 
-export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, curveCleanup = true, addStrokeControls } = {} ) {
+export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, addStrokeControls } = {} ) {
 
 	const brush = pencilBrush( editor );
 	const palette = document.createElement( 'div' );
@@ -194,27 +206,41 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 	}
 	palette.append( fieldRow );
+	const tipOptions = new Set( [ 'spacing', 'aspect', 'angle', 'pressureSize', 'pressureOpacity' ] );
+	const displayValue = key => key === 'angle' ? Math.round( brush.angle * 180 / Math.PI ) : brush[ key ];
 	const fields = [
 		[ 'color', 'Brush color', 'color', 'color' ],
 		[ 'size', 'Brush size (px)', 'brushWidth', 'number', 1, 256 ],
 		[ 'strength', 'Brush strength', 'opacity', 'number', .01, 1 ],
 		[ 'hardness', 'Brush hardness', 'brush', 'number', 0, 1 ],
 		[ 'grain', 'Brush grain', 'toolGrid', 'number', 0, 1 ],
-		[ 'grainScale', 'Grain scale', 'scale', 'number', 1, 30 ]
-	].map( ( [ key, name, glyph, type, min, max ] ) => {
+		[ 'grainScale', 'Grain scale', 'scale', 'number', 1, 30 ],
+		[ 'spacing', 'Brush spacing (× size)', 'toolPath', 'number', .02, 2 ],
+		[ 'aspect', 'Brush tip aspect', 'scale', 'number', .1, 1 ],
+		[ 'angle', 'Brush tip angle (°)', 'rotate', 'number', -180, 180 ],
+		[ 'pressureSize', 'Use pen pressure for size', 'brushWidth', 'checkbox' ],
+		[ 'pressureOpacity', 'Use pen pressure for opacity', 'opacity', 'checkbox' ]
+	].filter( ( [ key ] ) => dabSpacing || key !== 'spacing' ).map( ( [ key, name, glyph, type, min, max ] ) => {
 
-		const input = modelField( fieldRow, name, glyph, type, brush[ key ] );
+		const input = modelField( fieldRow, name, glyph, type, displayValue( key ) );
 		if ( type === 'number' ) {
 
-			Object.assign( input, { min, max, step: key === 'size' ? 1 : key === 'grainScale' ? .5 : .05 } );
-			input.dataset.scrubSensitivity = key === 'size' ? '.5' : key === 'grainScale' ? '.2' : '.005';
+			const step = key === 'size' || key === 'angle' ? 1 : key === 'grainScale' ? .5 : key === 'spacing' ? .01 : .05;
+			Object.assign( input, { min, max, step } );
+			input.dataset.scrubSensitivity = key === 'size' ? '.5' : key === 'grainScale' ? '.2' : key === 'angle' ? '.5' : '.005';
 
 		}
 		input.onchange = () => {
 
 			if ( type === 'color' ) brush.color = input.value;
-			else if ( Number.isFinite( input.valueAsNumber ) ) brush[ key ] = Math.max( min, Math.min( max, input.valueAsNumber ) );
-			input.value = brush[ key ];
+			else if ( type === 'checkbox' ) brush[ key ] = input.checked;
+			else if ( Number.isFinite( input.valueAsNumber ) ) {
+
+				const value = Math.max( min, Math.min( max, input.valueAsNumber ) );
+				brush[ key ] = key === 'angle' ? value * Math.PI / 180 : value;
+
+			}
+			if ( type !== 'checkbox' ) input.value = displayValue( key );
 			refresh(); changed();
 
 		};
@@ -306,7 +332,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		for ( const [ key, input ] of fields ) {
 
 			if ( input.type === 'checkbox' ) input.checked = brush[ key ];
-			else if ( document.activeElement !== input ) input.value = brush[ key ];
+			else if ( document.activeElement !== input ) input.value = displayValue( key );
 			if ( key === 'stabilizeRadius' ) input.disabled = ! brush.stabilize;
 			if ( key === 'guideAngle' ) input.disabled = brush.guide !== 'parallel';
 
@@ -329,6 +355,10 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 	}
 	refresh();
-	return { element: palette, refresh, showStrokeOptions( visible ) { if ( settings ) settings.hidden = ! visible; } };
+	return { element: palette, refresh, showStrokeOptions( visible ) { if ( settings ) settings.hidden = ! visible; },
+		showTipOptions( visible ) {
+			for ( const [ key, input ] of fields ) if ( tipOptions.has( key ) ) input.parentElement.hidden = ! visible;
+		}
+	};
 
 }

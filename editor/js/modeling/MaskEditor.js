@@ -4,9 +4,9 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { storeSourceFiles } from '../ProjectAssets.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
-import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
+import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=brush-response';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
-import { createBrushColorSampler } from './BrushColorSampler.js';
+import { createBrushColorSampler } from './BrushColorSampler.js?v=brush-response';
 import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
@@ -845,7 +845,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		ctx.restore();
 		brushSettings.hidden = ! usesPalette();
 		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : tool === 'reference' ? 'move' : '';
-		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); }
+		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); palette.showTipOptions( tool !== 'stroke' ); }
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth', 'pinch' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
@@ -983,7 +983,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			const step = point.map( ( value, i ) => value - gesture.last[ i ] );
 			shape.points = sculptMask( shape.points.map( pixel ), point, step, Number( radius.value ), event.shiftKey ? 'smooth' : tool,
-				Number( strength.value ) * ( event.pointerType === 'pen' ? event.pressure || .5 : 1 ), shape.closed !== false ).map( uv );
+				Number( strength.value ) * brushPressure( event ), shape.closed !== false ).map( uv );
 
 		}
 		gesture.last = point;

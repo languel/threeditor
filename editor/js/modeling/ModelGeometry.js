@@ -1,4 +1,4 @@
-import { pencilRibbon } from './PencilRibbon.js?v=pencil-grain';
+import { pencilRibbon } from './PencilRibbon.js?v=brush-response';
 import { pencilGrainTexture } from './PencilGrain.js';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
 

@@ -33,7 +33,7 @@ export function addPencilSplatDab( mark, point, sample, brush, tile ) {
 		const position = center.clone().addScaledVector( right, x * radius ).addScaledVector( up, y * radius * aspect );
 		mark.positions.push( ...position.toArray() );
 		mark.radii.push( radius );
-		mark.kernels.push( { axes, rotation, alpha } );
+		mark.kernels.push( { axes, rotation, alpha: alpha * ( sample.opacity ?? 1 ) } );
 
 	}
 	mark.points.push( point );

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { brushDab, brushGrainFill, drawBrushTip } from './PencilBrush.js?v=pencil-splats';
+import { brushDab, brushGrainFill, drawBrushTip } from './PencilBrush.js?v=brush-response';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { SetMaterialCommand } from '../commands/SetMaterialCommand.js';
 
@@ -32,7 +32,7 @@ function clipPolygonToFace( polygon, screen, det ) {
 
 }
 
-function perspectiveStamp( hit, texels, x, y, radius ) {
+function perspectiveStamp( hit, texels, x, y, radius, brush ) {
 
 	const { screen, det } = hit;
 	const [ a, b, c ] = screen;
@@ -46,14 +46,22 @@ function perspectiveStamp( hit, texels, x, y, radius ) {
 			.addScaledVector( texels[ 1 ], weights[ 1 ] / invW ).addScaledVector( texels[ 2 ], weights[ 2 ] / invW );
 
 	};
-	const fullyCovered = screen.every( point => ( point.x - x ) ** 2 + ( point.y - y ) ** 2 <= radius ** 2 );
-	const circle = fullyCovered ? null : Array.from( { length: 32 }, ( _, index ) => {
+	const cos = Math.cos( brush.angle || 0 ), sin = Math.sin( brush.angle || 0 );
+	const aspect = brush.aspect || 1;
+	const fullyCovered = screen.every( point => {
 
-		const angle = index / 32 * 2 * Math.PI;
-		return { x: x + radius * Math.cos( angle ), y: y + radius * Math.sin( angle ) };
+		const dx = point.x - x, dy = point.y - y;
+		return ( dx * cos + dy * sin ) ** 2 + ( ( dy * cos - dx * sin ) / aspect ) ** 2 <= radius ** 2;
 
 	} );
-	const outline = fullyCovered ? texels : clipPolygonToFace( circle, screen, det ).map( toUV );
+	const tip = fullyCovered ? null : Array.from( { length: 32 }, ( _, index ) => {
+
+		const angle = index / 32 * 2 * Math.PI;
+		const u = radius * Math.cos( angle ), v = radius * aspect * Math.sin( angle );
+		return { x: x + u * cos - v * sin, y: y + u * sin + v * cos };
+
+	} );
+	const outline = fullyCovered ? texels : clipPolygonToFace( tip, screen, det ).map( toUV );
 	const holes = hit.occluded.map( ( [ ox, oy, length ] ) => {
 
 		const left = x + ox, top = y + oy, right = left + length, bottom = top + 1;
@@ -132,7 +140,7 @@ export class TexturePaintStroke {
 		const cx = coord.x - offsetX * xx - offsetY * yx;
 		const cy = coord.y - offsetX * xy - offsetY * yy;
 		const perspective = projection && projection.some( point => point.invW !== projection[ 0 ].invW ) ?
-			perspectiveStamp( hit, texels, projection[ 0 ].x - offsetX, projection[ 0 ].y - offsetY, radius ) : null;
+			perspectiveStamp( hit, texels, projection[ 0 ].x - offsetX, projection[ 0 ].y - offsetY, radius, brush ) : null;
 		if ( perspective && perspective.outline.length < 3 ) return '';
 		const tiles = ( center, extent, size, wrap, axis ) => {
 
