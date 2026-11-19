@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-seams';
+import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=seam-unwrap';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
 import { bakeTexture } from './TextureBake.js';
 import { lightViewCamera } from './LightView.js';
@@ -299,7 +299,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			layout.append( group );
 
 		};
-		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'boxNet', 'Connected cube net' ], [ 'lightmap', 'Lightmap pack' ] ] );
+		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'seams', 'Unwrap from seams' ], [ 'boxNet', 'Connected cube net' ], [ 'lightmap', 'Lightmap pack' ] ] );
 		options( 'Projection', [ [ 'box', 'Cube projection' ], [ 'cylinder', 'Cylinder projection (Y)' ],
 			[ 'sphere', 'Sphere projection' ], [ 'view', 'Project from view' ],
 			[ 'xy', 'Planar XY' ], [ 'xz', 'Planar XZ' ], [ 'yz', 'Planar YZ' ] ] );
@@ -316,17 +316,18 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( pins.size ) throw new Error( 'Unpin the UV vertices before replacing the layout.' );
 			const mode = layout.value;
 			let next;
-			if ( mode === 'smart' || mode === 'lightmap' ) {
+			if ( [ 'smart', 'seams', 'lightmap' ].includes( mode ) ) {
 
 				object.updateWorldMatrix( true, false );
 				const proxy = new THREE.Mesh( original, object.material );
 				proxy.matrixAutoUpdate = false;
 				proxy.matrix.copy( object.matrixWorld );
-				const atlas = unwrapUVs( proxy, { mode: mode === 'smart' ? 'normal' : 'lightmap', attribute: 'uv',
+				const atlas = unwrapUVs( proxy, { mode: mode === 'smart' ? 'normal' : mode, attribute: 'uv',
 					respectUVSeams: false, isSeam: seams.size ? ( mesh, a, b ) => seams.has( edgeKey( mesh, a, b ) ) : undefined } );
 				if ( ! atlas?.charts.length ) { if ( proxy.geometry !== original ) proxy.geometry.dispose(); throw new Error( 'No usable UV islands could be packed.' ); }
 				next = proxy.geometry;
 				if ( atlas.warnings.excludedFaces ) status.textContent = atlas.warnings.excludedFaces + ' degenerate faces were omitted.';
+				else if ( mode === 'seams' ) status.textContent = 'Unwrapped ' + atlas.charts.length + ( atlas.charts.length === 1 ? ' UV island.' : ' UV islands.' );
 
 			} else {
 

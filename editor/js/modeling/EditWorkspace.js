@@ -5,7 +5,7 @@ import { editableMesh } from './ModelViewport.js?v=pencil-grain';
 import { isProjector } from '../assets/Projector.js?v=projector-shadows';
 import { modelButton } from './ModelControls.js?v=color-sampler';
 import { openMaskEditor } from './MaskEditor.js?v=reference-placement';
-import { openUVEditor } from './UVEditor.js?v=uv-anchors';
+import { openUVEditor } from './UVEditor.js?v=seam-unwrap';
 
 export function createEditWorkspace( editor, viewport ) {
 

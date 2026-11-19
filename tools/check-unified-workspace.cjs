@@ -774,6 +774,12 @@ async function checkUVUnwrap( page ) {
 	} );
 	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
 	const layout = page.getByRole( 'combobox', { name: 'UV layout' } );
+	const originalGeometry = await page.evaluate( () => editor.selected.geometry.uuid );
+	await layout.selectOption( 'seams' );
+	await page.getByRole( 'button', { name: 'Auto layout' } ).click();
+	assert.match( await page.getByRole( 'region', { name: 'UV editor', exact: true } ).getByRole( 'status' ).textContent(), /Add seams or choose Smart unwrap/ );
+	assert.equal( await page.evaluate( () => editor.selected.geometry.uuid ), originalGeometry );
+
 	for ( const mode of [ 'smart', 'lightmap', 'box', 'boxNet', 'cylinder', 'sphere', 'view' ] ) {
 
 		await layout.selectOption( mode );
@@ -824,6 +830,71 @@ async function checkUVUnwrap( page ) {
 	assert.equal( await page.evaluate( () => editor.selected.material.map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data[ 3 ] ), 0 );
 	await page.evaluate( () => { editor.undo(); editor.undo(); } );
 	assert.equal( await page.evaluate( () => editor.selected.material.map === null ), true );
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkConformalSeamUnwrap( page ) {
+
+	await page.evaluate( () => {
+
+		const sides = 12;
+		const positions = [], faces = [];
+		for ( let i = 0; i < sides; i ++ ) {
+
+			const angle = i * Math.PI * 2 / sides;
+			const x = Math.cos( angle ), z = Math.sin( angle );
+			positions.push( x, -1, z, x, 1, z );
+			const a = i * 2, b = ( i + 1 ) % sides * 2;
+			faces.push( a, a + 1, b, b, a + 1, b + 1 );
+
+		}
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+		geometry.setIndex( faces );
+		geometry.addGroup( 0, faces.length / 2, 0 );
+		geometry.addGroup( faces.length / 2, faces.length / 2, 1 );
+		geometry.computeVertexNormals();
+		const mesh = new THREE.Mesh( geometry, [ new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial() ] );
+		mesh.name = 'Seamed tube';
+		editor.addObject( mesh );
+		editor.select( mesh );
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	await page.evaluate( () => {
+
+		const model = editor.modeling;
+		model.setSelectionMode( 'edge' );
+		const a = model.data.points.findIndex( ( [ x, y, z ] ) => x === 1 && y === -1 && z === 0 );
+		const b = model.data.points.findIndex( ( [ x, y, z ] ) => x === 1 && y === 1 && z === 0 );
+		model.applyElementSelection( [ [ a, b ] ], 'set' );
+
+	} );
+	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
+	const status = uv.getByRole( 'status' );
+	const layout = uv.getByRole( 'combobox', { name: 'UV layout' } );
+	const autoLayout = uv.getByRole( 'button', { name: 'Auto layout' } );
+	await uv.getByRole( 'button', { name: 'Mark selected 3D edges as seams', exact: true } ).click();
+	assert.equal( await status.textContent(), 'Marked 1 UV seam.' );
+	await layout.selectOption( 'seams' );
+	await autoLayout.click();
+	assert.equal( await status.textContent(), 'Unwrapped 1 UV island.' );
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.deepEqual( await page.evaluate( () => {
+
+		const { index, attributes: { uv, position }, groups, userData } = editor.selected.geometry;
+		const atSeam = [ 0, 1, 2 ].map( ( _, i ) => [ ...new Set( Array.from( { length: position.count }, ( _, j ) => j )
+			.filter( j => Math.abs( position.getX( j ) - Math.cos( i * Math.PI / 6 ) ) < 1e-6 &&
+				Math.abs( position.getZ( j ) - Math.sin( i * Math.PI / 6 ) ) < 1e-6 && position.getY( j ) === 1 )
+			.map( j => [ uv.getX( j ), uv.getY( j ) ].join( ',' ) ) ) ].length );
+		const solidUVs = uv.array.every( value => value > 0 && value < 1 );
+		return [ index.count, groups.map( group => group.materialIndex ), userData.uvSeams.length, atSeam, solidUVs ];
+
+	} ), [ 72, [ 0, 1 ], 1, [ 2, 1, 1 ], true ] );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await page.evaluate( () => editor.selected.geometry.attributes.uv ), undefined );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -2307,6 +2378,7 @@ async function check() {
 		await checkCompactPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );
+		await checkConformalSeamUnwrap( page );
 		await checkUVSeams( page );
 		await checkUVIslands( page );
 		await checkTextureBake( page );

@@ -14,7 +14,9 @@ import { potpack } from '../libs/potpack.module.js';
  * @param {Object3D} root - A mesh or hierarchy to unwrap.
  * @param {Object} [options] - Atlas and chart options.
  * @param {string} [options.attribute='uv1'] - Output attribute: uv, uv1, uv2, uv3.
- * @param {string} [options.mode='lightmap'] - 'lightmap' or 'normal'. Normal tries LSCM.
+ * @param {string} [options.mode='lightmap'] - 'lightmap', 'normal', or 'seams'. Normal and seams try LSCM.
+ * Seam mode follows connected components across uncut edges without normal-based cuts.
+ * It throws when a component cannot be flattened within the atlas quality limits.
  * @param {number} [options.resolution=1024] - Square atlas size in pixels, integer >= 4.
  * @param {number} [options.padding=4] - Nonnegative gutter in pixels; 2 * padding + 1 must be less than resolution.
  * @param {number} [options.texelsPerUnit=0] - Common world density; zero fits the atlas. Must be nonnegative.
@@ -35,7 +37,9 @@ function unwrapUVs( root, options = {} ) {
 		useInputUVs: false,
 		...options, maxAreaRatio: 2
 	};
-	settings.maxStretch = settings.mode === 'normal' ? 2 : 1.5;
+	settings.seamOnly = settings.mode === 'seams';
+	settings.conformal = settings.mode === 'normal' || settings.seamOnly;
+	settings.maxStretch = settings.conformal ? 2 : 1.5;
 	settings.respectUVSeams ??= settings.mode === 'normal';
 	root.updateWorldMatrix( true, true );
 
@@ -79,6 +83,7 @@ function unwrapUVs( root, options = {} ) {
 		}
 
 		if ( failed.length === 0 ) break;
+		if ( settings.seamOnly ) return null;
 
 		// Float32 rounding broke these charts at this density; split them and repack.
 		for ( const chart of failed ) splitFaces( chart.record, chart.faces, settings, charts );
@@ -186,7 +191,7 @@ function readMesh( mesh, settings ) {
 	const uv = geometry.getAttribute( 'uv' );
 	// Explicit cuts can separate corners that share a buffer vertex, even inside
 	// one connected chart. Join only corners connected by an uncut half-edge.
-	const cornerParents = settings.isSeam && Int32Array.from( { length: count }, ( _, i ) => i );
+	const cornerParents = ( settings.isSeam || settings.seamOnly ) && Int32Array.from( { length: count }, ( _, i ) => i );
 	const corner = ( face, slot ) => 3 * face + slot % 3;
 	function find( i ) {
 
@@ -215,7 +220,7 @@ function readMesh( mesh, settings ) {
 			let best = null, bestDot = - Infinity;
 			for ( const y of edge ) {
 
-				if ( used.has( x ) || used.has( y ) || y.a !== x.b || y.b !== x.a || materials[ x.f ] !== materials[ y.f ] ) continue;
+				if ( used.has( x ) || used.has( y ) || y.a !== x.b || y.b !== x.a || ( ! settings.seamOnly && materials[ x.f ] !== materials[ y.f ] ) ) continue;
 				const dot = faces[ x.f ].normal.dot( faces[ y.f ].normal );
 				if ( dot > bestDot ) {
 
@@ -274,6 +279,12 @@ function equalUV( uv, a, b ) {
 
 function growCharts( record, settings ) {
 
+	if ( settings.seamOnly ) {
+
+		const usable = record.faces.flatMap( ( face, index ) => face.ignored ? [] : [ index ] );
+		return connectedComponents( record, usable );
+
+	}
 	const assigned = new Uint8Array( record.faces.length ), charts = [];
 	// Lightmap charts use planar projection; keep the costlier LSCM charts smaller.
 	const limit = settings.mode === 'lightmap' ? 8192 : 2048;
@@ -308,18 +319,25 @@ function growCharts( record, settings ) {
 function parameterize( record, faces, settings, charts ) {
 
 	const normal = new Vector3();
-	for ( const f of faces ) normal.addScaledVector( record.faces[ f ].normal, record.faces[ f ].area );
+	let worldArea = 0;
+	for ( const f of faces ) {
+
+		const face = record.faces[ f ];
+		worldArea += face.area;
+		normal.addScaledVector( face.normal, face.area );
+
+	}
+	// An open seam can wrap around a surface whose face normals cancel.
+	if ( settings.seamOnly && normal.lengthSq() < ( worldArea * 1e-8 ) ** 2 ) normal.copy( record.faces[ faces[ 0 ] ].normal );
 	normal.normalize();
 	const axis = Math.abs( normal.x ) < 0.8 ? new Vector3( 1, 0, 0 ) : new Vector3( 0, 1, 0 );
 	const u = axis.cross( normal ).normalize(), v = new Vector3().crossVectors( normal, u );
 	const vertexMap = new Map(), positions = [], uv = [], triangles = [];
 	const useInput = settings.useInputUVs && record.original.attributes.uv;
 	const origin = record.points[ record.faces[ faces[ 0 ] ].vertices[ 0 ] ];
-	let worldArea = 0;
 	for ( const f of faces ) {
 
 		const face = record.faces[ f ];
-		worldArea += face.area;
 		triangles.push( face.vertices.map( ( vertex, slot ) => {
 
 			const key = face.keys[ slot ];
@@ -347,7 +365,7 @@ function parameterize( record, faces, settings, charts ) {
 	let candidate = uv;
 	const initialQuality = checkChart( positions, triangles, uv, worldArea, settings );
 	let quality = initialQuality;
-	if ( settings.mode === 'normal' && faces.length > 1 && ! ( initialQuality && ( useInput || initialQuality.maxStretch < 1.000001 ) ) ) {
+	if ( settings.conformal && faces.length > 1 && ! ( initialQuality && ( useInput || initialQuality.maxStretch < 1.000001 ) ) ) {
 
 		const conformal = solveLSCM( positions, triangles, uv );
 		const conformalQuality = conformal && checkChart( positions, triangles, conformal, worldArea, settings );
@@ -362,6 +380,7 @@ function parameterize( record, faces, settings, charts ) {
 
 	if ( ! quality ) {
 
+		if ( settings.seamOnly ) throw new Error( 'A UV island could not be flattened without overlap or excessive stretch. Add seams or choose Smart unwrap.' );
 		if ( useInput && ( settings.mode === 'lightmap' || faces.length === 1 ) ) {
 
 			// Reproject a rejected lightmap island before splitting its authored UVs
