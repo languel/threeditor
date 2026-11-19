@@ -245,7 +245,20 @@ async function checkPencil( page ) {
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), false );
 	await page.evaluate( () => editor.undo() );
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
-	await page.evaluate( () => editor.config.setKey( 'settings/pencilStrokeDepth', 'off' ) );
+	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
+	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'off' );
+	await page.getByLabel( 'Stabilize strokes' ).check();
+	const simplify = page.getByLabel( 'Simplify tolerance (px)' );
+	await simplify.fill( '1' );
+	await simplify.press( 'Tab' );
+	await page.mouse.move( ax, ay );
+	await page.mouse.down();
+	await page.mouse.move( ax + 10, ay, { steps: 5 } );
+	assert.equal( await page.evaluate( () => editor.viewTools.stroke?.marks.values().next().value.points.length ), 1 );
+	await page.mouse.move( ax + 110, ay, { steps: 14 } );
+	await page.mouse.up();
+	assert.equal( await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points.length ), 2 );
+	await page.evaluate( () => Object.assign( editor.pencilBrush, { stabilize: false, simplify: 0 } ) );
 
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 

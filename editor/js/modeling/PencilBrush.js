@@ -30,7 +30,7 @@ export function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, color: '#ffae66' };
+	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0 };
 
 }
 
@@ -79,7 +79,7 @@ export function useBrushShortcut( editor, event ) {
 
 }
 
-export function brushPalette( editor, host, changed = () => {}, vector = false ) {
+export function brushPalette( editor, host, changed = () => {}, { vectorOnly = false, strokeOptions = false } = {} ) {
 
 	const brush = pencilBrush( editor );
 	const palette = document.createElement( 'div' );
@@ -87,7 +87,6 @@ export function brushPalette( editor, host, changed = () => {}, vector = false )
 	palette.setAttribute( 'role', 'group' );
 	palette.setAttribute( 'aria-label', 'Pencil brush palette' );
 	host.append( palette );
-	palette.classList.toggle( 'pencil-vector-settings', vector );
 	const presets = document.createElement( 'div' );
 	presets.className = 'pencil-brush-presets';
 	palette.append( presets );
@@ -96,7 +95,7 @@ export function brushPalette( editor, host, changed = () => {}, vector = false )
 		[ 'size', 'Brush size (px)', 'brushWidth', 'number', 1, 256 ],
 		[ 'strength', 'Brush strength', 'opacity', 'number', .01, 1 ],
 		[ 'hardness', 'Brush hardness', 'brush', 'number', 0, 1 ]
-	].filter( ( [ key ] ) => ! vector || key === 'color' || key === 'strength' ).map( ( [ key, name, glyph, type, min, max ] ) => {
+	].filter( ( [ key ] ) => ! vectorOnly || key === 'color' || key === 'strength' ).map( ( [ key, name, glyph, type, min, max ] ) => {
 
 		const input = modelField( palette, name, glyph, type, brush[ key ] );
 		if ( type === 'number' ) Object.assign( input, { min, max, step: key === 'size' ? 1 : .05 } );
@@ -110,6 +109,34 @@ export function brushPalette( editor, host, changed = () => {}, vector = false )
 		return [ key, input ];
 
 	} );
+	const options = [];
+	if ( strokeOptions ) {
+
+		const stabilizer = modelField( palette, 'Stabilize strokes', 'toolPath', 'checkbox', brush.stabilize );
+		stabilizer.onchange = () => { brush.stabilize = stabilizer.checked; refresh(); changed(); };
+		for ( const [ key, label, icon, min, max, step ] of [
+			[ 'stabilizeRadius', 'Stabilizer radius (px)', 'brushWidth', 1, 100, 1 ],
+			[ 'smoothing', 'Stroke smoothing', 'sculptSmooth', 0, 1, .05 ],
+			[ 'simplify', 'Simplify tolerance (px)', 'toolPath', 0, 10, .25 ]
+		] ) {
+
+			const input = modelField( palette, label, icon, 'number', brush[ key ] );
+			Object.assign( input, { min, max, step } );
+			input.onchange = () => {
+
+				if ( Number.isFinite( input.valueAsNumber ) ) brush[ key ] = Math.max( min, Math.min( max, input.valueAsNumber ) );
+				refresh(); changed();
+
+			};
+			fields.push( [ key, input ] );
+			options.push( input.parentElement );
+
+		}
+		options.push( stabilizer.parentElement );
+		fields.push( [ 'stabilize', stabilizer ] );
+
+	}
+
 	const buttons = tips.map( ( [ name, size, strength, hardness, spacing = .12, aspect = 1, angle = 0 ] ) => {
 
 		const button = modelButton( presets, name, 'brush', () => {
@@ -132,11 +159,17 @@ export function brushPalette( editor, host, changed = () => {}, vector = false )
 	} );
 	function refresh() {
 
-		for ( const [ key, input ] of fields ) input.value = brush[ key ];
+		for ( const [ key, input ] of fields ) {
+
+			if ( input.type === 'checkbox' ) input.checked = brush[ key ];
+			else input.value = brush[ key ];
+			if ( key === 'stabilizeRadius' ) input.disabled = ! brush.stabilize;
+
+		}
 		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( brush.name === name ) );
 
 	}
 	refresh();
-	return { element: palette, refresh };
+	return { element: palette, refresh, showStrokeOptions( visible ) { for ( const option of options ) option.hidden = ! visible; } };
 
 }

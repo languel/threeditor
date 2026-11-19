@@ -3,7 +3,8 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
-import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stroke-depth';
+import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-stabilizer';
+import { simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js';
 import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
@@ -96,7 +97,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! gesture );
 	const brushSettings = node( 'div' );
 	brushSettings.className = 'canvas-pencil-settings';
-	const palette = vectorMode && brushPalette( editor, brushSettings, draw );
+	const palette = vectorMode && brushPalette( editor, brushSettings, draw, { strokeOptions: true } );
 	if ( palette ) workspace.after( brushSettings );
 	const panel = node( 'aside', workspace );
 	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
@@ -556,6 +557,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.beginPath(); ctx.arc( ...pixel( draft[ 0 ] ), 4, 0, Math.PI * 2 ); ctx.fill();
 
 		}
+		if ( cursor && gesture?.stabilizer ) {
+
+			ctx.strokeStyle = '#ffae66';
+			ctx.lineWidth = 1 / view.scale;
+			ctx.beginPath();
+			ctx.moveTo( ...gesture.stabilizer );
+			ctx.lineTo( ...cursor );
+			ctx.stroke();
+
+		}
 		if ( cursor && [ 'push', 'smooth', 'raster', 'erase' ].includes( tool ) ) {
 
 			ctx.strokeStyle = '#fff';
@@ -567,7 +578,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		ctx.strokeRect( x, y, width, height );
 		ctx.restore();
 		brushSettings.hidden = ! usesPalette();
-		if ( usesPalette() ) palette.refresh();
+		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); }
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
@@ -623,7 +634,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
 		if ( ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
-		if ( tool === 'stroke' ) gesture.brush = { ...pencilBrush( editor ) };
+		if ( tool === 'stroke' ) {
+
+			gesture.brush = { ...pencilBrush( editor ) };
+			if ( gesture.brush.stabilize ) gesture.stabilizer = point.slice();
+
+		}
 		if ( pencilRaster() ) {
 
 			const stroke = { brush: { ...pencilBrush( editor ) }, erase: tool === 'erase', samples: [] };
@@ -644,7 +660,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	canvas.onpointermove = event => {
 
-		const point = cursor = pointer( event );
+		let point = cursor = pointer( event );
+		if ( gesture?.stabilizer ) {
+
+			const radius = gesture.brush.stabilizeRadius * canvas.width / canvas.getBoundingClientRect().width / view.scale;
+			point = stabilizePointer( gesture.stabilizer, ...point, radius ).slice();
+
+		}
 		if ( ! gesture ) { draw(); return; }
 		if ( distance( point, gesture.last ) < 3 ) return;
 		const start = bounded( gesture.start ), end = bounded( point );
@@ -692,8 +714,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} else if ( tool === 'stroke' && draft.length >= 2 ) {
 
-			const { color, size, strength } = gesture.brush;
-			addShape( { points: draft, closed: false, color, width: size / rasterSize, opacity: strength, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
+			const { color, size, strength, smoothing, simplify } = gesture.brush;
+			const tolerance = simplify * canvas.width / canvas.getBoundingClientRect().width / view.scale;
+			const points = simplifyPencilStroke( smoothPencilStroke( draft, smoothing ), pixel, tolerance );
+			addShape( { points, closed: false, color, width: size / rasterSize, opacity: strength, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
 
 		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
