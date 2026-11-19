@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
+import { icon } from '../Glyphs.js?v=color-sampler';
 
 function labelContent( node, label, glyph ) {
 

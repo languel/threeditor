@@ -10,10 +10,11 @@ import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=ma
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
-import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
+import { modelButton } from './ModelControls.js?v=color-sampler';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=color-sampler';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
+import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
@@ -78,7 +79,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const source = () => modifierSource( object );
 	let geometry = source();
 	let selected = [], dragging, dirty = false;
-	let tool = 'select', lastPoint, pivot = [ .5, .5 ];
+	let tool = 'select', beforeColorPick = 'pencil', lastPoint, pivot = [ .5, .5 ];
 	const undo = [], redo = [];
 	let bake, showBake = true;
 	let original = geometry;
@@ -97,13 +98,19 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
 	const shelf = createCanvasShelf( canvas, [
 		...selectionTools2D, [ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
-		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ] ] ),
+		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ] ] ),
 		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
 	], id => {
 
 		cancelDrag();
 		if ( id === 'fit' ) view.fit();
-		else { tool = id; draw(); }
+		else {
+
+			if ( id === 'pickColor' && tool !== 'pickColor' ) beforeColorPick = paintTool() ? tool : 'pencil';
+			tool = id;
+			draw();
+
+		}
 
 	}, warp ? 'Warp tools' : 'UV tools' );
 	const paintControls = document.createElement( 'div' );
@@ -119,6 +126,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	}
 	const materialSlot = () => Number( materialSelect.value );
 	const paintTool = () => tool === 'pencil' || tool === 'erase';
+	const pickColor = ! warp && createBrushColorSampler( editor );
 	const pivotSelect = document.createElement( 'select' );
 	pivotSelect.setAttribute( 'aria-label', 'UV transform pivot' );
 	pivotSelect.append( new Option( 'Median pivot', 'median' ), new Option( '2D Cursor pivot', 'cursor' ) );
@@ -361,12 +369,12 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		}
 		const material = editor.getObjectMaterial( object, materialSlot() );
 		const output = object.projectorOutput;
-		const source = warp ? output?.warpSource || output?.canvas : ( ! paintTool() && showBake && bake?.image ) || material?.map?.image;
+		const source = warp ? output?.warpSource || output?.canvas : ( tool !== 'pickColor' && ! paintTool() && showBake && bake?.image ) || material?.map?.image;
 		if ( source?.width || source?.videoWidth ) {
 
 			try {
 
-				ctx.globalAlpha = paintTool() || source === bake?.image ? 1 : .55;
+				ctx.globalAlpha = paintTool() || tool === 'pickColor' || source === bake?.image ? 1 : .55;
 				if ( warp ) ctx.drawImage( source, output.x, output.y, output.width, output.height, margin, margin, span, span );
 				else ctx.drawImage( source, margin, margin, span, span );
 
@@ -431,7 +439,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		}
 		ctx.restore();
-		paintControls.hidden = ! paintTool();
+		paintControls.hidden = ! paintTool() && tool !== 'pickColor';
+		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : '';
 		shelf.update( tool );
 
 	}
@@ -553,6 +562,18 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		canvas.focus( { preventScroll: true } );
 		if ( dragging?.modal ) { finishDrag(); return; }
 		const point = lastPoint = view.point( event );
+		if ( tool === 'pickColor' ) {
+
+			const material = editor.getObjectMaterial( object, materialSlot() );
+			const [ u, v ] = pointUV( point );
+			if ( u < 0 || u > 1 || v < 0 || v > 1 ) return;
+			const color = pickColor( material?.map?.image, u, v, material?.color && '#' + material.color.getHexString() );
+			status.textContent = color ? 'Picked ' + color + '.' : 'No readable color at this point.';
+			if ( color ) { tool = beforeColorPick; palette.refresh(); }
+			draw();
+			return;
+
+		}
 		if ( tool === 'cursor' ) { pivot = pointUV( point ); draw(); return; }
 		if ( paintTool() ) {
 

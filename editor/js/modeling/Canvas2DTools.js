@@ -1,4 +1,4 @@
-import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
+import { modelButton } from './ModelControls.js?v=color-sampler';
 
 export const selectionTools2D = [
 	[ 'select', 'Select', 'toolSelect' ], [ 'box', 'Box Select', 'selectBox' ],

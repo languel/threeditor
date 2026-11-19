@@ -1,11 +1,12 @@
-import { icon } from '../Glyphs.js?v=poly-context';
+import { icon } from '../Glyphs.js?v=color-sampler';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
-import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
+import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=color-sampler';
 import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
-import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
+import { createBrushColorSampler } from './BrushColorSampler.js';
+import { modelButton } from './ModelControls.js?v=color-sampler';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-grain';
@@ -30,7 +31,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const rasterSize = 1024;
 	if ( raster ) raster.width = raster.height = rasterSize;
 	const rasterContext = raster?.getContext( '2d' );
-	const usesPalette = () => [ 'stroke', 'raster', 'erase' ].includes( tool );
+	const usesPalette = () => [ 'stroke', 'raster', 'erase', 'pickColor' ].includes( tool );
+	const pickColor = vectorMode && createBrushColorSampler( editor );
+	let beforeColorPick = 'raster';
 	const pencilRaster = () => tool === 'raster' || tool === 'erase';
 	const transforms = () => transformTools2D.some( ( [ id ] ) => id === tool );
 	const node = ( tag, parent, label ) => {
@@ -50,6 +53,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const tools = new Map();
 	const addTool = ( id, label, glyph ) => tools.set( id, modelButton( toolbar, label, glyph, () => {
 
+		if ( id === 'pickColor' && tool !== 'pickColor' ) beforeColorPick = usesPalette() ? tool : 'raster';
 		tool = id;
 		draft = [];
 		vertex = -1;
@@ -65,6 +69,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		addTool( 'stroke', 'Pencil', 'freehandDraw' );
 		addTool( 'raster', 'Brush', 'brush' );
 		addTool( 'erase', 'Erase Brush Marks', 'erase' );
+		addTool( 'pickColor', 'Sample Brush Color', 'eyedropper' );
 		addTool( 'guideCenter', 'Set drawing guide center', 'pivotOrigin' );
 		for ( const [ id, label, glyph ] of transformTools2D ) addTool( id, label, glyph );
 
@@ -626,6 +631,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		ctx.strokeRect( x, y, width, height );
 		ctx.restore();
 		brushSettings.hidden = ! usesPalette();
+		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : '';
 		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); }
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
@@ -670,6 +676,15 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( event.button !== 0 ) return;
 		const point = pointer( event );
 		if ( uv( point ).some( value => value < 0 || value > 1 ) ) return;
+		if ( tool === 'pickColor' ) {
+
+			const color = pickColor( vectorCanvas, ...uv( point ) );
+			status.textContent = color ? 'Picked ' + color + '.' : 'No readable color at this point.';
+			if ( color ) tool = beforeColorPick;
+			draw();
+			return;
+
+		}
 		if ( tool === 'guideCenter' ) { guideCenter = uv( point ); tool = 'stroke'; draw(); return; }
 		canvas.focus( { preventScroll: true } );
 		if ( tool === 'polygon' ) {

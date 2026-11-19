@@ -568,6 +568,12 @@ async function checkUVUnwrap( page ) {
 		return map ? Array.from( map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data ) : [];
 
 	} ), [ 255, 174, 102, 255 ] );
+	const brushColor = page.getByLabel( 'Brush color', { exact: true } );
+	await brushColor.fill( '#123456' );
+	await tools.getByRole( 'button', { name: 'Sample Brush Color', exact: true } ).click();
+	await page.mouse.click( x, y );
+	assert.equal( await brushColor.inputValue(), '#ffae66' );
+	assert.equal( await tools.getByRole( 'button', { name: 'Pencil', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
 	await tools.getByRole( 'button', { name: 'Erase Texture', exact: true } ).click();
 	await page.mouse.click( x, y );
 	assert.equal( await page.evaluate( () => editor.selected.material.map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data[ 3 ] ), 0 );
@@ -2040,6 +2046,11 @@ async function check() {
 		await page.getByLabel( 'Contour color' ).fill( '#e4572e' );
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Create filled scene shape' } ).click();
+		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Sample Brush Color', exact: true } ).click();
+		await canvas.scrollIntoViewIfNeeded();
+		const swatch = await canvas.boundingBox();
+		await page.mouse.click( swatch.x + swatch.width / 2, swatch.y + swatch.height / 2 );
+		assert.equal( await page.getByLabel( 'Brush color', { exact: true } ).inputValue(), '#e4572e' );
 		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 		await page.getByRole( 'region', { name: 'Image and vector editor' } ).getByRole( 'button', { name: 'Pencil Soft', exact: true } ).click();
 		await canvas.scrollIntoViewIfNeeded();
