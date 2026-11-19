@@ -2103,7 +2103,7 @@ async function checkDrawingAssets( page ) {
 	assert.equal( await include.isChecked(), false );
 	await saveAsset.click();
 	await status.getByText( 'Saved drawing.png to Project assets.', { exact: true } ).waitFor();
-	const sampleAsset = path => page.evaluate( async path => {
+	const sampleAsset = ( path, x = 10, y = 10 ) => page.evaluate( async ( { path, x, y } ) => {
 
 		const image = await createImageBitmap( editor.sourceFiles.get( path ).file );
 		const canvas = document.createElement( 'canvas' );
@@ -2112,9 +2112,9 @@ async function checkDrawingAssets( page ) {
 		const ctx = canvas.getContext( '2d' );
 		ctx.drawImage( image, 0, 0 );
 		image.close();
-		return [ ...ctx.getImageData( 10, 10, 1, 1 ).data ];
+		return [ ...ctx.getImageData( x, y, 1, 1 ).data ];
 
-	}, path );
+	}, { path, x, y } );
 	assert.deepEqual( await sampleAsset( 'drawing.png' ), [ 0, 0, 0, 0 ] );
 	await include.check();
 	await ui.getByRole( 'button', { name: 'Show reference image' } ).click();
@@ -2180,6 +2180,46 @@ async function checkDrawingAssets( page ) {
 		editor.signals.assetsChanged.dispatch();
 
 	} );
+
+	const canvas = ui.getByLabel( 'Vector drawing canvas' );
+	const guideOpacity = ui.getByLabel( 'Reference guide opacity' );
+	await ui.getByRole( 'button', { name: 'Place reference image' } ).click();
+	await canvas.scrollIntoViewIfNeeded();
+	const bounds = await canvas.boundingBox();
+	const center = [ bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 ];
+	await page.mouse.move( ...center );
+	await page.mouse.down();
+	await page.mouse.move( center[ 0 ] + bounds.width * 454 / 760 * .1, center[ 1 ], { steps: 5 } );
+	await page.mouse.up();
+	await page.keyboard.down( 'Shift' );
+	await page.mouse.move( ...center );
+	await page.mouse.down();
+	await page.mouse.move( center[ 0 ], center[ 1 ] + bounds.height * 454 / 490 * .1, { steps: 5 } );
+	await page.mouse.up();
+	await page.keyboard.up( 'Shift' );
+	await guideOpacity.fill( '0.35' );
+	await guideOpacity.press( 'Tab' );
+	await include.check();
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	const placement = () => page.evaluate( () => editor.scene.userData.vectorDrawing.referencePlacement );
+	const moved = await placement();
+	assert.ok( Math.abs( moved.x - .1 ) < .01 && Math.abs( moved.y ) < .01 );
+	assert.ok( Math.abs( moved.scale - 2 ** -.3 ) < .02 && moved.opacity === .35 );
+	await saveAsset.click();
+	await status.getByText( 'Saved import-3/drawing.png to Project assets.', { exact: true } ).waitFor();
+	assert.deepEqual( await sampleAsset( 'import-3/drawing.png' ), [ 0, 0, 0, 0 ] );
+	assert.deepEqual( await sampleAsset( 'import-3/drawing.png', 600, 800 ), [ 0, 68, 255, 255 ] );
+	await ui.getByRole( 'button', { name: 'Fit reference to canvas' } ).click();
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	assert.deepEqual( await placement(), { x: 0, y: 0, scale: 1, opacity: .35 } );
+	await ui.getByRole( 'button', { name: 'Undo drawing edit' } ).click();
+	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
+	assert.deepEqual( await placement(), moved );
+	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await page.getByLabel( 'Editor Type', { exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
+	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	assert.equal( Number( await guideOpacity.inputValue() ), .35 );
 
 	await page.waitForFunction( () => editor.assetBrowser.records.has( 'project:drawing.png' ) );
 	await page.evaluate( () => {

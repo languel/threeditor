@@ -16,6 +16,17 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=uv-sculpt';
 import { closestPointOnSegment, fitDrawingContour, insertContourPoint, segmentCount } from './Contour.js';
 
+const referenceDefaults = { x: 0, y: 0, scale: 1, opacity: 1 };
+
+function readReferencePlacement( saved ) {
+
+	const limits = { x: [ -2, 2 ], y: [ -2, 2 ], scale: [ .05, 16 ], opacity: [ .05, 1 ] };
+	return Object.fromEntries( Object.entries( referenceDefaults ).map( ( [ key, fallback ] ) => [
+		key, Number.isFinite( saved?.[ key ] ) ? THREE.MathUtils.clamp( saved[ key ], ...limits[ key ] ) : fallback
+	] ) );
+
+}
+
 export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
 
 	if ( ! vectorMode && ! canEditLightMask( light ) ) return;
@@ -25,6 +36,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	let reference, referenceFile, referenceRequest, referenceURL;
 	let referencePath = vectorMode ? initial?.referencePath : undefined;
 	let includeReference = vectorMode && initial?.includeReference === true;
+	let referencePlacement = vectorMode && readReferencePlacement( initial?.referencePlacement );
 	let updateReferenceControls, referencePicker;
 	let referenceVisible = true;
 	let guideCenter = [ .5, .5 ];
@@ -225,6 +237,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const toggle = modelButton( media, 'Show reference image', 'scene', () => {
 
 			referenceVisible = ! referenceVisible;
+			if ( ! referenceVisible && tool === 'reference' ) tool = 'edit';
 			toggle.setAttribute( 'aria-pressed', String( referenceVisible ) );
 			draw();
 
@@ -235,6 +248,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			cancelReferencePicker();
 			cancelReferenceLoad();
 			reference = referenceFile = referencePath = undefined;
+			if ( tool === 'reference' ) tool = 'edit';
 			includeReference = false;
 			updateReferenceControls();
 			status.textContent = 'Reference removed.';
@@ -243,10 +257,37 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		} );
 		const include = modelField( media, 'Include reference in output', 'export', 'checkbox', includeReference );
 		include.onchange = () => { includeReference = include.checked; };
+		const place = modelButton( media, 'Place reference image', 'move', () => {
+
+			tool = tool === 'reference' ? 'edit' : 'reference';
+			referenceVisible = true;
+			draft = [];
+			status.textContent = tool === 'reference' ? 'Drag to move the reference. Shift-drag up or down to scale it.' : '';
+			updateReferenceControls();
+			canvas.focus( { preventScroll: true } );
+			draw();
+
+		} );
+		tools.set( 'reference', place );
+		const fitReference = modelButton( media, 'Fit reference to canvas', 'frame', () => change( () => {
+
+			referencePlacement = { ...referencePlacement, x: 0, y: 0, scale: 1 };
+
+		} ) );
+		const opacity = modelField( media, 'Reference guide opacity', 'opacity', 'number', referencePlacement.opacity );
+		Object.assign( opacity, { min: .05, max: 1, step: .05, onchange: () => change( () => {
+
+			referencePlacement = readReferencePlacement( { ...referencePlacement, opacity: opacity.valueAsNumber } );
+			opacity.value = referencePlacement.opacity;
+
+		} ) } );
 		const referenceName = node( 'small', media );
 		updateReferenceControls = () => {
 
-			toggle.disabled = ! reference;
+			toggle.disabled = place.disabled = fitReference.disabled = opacity.disabled = ! reference;
+			place.setAttribute( 'aria-pressed', String( tool === 'reference' ) );
+			toggle.setAttribute( 'aria-pressed', String( referenceVisible ) );
+			opacity.value = referencePlacement.opacity;
 			clearReference.disabled = ! reference && ! referencePath;
 			include.disabled = ! reference;
 			include.checked = includeReference;
@@ -335,7 +376,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 					referencePath = storeSourceFiles( editor, { [ referenceFile.name ]: referenceFile } ).get( referenceFile );
 
 				}
-				if ( referencePath ) value.referencePath = referencePath;
+				if ( referencePath ) {
+
+					value.referencePath = referencePath;
+					if ( Object.keys( referenceDefaults ).some( key => referencePlacement[ key ] !== referenceDefaults[ key ] ) ) {
+						value.referencePlacement = { ...referencePlacement };
+					}
+
+				}
 				if ( includeReference ) value.includeReference = true;
 				const command = new SetValueCommand( editor, scene, 'userData', { ...scene.userData, vectorDrawing: value } );
 				command.updatable = false;
@@ -352,7 +400,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function snapshot() {
 
-		return { shapes: structuredClone( shapes ), brushStrokes: brushStrokes.slice(), active, vertex };
+		return { shapes: structuredClone( shapes ), brushStrokes: brushStrokes.slice(), active, vertex, referencePlacement };
 
 	}
 	function remember( state = snapshot() ) {
@@ -366,7 +414,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		if ( ! from.length || gesture ) return;
 		to.push( snapshot() );
-		( { shapes, brushStrokes, active, vertex } = from.pop() );
+		( { shapes, brushStrokes, active, vertex, referencePlacement } = from.pop() );
+		updateReferenceControls?.();
 		repaint();
 		draft = [];
 		refresh();
@@ -493,13 +542,21 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		return /^#[0-9a-f]{6}$/i.test( shape?.color ) ? shape.color : '#72cbef';
 
 	}
-	function drawImage( target, image, x, y, width, height ) {
+	function imageBounds( image, x, y, width, height, placement ) {
 
 		const iw = image?.videoWidth || image?.naturalWidth || image?.width;
 		const ih = image?.videoHeight || image?.naturalHeight || image?.height;
 		if ( ! iw || ! ih ) return;
-		const scale = Math.min( width / iw, height / ih );
-		try { target.drawImage( image, x + ( width - iw * scale ) / 2, y + ( height - ih * scale ) / 2, iw * scale, ih * scale ); }
+		const scale = Math.min( width / iw, height / ih ) * ( placement?.scale ?? 1 );
+		return [ x + ( width - iw * scale ) / 2 + width * ( placement?.x ?? 0 ),
+			y + ( height - ih * scale ) / 2 + height * ( placement?.y ?? 0 ), iw * scale, ih * scale ];
+
+	}
+	function drawImage( target, image, x, y, width, height, placement ) {
+
+		const bounds = imageBounds( image, x, y, width, height, placement );
+		if ( ! bounds ) return;
+		try { target.drawImage( image, ...bounds ); }
 		catch { /* Wait for a decoded image. */ }
 
 	}
@@ -602,7 +659,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const output = document.createElement( 'canvas' );
 		const side = output.width = output.height = rasterSize;
 		const target = output.getContext( '2d' );
-		if ( includeReference ) drawImage( target, reference, 0, 0, side, side );
+		if ( includeReference ) drawImage( target, reference, 0, 0, side, side, referencePlacement );
 		target.drawImage( raster, 0, 0 );
 		if ( vectors ) drawVectors( target, side, side );
 		return output;
@@ -687,7 +744,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( vectorCanvas.height !== h ) vectorCanvas.height = h;
 			const layer = vectorCanvas.getContext( '2d' );
 			layer.clearRect( 0, 0, w, h );
-			drawImage( layer, image, 0, 0, w, h );
+			layer.globalAlpha = referencePlacement.opacity;
+			drawImage( layer, image, 0, 0, w, h, referencePlacement );
+			layer.globalAlpha = 1;
 			layer.drawImage( raster, 0, 0, w, h );
 			drawVectors( layer, w, h );
 			ctx.drawImage( vectorCanvas, x, y, width, height );
@@ -765,12 +824,27 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.beginPath(); ctx.arc( ...cursor, usesPalette() ? pencilBrush( editor ).size * width / rasterSize / 2 : Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
 
 		}
+		if ( tool === 'reference' && referenceVisible ) {
+
+			const bounds = imageBounds( reference, x, y, width, height, referencePlacement );
+			if ( bounds ) {
+
+				ctx.save();
+				ctx.strokeStyle = '#ffae66';
+				ctx.lineWidth = 1 / view.scale;
+				ctx.setLineDash( [ 5 / view.scale, 4 / view.scale ] );
+				ctx.strokeRect( ...bounds );
+				ctx.restore();
+
+			}
+
+		}
 		ctx.restore();
 		ctx.strokeStyle = '#68778a';
 		ctx.strokeRect( x, y, width, height );
 		ctx.restore();
 		brushSettings.hidden = ! usesPalette();
-		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : '';
+		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : tool === 'reference' ? 'move' : '';
 		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); }
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth', 'pinch' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
@@ -837,6 +911,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
 		if ( ( transforms() || [ 'edit', 'push', 'smooth', 'pinch' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
+		if ( tool === 'reference' ) gesture.referenceScale = event.shiftKey;
 		if ( tool === 'stroke' ) {
 
 			gesture.brush = { ...pencilBrush( editor ) };
@@ -878,7 +953,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const delta = end.map( ( value, i ) => value - start[ i ] );
 		const shape = shapes[ active ];
 		if ( gesture.paint ) gesture.sample( ...uv( point ).map( value => value * rasterSize ), brushPressure( event ) );
-		else if ( transforms() ) {
+		else if ( tool === 'reference' ) {
+
+			const placement = gesture.before.referencePlacement;
+			const [ dx, dy ] = uv( point ).map( ( value, axis ) => value - start[ axis ] );
+			referencePlacement = readReferencePlacement( gesture.referenceScale ? { ...placement, scale: placement.scale * 2 ** ( -3 * dy ) } :
+				{ ...placement, x: placement.x + dx, y: placement.y + dy } );
+
+		} else if ( transforms() ) {
 
 			const original = gesture.before.shapes[ active ].points;
 			const center = [ 0, 1 ].map( axis => original.reduce( ( sum, p ) => sum + p[ axis ], 0 ) / original.length );
@@ -926,7 +1008,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
-		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth', 'pinch' ].includes( tool ) ) ) remember( gesture.before );
+		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth', 'pinch', 'reference' ].includes( tool ) ) ) remember( gesture.before );
 		gesture = null;
 		draft = [];
 		refresh();
@@ -934,7 +1016,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	canvas.onpointercancel = () => {
 
-		if ( gesture ) ( { shapes, brushStrokes, active, vertex } = gesture.before );
+		if ( gesture ) ( { shapes, brushStrokes, active, vertex, referencePlacement } = gesture.before );
 		repaint();
 		gesture = null;
 		draft = [];
