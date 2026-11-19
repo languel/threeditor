@@ -85,13 +85,54 @@ export function isConstraintDrag( event ) {
 export function startConstraintDrag( event, mode ) {
 
 	return { clientX: event.clientX, clientY: event.clientY, button: event.button, id: event.pointerId,
-		plane: event.shiftKey && mode !== 'rotate' };
+		plane: event.shiftKey && mode !== 'rotate', locked: false };
 
 }
 
 export function endsConstraintDrag( drag, event ) {
 
-	return drag && drag.id === event.pointerId && ( drag.button === event.button || event.type === 'pointercancel' );
+	return drag && drag.button !== undefined && drag.id === event.pointerId &&
+		( drag.button === event.button || event.type === 'pointercancel' );
+
+}
+
+export function constraintHint( drag, lock ) {
+
+	if ( drag && ! drag.locked ) return 'Move the pointer to choose a constraint';
+	if ( ! lock ) return '';
+	return drag && drag.button === undefined ? lock + ' selected · release Alt to lock' : lock + ' locked';
+
+}
+
+export function createSnapBaseMarker( viewport ) {
+
+	const marker = document.createElement( 'span' );
+	marker.className = 'transform-snap-base';
+	marker.setAttribute( 'aria-hidden', 'true' );
+	marker.hidden = true;
+	viewport.append( marker );
+	return marker;
+
+}
+
+export function showSnapBase( marker, frame, point ) {
+
+	marker.hidden = true;
+	if ( ! frame || ! point ) return;
+	const projected = point.project( frame.camera );
+	if ( ! Number.isFinite( projected.x ) || Math.abs( projected.x ) > 1 || Math.abs( projected.y ) > 1 || Math.abs( projected.z ) > 1 ) return;
+	const { x, y, width, height } = frame.rect;
+	marker.style.left = x + ( projected.x + 1 ) * width / 2 + 'px';
+	marker.style.top = y + ( 1 - projected.y ) * height / 2 + 'px';
+	marker.hidden = false;
+
+}
+
+export function snapBaseHint( picking, base, moving ) {
+
+	if ( picking ) return 'Click a reference point in the scene';
+	if ( base ) return 'Snap base set · move it onto a snap target · B repick';
+	return moving ? 'B pick snap base' : '';
 
 }
 
@@ -104,4 +145,4 @@ export function transformNumber( value, key ) {
 
 }
 
-export const transformHints = 'G/R/S switch · R twice trackball · X/Y/Z axis · Shift+axis plane · middle or Alt drag auto constraint · Shift fine · Ctrl invert snap · Shift+Tab snap · Enter confirm · Esc cancel';
+export const transformHints = 'G/R/S switch · R twice trackball · X/Y/Z axis · Shift+axis plane · Hold Alt and move, or middle drag, to lock · Shift+Alt plane · Shift fine · Ctrl invert snap · Shift+Tab snap · Enter confirm · Esc cancel';

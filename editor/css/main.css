@@ -1461,6 +1461,17 @@ body { min-height: 100dvh; background: var(--theme-viewport); }
 .shortcut-row span { min-width: 0; }
 .shortcut-row button { flex: none; max-width: 48%; font-size: 11px; }
 .navigation-notice { position: absolute; z-index: 50; bottom: 50px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); padding: 0; background: transparent; color: #fff; border: 0; border-radius: 0; font-size: 12px; line-height: 1.4; text-align: center; text-shadow: 1px 1px 0 rgba(0,0,0,0.25); pointer-events: none; }
+.transform-snap-base {
+	position: absolute;
+	z-index: 12;
+	width: 10px;
+	height: 10px;
+	border: 2px solid #ffbf66;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+	box-shadow: 0 0 0 2px #171717;
+	pointer-events: none;
+}
 body.translucent-panels #viewport .navigation-notice { left: calc(var(--left-dock) + (100% - var(--left-dock) - var(--right-dock)) / 2); bottom: calc(var(--timeline-h) + var(--sidebar-bottom) + 50px); max-width: calc(100% - var(--left-dock) - var(--right-dock) - 20px); }
 .shortcut-binding { display: flex; gap: 3px; align-items: center; flex: none; }
 .shortcut-row .shortcut-binding button { max-width: none; }

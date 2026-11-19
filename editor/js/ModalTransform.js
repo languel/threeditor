@@ -1,5 +1,5 @@
-import { automaticAxis, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, startConstraintDrag,
- trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js?v=transform-gestures';
+import { automaticAxis, constraintHint, createSnapBaseMarker, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase,
+ snapBaseHint, startConstraintDrag, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js?v=held-alt-constraint';
 import * as THREE from 'three';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
@@ -11,12 +11,30 @@ function ModalTransform( editor ) {
  let mode=null,states=[],originals=[],objects=[],selection=[],axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0,commitPreview=null;
  let pointer, trackball, auto, snapBase, pickingBase;
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
+ let marker;
+ function movingSnapBase(){
+
+  if(!snapBase)return null;
+  const state=states[0];
+  const start=state.position.clone();
+  if(state.o.parent)state.o.parent.localToWorld(start);
+  return state.o.getWorldPosition(new THREE.Vector3()).sub(start).add(snapBase);
+
+ }
+ function updateMarker(){
+
+  if(!marker)return;
+  showSnapBase(marker,editor.viewLayout.navigation,mode&&!pickingBase?movingSnapBase():null);
+
+ }
+ editor.signals.sceneRendered.add(updateMarker);
  const snapshot=o=>({o,position:o.position.clone(),rotation:o.rotation.clone(),scale:o.scale.clone()});
  function label(){
 
   const name = mode === 'translate' ? 'Grab' : mode === 'scale' ? 'Scale' : trackball ? 'Trackball' : 'Rotate';
-  const constraint = axis && ( plane ? 'Plane excluding ' : '' ) + axis.toUpperCase() + ( local ? ' local' : ' global' );
-  const base = pickingBase ? 'Click in the scene to set the snap base' : mode === 'translate' ? ( snapBase ? 'B change snap base' : 'B set snap base' ) : '';
+  const locked = axis && ( plane ? 'XYZ'.replace( axis.toUpperCase(), '' ) + ' plane' : axis.toUpperCase() + ' axis' );
+  const constraint = constraintHint( auto, locked && locked + ( local ? ' (local)' : '' ) );
+  const base = snapBaseHint( pickingBase, snapBase, mode === 'translate' );
   notice.textContent = [ name, constraint, numeric, base, transformHints ].filter( Boolean ).join( ' · ' );
 
  }
@@ -39,7 +57,9 @@ function ModalTransform( editor ) {
   originals=objects.map(snapshot);
   mode=next;axis=null;plane=false;local=false;precision=false;trackball=false;auto=null;snapBase=null;pickingBase=false;
   rebase();
-  commitPreview=commit;editor.controls.enabled=false;document.getElementById('viewport').appendChild(notice);notice.hidden=false;label();
+  const viewport=document.getElementById('viewport');
+  marker ||= createSnapBaseMarker(viewport);
+  commitPreview=commit;editor.controls.enabled=false;viewport.appendChild(notice);notice.hidden=false;label();
  }
  function isAncestor(a,o){for(let p=o.parent;p;p=p.parent)if(p===a)return true;return false;}
  function update(){
@@ -113,7 +133,7 @@ function ModalTransform( editor ) {
    }
    if(!accept){state.o.updateMatrixWorld(true);editor.signals.objectChanged.dispatch(state.o);}
   }
-  mode=null;states=[];originals=[];objects=[];selection=[];notice.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
+  mode=null;states=[];originals=[];objects=[];selection=[];notice.hidden=true;marker.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
   const commit=commitPreview;commitPreview=null;
   if(commands.length){
    if(commit)commit();
@@ -124,22 +144,27 @@ function ModalTransform( editor ) {
 
  function updatePointer(event){
   pointer=event;x=lastX-startX;y=lastY-startY;precision=event.shiftKey;
-  if(auto){
+  if(auto&&!auto.locked){
    const frame=editor.viewLayout.navigation;
    if(frame){
     const basis=local?states[0].o.getWorldQuaternion(new THREE.Quaternion()):new THREE.Quaternion();
     const pivot=states[0].o.getWorldPosition(new THREE.Vector3());
-    const lock=automaticAxis(frame,pivot,basis,auto,event,auto.plane);
-    if(lock){axis=lock.toLowerCase();plane=auto.plane;trackball=false;label();}
+    const choosePlane=auto.button===undefined?event.shiftKey&&mode!=='rotate':auto.plane;
+    const lock=automaticAxis(frame,pivot,basis,auto,event,choosePlane);
+    if(lock){axis=lock.toLowerCase();plane=choosePlane;auto.locked=true;trackball=false;label();}
    }
   }
-  if(!pickingBase)update();
+  if(!pickingBase&&(!auto||auto.locked&&auto.button!==undefined))update();
  }
 
  window.addEventListener('pointermove',e=>{lastX=e.clientX;lastY=e.clientY;pointer=e;if(mode)updatePointer(e);},true);
  window.addEventListener('keydown',e=>{
   if(!mode)return;
   const key=e.key.toLowerCase();e.preventDefault();e.stopImmediatePropagation();
+  if(key==='alt'){
+   if(!e.repeat&&!pickingBase&&!auto)auto=startConstraintDrag({clientX:lastX,clientY:lastY,shiftKey:e.shiftKey},mode);
+   label();return;
+  }
   if(key==='escape'||key==='enter'){
    if(pickingBase){pickingBase=false;label();return;}
    finish(key==='enter');return;
@@ -149,7 +174,7 @@ function ModalTransform( editor ) {
    if(next===mode&&mode!=='rotate')return;
    trackball=next===mode&&mode==='rotate'&&!trackball;
    mode=next;axis=null;plane=false;local=false;auto=null;snapBase=null;pickingBase=false;
-   rebase();label();return;
+   rebase();updateMarker();label();return;
   }else if(key==='b'&&mode==='translate'&&!e.repeat)pickingBase=!pickingBase;
   else if(key==='tab'&&e.shiftKey&&!e.repeat)editor.toggleTransformSnap?.();
   else if('xyz'.includes(key)&&key.length===1&&!e.repeat){
@@ -164,10 +189,15 @@ function ModalTransform( editor ) {
    if(trackball&&input!==numeric&&input)trackball=false;
    numeric=input;
   }
-  label();updatePointer({clientX:lastX,clientY:lastY,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey});
+  label();updateMarker();updatePointer({clientX:lastX,clientY:lastY,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey});
  },true);
  window.addEventListener('keyup',e=>{
-  if(mode&&['Shift','Control'].includes(e.key))updatePointer({clientX:lastX,clientY:lastY,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey});
+  if(!mode)return;
+  if(e.key==='Alt'&&auto&&auto.button===undefined){
+   if(auto.locked){snapBase=movingSnapBase();rebase();}
+   auto=null;label();
+  }
+  if(['Shift','Control'].includes(e.key))updatePointer({clientX:lastX,clientY:lastY,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey});
  },true);
  window.addEventListener('pointerdown',e=>{
   if(!mode)return;
@@ -176,7 +206,10 @@ function ModalTransform( editor ) {
   if(e.button===2)editor.suppressContextMenuUntil=performance.now()+500;
   const frame=editor.viewLayout.navigation;
   if(isConstraintDrag(e)){
-   if(frame&&!pickingBase&&editor.viewLayout.at(e.clientX,e.clientY)===frame)auto=startConstraintDrag(e,mode);
+   if(frame&&!pickingBase&&editor.viewLayout.at(e.clientX,e.clientY)===frame){
+    if(e.button===0){lastX=e.clientX;lastY=e.clientY;snapBase=movingSnapBase();rebase();}
+    auto=startConstraintDrag(e,mode);label();
+   }
    return;
   }
   if(pickingBase){
@@ -187,12 +220,15 @@ function ModalTransform( editor ) {
    if(!base)return;
    snapBase=base;pickingBase=false;lastX=e.clientX;lastY=e.clientY;rebase();
    if(editor.config.getKey('settings/transformSnap')==null)editor.toggleTransformSnap?.();
-   label();return;
+   updateMarker();label();return;
   }
   finish(e.button===0);
  },true);
  for(const type of ['pointerup','pointercancel'])window.addEventListener(type,e=>{
-  if(mode&&endsConstraintDrag(auto,e)){auto=null;e.stopImmediatePropagation();}
+  if(!mode||!endsConstraintDrag(auto,e))return;
+  const accept=e.type==='pointerup'&&auto.button===0&&auto.locked;
+  auto=null;e.stopImmediatePropagation();
+  if(accept)finish(true);else label();
  },true);
  window.addEventListener('contextmenu',e=>{if(mode)e.preventDefault();},true);
  return {start,get active(){return mode!==null;}};

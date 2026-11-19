@@ -17,8 +17,8 @@ import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { automaticAxis, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, startConstraintDrag,
-	trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=transform-gestures';
+import { automaticAxis, constraintHint, createSnapBaseMarker, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase,
+	snapBaseHint, startConstraintDrag, trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=held-alt-constraint';
 import { addFace, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=surface-tools';
 
 
@@ -98,7 +98,8 @@ export class ModelViewport {
 			signals[ name ].add( () => { this.depthViews = new WeakMap(); } );
 
 		}
-		signals.sceneRendered.add( () => this.draw() );
+		this.snapBaseMarker = createSnapBaseMarker( viewport );
+		signals.sceneRendered.add( () => { this.draw(); this.refreshSnapBaseMarker(); } );
 		signals.transformSettingsChanged.add( () => { if ( this.object && ! this.gesture ) this.changed(); } );
 		signals.cursorChanged.add( () => {
 
@@ -120,7 +121,18 @@ export class ModelViewport {
 			if ( event.button === 2 ) editor.suppressContextMenuUntil = performance.now() + 500;
 			if ( ! state.extrusion && isConstraintDrag( event ) ) {
 
-				if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ! state.pickingBase ) state.auto = startConstraintDrag( event, state.mode );
+				if ( editor.viewLayout.at( event.clientX, event.clientY ) === this.frame && ! state.pickingBase ) {
+
+					if ( event.button === 0 ) {
+
+						state.snapBase = this.movingSnapBase();
+						this.rebaseModal( event );
+
+					}
+					state.auto = startConstraintDrag( event, state.mode );
+					this.labelModal();
+
+				}
 				return;
 
 			}
@@ -137,14 +149,32 @@ export class ModelViewport {
 		}, true );
 		for ( const type of [ 'pointerup', 'pointercancel' ] ) window.addEventListener( type, event => {
 
-			if ( ! endsConstraintDrag( this.gesture?.auto, event ) ) return;
-			this.gesture.auto = null;
+			const state = this.gesture;
+			if ( ! endsConstraintDrag( state?.auto, event ) ) return;
+			const accept = event.type === 'pointerup' && state.auto.button === 0 && state.auto.locked;
+			state.auto = null;
 			event.stopImmediatePropagation();
+			if ( accept ) this.finishTransform( true );
+			else this.labelModal();
 
 		}, true );
 		window.addEventListener( 'keyup', event => {
 
-			if ( this.gesture?.modal && ! this.gesture.extrusion && [ 'Shift', 'Control' ].includes( event.key ) ) this.updateModal( this.modalPointer( event ) );
+			const state = this.gesture;
+			if ( ! state?.modal || state.extrusion ) return;
+			if ( event.key === 'Alt' && state.auto && state.auto.button === undefined ) {
+
+				if ( state.auto.locked ) {
+
+					state.snapBase = this.movingSnapBase();
+					this.rebaseModal( this.modalPointer( event ) );
+
+				}
+				state.auto = null;
+				this.labelModal();
+
+			}
+			if ( [ 'Shift', 'Control' ].includes( event.key ) ) this.updateModal( this.modalPointer( event ) );
 
 		}, true );
 		signals.geometryChanged.add( object => {
@@ -1122,6 +1152,7 @@ export class ModelViewport {
 		if ( ! state ) return;
 		this.gesture = null;
 		this.notice?.remove();
+		this.snapBaseMarker.hidden = true;
 		if ( state.modal ) this.editor.controls.enabled = true;
 		if ( accept && state.geometry && this.canEdit() && state.extrusion ) {
 
@@ -1193,9 +1224,23 @@ export class ModelViewport {
 		}
 		const state = this.gesture;
 		const name = state.trackball ? 'Trackball' : { translate: 'Move points', rotate: 'Rotate points', scale: 'Scale points' }[ mode ];
-		const base = state.pickingBase ? 'Click in the scene to set the snap base' : mode === 'translate' ?
-			( state.snapBase ? 'B change snap base' : 'B set snap base' ) : '';
-		this.notice.textContent = [ name, axis, numeric, base, this.planar ? transformHints.replace( 'R twice trackball · ', '' ) : transformHints ].filter( Boolean ).join( ' · ' );
+		const base = snapBaseHint( state.pickingBase, state.snapBase, mode === 'translate' );
+		const constraint = constraintHint( state.auto, axis && axis + ( axis.length === 1 ? ' axis' : ' plane' ) );
+		this.refreshSnapBaseMarker();
+		this.notice.textContent = [ name, constraint, numeric, base, this.planar ? transformHints.replace( 'R twice trackball · ', '' ) : transformHints ].filter( Boolean ).join( ' · ' );
+
+	}
+
+	movingSnapBase() {
+
+		const state = this.gesture;
+		return state?.snapBase ? state.snapBase.clone().add( this.proxy.position ).sub( state.origin ) : null;
+
+	}
+
+	refreshSnapBaseMarker() {
+
+		showSnapBase( this.snapBaseMarker, this.frame, this.gesture?.pickingBase ? null : this.movingSnapBase() );
 
 	}
 
@@ -1245,11 +1290,18 @@ export class ModelViewport {
 
 	modalKey( event ) {
 
-		if ( [ 'Alt', 'Meta' ].includes( event.key ) ) return;
+		if ( event.key === 'Meta' ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		const state = this.gesture, key = event.key.toLowerCase();
 		const pointer = this.modalPointer( event );
+		if ( key === 'alt' ) {
+
+			if ( ! state.extrusion && ! event.repeat && ! state.pickingBase && ! state.auto ) state.auto = startConstraintDrag( pointer, state.mode );
+			this.labelModal();
+			return;
+
+		}
 		if ( key === 'enter' || key === 'escape' ) {
 
 			if ( state.pickingBase ) { state.pickingBase = false; this.labelModal(); return; }
@@ -1296,18 +1348,21 @@ export class ModelViewport {
 		const state = this.gesture;
 		if ( state.extrusion ) { this.updateExtrusion( pointer ); return; }
 		if ( state.pickingBase ) return;
-		if ( state.auto ) {
+		if ( state.auto && ! state.auto.locked ) {
 
-			const lock = automaticAxis( this.frame, state.origin, state.rotation, state.auto, pointer, state.auto.plane );
+			const plane = state.auto.button === undefined ? pointer.shiftKey && state.mode !== 'rotate' : state.auto.plane;
+			const lock = automaticAxis( this.frame, state.origin, state.rotation, state.auto, pointer, plane );
 			if ( lock ) {
 
-				state.axis = state.auto.plane ? 'XYZ'.replace( lock, '' ) : lock;
+				state.axis = plane ? 'XYZ'.replace( lock, '' ) : lock;
+				state.auto.locked = true;
 				state.trackball = false;
 				this.labelModal();
 
 			}
 
 		}
+		if ( state.auto && ( ! state.auto.locked || state.auto.button === undefined ) ) { this.draw(); return; }
 		const start = state.pointer;
 		const precision = pointer.shiftKey ? .1 : 1;
 		const dx = ( pointer.clientX - start.clientX ) * precision;
