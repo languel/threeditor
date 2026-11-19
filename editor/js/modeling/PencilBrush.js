@@ -1,25 +1,25 @@
 import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
-import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
+import { grainOpacity, grainTileSize } from './PencilGrain.js';
 import { StrokeSampler } from './StrokeSampler.js';
 
 // Size, strength and tip hardness from ThreeGrease's natural-media set.
 const tips = [
 	[ 'Pen', 8, 1, 1 ],
-	[ 'Ink Rough', 20, 1, .9, .12, .85, 0 ],
-	[ 'Marker', 30, .9, .85, .1, .45, .7 ],
-	[ 'Charcoal', 26, .85, .55, .16, .6, 0 ],
-	[ 'Airbrush', 46, .25, .15, .3 ],
-	[ 'Pencil Soft', 10, .85, .7 ],
-	[ 'Pencil Hard', 5, .7, 1 ],
+	[ 'Ink Rough', 20, 1, .9, .12, .85, 0, 0.55, 7, 'fiber' ],
+	[ 'Marker', 30, .9, .85, .1, .45, .7, 0.1, 4, 'paper' ],
+	[ 'Charcoal', 26, .85, .55, .16, .6, 0, 0.9, 10, 'speckle' ],
+	[ 'Airbrush', 46, .25, .15, .3, 1, 0, 0.22, 3, 'paper' ],
+	[ 'Pencil Soft', 10, .85, .7, .12, 1, 0, 0.48, 9, 'paper' ],
+	[ 'Pencil Hard', 5, .7, 1, .12, 1, 0, 0.62, 13, 'paper' ],
 	[ 'Ink Pooling', 14, 1, .95 ],
 	[ 'Brush Pen', 26, 1, .85 ],
-	[ 'Chalk', 30, .8, .4, .14, .75, .3 ],
-	[ 'Dry Brush', 34, .9, .5, .2, .5, 0 ],
+	[ 'Chalk', 30, .8, .4, .14, .75, .3, 0.8, 14, 'speckle' ],
+	[ 'Dry Brush', 34, .9, .5, .2, .5, 0, 0.95, 18, 'fiber' ],
 	[ 'Fading Marker', 24, .95, .8 ],
 	[ 'Calligraphy', 22, 1, 1, .06, .25, .9 ]
 ];
 
-export function brushFill( context, radius, color, hardness ) {
+function brushFill( context, radius, color, hardness ) {
 
 	if ( hardness >= 1 ) return color;
 	const gradient = context.createRadialGradient( 0, 0, radius * hardness, 0, 0, radius );
@@ -31,7 +31,77 @@ export function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
+	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
+
+}
+
+const brushImages = new Map();
+
+function brushImage( brush, tip ) {
+
+	const { color, hardness, grain, grainPattern, grainScale } = brush;
+	const key = [ color, grain, grainPattern, tip ? hardness : '', tip ? grainScale : '' ].join( '/' );
+	if ( brushImages.has( key ) ) return brushImages.get( key );
+	const canvas = document.createElement( 'canvas' );
+	canvas.width = canvas.height = tip ? 96 : grainTileSize;
+	const context = canvas.getContext( '2d' );
+	const image = context.createImageData( canvas.width, canvas.height );
+	const tint = Number.parseInt( color.slice( 1 ), 16 );
+	const tile = grainOpacity( grain, grainPattern );
+	const repeat = ( grainScale || 6 ) / 8;
+	for ( let y = 0; y < canvas.height; y ++ ) for ( let x = 0; x < canvas.width; x ++ ) {
+
+		const index = ( y * canvas.width + x ) * 4;
+		const u = ( x + .5 ) / canvas.width, v = ( y + .5 ) / canvas.height;
+		const radius = tip ? 2 * Math.hypot( u - .5, v - .5 ) : 0;
+		const feather = tip ? Math.min( 1, Math.max( 0, ( 1 - radius ) / Math.max( .015, 1 - hardness ) ) ) : 1;
+		const gx = tip ? Math.floor( u * repeat * grainTileSize ) % grainTileSize : x;
+		const gy = tip ? Math.floor( v * repeat * grainTileSize ) % grainTileSize : y;
+		image.data[ index ] = tint >> 16 & 255;
+		image.data[ index + 1 ] = tint >> 8 & 255;
+		image.data[ index + 2 ] = tint & 255;
+		image.data[ index + 3 ] = tile[ gy * grainTileSize + gx ] * feather;
+
+	}
+	context.putImageData( image, 0, 0 );
+	if ( brushImages.size >= 64 ) brushImages.delete( brushImages.keys().next().value );
+	brushImages.set( key, canvas );
+	return canvas;
+
+}
+
+export function brushGrainTile( color, brush, diameter ) {
+
+	if ( ! ( brush?.grain > 0 ) ) return null;
+	const size = Math.max( 1, diameter * 8 / ( brush.grainScale || 6 ) );
+	return { image: brushImage( { ...brush, color }, false ), size };
+
+}
+
+export function brushGrainFill( context, color, brush, diameter ) {
+
+	const tile = brushGrainTile( color, brush, diameter );
+	if ( ! tile ) return color;
+	const pattern = context.createPattern( tile.image, 'repeat' );
+	pattern.setTransform( new DOMMatrix().scale( tile.size / grainTileSize ) );
+	return pattern;
+
+}
+
+export function drawBrushTip( context, radius, brush ) {
+
+	context.rotate( brush.angle || 0 );
+	context.scale( 1, brush.aspect || 1 );
+	if ( brush.grain > 0 ) {
+
+		context.drawImage( brushImage( brush, true ), -radius, -radius, radius * 2, radius * 2 );
+		return;
+
+	}
+	context.fillStyle = brushFill( context, radius, brush.color, brush.hardness ?? 1 );
+	context.beginPath();
+	context.arc( 0, 0, radius, 0, Math.PI * 2 );
+	context.fill();
 
 }
 
@@ -42,12 +112,7 @@ export function brushDab( context, x, y, pressure, brush, erase = false ) {
 	context.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
 	context.globalAlpha = brush.strength;
 	context.translate( x, y );
-	context.rotate( brush.angle || 0 );
-	context.scale( 1, brush.aspect || 1 );
-	context.fillStyle = brushFill( context, radius, brush.color, brush.hardness );
-	context.beginPath();
-	context.arc( 0, 0, radius, 0, Math.PI * 2 );
-	context.fill();
+	drawBrushTip( context, radius, brush );
 	context.restore();
 
 }
@@ -115,18 +180,34 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		palette.append( picker );
 
 	} else palette.append( presets );
+	const fieldRow = document.createElement( 'div' );
+	fieldRow.className = 'pencil-brush-fields';
+	if ( singleRow ) {
+
+		fieldRow.addEventListener( 'wheel', event => {
+
+			if ( event.ctrlKey || event.metaKey || Math.abs( event.deltaX ) >= Math.abs( event.deltaY ) || fieldRow.scrollWidth <= fieldRow.clientWidth ) return;
+			fieldRow.scrollLeft += event.deltaY * ( event.deltaMode === 1 ? 16 : 1 );
+			event.preventDefault();
+
+		}, { passive: false } );
+
+	}
+	palette.append( fieldRow );
 	const fields = [
 		[ 'color', 'Brush color', 'color', 'color' ],
 		[ 'size', 'Brush size (px)', 'brushWidth', 'number', 1, 256 ],
 		[ 'strength', 'Brush strength', 'opacity', 'number', .01, 1 ],
-		[ 'hardness', 'Brush hardness', 'brush', 'number', 0, 1 ]
+		[ 'hardness', 'Brush hardness', 'brush', 'number', 0, 1 ],
+		[ 'grain', 'Brush grain', 'toolGrid', 'number', 0, 1 ],
+		[ 'grainScale', 'Grain scale', 'scale', 'number', 1, 30 ]
 	].map( ( [ key, name, glyph, type, min, max ] ) => {
 
-		const input = modelField( palette, name, glyph, type, brush[ key ] );
+		const input = modelField( fieldRow, name, glyph, type, brush[ key ] );
 		if ( type === 'number' ) {
 
-			Object.assign( input, { min, max, step: key === 'size' ? 1 : .05 } );
-			input.dataset.scrubSensitivity = key === 'size' ? '.5' : '.005';
+			Object.assign( input, { min, max, step: key === 'size' ? 1 : key === 'grainScale' ? .5 : .05 } );
+			input.dataset.scrubSensitivity = key === 'size' ? '.5' : key === 'grainScale' ? '.2' : '.005';
 
 		}
 		input.onchange = () => {
@@ -140,28 +221,21 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		return [ key, input ];
 
 	} );
+	const pattern = document.createElement( 'select' );
+	pattern.setAttribute( 'aria-label', 'Brush grain pattern' );
+	pattern.title = 'Brush grain pattern';
+	for ( const [ id, label ] of [ [ 'paper', 'Paper' ], [ 'fiber', 'Fibers' ], [ 'speckle', 'Speckles' ] ] ) pattern.append( new Option( label, id ) );
+	pattern.onchange = () => { brush.grainPattern = pattern.value; refresh(); changed(); };
+	fieldRow.append( pattern );
 	let settings, guide;
 	if ( strokeOptions ) {
 
-		settings = document.createElement( 'details' );
-		settings.className = 'pencil-stroke-settings';
-		const summary = document.createElement( 'summary' );
-		summary.innerHTML = icon( 'toolActions' );
-		summary.title = 'Pencil stroke settings';
-		summary.setAttribute( 'aria-label', summary.title );
-		const controls = document.createElement( 'div' );
-		controls.className = 'pencil-stroke-options';
-		settings.append( summary, controls );
-		settings.addEventListener( 'keydown', event => {
-
-			if ( ! settings.open || event.key !== 'Escape' ) return;
-			event.preventDefault();
-			event.stopPropagation();
-			settings.open = false;
-			summary.focus();
-
-		} );
-		palette.append( settings );
+		settings = document.createElement( 'div' );
+		settings.className = 'pencil-inline-stroke-options';
+		settings.setAttribute( 'role', 'group' );
+		settings.setAttribute( 'aria-label', 'Pencil stroke settings' );
+		fieldRow.append( settings );
+		const controls = settings;
 		const stabilizer = modelField( controls, 'Stabilize strokes', 'toolPath', 'checkbox', brush.stabilize );
 		stabilizer.onchange = () => { brush.stabilize = stabilizer.checked; refresh(); changed(); };
 
@@ -199,11 +273,11 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 	}
 
-	const buttons = tips.map( ( [ name, size, strength, hardness, spacing = .12, aspect = 1, angle = 0 ] ) => {
+	const buttons = tips.map( ( [ name, size, strength, hardness, spacing = .12, aspect = 1, angle = 0, grain = 0, grainScale = 6, grainPattern = 'paper' ] ) => {
 
 		const button = modelButton( presets, name, 'brush', () => {
 
-			Object.assign( brush, { name, size, strength, hardness, spacing, aspect, angle } );
+			Object.assign( brush, { name, size, strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern } );
 			if ( singleRow ) {
 
 				presets.parentElement.open = false;
@@ -219,7 +293,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 		sample.setAttribute( 'aria-hidden', 'true' );
 		button.prepend( sample );
 		const context = sample.getContext( '2d' );
-		const style = { size: Math.min( 17, size * .58 ), strength, hardness, spacing, aspect, angle, color: '#263449' };
+		const style = { size: Math.min( 17, size * .58 ), strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern, color: '#263449' };
 		const draw = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => brushDab( context, x, y, pressure, style ) );
 		for ( let x = 8; x < 38; x ++ ) draw( x, 12 + Math.sin( x / 5 ) * 4, .35 + .65 * Math.sin( x / 15 ) );
 		return [ name, button, sample ];
@@ -236,6 +310,7 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 
 		}
 		if ( guide ) guide.value = brush.guide;
+		pattern.value = brush.grainPattern;
 		for ( const [ name, button, sample ] of buttons ) {
 
 			button.setAttribute( 'aria-pressed', String( brush.name === name ) );

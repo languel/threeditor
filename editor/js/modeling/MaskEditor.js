@@ -3,12 +3,12 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=pencil-stroke-depth';
-import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-ribbon';
+import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-grain';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
 import { modelButton } from './ModelControls.js?v=pencil-stroke-depth';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
-import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-ribbon';
+import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-grain';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
@@ -426,8 +426,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			shape.points.forEach( ( [ x, y ], i ) => target[ i ? 'lineTo' : 'moveTo' ]( x * width, y * height ) );
 			if ( shape.closed === false ) {
 
-				target.strokeStyle = color( shape );
 				target.lineWidth = width * lineWidth( shape );
+				target.strokeStyle = brushGrainFill( target, color( shape ), shape, target.lineWidth );
 				target.globalAlpha = lineOpacity( shape );
 				target.lineCap = target.lineJoin = 'round';
 				target.stroke();
@@ -464,18 +464,36 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function exportSVG() {
 
+		const patterns = [];
 		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape => {
 
 			const path = shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' );
-			if ( shape.closed === false ) return '<path fill="none" stroke="' + color( shape ) + '" stroke-width="' + ( 1000 * lineWidth( shape ) ).toFixed( 2 ) +
-				'" stroke-opacity="' + lineOpacity( shape ) + '" stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/>';
+			if ( shape.closed === false ) {
+
+				const width = 1000 * lineWidth( shape );
+				let stroke = color( shape );
+				const tile = brushGrainTile( stroke, shape, width );
+				if ( tile ) {
+
+					const id = 'brush-grain-' + patterns.length;
+					const size = tile.size.toFixed( 2 );
+					patterns.push( '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="' + size + '" height="' + size +
+						'"><image width="' + size + '" height="' + size + '" href="' + tile.image.toDataURL() + '"/></pattern>' );
+					stroke = 'url(#' + id + ')';
+
+				}
+				return '<path fill="none" stroke="' + stroke + '" stroke-width="' + width.toFixed( 2 ) +
+					'" stroke-opacity="' + lineOpacity( shape ) + '" stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/>';
+
+			}
 			return '<path fill="' + ( operation === 'cutout' ? 'black' : color( shape ) ) + '" fill-rule="evenodd" d="' + path + ' Z"/>';
 
 		} ).join( '' );
-		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' +
-			layers( 'cutout' ) + '</mask></defs><g mask="url(#cutouts)">' +
+		const cutouts = layers( 'cutout' ), drawing = layers( 'inside' );
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs>' + patterns.join( '' ) +
+			'<mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' + cutouts + '</mask></defs><g mask="url(#cutouts)">' +
 			( brushStrokes.length ? '<image width="1000" height="1000" href="' + raster.toDataURL() + '"/>' : '' ) +
-			layers( 'inside' ) + '</g></svg>';
+			drawing + '</g></svg>';
 		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
 
 	}
@@ -538,6 +556,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		for ( const [ index, shape ] of shapes.entries() ) {
 
+			if ( vectorMode && shape.closed === false && shape.grain > 0 && ( index !== active || tool !== 'edit' ) ) continue;
 			trace( shape.points, shape.closed !== false );
 			ctx.strokeStyle = shape.mode === 'cutout' ? '#ff9e71' : '#74dcf3';
 			ctx.lineWidth = active === index ? 2 : 1;
@@ -553,10 +572,25 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( draft.length ) {
 
 			trace( draft, tool !== 'polygon' && tool !== 'stroke' );
-			ctx.strokeStyle = '#fff';
-			ctx.stroke();
-			ctx.fillStyle = '#fff';
-			ctx.beginPath(); ctx.arc( ...pixel( draft[ 0 ] ), 4, 0, Math.PI * 2 ); ctx.fill();
+			if ( tool === 'stroke' && gesture?.brush ) {
+
+				const style = gesture.brush;
+				ctx.save();
+				ctx.lineWidth = width * style.size / rasterSize;
+				ctx.strokeStyle = brushGrainFill( ctx, style.color, style, ctx.lineWidth );
+				ctx.globalAlpha = style.strength;
+				ctx.lineCap = ctx.lineJoin = 'round';
+				ctx.stroke();
+				ctx.restore();
+
+			} else {
+
+				ctx.strokeStyle = '#fff';
+				ctx.stroke();
+				ctx.fillStyle = '#fff';
+				ctx.beginPath(); ctx.arc( ...pixel( draft[ 0 ] ), 4, 0, Math.PI * 2 ); ctx.fill();
+
+			}
 
 		}
 		if ( tool === 'guideCenter' || tool === 'stroke' && [ 'circle', 'radial' ].includes( pencilBrush( editor ).guide ) ) {
@@ -731,10 +765,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} else if ( tool === 'stroke' && draft.length >= 2 ) {
 
-			const { color, size, strength, smoothing, simplify } = gesture.brush;
+			const { color, size, strength, smoothing, simplify, grain, grainScale, grainPattern } = gesture.brush;
 			const tolerance = simplify * canvas.width / canvas.getBoundingClientRect().width / view.scale;
 			const points = simplifyPencilStroke( smoothPencilStroke( draft, smoothing ), pixel, tolerance );
-			addShape( { points, closed: false, color, width: size / rasterSize, opacity: strength, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
+			addShape( { points, closed: false, color, width: size / rasterSize, opacity: strength, grain, grainScale, grainPattern, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
 
 		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();

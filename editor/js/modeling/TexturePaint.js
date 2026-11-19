@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { brushDab, brushFill } from './PencilBrush.js?v=pencil-ribbon';
+import { brushDab, brushGrainFill, drawBrushTip } from './PencilBrush.js?v=pencil-grain';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { SetMaterialCommand } from '../commands/SetMaterialCommand.js';
 
@@ -155,12 +155,12 @@ export class TexturePaintStroke {
 			ctx.save();
 			ctx.setTransform( mirrorX ? -1 : 1, 0, 0, flipY ? -1 : 1,
 				( mirrorX ? column + 1 : -column ) * width, ( flipY ? row + 1 : -row ) * height );
-			ctx.fillStyle = color;
 			ctx.globalAlpha = opacity;
 			if ( brush.erase ) ctx.globalCompositeOperation = 'destination-out';
 			ctx.beginPath();
 			if ( perspective ) {
 
+				ctx.fillStyle = brushGrainFill( ctx, color, brush, radius * 2 * Math.sqrt( Math.abs( xx * yy - xy * yx ) ) );
 				tracePolygon( ctx, perspective.outline );
 				if ( perspective.holes.length ) {
 
@@ -184,12 +184,7 @@ export class TexturePaintStroke {
 				ctx.clip( 'evenodd' );
 
 			}
-			ctx.rotate( brush.angle || 0 );
-			ctx.scale( 1, brush.aspect || 1 );
-			ctx.fillStyle = brushFill( ctx, radius, color, brush.hardness ?? 1 );
-			ctx.beginPath();
-			ctx.arc( 0, 0, radius, 0, Math.PI * 2 );
-			ctx.fill();
+			drawBrushTip( ctx, radius, { ...brush, color } );
 			ctx.restore();
 
 		}

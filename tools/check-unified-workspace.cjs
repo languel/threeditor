@@ -158,7 +158,7 @@ async function checkPencil( page ) {
 	};
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
-	await page.getByRole( 'button', { name: 'Marker', exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
 	const size = page.getByLabel( 'Brush size (px)', { exact: true } );
 	const field = await size.boundingBox();
 	await page.mouse.move( field.x + field.width / 2, field.y + field.height / 2 );
@@ -167,7 +167,7 @@ async function checkPencil( page ) {
 	await page.mouse.move( field.x + field.width / 2 + 30, field.y + field.height / 2, { steps: 6 } );
 	await page.mouse.up();
 	await page.keyboard.up( 'Meta' );
-	assert.equal( await size.inputValue(), '45' );
+	assert.equal( await size.inputValue(), '41' );
 	await draw( true );
 	assert.deepEqual( await page.evaluate( () => {
 
@@ -182,8 +182,8 @@ async function checkPencil( page ) {
 		camera.position.z = 3;
 		const renderer = editor.renderer;
 		const previousTarget = renderer.getRenderTarget();
-		const target = new THREE.WebGLRenderTarget( 64, 64 );
-		const pixel = new Uint8Array( 4 );
+		const target = new THREE.WebGLRenderTarget( 128, 128 );
+		const pixels = new Uint8Array( 32 * 3 * 4 );
 		const clear = renderer.getClearColor( new THREE.Color() );
 		const clearAlpha = renderer.getClearAlpha();
 		try {
@@ -192,7 +192,7 @@ async function checkPencil( page ) {
 			renderer.setRenderTarget( target );
 			renderer.clear();
 			renderer.render( scene, camera );
-			renderer.readRenderTargetPixels( target, 32, 32, 1, 1, pixel );
+			renderer.readRenderTargetPixels( target, 48, 63, 32, 3, pixels );
 
 		} finally {
 
@@ -201,10 +201,12 @@ async function checkPencil( page ) {
 			target.dispose();
 
 		}
+		const coverage = pixels.filter( ( _, index ) => index % 4 === 3 );
 		return [ loaded.isMesh, loaded.material.vertexColors, loaded.material.transparent, geometry.index.count > 0, alpha.includes( 0 ),
-			alpha.some( value => Math.abs( value - .9 ) < 1e-5 ), style.hardness, style.aspect, style.samples.length === geometry.userData.modeling.points.length, pixel[ 0 ] > pixel[ 2 ] + 50 && pixel[ 3 ] > 175 ];
+			alpha.some( value => Math.abs( value - .85 ) < 1e-5 ), style.grain, style.grainPattern, style.samples.length === geometry.userData.modeling.points.length,
+			loaded.material.map?.isDataTexture, Math.max( ...coverage ) > 110 && Math.max( ...coverage ) - Math.min( ...coverage ) > 50 ];
 
-	} ), [ true, true, true, true, true, true, .85, .45, true, true ] );
+	} ), [ true, true, true, true, true, true, .9, 'speckle', true, true, true ] );
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Pen', exact: true } ).click();
 	assert.deepEqual( await page.evaluate( () => {
@@ -240,14 +242,11 @@ async function checkPencil( page ) {
 	await page.keyboard.press( 'd' );
 	assert.equal( await page.getByLabel( 'Pencil placement' ).count(), 0 );
 	assert.equal( await page.evaluate( () => editor.modeling.placement ), 'ground' );
-	const strokeOptions = page.getByLabel( 'Pencil stroke settings', { exact: true } );
-	await strokeOptions.click();
 	await page.mouse.move( ...center );
 	const guide = await page.evaluate( () => editor.viewTools.overlay.toDataURL() );
 	await page.getByLabel( 'Pencil plane guide' ).uncheck();
 	assert.notEqual( await page.evaluate( () => editor.viewTools.overlay.toDataURL() ), guide );
 	await page.getByLabel( 'Pencil plane guide' ).check();
-	await strokeOptions.click();
 	await draw( false );
 	assert.equal( await page.evaluate( () => {
 
@@ -281,9 +280,7 @@ async function checkPencil( page ) {
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Placement', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'View plane', exact: true } ).click();
-	await strokeOptions.click();
 	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'segment' );
-	await strokeOptions.click();
 	const [ ax, ay ] = anchorPixel;
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
@@ -303,13 +300,11 @@ async function checkPencil( page ) {
 	await page.evaluate( () => editor.undo() );
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
-	await strokeOptions.click();
 	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'off' );
 	await page.getByLabel( 'Stabilize strokes' ).check();
 	const simplify = page.getByLabel( 'Simplify tolerance (px)' );
 	await simplify.fill( '1' );
 	await simplify.press( 'Tab' );
-	await strokeOptions.click();
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
 	await page.mouse.move( ax + 10, ay, { steps: 5 } );
@@ -317,12 +312,10 @@ async function checkPencil( page ) {
 	await page.mouse.move( ax + 110, ay, { steps: 14 } );
 	await page.mouse.up();
 	assert.equal( await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points.length ), 2 );
-	await strokeOptions.click();
 	await page.getByLabel( 'Stabilize strokes' ).uncheck();
 	await simplify.fill( '0' );
 	await simplify.press( 'Tab' );
 	await page.getByLabel( 'Pencil drawing guide' ).selectOption( 'parallel' );
-	await strokeOptions.click();
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
 	await page.mouse.move( ax + 95, ay + 28, { steps: 9 } );
@@ -348,19 +341,23 @@ async function checkCompactPencil( page ) {
 	} );
 	await page.setViewportSize( { width: 640, height: 720 } );
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
-	await page.getByLabel( 'Pencil stroke settings', { exact: true } ).click();
+	await page.getByLabel( 'Stroke smoothing', { exact: true } ).scrollIntoViewIfNeeded();
 	assert.deepEqual( await page.evaluate( () => {
 
 		const pane = document.querySelector( '#viewport' ).getBoundingClientRect();
 		const palette = document.querySelector( '.pencil-brush-palette' ).getBoundingClientRect();
-		const menu = document.querySelector( '.pencil-stroke-settings .pencil-stroke-options' ).getBoundingClientRect();
+		const inline = document.querySelector( '.pencil-inline-stroke-options' );
+		const smoothing = inline.querySelector( '[aria-label="Stroke smoothing"]' ).getBoundingClientRect();
+		const scroller = document.querySelector( '.pencil-brush-fields' );
+		const scrollBounds = scroller.getBoundingClientRect();
 		const row = document.querySelector( '.viewport-pencil-controls' );
 		const toolbar = document.querySelector( '.viewport-geometry-tools' ).getBoundingClientRect();
 		const { x, right, bottom } = row.getBoundingClientRect();
-		return [ palette.right <= pane.right, menu.right <= pane.right && menu.bottom <= pane.bottom, menu.left >= pane.left,
-			x >= pane.left && right <= pane.right && bottom <= pane.bottom, getComputedStyle( row ).flexWrap === 'nowrap', toolbar.top < menu.bottom ];
+		return [ palette.right <= pane.right, inline.tagName === 'DIV' && inline.getBoundingClientRect().top >= row.getBoundingClientRect().top,
+			smoothing.left >= scrollBounds.left && smoothing.right <= scrollBounds.right, scroller.scrollLeft > 0,
+			x >= pane.left && right <= pane.right && bottom <= pane.bottom, getComputedStyle( row ).flexWrap === 'nowrap', toolbar.top < inline.getBoundingClientRect().top ];
 
-	} ), [ true, true, true, true, true, true ] );
+	} ), [ true, true, true, true, true, true, true ] );
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 	await page.setViewportSize( originalViewport );
 	await page.evaluate( style => {

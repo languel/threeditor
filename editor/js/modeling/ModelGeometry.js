@@ -1,4 +1,5 @@
-import { pencilRibbon } from './PencilRibbon.js';
+import { pencilRibbon } from './PencilRibbon.js?v=pencil-grain';
+import { pencilGrainTexture } from './PencilGrain.js';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
 
 export function modelData( kind ) {
@@ -346,7 +347,7 @@ export function modelObject( THREE, data, name ) {
 	const geometry = modelGeometry( THREE, data );
 	const object = data.kind === 'path' && data.pencilBrush?.samples?.length ?
 		new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( {
-			vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false,
+			vertexColors: true, map: pencilGrainTexture( THREE, data.pencilBrush ), side: THREE.DoubleSide, transparent: true, depthWrite: false,
 			polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, toneMapped: false
 		} ) ) : data.kind === 'path' ? new THREE.Line( geometry, new THREE.LineBasicMaterial( { color: 0x73d9f5 } ) ) :
 		new THREE.Mesh( geometry, new THREE.MeshStandardMaterial( { color: 0xeeeeee, roughness: .9, side: THREE.DoubleSide } ) );

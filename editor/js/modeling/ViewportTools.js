@@ -1,9 +1,9 @@
-import { brushPalette, pencilBrush } from './PencilBrush.js?v=pencil-ribbon';
+import { brushPalette, pencilBrush } from './PencilBrush.js?v=pencil-grain';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
-import { modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-ribbon';
+import { modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-grain';
 import { icon } from '../Glyphs.js?v=pencil-stroke-depth';
 import { splatStrokeCommands } from './SplatPaint.js?v=splat-filters';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-ribbon';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-grain';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js?v=pencil-ribbon';
@@ -18,7 +18,7 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-ribbon';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-grain';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -1038,7 +1038,8 @@ export class ViewportTools {
 				const brush = pencil ? {
 					output: { vector: 'vector', eraseStroke: 'eraseStroke' }[ this.pencilTool ] || 'texture',
 					erase: this.pencilTool === 'erase', color: style.color, diameter: this.pencilTool === 'vector' ? 6 : style.size,
-					opacity: style.strength, hardness: style.hardness, aspect: style.aspect, angle: style.angle
+					opacity: style.strength, hardness: style.hardness, aspect: style.aspect, angle: style.angle,
+					grain: style.grain, grainScale: style.grainScale, grainPattern: style.grainPattern
 				} : this.brush;
 				const { output, diameter } = brush;
 				const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
@@ -1466,9 +1467,9 @@ export class ViewportTools {
 
 	pencilObject( stroke, points, samples, closed ) {
 
-		const { color, strength, hardness, aspect, angle } = stroke.style;
+		const { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern } = stroke.style;
 		return modelObject( THREE, { kind: 'path', points, smooth: false, closed, planar: false,
-			pencilBrush: { color, strength, hardness, aspect, angle, samples } }, 'Pencil stroke' );
+			pencilBrush: { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern, samples } }, 'Pencil stroke' );
 
 	}
 
