@@ -2,6 +2,8 @@ import { icon } from '../Glyphs.js?v=poly-context';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
+import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js';
+import { brushDab, brushPalette, brushPressure, brushStroke, pencilBrush } from './PencilBrush.js';
 import { modelButton } from './ModelControls.js';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
@@ -21,6 +23,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	let referenceVisible = true;
 	let shapes = maskShapes( initial ), active = shapes.length - 1, vertex = -1, tool = 'edit', draft = [], gesture;
 	const undo = [], redo = [];
+	let brushStrokes = vectorMode ? structuredClone( initial?.brushStrokes || [] ) : [];
+	const raster = vectorMode ? document.createElement( 'canvas' ) : null;
+	const rasterSize = 1024;
+	if ( raster ) raster.width = raster.height = rasterSize;
+	const rasterContext = raster?.getContext( '2d' );
+	const usesPalette = () => [ 'stroke', 'raster', 'erase' ].includes( tool );
+	const transforms = () => transformTools2D.some( ( [ id ] ) => id === tool );
 	const node = ( tag, parent, label ) => {
 
 		const item = document.createElement( tag );
@@ -48,7 +57,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	addTool( 'edit', 'Edit points', 'toolSelect' );
 	addTool( 'polygon', 'Draw polygon', 'toolMask' );
 	addTool( 'freehand', 'Freehand outline', 'toolPaint' );
-	if ( vectorMode ) addTool( 'stroke', 'Draw stroke', 'toolPath' );
+	if ( vectorMode ) {
+
+		addTool( 'stroke', 'Pencil', 'freehandDraw' );
+		addTool( 'raster', 'Brush', 'brush' );
+		addTool( 'erase', 'Erase Brush Marks', 'remove' );
+		for ( const [ id, label, glyph ] of transformTools2D ) addTool( id, label, glyph );
+
+	}
+	addTool( 'pan', 'Pan', 'hand' );
+	modelButton( toolbar, 'Frame All', 'frame', () => view.fit() );
 	addTool( 'rectangle', 'Draw rectangle', 'toolGrid' );
 	addTool( 'ellipse', 'Draw ellipse', 'brushWidth' );
 	addTool( 'push', 'Push brush', 'brush' );
@@ -74,6 +92,11 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.width = 760;
 	canvas.height = 490;
 	const ctx = canvas.getContext( '2d' );
+	const view = canvasView( canvas, draw, () => tool === 'pan' && ! gesture );
+	const brushSettings = node( 'div' );
+	brushSettings.className = 'canvas-pencil-settings';
+	const palette = vectorMode && brushPalette( editor, brushSettings, draw );
+	if ( palette ) workspace.after( brushSettings );
 	const panel = node( 'aside', workspace );
 	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
 	const layers = node( 'select', panel );
@@ -209,6 +232,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( draft.length ) throw new Error( 'Close the polygon with Enter, or press Escape to discard it.' );
 			if ( saved() !== initial ) throw new Error( 'The saved shapes changed. Reopen the editor to continue.' );
 			const value = { shapes: structuredClone( shapes ) };
+			if ( vectorMode && brushStrokes.length ) value.brushStrokes = structuredClone( brushStrokes );
 			if ( vectorMode ) {
 
 				const command = new SetValueCommand( editor, scene, 'userData', { ...scene.userData, vectorDrawing: value } );
@@ -226,7 +250,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function snapshot() {
 
-		return { shapes: structuredClone( shapes ), active, vertex };
+		return { shapes: structuredClone( shapes ), brushStrokes: brushStrokes.slice(), active, vertex };
 
 	}
 	function remember( state = snapshot() ) {
@@ -240,7 +264,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		if ( ! from.length || gesture ) return;
 		to.push( snapshot() );
-		( { shapes, active, vertex } = from.pop() );
+		( { shapes, brushStrokes, active, vertex } = from.pop() );
+		repaint();
 		draft = [];
 		refresh();
 
@@ -252,7 +277,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		refresh();
 
 	}
-	function addShape( shape ) {
+	function addShape( shape, nextTool = 'edit' ) {
 
 		change( () => {
 
@@ -260,7 +285,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			active = shapes.length - 1;
 			vertex = -1;
 			draft = [];
-			tool = 'edit';
+			tool = nextTool;
 			status.textContent = '';
 
 		} );
@@ -405,6 +430,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	}
 	const vectorCanvas = document.createElement( 'canvas' );
+
+	function rasterDab( stroke, x, y, force ) {
+
+		brushDab( rasterContext, x, y, force, stroke.brush, stroke.erase );
+
+	}
+
+	function repaint() {
+
+		if ( ! rasterContext ) return;
+		rasterContext.clearRect( 0, 0, rasterSize, rasterSize );
+		for ( const stroke of brushStrokes ) for ( const [ x, y, force ] of stroke.samples ) rasterDab( stroke, x, y, force );
+
+	}
+	repaint();
+
 	function exportSVG() {
 
 		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape => {
@@ -415,7 +456,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} ).join( '' );
 		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' +
-			layers( 'cutout' ) + '</mask></defs><g mask="url(#cutouts)">' + layers( 'inside' ) + '</g></svg>';
+			layers( 'cutout' ) + '</mask></defs><g mask="url(#cutouts)">' +
+			( brushStrokes.length ? '<image width="1000" height="1000" href="' + raster.toDataURL() + '"/>' : '' ) +
+			layers( 'inside' ) + '</g></svg>';
 		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
 
 	}
@@ -425,6 +468,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const side = output.width = output.height = 1024;
 		const target = output.getContext( '2d' );
 		if ( referenceVisible ) drawImage( target, reference, 0, 0, side, side );
+		target.drawImage( raster, 0, 0 );
 		drawVectors( target, side, side );
 		output.toBlob( blob => { if ( blob ) editor.utils.save( blob, 'drawing.png' ); }, 'image/png' );
 
@@ -440,6 +484,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const { x, y } = frame;
 		ctx.fillStyle = '#13171e';
 		ctx.fillRect( 0, 0, canvas.width, canvas.height );
+		ctx.save();
+		view.apply( ctx );
 		ctx.save();
 		ctx.beginPath();
 		ctx.rect( x, y, width, height );
@@ -463,6 +509,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			const layer = vectorCanvas.getContext( '2d' );
 			layer.clearRect( 0, 0, w, h );
 			drawImage( layer, image, 0, 0, w, h );
+			layer.drawImage( raster, 0, 0, w, h );
 			drawVectors( layer, w, h );
 			ctx.drawImage( vectorCanvas, x, y, width, height );
 
@@ -495,15 +542,18 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.beginPath(); ctx.arc( ...pixel( draft[ 0 ] ), 4, 0, Math.PI * 2 ); ctx.fill();
 
 		}
-		if ( cursor && [ 'push', 'smooth' ].includes( tool ) ) {
+		if ( cursor && [ 'push', 'smooth', 'raster', 'erase' ].includes( tool ) ) {
 
 			ctx.strokeStyle = '#fff';
-			ctx.beginPath(); ctx.arc( ...cursor, Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
+			ctx.beginPath(); ctx.arc( ...cursor, usesPalette() ? pencilBrush( editor ).size * width / rasterSize / 2 : Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
 
 		}
 		ctx.restore();
 		ctx.strokeStyle = '#68778a';
 		ctx.strokeRect( x, y, width, height );
+		ctx.restore();
+		brushSettings.hidden = ! usesPalette();
+		if ( usesPalette() ) palette.refresh();
 		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
@@ -512,8 +562,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function pointer( event ) {
 
-		const rect = canvas.getBoundingClientRect();
-		return [ ( event.clientX - rect.left ) * canvas.width / rect.width, ( event.clientY - rect.top ) * canvas.height / rect.height ];
+		return view.point( event );
 
 	}
 	function bounded( point ) {
@@ -528,7 +577,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			const shape = shapes[ i ];
 			if ( ! shape ) continue;
-			const hit = shape.points.findIndex( p => distance( pixel( p ), point ) < 8 );
+			const hit = shape.points.findIndex( p => distance( pixel( p ), point ) < 8 / view.scale );
 			if ( hit >= 0 ) return [ i, hit ];
 			const closed = shape.closed !== false;
 			trace( shape.points, closed );
@@ -548,7 +597,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( event.button !== 0 ) return;
 		const point = pointer( event );
 		if ( uv( point ).some( value => value < 0 || value > 1 ) ) return;
-		canvas.focus();
+		canvas.focus( { preventScroll: true } );
 		if ( tool === 'polygon' ) {
 
 			const closes = draft.length > 2 && distance( pixel( draft[ 0 ] ), point ) < 9;
@@ -557,9 +606,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			return;
 
 		}
-		if ( tool === 'edit' ) [ active, vertex ] = hitShape( point );
-		if ( [ 'edit', 'push', 'smooth' ].includes( tool ) && ! shapes[ active ] ) { refresh(); return; }
+		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
+		if ( ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
+		if ( tool === 'raster' || tool === 'erase' ) {
+
+			const stroke = { brush: { ...pencilBrush( editor ) }, erase: tool === 'erase', samples: [] };
+			gesture.paint = stroke;
+			gesture.sample = brushStroke( stroke.brush, ...uv( point ).map( value => value * rasterSize ), brushPressure( event ), ( x, y, force ) => {
+
+				if ( x < 0 || x > rasterSize || y < 0 || y > rasterSize ) return;
+				stroke.samples.push( [ x, y, force ] );
+				rasterDab( stroke, x, y, force );
+
+			} );
+
+		}
 		draft = [ 'freehand', 'stroke' ].includes( tool ) ? [ uv( point ) ] : [];
 		canvas.setPointerCapture( event.pointerId );
 		refresh();
@@ -573,7 +635,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const start = bounded( gesture.start ), end = bounded( point );
 		const delta = end.map( ( value, i ) => value - start[ i ] );
 		const shape = shapes[ active ];
-		if ( tool === 'edit' ) {
+		if ( gesture.paint ) gesture.sample( ...uv( point ).map( value => value * rasterSize ), brushPressure( event ) );
+		else if ( transforms() ) {
+
+			const original = gesture.before.shapes[ active ].points;
+			const center = [ 0, 1 ].map( axis => original.reduce( ( sum, p ) => sum + p[ axis ], 0 ) / original.length );
+			shape.points = original.map( p => transformCanvasPoint( tool, p, start, end, center ) );
+
+		} else if ( tool === 'edit' ) {
 
 			const original = gesture.before.shapes[ active ].points;
 			shape.points = original.map( ( p, i ) => vertex >= 0 && vertex !== i ? p : p.map( ( value, axis ) => value + delta[ axis ] ) );
@@ -601,9 +670,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.onpointerup = () => {
 
 		if ( ! gesture ) return;
-		if ( tool === 'stroke' && draft.length >= 2 ) addShape( { points: draft, closed: false, name: 'Stroke ' + ( shapes.length + 1 ) } );
+		if ( gesture.paint ) {
+
+			remember( gesture.before );
+			brushStrokes.push( gesture.paint );
+
+		} else if ( tool === 'stroke' && draft.length >= 2 ) addShape( { points: draft, closed: false, color: pencilBrush( editor ).color, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
-		else if ( gesture.moved && [ 'edit', 'push', 'smooth' ].includes( tool ) ) remember( gesture.before );
+		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) ) remember( gesture.before );
 		gesture = null;
 		draft = [];
 		refresh();
@@ -611,12 +685,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	canvas.onpointercancel = () => {
 
-		if ( gesture ) ( { shapes, active, vertex } = gesture.before );
+		if ( gesture ) ( { shapes, brushStrokes, active, vertex } = gesture.before );
+		repaint();
 		gesture = null;
 		draft = [];
 		refresh();
 
 	};
+	canvas.onlostpointercapture = () => { if ( gesture ) canvas.onpointercancel(); };
 	canvas.onpointerleave = () => { cursor = null; if ( ! gesture ) draw(); };
 	canvas.ondblclick = event => {
 
@@ -648,8 +724,15 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( [ 'INPUT', 'SELECT', 'BUTTON' ].includes( event.target.tagName ) ) return;
 		const key = event.key.toLowerCase();
+		if ( key === 'home' ) { event.preventDefault(); view.fit(); return; }
+		if ( vectorMode && ! gesture && ! event.ctrlKey && ! event.metaKey && ! event.altKey ) {
+
+			const next = { d: 'stroke', g: 'move', r: 'rotate', s: 'scale' }[ key ];
+			if ( next ) { event.preventDefault(); tool = next; draw(); return; }
+
+		}
 		if ( key === 'enter' && tool === 'polygon' && draft.length ) { event.preventDefault(); closeDraft(); }
-		if ( key === 'f' && vectorMode && tool === 'edit' && ! ( event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ) ) {
+		if ( key === 'f' && vectorMode && [ 'edit', 'stroke' ].includes( tool ) && ! ( event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ) ) {
 
 			event.preventDefault();
 			toggleCyclic();
@@ -683,6 +766,6 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	} );
 	refresh();
 	if ( showPicker ) search.focus();
-	else canvas.focus();
+	else canvas.focus( { preventScroll: true } );
 
 }

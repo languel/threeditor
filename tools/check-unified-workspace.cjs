@@ -189,6 +189,11 @@ async function checkPencil( page ) {
 	} );
 	await page.keyboard.press( 'd' );
 	assert.equal( await page.getByLabel( 'Pencil placement' ).inputValue(), 'ground' );
+	await page.mouse.move( ...center );
+	const guide = await page.evaluate( () => editor.viewTools.overlay.toDataURL() );
+	await page.getByLabel( 'Pencil plane guide' ).uncheck();
+	assert.notEqual( await page.evaluate( () => editor.viewTools.overlay.toDataURL() ), guide );
+	await page.getByLabel( 'Pencil plane guide' ).check();
 	await draw( false );
 	assert.equal( await page.evaluate( () => {
 
@@ -196,6 +201,17 @@ async function checkPencil( page ) {
 		return path?.parent === editor.scene && path.geometry.userData.modeling.points.every( point => Math.abs( point[ 1 ] ) < 1e-7 );
 
 	} ), true );
+	await page.evaluate( () => {
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+	} );
+	await page.getByRole( 'button', { name: 'Paint mesh texture', exact: true } ).click();
+	await draw( false );
+	assert.equal( await page.evaluate( () => !! editor.scene.getObjectByName( 'Pencil receiver' ).material.map ), true );
+	await page.getByRole( 'button', { name: 'Erase mesh texture', exact: true } ).click();
+	await draw( false );
+	assert.equal( await page.evaluate( () => editor.scene.getObjectByName( 'Pencil receiver' ).material.transparent ), true );
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 
 }
@@ -291,6 +307,34 @@ async function checkUVUnwrap( page ) {
 		await page.evaluate( () => editor.undo() );
 
 	}
+	const tools = page.getByRole( 'group', { name: 'UV tools' } );
+	const grid = page.getByLabel( 'UV grid', { exact: true } );
+	const bounds = await grid.boundingBox();
+	const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+	const original = await page.evaluate( () => Array.from( editor.selected.geometry.attributes.uv.array ) );
+	await grid.press( 'a' );
+	await tools.getByRole( 'button', { name: 'Move', exact: true } ).click();
+	await page.mouse.move( x, y );
+	await page.mouse.down();
+	await page.mouse.move( x + bounds.width / 12, y, { steps: 3 } );
+	await page.mouse.up();
+	await page.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	assert.ok( await page.evaluate( previous => editor.selected.geometry.attributes.uv.array.every( ( value, i ) =>
+		i % 2 === 0 ? value > previous[ i ] + .08 : Math.abs( value - previous[ i ] ) < 1e-6, previous ), original ) );
+	await page.evaluate( () => editor.undo() );
+	await tools.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.mouse.click( x, y );
+	assert.deepEqual( await page.evaluate( () => {
+
+		const map = editor.selected.material.map;
+		return map ? Array.from( map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data ) : [];
+
+	} ), [ 255, 174, 102, 255 ] );
+	await tools.getByRole( 'button', { name: 'Erase Texture', exact: true } ).click();
+	await page.mouse.click( x, y );
+	assert.equal( await page.evaluate( () => editor.selected.material.map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data[ 3 ] ), 0 );
+	await page.evaluate( () => { editor.undo(); editor.undo(); } );
+	assert.equal( await page.evaluate( () => editor.selected.material.map === null ), true );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -1725,7 +1769,7 @@ async function check() {
 		await page.getByLabel( 'Contour color' ).fill( '#e4572e' );
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Create filled scene shape' } ).click();
-		await page.getByRole( 'button', { name: 'Draw stroke', exact: true } ).click();
+		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Pencil', exact: true } ).click();
 		await page.mouse.move( drawing.x + drawing.width * .28, drawing.y + drawing.height * .28 );
 		await page.mouse.down();
 		await page.mouse.move( drawing.x + drawing.width * .34, drawing.y + drawing.height * .21, { steps: 4 } );
@@ -1779,11 +1823,21 @@ async function check() {
 		} );
 		await page.getByRole( 'button', { name: 'Undo drawing edit' } ).click();
 		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
+		const vectorTools = canvas.locator( '../..' );
+		await vectorTools.getByRole( 'button', { name: 'Brush', exact: true } ).click();
+		const palette = page.getByRole( 'region', { name: 'Image and vector editor' } ).getByRole( 'group', { name: 'Pencil brush palette' } );
+		await palette.getByRole( 'button', { name: 'Marker', exact: true } ).click();
+		await canvas.scrollIntoViewIfNeeded();
+		const brushFrame = await canvas.boundingBox();
+		await page.mouse.click( brushFrame.x + brushFrame.width / 2, brushFrame.y + brushFrame.height / 2 );
+		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
+		assert.equal( await page.evaluate( () => editor.scene.userData.vectorDrawing.brushStrokes?.[ 0 ]?.brush.name ), 'Marker' );
 		const vectorDownload = page.waitForEvent( 'download' );
 		await page.getByRole( 'button', { name: 'Export SVG' } ).click();
 		const svg = await fs.readFile( await ( await vectorDownload ).path(), 'utf8' );
 		assert.match( svg, /<path fill="#e4572e"[^>]+ Z"/ );
-		assert.match( svg, /<path fill="none" stroke="#72cbef"[^>]+ [ML][^>]+"/ );
+		assert.match( svg, /<image [^>]+data:image\/png;base64,/ );
+		assert.match( svg, /<path fill="none" stroke="#ffae66"[^>]+ [ML][^>]+"/ );
 		await page.getByRole( 'group', { name: 'Workspace controls' } ).getByLabel( 'Image & Vector', { exact: true } ).click();
 		await page.getByRole( 'button', { name: '3D View', exact: true } ).click();
 		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );

@@ -1,10 +1,11 @@
+import { brushPalette, pencilBrush } from './PencilBrush.js';
 import { placementModes } from './PlacementModes.js';
 import { icon } from '../Glyphs.js?v=poly-context';
 import { splatStrokeCommands } from './SplatPaint.js?v=splat-filters';
-import { TexturePaintStroke } from './TexturePaint.js';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-workspace';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
-import { formatCombo } from '../Keymap.js';
+import { formatCombo } from '../Keymap.js?v=pencil-workspace';
 import { meshBrushes } from './SculptBrush.js?v=surface-tools';
 import { modelButton, modelField } from './ModelControls.js?v=poly-context';
 import * as THREE from 'three';
@@ -14,7 +15,7 @@ import { AddObjectCommand } from '../commands/AddObjectCommand.js?v=surface-tool
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=brush-shortcuts';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-workspace';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -58,7 +59,7 @@ export class ViewportTools {
 		this.mode = '';
 		this.points = [];
 		this.brush = { output: 'surface', placement: 'surface', color: '#47cdea', diameter: 14, opacity: 1 };
-		this.pencil = { output: 'vector', color: '#ffae66', diameter: 6, opacity: 1 };
+		this.pencilTool = 'vector';
 		this.measure = { unit: 'm', closed: false, bind: true, snap: true };
 		this.ray = new THREE.Raycaster();
 		this.measurements = [];
@@ -639,15 +640,35 @@ export class ViewportTools {
 
 		} else if ( this.mode === 'pencil' ) {
 
-			const placement = select( parent, 'Pencil placement', placementModes );
-			placement.value = this.editor.modeling.placement;
-			placement.onchange = () => {
+			for ( const [ tool, label, glyph ] of [
+				[ 'vector', 'Draw editable stroke', 'freehandDraw' ],
+				[ 'texture', 'Paint mesh texture', 'brush' ],
+				[ 'erase', 'Erase mesh texture', 'delete' ]
+			] ) {
 
-				this.editor.config.setKey( 'settings/modelPlacement', placement.value );
-				this.editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+				const button = modelButton( parent, label, glyph, () => { this.pencilTool = tool; this.buildOptions(); this.draw(); } );
+				button.setAttribute( 'aria-pressed', String( this.pencilTool === tool ) );
 
-			};
-			modelField( parent, 'Pencil color', 'color', 'color', this.pencil.color ).oninput = event => { this.pencil.color = event.target.value; };
+			}
+			if ( this.pencilTool === 'vector' ) {
+
+				const placement = select( parent, 'Pencil placement', placementModes );
+				placement.value = this.editor.modeling.placement;
+				placement.onchange = () => {
+
+					this.editor.config.setKey( 'settings/modelPlacement', placement.value );
+					this.editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+
+				};
+				modelField( parent, 'Pencil plane guide', 'plane', 'checkbox', this.editor.config.getKey( 'settings/pencilPlaneGuide' ) !== false ).onchange = event => {
+
+					this.editor.config.setKey( 'settings/pencilPlaneGuide', event.target.checked );
+					this.draw();
+
+				};
+
+			}
+			brushPalette( this.editor, parent, () => this.draw(), this.pencilTool === 'vector' );
 
 		} else {
 
@@ -686,7 +707,13 @@ export class ViewportTools {
 	resizeBrush( factor ) {
 
 		const model = this.editor.modeling;
-		if ( this.mode === 'paint' ) {
+		if ( this.mode === 'pencil' && this.pencilTool !== 'vector' ) {
+
+			const brush = pencilBrush( this.editor );
+			brush.size = THREE.MathUtils.clamp( Math.round( brush.size * factor ), 1, 256 );
+			this.buildOptions();
+
+		} else if ( this.mode === 'paint' ) {
 
 			this.brush.diameter = THREE.MathUtils.clamp( Math.round( this.brush.diameter * factor ), 2, 100 );
 			this.buildOptions();
@@ -705,7 +732,13 @@ export class ViewportTools {
 	adjustBrushStrength( delta ) {
 
 		const model = this.editor.modeling;
-		if ( this.mode === 'paint' ) {
+		if ( this.mode === 'pencil' ) {
+
+			const brush = pencilBrush( this.editor );
+			brush.strength = Math.round( THREE.MathUtils.clamp( brush.strength + delta, .01, 1 ) * 100 ) / 100;
+			this.buildOptions();
+
+		} else if ( this.mode === 'paint' ) {
 
 			this.brush.opacity = Math.round( THREE.MathUtils.clamp( this.brush.opacity + delta, .01, 1 ) * 100 ) / 100;
 			this.buildOptions();
@@ -955,15 +988,19 @@ export class ViewportTools {
 
 			} else {
 
-				const brush = this.mode === 'pencil' ? this.pencil : this.brush;
+				const pencil = this.mode === 'pencil';
+				const style = pencilBrush( this.editor );
+				const brush = pencil ? {
+					output: this.pencilTool === 'vector' ? 'vector' : 'texture', erase: this.pencilTool === 'erase',
+					color: style.color, diameter: this.pencilTool === 'vector' ? 6 : style.size, opacity: style.strength, hardness: style.hardness, aspect: style.aspect, angle: style.angle
+				} : this.brush;
 				const { output, diameter } = brush;
 				const pressure = event.pointerType === 'pen' ? Math.max( .12, event.pressure ) : 1;
-				const spacing = output === 'vector' ? diameter : Math.max( 2, diameter * .25 );
-				const pencil = this.mode === 'pencil';
+				const spacing = output === 'vector' ? diameter : Math.max( 1, diameter * ( pencil ? style.spacing ?? .12 : .25 ) );
 				const placement = pencil ? this.editor.modeling.placement : brush.placement;
 				this.stroke = { ...brush, pencil, placement, object: this.editor.selected, startPixel: [ x, y ], marks: new Set(), receivers: new Map(),
 					surfaces: paintSurfaces( this.editor.scene ), sampler: new StrokeSampler( x, y, pressure, spacing ) };
-				if ( this.brush.output === 'texture' ) this.stroke.texture = new TexturePaintStroke( this.editor );
+				if ( output === 'texture' ) this.stroke.texture = new TexturePaintStroke( this.editor );
 				this.paintDab( frame, x, y, pressure );
 				this.refreshPaintPreview();
 
@@ -1011,7 +1048,7 @@ export class ViewportTools {
 	pointerMove( event ) {
 
 		const pointer = this.pointer;
-		if ( ! pointer && this.mode === 'paint' ) {
+		if ( ! pointer && [ 'paint', 'pencil' ].includes( this.mode ) ) {
 
 			const frame = this.layout.at( event.clientX, event.clientY );
 			this.brushCursor = event.target === this.editor.renderer?.domElement && frame ? { x: event.clientX, y: event.clientY, frame } : null;
@@ -1069,7 +1106,7 @@ export class ViewportTools {
 
 	pencilPoint( stroke, frame, x, y ) {
 
-		const { scene, cursor } = this.editor;
+		const { scene } = this.editor;
 		rayToView( this.ray, this.layout, frame, x, y );
 		if ( stroke.placement === 'surface' ) {
 
@@ -1079,32 +1116,36 @@ export class ViewportTools {
 			return { object: receiver, point: localSurfacePoint( hit, this.ray, receiver ) };
 
 		}
-		if ( ! stroke.plane ) {
+		stroke.plane ||= this.pencilPlane( stroke, frame );
+		const point = stroke.plane && this.ray.ray.intersectPlane( stroke.plane, new THREE.Vector3() );
+		if ( point ) return { object: scene, point: scene.worldToLocal( point ).toArray() };
 
-			const origin = cursor.clone();
-			const normal = frame.camera.getWorldDirection( new THREE.Vector3() );
-			if ( stroke.placement === 'ground' ) { origin.y = 0; normal.set( 0, 1, 0 ); }
-			else if ( stroke.placement === 'object' && stroke.object && stroke.object !== scene ) {
+	}
 
-				stroke.object.getWorldPosition( origin );
-				normal.set( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( stroke.object.matrixWorld ) );
+	pencilPlane( stroke, frame ) {
 
-			} else if ( stroke.placement === 'surfacePerpendicular' ) {
+		const { scene, cursor } = this.editor;
+		if ( stroke.placement === 'surface' ) return;
+		const origin = cursor.clone();
+		const normal = frame.camera.getWorldDirection( new THREE.Vector3() );
+		if ( stroke.placement === 'ground' ) { origin.y = 0; normal.set( 0, 1, 0 ); }
+		else if ( stroke.placement === 'object' && stroke.object && stroke.object !== scene ) {
 
-				const hit = meshHit( this.ray, scene );
-				if ( ! hit ) return;
-				origin.copy( hit.point );
-				const n = hit.face.normal.clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
-				normal.addScaledVector( n, -normal.dot( n ) );
-				if ( normal.lengthSq() < 1e-6 ) frame.camera.getWorldDirection( normal );
-				normal.normalize();
+			stroke.object.getWorldPosition( origin );
+			normal.set( 0, 0, 1 ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( stroke.object.matrixWorld ) );
 
-			}
-			stroke.plane = new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
+		} else if ( stroke.placement === 'surfacePerpendicular' ) {
+
+			const hit = meshHit( this.ray, scene );
+			if ( ! hit ) return;
+			origin.copy( hit.point );
+			const n = hit.face.normal.clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
+			normal.addScaledVector( n, -normal.dot( n ) );
+			if ( normal.lengthSq() < 1e-6 ) frame.camera.getWorldDirection( normal );
+			normal.normalize();
 
 		}
-		const point = this.ray.ray.intersectPlane( stroke.plane, new THREE.Vector3() );
-		if ( point ) return { object: scene, point: scene.worldToLocal( point ).toArray() };
+		return new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin );
 
 	}
 
@@ -1200,7 +1241,7 @@ export class ViewportTools {
 
 					const [ anchor ] = face.screen;
 					const result = stroke.texture.paint( face, stroke.color, stroke.opacity, radius,
-						frame, anchor.x - px, anchor.y - py );
+						frame, anchor.x - px, anchor.y - py, stroke );
 					issue ||= result;
 
 				}
@@ -1215,7 +1256,7 @@ export class ViewportTools {
 				const hit = contact.hit;
 				const key = [ contact.object.uuid, hit.instanceId, hit.faceIndex ].join( '/' );
 				if ( faces.has( key ) ) return;
-				faces.set( key, stroke.texture.paint( hit, stroke.color, stroke.opacity, radius, frame, dx, dy ) );
+				faces.set( key, stroke.texture.paint( hit, stroke.color, stroke.opacity, radius, frame, dx, dy, stroke ) );
 
 			};
 			stamp( sample( x, y, true ), 0, 0 );
@@ -1329,7 +1370,7 @@ export class ViewportTools {
 				commands.push( new AddObjectCommand( this.editor, object, receiver, false ) );
 
 			}
-			if ( commands.length ) this.editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( this.editor, commands ), stroke.pencil ? 'Draw pencil stroke' : 'Paint surface stroke' );
+			if ( commands.length ) this.editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( this.editor, commands ), stroke.erase ? 'Erase texture stroke' : stroke.texture ? 'Paint texture stroke' : stroke.pencil ? 'Draw pencil stroke' : 'Paint surface stroke' );
 
 		}
 		if ( stroke ) this.render();
@@ -1352,6 +1393,47 @@ export class ViewportTools {
 		this.stroke = null;
 		this.brushCursor = null;
 		if ( pointer?.target.hasPointerCapture( pointer.id ) ) pointer.target.releasePointerCapture( pointer.id );
+
+	}
+
+	drawPencilPlane( ctx, frame ) {
+
+		const pointer = this.brushCursor;
+		if ( pointer?.frame.key !== frame.key ) return;
+		rayToView( this.ray, this.layout, frame, pointer.x, pointer.y );
+		const plane = this.stroke?.plane || this.pencilPlane( { placement: this.editor.modeling.placement, object: this.editor.selected }, frame );
+		if ( ! plane ) return;
+		const center = new THREE.Vector3();
+		if ( ! this.ray.ray.intersectPlane( plane, center ) ) plane.projectPoint( this.editor.cursor, center );
+		const n = plane.normal;
+		const right = new THREE.Vector3().crossVectors( Math.abs( n.z ) < .9 ? new THREE.Vector3( 0, 0, 1 ) : new THREE.Vector3( 1, 0, 0 ), n ).normalize();
+		const up = new THREE.Vector3().crossVectors( n, right );
+		const camera = frame.camera;
+		const depth = - center.clone().applyMatrix4( camera.matrixWorldInverse ).z;
+		if ( depth <= camera.near ) return;
+		const height = camera.isOrthographicCamera ? ( camera.top - camera.bottom ) / camera.zoom :
+			2 * depth * Math.tan( THREE.MathUtils.degToRad( camera.getEffectiveFOV() / 2 ) );
+		const span = height / frame.rect.height * 44;
+		const point = ( u, v ) => this.project( center.clone().addScaledVector( right, span * u ).addScaledVector( up, span * v ), frame );
+		ctx.save();
+		ctx.strokeStyle = '#ffae66';
+		ctx.lineWidth = 1;
+		ctx.setLineDash( [ 4, 3 ] );
+		ctx.beginPath();
+		for ( const [ u, v ] of [ [ -1, -1 ], [ -1, 0 ], [ -1, 1 ], [ 0, -1 ], [ 1, -1 ] ] ) {
+
+			const start = point( u, v );
+			for ( const end of [ u === -1 && point( 1, v ), v === -1 && point( u, 1 ) ] ) {
+
+				if ( ! start || ! end ) continue;
+				ctx.moveTo( ...start );
+				ctx.lineTo( ...end );
+
+			}
+
+		}
+		ctx.stroke();
+		ctx.restore();
 
 	}
 
@@ -1403,12 +1485,15 @@ export class ViewportTools {
 				this.strokePixels( ctx, this.points.map( point => this.visiblePoint( frame, point ) ), true, true );
 
 			}
-			if ( this.mode === 'paint' && this.brushCursor?.frame.key === frame.key ) {
+			if ( showCursor && this.mode === 'pencil' && this.pencilTool === 'vector' && frame.director &&
+				this.editor.config.getKey( 'settings/pencilPlaneGuide' ) !== false ) this.drawPencilPlane( ctx, frame );
+			if ( ( this.mode === 'paint' || this.mode === 'pencil' && frame.director && this.pencilTool !== 'vector' ) &&
+				this.brushCursor?.frame.key === frame.key ) {
 
 				const bounds = this.layout.clientRect( frame );
 				ctx.beginPath();
-				ctx.arc( rect.x + this.brushCursor.x - bounds.left, rect.y + this.brushCursor.y - bounds.top, this.brush.diameter / 2, 0, 2 * Math.PI );
-				ctx.strokeStyle = this.brush.color;
+				ctx.arc( rect.x + this.brushCursor.x - bounds.left, rect.y + this.brushCursor.y - bounds.top, ( this.mode === 'pencil' ? pencilBrush( this.editor ).size : this.brush.diameter ) / 2, 0, 2 * Math.PI );
+				ctx.strokeStyle = this.mode === 'pencil' ? pencilBrush( this.editor ).color : this.brush.color;
 				ctx.lineWidth = 1.5;
 				ctx.stroke();
 

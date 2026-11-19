@@ -28,6 +28,12 @@ Run `node --test test/*.test.mjs` before pushing. For a browser smoke test, open
 - `SculptBrush.js` applies weighted movement and adjacency for Grab, Push, Smooth, Relax, Pinch, and Twist. The standard keymap exposes Surface Paint, Edit, Sculpt, Topology Pen, Weld, and brush size. Hold Shift for temporary Smooth.
 - Smoke-test one paint stroke across two receivers and undo once. Also paint an unlocked point cloud and a bundled Gaussian scan. On an authored mesh, click an edge to split it, pull a boundary edge, and Ctrl-click a face. On a dense mesh, switch from Push to Pinch and undo a stroke.
 
+### Pencil and 2D painting
+
+- Pencil uses shared placement settings. The viewport overlay resolves the same plane as the current stroke and follows the pointer. Mesh Surface follows the receiver and Surface Perpendicular locks at the first hit.
+- `PencilBrush.js` holds shared tip settings and the raster dab profile. `TexturePaint.js` uses the same material-copy and undo path for 3D and UV painting. Image & Vector records raster brush samples separately from editable contours and composites them for export.
+- `Canvas2DTools.js` supplies the shared pan, zoom and 2D transforms for the UV, Warp, Image & Vector, and Mask work areas. The browser smoke test checks guide visibility, texture paint and erase, UV moves, and SVG paint export.
+
 ### Mode and tool layout
 
 The app top bar owns the editor picker exposed by `EditWorkspace.js`. `ViewportTools.js` builds one vertical shelf for persistent tools and a separate dropdown for immediate mesh operations. The mode picker exposes Object, Edit, Sculpt and Paint. The shelf follows the mode, and returning to Edit or Sculpt restores its last compatible tool. The pressed tool button identifies the active tool without an extra label. The T binding and View menu toggle the tool shelf independently of the transform row. Mode controls stay top-left, transform/grid controls center, and view controls top-right; a ResizeObserver puts transforms on a separate centered row when the viewport is narrow. Operation menus align glyphs and labels on one left-aligned row. Active shelf buttons use the same centered accent fill as transforms; keep their selector specific enough to override the nested theme Button rule. Glyphs for surface paint, sculpt, topology, curve, polygon, mesh, and freehand drawing are distinct.

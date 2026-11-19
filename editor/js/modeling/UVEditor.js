@@ -11,6 +11,10 @@ import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton } from './ModelControls.js';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js';
+import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
+import { brushPalette, brushPressure, brushStroke, pencilBrush } from './PencilBrush.js';
+import { TexturePaintStroke } from './TexturePaint.js?v=pencil-workspace';
 import { layoutUV } from './UVLayout.js?v=unwrap-modes';
 
 export function setProjectorMapping( editor, projector, key, value ) {
@@ -74,6 +78,8 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const source = () => modifierSource( object );
 	let geometry = source();
 	let selected = [], dragging, dirty = false;
+	let tool = 'select', lastPoint, pivot = [ .5, .5 ];
+	const undo = [], redo = [];
 	let bake, showBake = true;
 	let original = geometry;
 	function reset() {
@@ -87,6 +93,38 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	let points = reset();
 	const margin = 25, span = canvas.width - margin * 2;
 	const pixel = ( [ u, v ] ) => [ margin + u * span, margin + v * span ];
+	const pointUV = point => point.map( value => ( value - margin ) / span );
+	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
+	const shelf = createCanvasShelf( canvas, [
+		...selectionTools2D, [ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
+		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'remove' ] ] ),
+		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
+	], id => {
+
+		cancelDrag();
+		if ( id === 'fit' ) view.fit();
+		else { tool = id; draw(); }
+
+	}, warp ? 'Warp tools' : 'UV tools' );
+	const paintControls = document.createElement( 'div' );
+	paintControls.className = 'canvas-pencil-settings';
+	const palette = ! warp && brushPalette( editor, paintControls, draw );
+	const materialSelect = document.createElement( 'select' );
+	materialSelect.setAttribute( 'aria-label', 'Material slot' );
+	if ( ! warp && Array.isArray( object.material ) ) {
+
+		object.material.forEach( ( material, i ) => materialSelect.append( new Option( material.name || 'Material ' + ( i + 1 ), i ) ) );
+		toolbar.append( materialSelect );
+
+	}
+	const materialSlot = () => Number( materialSelect.value );
+	const paintTool = () => tool === 'pencil' || tool === 'erase';
+	const pivotSelect = document.createElement( 'select' );
+	pivotSelect.setAttribute( 'aria-label', 'UV transform pivot' );
+	pivotSelect.append( new Option( 'Median pivot', 'median' ), new Option( '2D Cursor pivot', 'cursor' ) );
+	toolbar.append( pivotSelect );
+	modelButton( toolbar, 'Undo UV edit', 'undo', () => restore( undo, redo ) );
+	modelButton( toolbar, 'Redo UV edit', 'redo', () => restore( redo, undo ) );
 	const layout = document.createElement( 'select' );
 	layout.setAttribute( 'aria-label', 'UV layout' );
 	function run( action ) {
@@ -140,6 +178,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( geometry !== original ) geometry.dispose();
 			geometry = next;
 			points = reset();
+			undo.length = redo.length = 0;
 			selected = [];
 			dirty = true;
 
@@ -277,69 +316,129 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			dirty = false;
 
 		}
+		undo.length = redo.length = 0;
+		if ( warp ) dirty = false;
 		status.textContent = warp ? 'Warp applied.' : 'UVs applied.';
 
 	} ) );
-	function line( indices ) {
+	function line( indices, closed = false ) {
 
 		ctx.beginPath();
 		indices.forEach( ( index, i ) => ctx[ i ? 'lineTo' : 'moveTo' ]( ...pixel( points[ index ] ) ) );
+		if ( closed ) ctx.closePath();
 		ctx.stroke();
 
 	}
+
+	function eachTriangle( visit ) {
+
+		const index = geometry.index;
+		for ( let row = 0; row + 2 < ( index?.count ?? points.length ); row += 3 ) {
+
+			const face = [ row, row + 1, row + 2 ];
+			visit( index ? face.map( i => index.getX( i ) ) : face );
+
+		}
+
+	}
+
 	function draw() {
 
 		ctx.fillStyle = '#12161d';
 		ctx.fillRect( 0, 0, canvas.width, canvas.height );
-		const material = Array.isArray( object.material ) ? object.material[ 0 ] : object.material;
+		ctx.save();
+		view.apply( ctx );
+		ctx.lineWidth = 1 / view.scale;
+		ctx.strokeStyle = '#53606f';
+		for ( let i = 1; i < 10; i ++ ) {
+
+			const grid = margin + i * span / 10;
+			ctx.beginPath();
+			ctx.moveTo( grid, margin ); ctx.lineTo( grid, margin + span );
+			ctx.moveTo( margin, grid ); ctx.lineTo( margin + span, grid );
+			ctx.stroke();
+
+		}
+		const material = editor.getObjectMaterial( object, materialSlot() );
 		const output = object.projectorOutput;
-		const source = warp ? output?.warpSource || output?.canvas : ( showBake && bake?.image ) || material?.map?.image;
+		const source = warp ? output?.warpSource || output?.canvas : ( ! paintTool() && showBake && bake?.image ) || material?.map?.image;
 		if ( source?.width || source?.videoWidth ) {
 
 			try {
 
-				ctx.globalAlpha = source === bake?.image ? 1 : .55;
+				ctx.globalAlpha = paintTool() || source === bake?.image ? 1 : .55;
 				if ( warp ) ctx.drawImage( source, output.x, output.y, output.width, output.height, margin, margin, span, span );
 				else ctx.drawImage( source, margin, margin, span, span );
 
-			} catch { /* The image has not decoded yet. */ }
+			} catch { /* Wait for image decode. */ }
 			finally { ctx.globalAlpha = 1; }
 
 		}
 		ctx.strokeStyle = '#6a7c8d';
 		ctx.strokeRect( margin, margin, span, span );
+		const selection = new Set( selected );
 		if ( warp ) for ( let i = 0; i < points.length; i ++ ) {
 
 			if ( i % size < size - 1 ) line( [ i, i + 1 ] );
 			if ( i + size < points.length ) line( [ i, i + size ] );
 
 		}
-		else if ( points.length ) {
+		else if ( points.length ) eachTriangle( face => {
 
-			const index = geometry.index;
-			const at = i => index ? index.getX( i ) : i;
-			for ( let i = 0; i + 2 < ( index?.count ?? points.length ); i += 3 ) line( [ at( i ), at( i + 1 ), at( i + 2 ), at( i ) ] );
-
-		}
-		points.forEach( ( point, index ) => {
-
-			ctx.fillStyle = selected.includes( index ) ? '#ffae62' : '#70dcee';
-			ctx.beginPath(); ctx.arc( ...pixel( point ), 2.5, 0, Math.PI * 2 ); ctx.fill();
+			const active = face.every( index => selection.has( index ) );
+			ctx.strokeStyle = active ? '#ffae62' : '#768597';
+			line( face, true );
+			if ( active ) { ctx.fillStyle = '#ff9d4526'; ctx.fill(); }
 
 		} );
+		points.forEach( ( point, index ) => {
+
+			ctx.fillStyle = selection.has( index ) ? '#ffae62' : '#8ba4bb';
+			ctx.beginPath(); ctx.arc( ...pixel( point ), 2.5 / view.scale, 0, Math.PI * 2 ); ctx.fill();
+
+		} );
+		if ( tool === 'cursor' || pivotSelect.value === 'cursor' ) {
+
+			const [ x, y ] = pixel( pivot ), r = 9 / view.scale;
+			ctx.strokeStyle = '#ffbc8d';
+			ctx.beginPath(); ctx.arc( x, y, r * .6, 0, Math.PI * 2 );
+			ctx.moveTo( x - r, y ); ctx.lineTo( x + r, y ); ctx.moveTo( x, y - r ); ctx.lineTo( x, y + r );
+			ctx.stroke();
+
+		}
+		if ( dragging?.region ) {
+
+			ctx.beginPath();
+			const { start, end, polygon } = dragging;
+			if ( tool === 'circle' ) ctx.arc( ...end, 22 / view.scale, 0, Math.PI * 2 );
+			else if ( tool === 'lasso' ) {
+
+				polygon.forEach( ( p, i ) => ctx[ i ? 'lineTo' : 'moveTo' ]( ...p ) );
+				ctx.closePath();
+
+			} else ctx.rect( ...start, end[ 0 ] - start[ 0 ], end[ 1 ] - start[ 1 ] );
+			ctx.fillStyle = '#ff9d4520'; ctx.strokeStyle = '#ffae62'; ctx.fill(); ctx.stroke();
+
+		}
+		if ( paintTool() && lastPoint ) {
+
+			const diameter = pencilBrush( editor ).size;
+			const width = material?.map?.image?.width || 1024;
+			ctx.strokeStyle = '#ffdc97';
+			ctx.beginPath();
+			ctx.arc( ...lastPoint, diameter * span / width / 2, 0, Math.PI * 2 );
+			ctx.stroke();
+
+		}
+		ctx.restore();
+		paintControls.hidden = ! paintTool();
+		shelf.update( tool );
 
 	}
-	function cursor( event ) {
 
-		const rect = canvas.getBoundingClientRect();
-		return [ ( event.clientX - rect.left ) * canvas.width / rect.width, ( event.clientY - rect.top ) * canvas.height / rect.height ];
+	function nearest( at ) {
 
-	}
-	canvas.onpointerdown = event => {
-
-		if ( event.button !== 0 ) return;
-		const at = cursor( event );
-		let hit = -1, best = 9;
+		let hit = -1, best = 9 / view.scale;
 		points.forEach( ( point, index ) => {
 
 			const p = pixel( point );
@@ -347,56 +446,252 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( distance < best ) { best = distance; hit = index; }
 
 		} );
-		if ( hit < 0 ) return;
-		const matches = points.flatMap( ( point, index ) => point.every( ( value, axis ) => Math.abs( value - points[ hit ][ axis ] ) < 1e-6 ) ? [ index ] : [] );
-		selected = event.shiftKey ? [ ...new Set( [ ...selected, ...matches ] ) ] : matches;
-		dragging = { at, points: selected.map( index => points[ index ].slice() ) };
-		canvas.setPointerCapture( event.pointerId );
-		draw();
+		return hit;
 
-	};
-	canvas.onpointermove = event => {
+	}
 
-		if ( ! dragging ) return;
-		const at = cursor( event );
-		if ( selected.length ) dirty = true;
-		selected.forEach( ( index, i ) => {
+	function pointKey( i ) {
 
-			points[ index ] = dragging.points[ i ].map( ( value, axis ) => {
+		const uv = points[ i ].map( value => Math.round( value * 1e6 ) ).join( ',' );
+		const xyz = geometry.attributes.position;
+		return warp ? i : uv + '/' + [ xyz.getX( i ), xyz.getY( i ), xyz.getZ( i ) ].join( ',' );
 
-				const next = value + ( at[ axis ] - dragging.at[ axis ] ) / span;
-				return warp ? Math.max( 0, Math.min( 1, next ) ) : next;
+	}
 
-			} );
+	function select( hits, event ) {
+
+		if ( event.ctrlKey ) selected = selected.filter( i => ! hits.includes( i ) );
+		else if ( event.shiftKey ) selected = [ ...new Set( [ ...selected, ...hits ] ) ];
+		else selected = hits;
+
+	}
+
+	function selectLinked() {
+
+		if ( warp ) return;
+		const hit = lastPoint && nearest( lastPoint );
+		const seeds = hit >= 0 ? [ hit ] : selected;
+		const links = new Map();
+		eachTriangle( face => {
+
+			const keys = face.map( pointKey );
+			for ( const key of keys ) {
+
+				if ( ! links.has( key ) ) links.set( key, new Set() );
+				for ( const neighbor of keys ) links.get( key ).add( neighbor );
+
+			}
 
 		} );
-		draw();
+		const queue = seeds.map( pointKey ), reached = new Set( queue );
+		for ( let i = 0; i < queue.length; i ++ ) for ( const next of links.get( queue[ i ] ) || [] ) {
 
-	};
-	canvas.onpointerup = () => { dragging = null; };
-	canvas.onpointercancel = () => {
+			if ( reached.has( next ) ) continue;
+			reached.add( next ); queue.push( next );
 
-		if ( dragging ) selected.forEach( ( index, i ) => { points[ index ] = dragging.points[ i ]; } );
+		}
+		selected = points.flatMap( ( _, index ) => reached.has( pointKey( index ) ) ? [ index ] : [] );
+
+	}
+
+	function restore( from, to ) {
+
+		if ( ! from.length || dragging ) return;
+		to.push( { points, dirty } );
+		( { points, dirty } = from.pop() );
+
+	}
+
+	function beginTransform( mode, point, modal = false ) {
+
+		if ( ! selected.length ) return;
+		const center = [ 0, 1 ].map( axis => selected.reduce( ( sum, index ) => sum + points[ index ][ axis ], 0 ) / selected.length );
+		dragging = { mode, at: pointUV( point ), center: pivotSelect.value === 'cursor' ? pivot.slice() : center,
+			before: { points: points.slice(), dirty }, modal };
+
+	}
+
+	function cancelDrag() {
+
+		if ( dragging?.before ) ( { points, dirty } = dragging.before );
+		if ( dragging?.paint ) {
+
+			dragging.paint.finish( false );
+			editor.signals.objectChanged.dispatch( object );
+
+		}
+		dragging = null;
+
+	}
+
+	function finishDrag() {
+
+		if ( dragging?.paint ) {
+
+			const [ command ] = dragging.paint.finish( true );
+			dragging = null;
+			if ( command ) editor.execute( command, 'Paint UV texture' );
+			draw();
+			return;
+
+		}
+		if ( dragging?.changed ) {
+
+			undo.push( dragging.before );
+			if ( undo.length > 30 ) undo.shift();
+			redo.length = 0;
+
+		}
 		dragging = null;
 		draw();
 
+	}
+
+	canvas.onpointerdown = event => {
+
+		if ( event.button !== 0 ) return;
+		canvas.focus( { preventScroll: true } );
+		if ( dragging?.modal ) { finishDrag(); return; }
+		const point = lastPoint = view.point( event );
+		if ( tool === 'cursor' ) { pivot = pointUV( point ); draw(); return; }
+		if ( paintTool() ) {
+
+			const uv = pointUV( point );
+			if ( uv.some( value => value < 0 || value > 1 ) ) return;
+			const slot = materialSlot();
+			const image = editor.getObjectMaterial( object, slot )?.map?.image;
+			const w = image?.width || 1024, h = image?.height || 1024;
+			const brush = { ...pencilBrush( editor ) };
+			const paint = new TexturePaintStroke( editor );
+			const pressure = brushPressure( event );
+			const sample = brushStroke( brush, uv[ 0 ] * w, uv[ 1 ] * h, pressure, ( x, y, force ) => {
+
+				if ( x < 0 || x > w || y < 0 || y > h ) return;
+				const issue = paint.paintUV( object, slot, x / w, y / h, brush, force, tool === 'erase' );
+				if ( issue ) status.textContent = issue;
+
+			} );
+			dragging = { paint, sample, w, h };
+			editor.signals.objectChanged.dispatch( object );
+
+		} else if ( [ 'box', 'circle', 'lasso' ].includes( tool ) ) {
+
+			dragging = { region: true, tool, start: point, end: point, polygon: [ point ], event };
+
+		} else {
+
+			const hit = nearest( point );
+			if ( tool === 'select' || ! selected.length ) {
+
+				const key = hit >= 0 ? pointKey( hit ) : null;
+				select( key === null ? [] : points.flatMap( ( _, i ) => pointKey( i ) === key ? [ i ] : [] ), event );
+
+			}
+			if ( tool !== 'select' || hit >= 0 && ! event.ctrlKey ) beginTransform( tool === 'select' ? 'move' : tool, point );
+
+		}
+		if ( dragging ) canvas.setPointerCapture( event.pointerId );
+		draw();
+
 	};
+
+	canvas.onpointermove = event => {
+
+		const point = lastPoint = view.point( event );
+		if ( ! dragging ) { if ( paintTool() ) draw(); return; }
+		if ( dragging.paint ) {
+
+			const uv = pointUV( point );
+			dragging.sample( uv[ 0 ] * dragging.w, uv[ 1 ] * dragging.h, brushPressure( event ) );
+			editor.signals.objectChanged.dispatch( object );
+
+		} else if ( dragging.region ) {
+
+			dragging.end = point;
+			dragging.polygon.push( point );
+
+		} else {
+
+			const to = pointUV( point );
+			dragging.changed ||= Math.hypot( to[ 0 ] - dragging.at[ 0 ], to[ 1 ] - dragging.at[ 1 ] ) > 1e-7;
+			for ( const index of selected ) {
+
+				const next = transformCanvasPoint( dragging.mode, dragging.before.points[ index ], dragging.at, to, dragging.center );
+				points[ index ] = warp ? next.map( value => THREE.MathUtils.clamp( value, 0, 1 ) ) : next;
+
+			}
+			dirty ||= dragging.changed;
+
+		}
+		draw();
+
+	};
+
+	canvas.onpointerup = () => {
+
+		if ( dragging?.region ) {
+
+			const region = dragging;
+			select( points.flatMap( ( point, i ) => selectionRegionContains( region, pixel( point ), 22 / view.scale ) ? [ i ] : [] ), region.event );
+
+		}
+		if ( dragging && ! dragging.modal ) finishDrag();
+
+	};
+	canvas.onpointercancel = () => { cancelDrag(); draw(); };
+	canvas.onlostpointercapture = () => { if ( dragging && ! dragging.modal ) canvas.onpointercancel(); };
+	canvas.onpointerleave = () => { if ( ! dragging ) { lastPoint = null; draw(); } };
+	canvas.onkeydown = event => {
+
+		const key = event.key.toLowerCase();
+		const modes = { g: 'move', r: 'rotate', s: 'scale' };
+		if ( dragging && key === 'escape' ) cancelDrag();
+		else if ( dragging?.modal && key === 'enter' ) finishDrag();
+		else if ( key === 'z' && ( event.ctrlKey || event.metaKey ) ) {
+
+			if ( event.shiftKey ) { if ( redo.length ) restore( redo, undo ); else if ( ! dragging ) editor.redo(); }
+			else if ( undo.length ) restore( undo, redo );
+			else if ( ! dragging ) editor.undo();
+
+		} else if ( ! dragging && key === 'a' && ! event.ctrlKey && ! event.metaKey ) selected = event.altKey ? [] : points.map( ( _, i ) => i );
+		else if ( ! dragging && key === 'l' ) selectLinked();
+		else if ( ! dragging && key === 'home' ) view.fit();
+		else if ( ! dragging && ! warp && key === 'd' && ! event.ctrlKey && ! event.metaKey ) { tool = 'pencil'; palette.refresh(); }
+		else if ( ! dragging && modes[ key ] && ! event.ctrlKey && ! event.metaKey && selected.length ) beginTransform( modes[ key ], lastPoint || pixel( [ .5, .5 ] ), true );
+		else return;
+		event.preventDefault();
+		event.stopPropagation();
+		draw();
+
+	};
+	pivotSelect.onchange = materialSelect.onchange = draw;
+
+
 	workspacePanel.append( toolbar );
 	if ( baking ) workspacePanel.append( baking );
-	workspacePanel.append( canvas, status );
+	const workArea = document.createElement( 'div' );
+	workArea.className = 'uv-work-area';
+	workArea.append( shelf.element, canvas );
+	workspacePanel.append( workArea );
+	if ( ! warp ) workspacePanel.append( paintControls );
+	workspacePanel.append( status );
 	const updateGeometry = changed => {
 
 		if ( warp || changed !== object || source() === original || dirty ) return;
 		original = geometry = source();
 		points = reset();
+		undo.length = redo.length = 0;
 		selected = [];
 		draw();
 
 	};
 	editor.signals.geometryChanged.add( updateGeometry );
+	editor.signals.materialChanged.add( draw );
 	editor.editWorkspace.mount( warp ? 'warp' : 'uv', object, workspacePanel, () => {
 
 		editor.signals.geometryChanged.remove( updateGeometry );
+		editor.signals.materialChanged.remove( draw );
+		cancelDrag();
 		if ( ! warp && geometry !== original ) geometry.dispose();
 		bake?.geometry.dispose();
 

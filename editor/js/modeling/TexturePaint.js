@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { brushDab, brushFill } from './PencilBrush.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { SetMaterialCommand } from '../commands/SetMaterialCommand.js';
 
@@ -82,7 +83,7 @@ export class TexturePaintStroke {
 
 	}
 
-	paint( hit, color, opacity, radius, frame, offsetX, offsetY ) {
+	paint( hit, color, opacity, radius, frame, offsetX, offsetY, brush = {} ) {
 
 		const receiver = hit.object;
 		const projection = hit.screen;
@@ -94,53 +95,11 @@ export class TexturePaintStroke {
 		const uv = channel === 1 ? hit.uv1 : hit.uv;
 		if ( ! hit.face || ! coords || ! ( projection || uv ) || ! source?.color || ! ( 'map' in source ) || channel > 1 ) return 'Choose a mesh with UV coordinates and a base-color material.';
 
-		const key = receiver.uuid + '/' + slot;
-		let target = this.targets.get( key );
-		if ( ! target ) {
+		const target = this.materialTarget( receiver, slot, source );
+		if ( typeof target === 'string' ) return target;
 
-			const original = source.map;
-			const image = original?.image;
-			if ( original && ( original.mapping !== THREE.UVMapping || original.isVideoTexture || ! ( image instanceof HTMLCanvasElement || image instanceof HTMLImageElement || image instanceof ImageBitmap ) ) ) return 'This base-color map needs an editable image.';
-			const canvas = document.createElement( 'canvas' );
-			canvas.width = image?.width || 1024;
-			canvas.height = image?.height || 1024;
-			const ctx = canvas.getContext( '2d' );
-			if ( image ) {
-
-				try {
-
-					ctx.drawImage( image, 0, 0 );
-					ctx.getImageData( 0, 0, 1, 1 );
-
-				} catch { return 'The base-color image is unavailable for painting.'; }
-
-			} else {
-
-				ctx.fillStyle = '#' + source.color.getHexString();
-				ctx.fillRect( 0, 0, canvas.width, canvas.height );
-
-			}
-			const texture = new THREE.CanvasTexture( canvas );
-			if ( original ) {
-
-				const pixels = texture.source;
-				texture.copy( original );
-				texture.source = pixels;
-				texture.userData = {};
-
-			} else texture.colorSpace = THREE.SRGBColorSpace;
-			texture.userData.surfacePaint = true;
-			texture.name = ( receiver.name || 'Mesh' ) + ' paint';
-			const material = source.clone();
-			if ( ! image ) material.color.set( 0xffffff );
-			material.map = texture;
-			target = { receiver, slot, source, material, texture, ctx };
-			this.targets.set( key, target );
-			this.assign( target, material );
-
-		}
-
-		const { texture, ctx } = target;
+		const { texture, ctx, material } = target;
+		if ( brush.erase && ! material.transparent ) { material.transparent = true; material.needsUpdate = true; }
 		if ( texture.matrixAutoUpdate ) texture.updateMatrix();
 		const { a, b, c } = hit.face;
 		const world = receiver.matrixWorld.clone();
@@ -198,6 +157,7 @@ export class TexturePaintStroke {
 				( mirrorX ? column + 1 : -column ) * width, ( flipY ? row + 1 : -row ) * height );
 			ctx.fillStyle = color;
 			ctx.globalAlpha = opacity;
+			if ( brush.erase ) ctx.globalCompositeOperation = 'destination-out';
 			ctx.beginPath();
 			if ( perspective ) {
 
@@ -216,23 +176,90 @@ export class TexturePaintStroke {
 			tracePolygon( ctx, texels );
 			ctx.clip();
 			ctx.transform( xx, xy, yx, yy, cx, cy );
-			ctx.beginPath();
-			ctx.arc( 0, 0, radius, 0, Math.PI * 2 );
 			if ( hit.occluded?.length ) {
 
-				ctx.clip();
 				ctx.beginPath();
 				ctx.rect( -radius - 1, -radius - 1, 2 * radius + 2, 2 * radius + 2 );
 				for ( const [ x, y, length ] of hit.occluded ) ctx.rect( x, y, length, 1 );
 				ctx.clip( 'evenodd' );
-				ctx.beginPath();
-				ctx.rect( -radius, -radius, 2 * radius, 2 * radius );
 
 			}
+			ctx.rotate( brush.angle || 0 );
+			ctx.scale( 1, brush.aspect || 1 );
+			ctx.fillStyle = brushFill( ctx, radius, color, brush.hardness ?? 1 );
+			ctx.beginPath();
+			ctx.arc( 0, 0, radius, 0, Math.PI * 2 );
 			ctx.fill();
 			ctx.restore();
 
 		}
+		target.dirty = true;
+		texture.needsUpdate = true;
+		return '';
+
+	}
+
+	materialTarget( receiver, slot, source ) {
+
+		const key = receiver.uuid + '/' + slot;
+		let target = this.targets.get( key );
+		if ( ! target ) {
+
+			const original = source.map;
+			const image = original?.image;
+			if ( original && ( original.mapping !== THREE.UVMapping || original.isVideoTexture || ! ( image instanceof HTMLCanvasElement || image instanceof HTMLImageElement || image instanceof ImageBitmap ) ) ) return 'This base-color map needs an editable image.';
+			const canvas = document.createElement( 'canvas' );
+			canvas.width = image?.width || 1024;
+			canvas.height = image?.height || 1024;
+			const ctx = canvas.getContext( '2d' );
+			if ( image ) {
+
+				try {
+
+					ctx.drawImage( image, 0, 0 );
+					ctx.getImageData( 0, 0, 1, 1 );
+
+				} catch { return 'The base-color image is unavailable for painting.'; }
+
+			} else {
+
+				ctx.fillStyle = '#' + source.color.getHexString();
+				ctx.fillRect( 0, 0, canvas.width, canvas.height );
+
+			}
+			const texture = new THREE.CanvasTexture( canvas );
+			if ( original ) {
+
+				const pixels = texture.source;
+				texture.copy( original );
+				texture.source = pixels;
+				texture.userData = {};
+
+			} else texture.colorSpace = THREE.SRGBColorSpace;
+			texture.userData.surfacePaint = true;
+			texture.name = ( receiver.name || 'Mesh' ) + ' paint';
+			const material = source.clone();
+			if ( ! image ) material.color.set( 0xffffff );
+			material.map = texture;
+			target = { receiver, slot, source, material, texture, ctx };
+			this.targets.set( key, target );
+			this.assign( target, material );
+
+		}
+
+		return target;
+
+	}
+
+	paintUV( receiver, slot, u, v, brush, pressure, erase = false ) {
+
+		const source = this.editor.getObjectMaterial( receiver, slot );
+		if ( ! source?.color || ! ( 'map' in source ) ) return 'Choose a base-color material.';
+		const target = this.materialTarget( receiver, slot, source );
+		if ( typeof target === 'string' ) return target;
+		const { ctx, material, texture } = target;
+		if ( erase && ! material.transparent ) { material.transparent = true; material.needsUpdate = true; }
+		brushDab( ctx, u * ctx.canvas.width, v * ctx.canvas.height, pressure, brush, erase );
 		target.dirty = true;
 		texture.needsUpdate = true;
 		return '';
