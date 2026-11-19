@@ -4,9 +4,9 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { storeSourceFiles } from '../ProjectAssets.js';
 import * as THREE from 'three';
 import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
-import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=brush-presets';
-import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
-import { createBrushColorSampler } from './BrushColorSampler.js?v=brush-presets';
+import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-placement';
+import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-placement';
+import { createBrushColorSampler } from './BrushColorSampler.js?v=pencil-placement';
 import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
@@ -915,7 +915,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'stroke' ) {
 
 			gesture.brush = { ...pencilBrush( editor ) };
-			if ( gesture.brush.stabilize ) gesture.stabilizer = point.slice();
+			if ( gesture.brush.stabilize || event.shiftKey ) gesture.stabilizer = point.slice();
 
 		}
 		if ( pencilRaster() ) {
@@ -939,12 +939,13 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.onpointermove = event => {
 
 		let point = cursor = pointer( event );
-		if ( gesture?.stabilizer ) {
+		if ( gesture?.brush && ( gesture.brush.stabilize || event.shiftKey ) ) {
 
+			gesture.stabilizer ||= gesture.last.slice();
 			const radius = gesture.brush.stabilizeRadius * canvas.width / canvas.getBoundingClientRect().width / view.scale;
 			point = stabilizePointer( gesture.stabilizer, ...point, radius ).slice();
 
-		}
+		} else if ( gesture ) gesture.stabilizer = null;
 		if ( ! gesture ) { draw(); return; }
 		if ( distance( point, gesture.last ) < 3 ) return;
 		if ( gesture.brush ) point = guidePencilPoint( point, gesture.start, pixel( guideCenter ), gesture.brush.guide,

@@ -31,7 +31,7 @@ function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, spacing: .12, aspect: 1, angle: 0, pressureSize: true, pressureOpacity: false, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#ffae66', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
+	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, spacing: .12, aspect: 1, angle: 0, pressureSize: true, pressureOpacity: false, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#71bce7', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
 
 }
 

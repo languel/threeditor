@@ -16,13 +16,14 @@ export function stabilizePointer( position, x, y, radius ) {
 
 }
 
-export function smoothPencilStroke( points, strength, passes = 2 ) {
+export function smoothPencilStroke( points, strength, passes = 2, anchors = [] ) {
 
 	let smoothed = points;
 	if ( strength <= 0 || points.length < 3 ) return smoothed;
+	const locked = new Set( anchors );
 	for ( let pass = 0; pass < passes; pass ++ ) smoothed = smoothed.map( ( point, index, input ) => {
 
-		if ( index === 0 || index === input.length - 1 ) return point;
+		if ( index === 0 || index === input.length - 1 || locked.has( index ) ) return point;
 		return point.map( ( value, axis ) => value + strength * ( ( input[ index - 1 ][ axis ] + input[ index + 1 ][ axis ] ) / 2 - value ) );
 
 	} );
@@ -31,13 +32,14 @@ export function smoothPencilStroke( points, strength, passes = 2 ) {
 }
 
 // Work in screen pixels so the requested error is independent of camera zoom.
-export function simplifyPencilStroke( points, project, tolerance, closed = false ) {
+export function simplifyPencilStroke( points, project, tolerance, closed = false, anchors = [] ) {
 
 	if ( tolerance <= 0 || points.length <= ( closed ? 3 : 2 ) ) return points;
 	const projected = points.map( project );
 	if ( projected.some( point => ! point ) ) return points;
-	const keep = new Set( [ 0, points.length - 1 ] );
-	const spans = [ [ 0, points.length - 1 ] ];
+	const kept = [ 0, ...anchors.filter( i => i > 0 && i < points.length - 1 ), points.length - 1 ].sort( ( a, b ) => a - b );
+	const keep = new Set( kept );
+	const spans = kept.slice( 1 ).map( ( end, i ) => [ kept[ i ], end ] );
 	while ( spans.length ) {
 
 		const [ start, end ] = spans.pop();

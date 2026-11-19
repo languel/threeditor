@@ -302,6 +302,41 @@ async function checkPencil( page ) {
 
 	} ), true );
 	await page.evaluate( () => {
+
+		editor.undo();
+		editor.scene.getObjectByName( 'Pencil receiver' ).visible = false;
+		editor.config.setKey( 'settings/modelPlacement', 'surface' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+
+	} );
+	await draw( false );
+	assert.ok( await page.evaluate( () => {
+
+		const stroke = editor.scene.getObjectByName( 'Pencil stroke' );
+		return stroke?.parent === editor.scene && stroke.geometry.userData.modeling.points.every( point => Math.abs( point[ 1 ] ) < 1e-7 );
+
+	} ), 'Surface placement falls back to the ground when the ray misses' );
+	await page.evaluate( () => {
+
+		editor.undo();
+		editor.scene.getObjectByName( 'Pencil receiver' ).visible = true;
+		editor.config.setKey( 'settings/modelPlacement', 'view' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+		editor.setCursor( new THREE.Vector3( 0, 1.5, 0 ) );
+
+	} );
+	await page.mouse.move( center[ 0 ], center[ 1 ] - 55 );
+	const withHeight = await page.evaluate( () => editor.viewTools.overlay.toDataURL() );
+	await page.getByLabel( 'Pencil height guide' ).uncheck();
+	await page.mouse.move( center[ 0 ], center[ 1 ] - 55 );
+	assert.notEqual( await page.evaluate( () => editor.viewTools.overlay.toDataURL() ), withHeight );
+	await page.getByLabel( 'Pencil height guide' ).check();
+	await page.evaluate( () => {
+		editor.setCursor( new THREE.Vector3() );
+		editor.config.setKey( 'settings/modelPlacement', 'ground' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+	} );
+	await page.evaluate( () => {
 		editor.camera.position.set( 0, 0, 6 );
 		editor.camera.lookAt( 0, 0, 0 );
 		editor.signals.cameraChanged.dispatch( editor.camera );
@@ -327,7 +362,7 @@ async function checkPencil( page ) {
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Placement', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'View plane', exact: true } ).click();
-	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'segment' );
+	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'segment' );
 	const [ ax, ay ] = anchorPixel;
 	await page.mouse.move( ax, ay );
 	await page.mouse.down();
@@ -347,19 +382,20 @@ async function checkPencil( page ) {
 	await page.evaluate( () => editor.undo() );
 	assert.equal( await page.evaluate( uuid => !! editor.scene.getObjectByProperty( 'uuid', uuid ), depthStroke.uuid ), true );
 	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
-	await page.getByLabel( 'Pencil stroke depth' ).selectOption( 'off' );
-	await page.getByLabel( 'Stabilize strokes' ).check();
+	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
+	assert.equal( await page.getByLabel( 'Stabilize strokes' ).isChecked(), false );
 	const simplify = page.getByLabel( 'Simplify tolerance (px)' );
 	await simplify.fill( '1' );
 	await simplify.press( 'Tab' );
 	await page.mouse.move( ax, ay );
+	await page.keyboard.down( 'Shift' );
 	await page.mouse.down();
 	await page.mouse.move( ax + 10, ay, { steps: 5 } );
 	assert.equal( await page.evaluate( () => editor.viewTools.stroke?.marks.values().next().value.points.length ), 1 );
 	await page.mouse.move( ax + 110, ay, { steps: 14 } );
 	await page.mouse.up();
+	await page.keyboard.up( 'Shift' );
 	assert.equal( await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points.length ), 2 );
-	await page.getByLabel( 'Stabilize strokes' ).uncheck();
 	await simplify.fill( '0' );
 	await simplify.press( 'Tab' );
 	await page.getByLabel( 'Pencil drawing guide' ).selectOption( 'parallel' );
@@ -369,8 +405,76 @@ async function checkPencil( page ) {
 	await page.mouse.up();
 	const guided = await page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points );
 	assert.ok( guided.length > 2 && guided.every( point => Math.abs( point[ 1 ] - guided[ 0 ][ 1 ] ) < 1e-6 ), JSON.stringify( guided ) );
+	const before = await page.evaluate( () => [ editor.pencilBrush.size, editor.pencilBrush.strength ] );
+	await page.keyboard.press( 'BracketLeft' );
+	await page.keyboard.press( 'Shift+BracketLeft' );
+	const reduced = await page.evaluate( () => [ editor.pencilBrush.size, editor.pencilBrush.strength ] );
+	assert.ok( reduced[ 0 ] < before[ 0 ] && reduced[ 1 ] < before[ 1 ], 'Brush shortcuts affect Pencil size and strength ' + JSON.stringify( { before, reduced, state: await page.evaluate( () => [ editor.viewTools.mode, editor.keymap.overEditableViewport, editor.keymap.actionAvailable( 'brushSmaller' ), document.activeElement.outerHTML.slice( 0, 150 ), editor.keymap.combo( 'brushWeaker' ) ] ) } ) );
+	await page.keyboard.press( 'BracketRight' );
+	await page.keyboard.press( 'Shift+BracketRight' );
+	const increased = await page.evaluate( () => [ editor.pencilBrush.size, editor.pencilBrush.strength ] );
+	assert.ok( increased[ 0 ] > reduced[ 0 ] && increased[ 1 ] > reduced[ 1 ] );
 	await page.evaluate( () => { editor.pencilBrush.guide = 'off'; } );
 
+	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
+
+}
+
+async function checkPencilAttachments( page ) {
+
+	const [ start, end ] = await page.evaluate( () => {
+
+		editor.clear();
+		editor.config.setKey( 'settings/modelPlacement', 'ground' );
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const frame = editor.viewLayout.frames.find( item => item.director );
+		const { left, top } = editor.viewLayout.clientRect( frame );
+		return [ [ -.95, .25, 1.6 ], [ .95, .25, 2.4 ] ].map( co => {
+
+			const points = [ co, [ co[ 0 ], .5, co[ 2 ] ] ];
+			const source = new THREE.Line( new THREE.BufferGeometry().setFromPoints( points.map( p => new THREE.Vector3( ...p ) ) ), new THREE.LineBasicMaterial() );
+			source.geometry.userData.modeling = { kind: 'path', points };
+			editor.addObject( source );
+			const [ x, y ] = editor.viewTools.project( new THREE.Vector3( ...co ), frame );
+			return [ left + x - frame.rect.x, top + y - frame.rect.y + 9 ];
+
+		} );
+
+	} );
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'view' );
+	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'ends' );
+	const target = page.getByLabel( 'Pencil attach points' );
+	await target.selectOption( 'ends' );
+	const draw = async () => {
+
+		await page.mouse.move( ...start );
+		await page.mouse.down();
+		await page.mouse.move( ( start[ 0 ] + end[ 0 ] ) / 2, end[ 1 ] + 55, { steps: 12 } );
+		await page.mouse.move( ...end, { steps: 12 } );
+		await page.mouse.up();
+		return page.evaluate( () => editor.scene.children.filter( object => object.userData.pencilStroke ).at( -1 ).geometry.userData.modeling.points );
+
+	};
+	const distance = ( a, b ) => Math.hypot( ...a.map( ( value, i ) => value - b[ i ] ) );
+	const connected = await draw();
+	assert.ok( distance( connected[ 0 ], [ -.95, .25, 1.6 ] ) < 1e-6 );
+	assert.ok( distance( connected.at( -1 ), [ .95, .25, 2.4 ] ) < 1e-6 );
+	assert.ok( connected.slice( 1, -1 ).every( point => Math.abs( point[ 2 ] - 1.6 ) < 1e-6 ), 'View at start sets the body plane independently of the endpoints' );
+	await page.evaluate( () => editor.undo() );
+	await target.selectOption( 'first' );
+	const firstOnly = await draw();
+	assert.ok( firstOnly.every( point => Math.abs( point[ 2 ] - 1.6 ) < 1e-6 ) );
+	await page.evaluate( () => editor.undo() );
+	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'strokeDepth' );
+	const following = await draw();
+	assert.ok( following.slice( 1, -1 ).some( point => Math.abs( point[ 2 ] - 2.4 ) < 1e-6 ),
+		'Follow stroke depth can change the body depth as it approaches another stroke' );
+	await page.getByLabel( 'Pencil drawing plane' ).selectOption( 'placement' );
+	await page.getByLabel( 'Pencil attachment target' ).selectOption( 'off' );
+	await target.selectOption( 'ends' );
 	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
 
 }
@@ -900,12 +1004,12 @@ async function checkUVUnwrap( page ) {
 		const map = editor.selected.material.map;
 		return map ? Array.from( map.image.getContext( '2d' ).getImageData( 512, 512, 1, 1 ).data ) : [];
 
-	} ), [ 255, 174, 102, 255 ] );
+	} ), [ 113, 188, 231, 255 ] );
 	const brushColor = page.getByLabel( 'Brush color', { exact: true } );
 	await brushColor.fill( '#123456' );
 	await tools.getByRole( 'button', { name: 'Sample Brush Color', exact: true } ).click();
 	await page.mouse.click( x, y );
-	assert.equal( await brushColor.inputValue(), '#ffae66' );
+	assert.equal( await brushColor.inputValue(), '#71bce7' );
 	assert.equal( await tools.getByRole( 'button', { name: 'Pencil', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
 	await tools.getByRole( 'button', { name: 'Erase Texture', exact: true } ).click();
 	await page.mouse.click( x, y );
@@ -953,7 +1057,7 @@ async function checkUVUnwrap( page ) {
 	await pressureSize.uncheck();
 	await pressureOpacity.uncheck();
 	await penDab();
-	assert.deepEqual( await sample( 512, 524 ), [ 255, 174, 102, 255 ] );
+	assert.deepEqual( await sample( 512, 524 ), [ 113, 188, 231, 255 ] );
 	assert.deepEqual( await sample( 524, 512 ), [ 255, 255, 255, 255 ] );
 	await page.evaluate( () => editor.undo() );
 	await pressureSize.check();
@@ -2817,6 +2921,7 @@ async function check() {
 		await checkSelectionShelf( page );
 		await checkPencilObjectSelection( page );
 		await checkPencil( page );
+		await checkPencilAttachments( page );
 		await checkPencilSplats( page );
 		await checkCompactPencil( page );
 		await checkUVSelection( page );

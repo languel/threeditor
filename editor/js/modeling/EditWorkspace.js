@@ -4,8 +4,8 @@ import { canEditLightMask } from './LightMask.js?v=projector-shadows';
 import { editableMesh } from './ModelViewport.js?v=uv-selection-sync';
 import { isProjector } from '../assets/Projector.js?v=projector-shadows';
 import { modelButton } from './ModelControls.js?v=color-sampler';
-import { openMaskEditor } from './MaskEditor.js?v=brush-presets';
-import { openUVEditor } from './UVEditor.js?v=stroke-bake';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-placement';
+import { openUVEditor } from './UVEditor.js?v=pencil-placement';
 
 export function createEditWorkspace( editor, viewport ) {
 

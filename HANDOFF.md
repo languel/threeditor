@@ -89,6 +89,8 @@ The UV workspace stages edits before Apply. Unwrap from seams, Smart unwrap, and
 
 The **Pencil and surface marks** pass renders scene depth first, then draws the vector and geometry marks over that depth into a transparent color layer. The UV pass converts its premultiplied linear color to straight sRGB for PNG export. Gaussian paint batches still need a bake render path. All bake passes can save a reusable PNG to Project assets. The browser check verifies occlusion, opacity, and transparent unpainted texels in the stored PNG.
 
+Pencil reads the shared modeling Placement for the first point, then resolves the body using its own drawing-plane setting. Surface misses fall back to world Y = 0. The placement resolver is also used by the orientation and height guides, so they preview the same point. Attachment resolves against committed path geometry, and planar cleanup preserves snapped samples. Shift temporarily uses the configured stabilizer radius while drawing. Pointer-down on the viewport releases prior input focus so the Pencil brush shortcuts remain available after a stroke.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

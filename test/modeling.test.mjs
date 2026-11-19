@@ -9,6 +9,7 @@ import { sculptNeighbors, sculptPoints } from '../editor/js/modeling/SculptBrush
 import { sculptMask } from '../editor/js/modeling/MaskSculpt.js';
 import { fitDrawingContour, insertContourPoint, segmentCount } from '../editor/js/modeling/Contour.js';
 import { StrokeSampler } from '../editor/js/modeling/StrokeSampler.js';
+import { simplifyPencilStroke, smoothPencilStroke } from '../editor/js/modeling/PencilStroke.js';
 import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { uvComponents, uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
@@ -83,6 +84,15 @@ test( 'UV selection maps seam copies, authored edges and full polygon faces', ()
 		geometry.dispose();
 
 	}
+
+} );
+
+test( 'Pencil cleanup preserves attached samples between the endpoints', () => {
+
+	const points = [ [ 0, 0 ], [ 1, 1 ], [ 2, .1 ], [ 3, 1 ], [ 4, 0 ] ];
+	const smoothed = smoothPencilStroke( points, .8, 2, [ 2 ] );
+	assert.notDeepEqual( smoothed[ 1 ], points[ 1 ] );
+	assert.deepEqual( simplifyPencilStroke( smoothed, point => point, 2, false, [ 2 ] ), [ points[ 0 ], points[ 2 ], points[ 4 ] ] );
 
 } );
 
