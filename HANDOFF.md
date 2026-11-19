@@ -95,6 +95,8 @@ The Pencil reference lock stores a point in the source object's local coordinate
 
 Pencil ribbons edit through the path's authored control points. Entering a Pencil ribbon selects vertex mode and leaving it restores the previous mesh selection mode. Point insertion and removal keep brush samples aligned with the contour. Sculpt preview supports the same point movement as meshes and can write per-sample thickness and opacity. These edits rebuild the ribbon with its existing material and commit through geometry history.
 
+Sculpt Mode stays active with an empty selection. A gesture scopes to the selection or the editable scene, resolves nearby candidates per object in local coordinates, and previews changed geometries together. Grab uses its initial brush footprint. Other brushes can pick up new targets as the pointer moves. Commit groups the per-object geometry and modifier updates into one history entry, and cancel disposes every preview.
+
 ### Multi-shape masks
 
 - `modeling/MaskEditor.js` handles the 2D workspace, scene outline picker, and draft undo. `MaskSculpt.js` adapts Poliplan’s local subdivision, brush falloff, Push, and Smooth to closed mask contours. **Apply masks** commits the draft through `setLightMask`.

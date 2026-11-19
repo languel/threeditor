@@ -227,6 +227,84 @@ async function checkPencilObjectSelection( page ) {
 
 }
 
+async function checkSculptTargets( page ) {
+
+	const center = await page.evaluate( () => {
+
+		editor.clear();
+		for ( const [ index, x ] of [ -.18, .18, 0, .09 ].entries() ) {
+
+			const object = new THREE.Mesh( new THREE.PlaneGeometry( .24, .24, 2, 2 ), new THREE.MeshBasicMaterial() );
+			object.name = 'Sculpt target ' + index;
+			object.position.x = x;
+			if ( index === 3 ) object.userData.threeditor = { locked: true };
+			editor.addObject( object );
+
+		}
+		editor.camera.position.set( 0, 0, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const { left, top, width, height } = editor.modeling.rect();
+		return [ left + width / 2, top + height / 2 ];
+
+	} );
+	const mode = page.getByLabel( 'Interaction mode', { exact: true } );
+	const positions = () => page.evaluate( () => editor.scene.children.filter( object => object.name.startsWith( 'Sculpt target' ) )
+		.map( object => [ ...object.geometry.attributes.position.array ] ) );
+	const gesture = async ( cancel = false ) => {
+
+		await page.mouse.move( ...center );
+		await page.mouse.down();
+		await page.mouse.move( center[ 0 ], center[ 1 ] - 24, { steps: 5 } );
+		if ( cancel ) await page.keyboard.press( 'Escape' );
+		await page.mouse.up();
+
+	};
+	const before = await positions();
+	const history = () => page.evaluate( () => editor.history.undos.length );
+	const initial = await history();
+	await mode.selectOption( 'sculpt' );
+	assert.equal( await mode.inputValue(), 'sculpt' );
+	await page.getByRole( 'region', { name: 'Tool properties' } ).getByLabel( 'Brush radius (px)' ).waitFor();
+	await gesture( true );
+	assert.deepEqual( await positions(), before );
+	assert.equal( await history(), initial );
+	await gesture();
+	const all = await positions();
+	for ( let i = 0; i < 3; i ++ ) assert.notDeepEqual( all[ i ], before[ i ] );
+	assert.deepEqual( all[ 3 ], before[ 3 ] );
+	assert.equal( await history(), initial + 1 );
+	assert.equal( await page.evaluate( () => editor.selector.selection.length ), 0 );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await positions(), before );
+	await page.evaluate( () => editor.selector.setSelection( [ 0, 1 ].map( i => editor.scene.getObjectByName( 'Sculpt target ' + i ) ) ) );
+	await gesture();
+	const selected = await positions();
+	assert.notDeepEqual( selected[ 0 ], before[ 0 ] );
+	assert.notDeepEqual( selected[ 1 ], before[ 1 ] );
+	assert.deepEqual( selected.slice( 2 ), before.slice( 2 ) );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await positions(), before );
+	await page.evaluate( () => editor.deselect() );
+	const tools = page.getByRole( 'region', { name: 'Tool properties' } );
+	await tools.getByLabel( 'Sculpt brush', { exact: true } ).selectOption( 'push' );
+	const radius = tools.getByLabel( 'Brush radius (px)' );
+	await radius.fill( '12' );
+	await radius.press( 'Tab' );
+	await page.mouse.move( center[ 0 ] - 40, center[ 1 ] );
+	await page.mouse.down();
+	await page.mouse.move( center[ 0 ] + 40, center[ 1 ], { steps: 18 } );
+	await page.mouse.up();
+	const swept = await positions();
+	for ( let i = 0; i < 3; i ++ ) assert.notDeepEqual( swept[ i ], before[ i ] );
+	assert.deepEqual( swept[ 3 ], before[ 3 ] );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await positions(), before );
+	await mode.selectOption( 'object' );
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkPencil( page ) {
 
 	const center = await page.evaluate( () => {
@@ -3022,6 +3100,7 @@ async function check() {
 		await checkBrushPresets( browser );
 		await checkSelectionShelf( page );
 		await checkPencilObjectSelection( page );
+		await checkSculptTargets( page );
 		await checkPencil( page );
 		await checkPencilAttachments( page );
 		await checkPencilSplats( page );

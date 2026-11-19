@@ -407,7 +407,6 @@ export class ViewportTools {
 
 		}
 		this.modeSelect.value = this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
-		this.modeSelect.querySelector( 'option[value="sculpt"]' ).disabled = ! model.canEditTarget( this.editor.selected );
 		for ( const mode of [ 'path' ] ) {
 
 			this.toolButtons.get( mode ).hidden = ! edit;

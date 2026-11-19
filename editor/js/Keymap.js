@@ -260,7 +260,7 @@ class Keymap {
    case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
-   case 'meshSculptMode':if(!e.modeling.canEdit()||e.viewTools.mode)e.modeling.start(e.selected);e.modeling.setBrush('grab');break;
+   case 'meshSculptMode':e.viewTools.setWorkspaceMode('sculpt');break;
    case 'topologyPen':e.modeling.togglePen();break;case 'weldPoints':e.modeling.weld();break;
    case 'brushWeaker':case 'brushStronger':e.viewTools.adjustBrushStrength(id==='brushWeaker'?-.05:.05);break;
    case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;

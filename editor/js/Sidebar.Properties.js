@@ -6,8 +6,8 @@ import { UIPanel, UITabbedPanel } from './libs/ui.js';
 import { SidebarObject } from './Sidebar.Object.js?v=unified-sync';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
-import { SidebarModeling } from './Sidebar.Modeling.js?v=stroke-edit';
-import { editableMesh } from './modeling/ModelViewport.js?v=stroke-edit';
+import { SidebarModeling } from './Sidebar.Modeling.js?v=sculpt-targets';
+import { editableMesh } from './modeling/ModelViewport.js?v=sculpt-targets';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
@@ -78,6 +78,11 @@ function SidebarProperties( editor, sceneSettings ) {
 		previousTool = tool;
 
 	};
+	editor.signals.objectSelected.add( () => {
+
+		if ( editor.viewTools.toolPropertiesMode === 'sculpt' ) editor.updateToolProperties( true );
+
+	} );
 
 	toggleTabs( editor.selected );
 
