@@ -10,15 +10,16 @@ import { isProjector, upgradeProjectorScript } from '../assets/Projector.js?v=pr
 import { SetScriptValueCommand } from '../commands/SetScriptValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { modelButton } from './ModelControls.js?v=color-sampler';
-import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-islands';
+import { modelButton, modelField } from './ModelControls.js?v=color-sampler';
+import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
 import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { createBrushColorSampler } from './BrushColorSampler.js';
 import { TexturePaintStroke } from './TexturePaint.js?v=pencil-splats';
 import { closestPointOnSegment } from './Contour.js';
 import { linkedUVVertices, uvFaceAt } from './UVIslands.js';
-import { layoutUV } from './UVLayout.js?v=unwrap-modes';
+import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { layoutUV } from './UVLayout.js?v=uv-sculpt';
 
 export function setProjectorMapping( editor, projector, key, value ) {
 
@@ -192,11 +193,12 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const margin = 25, span = canvas.width - margin * 2;
 	const pixel = ( [ u, v ] ) => [ margin + u * span, margin + v * span ];
 	const pointUV = point => point.map( value => ( value - margin ) / span );
-	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging );
+	const view = canvasView( canvas, draw, () => tool === 'pan' && ! dragging, () => editor.config.getKey( 'settings/emulateThreeButtonMouse' ) );
 	const shelf = createCanvasShelf( canvas, [
-		...selectionTools2D, ...( warp ? [] : [ [ 'island', 'Select UV islands', 'uvIsland' ] ] ),
+		...selectionTools2D.map( ( entry, index ) => ! warp && index === 0 ? [ 'select', 'Edit UV vertices', 'vertexSelect' ] : entry ), ...( warp ? [] : [ [ 'island', 'Select UV islands', 'uvIsland' ] ] ),
 		[ 'cursor', 'Set 2D Cursor', 'pivotOrigin' ], ...transformTools2D,
-		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ], [ 'seam', 'Mark or clear UV seam', 'uvSeam' ] ] ),
+		...( warp ? [] : [ [ 'pencil', 'Pencil', 'freehandDraw' ], [ 'erase', 'Erase Texture', 'erase' ], [ 'pickColor', 'Sample Brush Color', 'eyedropper' ], [ 'seam', 'Mark or clear UV seam', 'uvSeam' ],
+			[ 'push', 'Push UV vertices', 'sculptPush' ], [ 'smooth', 'Smooth UV vertices', 'sculptSmooth' ], [ 'pinch', 'Pinch UV vertices', 'sculptPinch' ] ] ),
 		[ 'pan', 'Pan', 'hand' ], [ 'fit', 'Frame All', 'frame' ]
 	], id => {
 
@@ -212,6 +214,20 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		}
 
 	}, warp ? 'Warp tools' : 'UV tools' );
+	const sculptTool = () => [ 'push', 'smooth', 'pinch' ].includes( tool );
+	const sculptControls = document.createElement( 'div' );
+	sculptControls.className = 'canvas-pencil-settings';
+	const sizeControl = ! warp && modelField( sculptControls, 'UV sculpt radius (px)', 'brushWidth', 'number', 48 );
+	const strengthControl = ! warp && modelField( sculptControls, 'UV sculpt strength', 'opacity', 'number', .5 );
+	if ( ! warp ) {
+
+		Object.assign( sizeControl, { min: 4, max: 240, step: 1, onchange: draw } );
+		Object.assign( strengthControl, { min: .01, max: 1, step: .05, onchange: draw } );
+
+	}
+	const brushRadius = () => THREE.MathUtils.clamp( sizeControl.valueAsNumber || 48, 4, 240 ) *
+		canvas.width / canvas.getBoundingClientRect().width / view.scale;
+
 	const paintControls = document.createElement( 'div' );
 	paintControls.className = 'canvas-pencil-settings';
 	const palette = ! warp && brushPalette( editor, paintControls, draw );
@@ -251,7 +267,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			layout.append( group );
 
 		};
-		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'lightmap', 'Lightmap pack' ] ] );
+		options( 'Unwrap', [ [ 'smart', 'Smart unwrap' ], [ 'boxNet', 'Connected cube net' ], [ 'lightmap', 'Lightmap pack' ] ] );
 		options( 'Projection', [ [ 'box', 'Cube projection' ], [ 'cylinder', 'Cylinder projection (Y)' ],
 			[ 'sphere', 'Sphere projection' ], [ 'view', 'Project from view' ],
 			[ 'xy', 'Planar XY' ], [ 'xz', 'Planar XZ' ], [ 'yz', 'Planar YZ' ] ] );
@@ -449,7 +465,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		for ( let row = 0; row + 2 < ( index?.count ?? points.length ); row += 3 ) {
 
 			const face = [ row, row + 1, row + 2 ];
-			visit( index ? face.map( i => index.getX( i ) ) : face );
+			visit( index ? face.map( i => index.getX( i ) ) : face, row / 3 );
 
 		}
 
@@ -496,14 +512,47 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( i + size < points.length ) line( [ i, i + size ] );
 
 		}
-		else if ( points.length ) eachTriangle( face => {
+		else if ( points.length ) {
 
-			const active = face.every( index => selection.has( index ) );
-			ctx.strokeStyle = active ? '#ffae62' : '#768597';
-			line( face, true );
-			if ( active ) { ctx.fillStyle = '#ff9d4526'; ctx.fill(); }
+			const authored = geometry.userData.triangleFaces;
+			const polygonEdges = new Map();
+			eachTriangle( ( face, index ) => {
 
-		} );
+				const active = face.every( index => selection.has( index ) );
+				ctx.strokeStyle = active ? '#ffae62' : '#768597';
+				if ( ! authored ) line( face, true );
+				if ( active ) {
+
+					if ( authored ) {
+
+						ctx.beginPath();
+						face.forEach( ( vertex, i ) => ctx[ i ? 'lineTo' : 'moveTo' ]( ...pixel( points[ vertex ] ) ) );
+						ctx.closePath();
+
+					}
+					ctx.fillStyle = '#ff9d4526';
+					ctx.fill();
+
+				}
+				if ( authored ) face.forEach( ( from, i ) => {
+
+					const to = face[ ( i + 1 ) % face.length ];
+					const a = pointKey( from ), b = pointKey( to );
+					const key = authored[ index ] + ':' + ( a < b ? a + ';' + b : b + ';' + a );
+					if ( polygonEdges.has( key ) ) polygonEdges.delete( key );
+					else polygonEdges.set( key, [ from, to ] );
+
+				} );
+
+			} );
+			for ( const edge of polygonEdges.values() ) {
+
+				ctx.strokeStyle = edge.every( index => selection.has( index ) ) ? '#ffae62' : '#768597';
+				line( edge );
+
+			}
+
+		}
 		if ( ! warp && points.length && ( seams.size || hoveredSeam ) ) eachEdge( ( a, b, key ) => {
 
 			if ( ! seams.has( key ) && key !== hoveredSeam ) return;
@@ -541,6 +590,15 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			ctx.fillStyle = '#ff9d4520'; ctx.strokeStyle = '#ffae62'; ctx.fill(); ctx.stroke();
 
 		}
+		if ( sculptTool() && lastPoint ) {
+
+			ctx.strokeStyle = '#fff2d7';
+			ctx.lineWidth = 1 / view.scale;
+			ctx.beginPath();
+			ctx.arc( ...lastPoint, brushRadius(), 0, Math.PI * 2 );
+			ctx.stroke();
+
+		}
 		if ( paintTool() && lastPoint ) {
 
 			const diameter = pencilBrush( editor ).size;
@@ -552,6 +610,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		}
 		ctx.restore();
+		sculptControls.hidden = ! sculptTool();
 		paintControls.hidden = ! paintTool() && tool !== 'pickColor';
 		canvas.style.cursor = tool === 'pickColor' || tool === 'seam' ? 'crosshair' : '';
 		shelf.update( tool );
@@ -616,6 +675,45 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		const center = [ 0, 1 ].map( axis => selected.reduce( ( sum, index ) => sum + points[ index ][ axis ], 0 ) / selected.length );
 		dragging = { mode, at: pointUV( point ), center: pivotSelect.value === 'cursor' ? pivot.slice() : center,
 			before: { points: points.slice(), dirty, seams }, modal };
+
+	}
+
+	function beginSculpt( point, event ) {
+
+		const groups = new Map(), indices = [];
+		const selectedVertices = new Set( selected );
+		const allowed = new Set();
+		for ( let i = 0; i < points.length; i ++ ) {
+
+			const key = pointKey( i );
+			if ( ! groups.has( key ) ) groups.set( key, i );
+			indices[ i ] = groups.get( key );
+			if ( selectedVertices.has( i ) ) allowed.add( indices[ i ] );
+
+		}
+		const faces = [];
+		eachTriangle( face => faces.push( face.map( i => indices[ i ] ) ) );
+		dragging = { sculpt: true, last: point, indices, allowed, neighbors: sculptNeighbors( { points, faces } ),
+			before: { points: points.slice(), dirty, seams } };
+		sculptAt( point, event );
+
+	}
+
+	function sculptAt( point, event ) {
+
+		const { last, indices, allowed, neighbors } = dragging;
+		const brush = event.shiftKey ? 'smooth' : tool;
+		const cursor = pointUV( point );
+		const delta = point.map( ( value, axis ) => ( value - last[ axis ] ) / span );
+		dragging.last = point;
+		const strength = THREE.MathUtils.clamp( strengthControl.valueAsNumber || .5, .01, 1 ) * brushPressure( event );
+		const move = brush === 'smooth' ? null : ( p, _, weight ) => p.map( ( value, axis ) =>
+			value + weight * ( brush === 'pinch' ? ( cursor[ axis ] - value ) * .25 : delta[ axis ] ) );
+		const pixels = points.map( ( p, i ) => indices[ i ] === i && ( ! allowed.size || allowed.has( i ) ) ? pixel( p ) : null );
+		const result = sculptPoints( points, pixels, point, brushRadius(), strength * ( brush === 'smooth' ? .5 : 1 ), { tool: brush, move, neighbors } );
+		if ( ! result.some( ( p, i ) => p[ 0 ] !== points[ i ][ 0 ] || p[ 1 ] !== points[ i ][ 1 ] ) ) return;
+		points = indices.map( i => result[ i ] );
+		dirty = dragging.changed = true;
 
 	}
 
@@ -684,6 +782,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			return;
 
 		}
+		if ( sculptTool() ) {
+
+			if ( points.length ) { beginSculpt( point, event ); canvas.setPointerCapture( event.pointerId ); }
+			draw();
+			return;
+
+		}
 		if ( tool === 'island' ) {
 
 			const group = linkedSelection( point, false );
@@ -746,7 +851,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( ! dragging ) {
 
 			if ( tool === 'seam' ) hoveredSeam = points.length ? seamAt( point ) : undefined;
-			if ( paintTool() || tool === 'seam' ) draw();
+			if ( paintTool() || sculptTool() || tool === 'seam' ) draw();
 			return;
 
 		}
@@ -755,6 +860,10 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			const uv = pointUV( point );
 			dragging.sample( uv[ 0 ] * dragging.w, uv[ 1 ] * dragging.h, brushPressure( event ) );
 			editor.signals.objectChanged.dispatch( object );
+
+		} else if ( dragging.sculpt ) {
+
+			sculptAt( point, event );
 
 		} else if ( dragging.region ) {
 
@@ -796,7 +905,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 		const key = event.key.toLowerCase();
 		const modes = { g: 'move', r: 'rotate', s: 'scale' };
-		if ( ! dragging && paintTool() && useBrushShortcut( editor, event ) ) palette.refresh();
+		if ( ! dragging && sculptTool() && [ '[', ']', '{', '}' ].includes( event.key ) ) {
+
+			const sign = event.key === '[' || event.key === '{' ? -1 : 1;
+			if ( event.shiftKey ) strengthControl.value = THREE.MathUtils.clamp( Number( strengthControl.value ) + sign * .05, .01, 1 ).toFixed( 2 );
+			else sizeControl.value = THREE.MathUtils.clamp( Number( sizeControl.value ) + sign * 6, 4, 240 );
+
+		} else if ( ! dragging && paintTool() && useBrushShortcut( editor, event ) ) palette.refresh();
 		else if ( dragging && key === 'escape' ) cancelDrag();
 		else if ( dragging?.modal && key === 'enter' ) finishDrag();
 		else if ( key === 'z' && ( event.ctrlKey || event.metaKey ) ) {
@@ -829,7 +944,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	workArea.className = 'uv-work-area';
 	workArea.append( shelf.element, canvas );
 	workspacePanel.append( workArea );
-	if ( ! warp ) workspacePanel.append( paintControls );
+	if ( ! warp ) workspacePanel.append( paintControls, sculptControls );
 	workspacePanel.append( status );
 	const updateGeometry = changed => {
 

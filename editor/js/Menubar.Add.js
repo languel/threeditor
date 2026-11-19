@@ -7,7 +7,7 @@ import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { SetGeometryCommand } from './commands/SetGeometryCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
-import { meshPrimitives } from './modeling/MeshPrimitives.js';
+import { meshPrimitives } from './modeling/MeshPrimitives.js?v=uv-sculpt';
 
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';

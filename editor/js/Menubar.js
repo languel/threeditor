@@ -1,7 +1,7 @@
 import { WorkspaceTabs } from './WorkspaceTabs.js?v=script-window';
 import { UIPanel } from './libs/ui.js';
 
-import { MenubarAdd } from './Menubar.Add.js?v=projector-shadows';
+import { MenubarAdd } from './Menubar.Add.js?v=uv-sculpt';
 import { MenubarEdit } from './Menubar.Edit.js?v=unified-sync';
 import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
 import { MenubarView } from './Menubar.View.js?v=unified-sync';

@@ -30,7 +30,7 @@ export function createCanvasShelf( canvas, entries, onChange, label ) {
 
 }
 
-export function canvasView( canvas, draw, isPan ) {
+export function canvasView( canvas, draw, isPan, emulateMouse ) {
 
 	let scale = 1, x = 0, y = 0, pan;
 	const pixels = event => {
@@ -48,9 +48,19 @@ export function canvasView( canvas, draw, isPan ) {
 	canvas.addEventListener( 'wheel', event => {
 
 		event.preventDefault();
+		const rect = canvas.getBoundingClientRect();
+		const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
+		if ( ! ( event.ctrlKey || event.metaKey || event.altKey ) && ( event.deltaMode === 0 || event.shiftKey ) ) {
+
+			x -= ( event.shiftKey && ! event.deltaX ? event.deltaY : event.deltaX ) * units * canvas.width / rect.width;
+			y -= ( event.shiftKey && ! event.deltaX ? 0 : event.deltaY ) * units * canvas.height / rect.height;
+			draw();
+			return;
+
+		}
 		const [ px, py ] = pixels( event );
 		const [ u, v ] = point( event );
-		const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+		const delta = event.deltaY * units;
 		scale = Math.max( .25, Math.min( 16, scale * Math.exp( -delta * .0015 ) ) );
 		x = px - u * scale;
 		y = py - v * scale;
@@ -59,7 +69,8 @@ export function canvasView( canvas, draw, isPan ) {
 	}, { passive: false } );
 	canvas.addEventListener( 'pointerdown', event => {
 
-		if ( event.button !== 1 && ( event.button !== 0 || ! isPan() ) ) return;
+		const emulatedPan = event.altKey && event.shiftKey && emulateMouse();
+		if ( event.button !== 1 && ( event.button !== 0 || ! ( isPan() || emulatedPan ) ) ) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		canvas.focus( { preventScroll: true } );

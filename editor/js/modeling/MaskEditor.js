@@ -2,7 +2,7 @@ import { icon } from '../Glyphs.js?v=color-sampler';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import * as THREE from 'three';
-import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=color-sampler';
+import { canvasView, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
 import { brushDab, brushGrainFill, brushGrainTile, brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=pencil-splats';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-guides';
 import { createBrushColorSampler } from './BrushColorSampler.js';
@@ -12,7 +12,7 @@ import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=pencil-grain';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { sculptMask } from './MaskSculpt.js?v=brush-shortcuts';
+import { sculptMask } from './MaskSculpt.js?v=uv-sculpt';
 import { closestPointOnSegment, fitDrawingContour, insertContourPoint, segmentCount } from './Contour.js';
 
 export function openMaskEditor( editor, light, showPicker = false, vectorMode = false ) {
@@ -79,7 +79,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	addTool( 'rectangle', 'Draw rectangle', 'toolGrid' );
 	addTool( 'ellipse', 'Draw ellipse', 'brushWidth' );
 	addTool( 'push', 'Push brush', 'sculptTool' );
-	addTool( 'smooth', 'Smooth brush', 'toolPath' );
+	addTool( 'smooth', 'Smooth brush', 'sculptSmooth' );
+	addTool( 'pinch', 'Pinch brush', 'sculptPinch' );
 	const radiusLabel = node( 'label', toolbar, 'Brush radius ' );
 	const radius = node( 'input', radiusLabel );
 	Object.assign( radius, { type: 'range', min: 12, max: 130, value: 46 } );
@@ -101,7 +102,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	canvas.width = 760;
 	canvas.height = 490;
 	const ctx = canvas.getContext( '2d' );
-	const view = canvasView( canvas, draw, () => tool === 'pan' && ! gesture );
+	const view = canvasView( canvas, draw, () => tool === 'pan' && ! gesture, () => editor.config.getKey( 'settings/emulateThreeButtonMouse' ) );
 	const brushSettings = node( 'div' );
 	brushSettings.className = 'canvas-pencil-settings';
 	const palette = vectorMode && brushPalette( editor, brushSettings, draw, { strokeOptions: true } );
@@ -620,7 +621,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.stroke();
 
 		}
-		if ( cursor && [ 'push', 'smooth', 'raster', 'erase' ].includes( tool ) ) {
+		if ( cursor && [ 'push', 'smooth', 'pinch', 'raster', 'erase' ].includes( tool ) ) {
 
 			ctx.strokeStyle = '#fff';
 			ctx.beginPath(); ctx.arc( ...cursor, usesPalette() ? pencilBrush( editor ).size * width / rasterSize / 2 : Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
@@ -633,7 +634,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		brushSettings.hidden = ! usesPalette();
 		canvas.style.cursor = tool === 'pickColor' ? 'crosshair' : '';
 		if ( usesPalette() ) { palette.refresh(); palette.showStrokeOptions( tool === 'stroke' ); }
-		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth' ].includes( tool );
+		radiusLabel.hidden = strengthLabel.hidden = ! [ 'push', 'smooth', 'pinch' ].includes( tool );
 		deletePoint.disabled = ! canRemoveVertex();
 		for ( const [ id, button ] of tools ) button.setAttribute( 'aria-pressed', String( id === tool ) );
 
@@ -696,7 +697,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		}
 		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
-		if ( ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
+		if ( ( transforms() || [ 'edit', 'push', 'smooth', 'pinch' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
 		if ( tool === 'stroke' ) {
 
@@ -787,7 +788,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
-		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth' ].includes( tool ) ) ) remember( gesture.before );
+		else if ( gesture.moved && ( transforms() || [ 'edit', 'push', 'smooth', 'pinch' ].includes( tool ) ) ) remember( gesture.before );
 		gesture = null;
 		draft = [];
 		refresh();
@@ -822,7 +823,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	};
 	workspacePanel.onkeydown = event => {
 
-		if ( ! [ 'INPUT', 'SELECT', 'TEXTAREA' ].includes( event.target.tagName ) && [ 'push', 'smooth' ].includes( tool ) && ! event.metaKey && ! event.ctrlKey && ! event.altKey &&
+		if ( ! [ 'INPUT', 'SELECT', 'TEXTAREA' ].includes( event.target.tagName ) && [ 'push', 'smooth', 'pinch' ].includes( tool ) && ! event.metaKey && ! event.ctrlKey && ! event.altKey &&
 			( [ 'BracketLeft', 'BracketRight' ].includes( event.code ) || [ '[', ']', '{', '}' ].includes( event.key ) ) ) {
 
 			event.preventDefault(); event.stopPropagation();

@@ -16,7 +16,8 @@ export function sculptMask( points, cursor, delta, radius, tool, strength = 1, c
 	} );
 	const smooth = tool === 'smooth';
 	const neighbors = smooth ? sculptNeighbors( { points: refined, closed } ) : null;
-	const move = smooth ? null : ( point, pixel, weight ) => point.map( ( value, axis ) => value + delta[ axis ] * weight );
+	const move = smooth ? null : ( point, pixel, weight ) => point.map( ( value, axis ) => value +
+		( tool === 'pinch' ? ( cursor[ axis ] - value ) * .25 : delta[ axis ] ) * weight );
 	return sculptPoints( refined, refined, cursor, radius, Math.max( 0, Math.min( 1, strength ) ) * ( smooth ? .5 : 1 ),
 		{ tool, neighbors, move } );
 

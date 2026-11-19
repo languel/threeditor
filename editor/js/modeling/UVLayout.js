@@ -1,9 +1,11 @@
+import { cubeNetUV } from './CubeUV.js';
 import { lightViewCamera } from './LightView.js';
 
 export function layoutUV( THREE, object, mode, projector, view, geometry = object.geometry ) {
 
 	object.updateWorldMatrix( true, false );
-	const box = mode === 'box';
+	const net = mode === 'boxNet';
+	const box = mode === 'box' || net;
 	const cylinder = mode === 'cylinder';
 	const radial = cylinder || mode === 'sphere';
 	const next = ( box || radial ) && geometry.index ? geometry.toNonIndexed() : new THREE.BufferGeometry().copy( geometry );
@@ -26,7 +28,8 @@ export function layoutUV( THREE, object, mode, projector, view, geometry = objec
 
 			const triangle = [ new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3() ];
 			const normal = new THREE.Vector3(), edge = new THREE.Vector3();
-			const sideRows = [];
+			const sideRows = [], boxSides = new Set();
+			if ( net && Math.min( extent.x, extent.y, extent.z ) <= 0 ) throw new Error( 'A connected cube net needs a closed box.' );
 			for ( let first = 0; first + 2 < positions.count; first += 3 ) {
 
 				triangle.forEach( ( p, i ) => p.fromBufferAttribute( positions, first + i ) );
@@ -36,6 +39,20 @@ export function layoutUV( THREE, object, mode, projector, view, geometry = objec
 					const x = Math.abs( normal.x ), y = Math.abs( normal.y ), z = Math.abs( normal.z );
 					const axis = x > Math.max( y, z ) ? 0 : y > z ? 1 : 2;
 					const sign = normal.getComponent( axis ) < 0;
+					if ( net ) {
+
+						const side = sign ? 0 : 1;
+						if ( normal.lengthSq() === 0 || ! triangle.every( p => Math.abs( normalized( p, axis ) - side ) <= 1e-5 ) ) {
+
+							throw new Error( 'A connected cube net needs six flat box sides. Use Smart unwrap for this mesh.' );
+
+						}
+						boxSides.add( axis * 2 + side );
+						triangle.forEach( ( point, i ) => uv.setXY( first + i, ...cubeNetUV(
+							[ 0, 1, 2 ].map( axis => normalized( point, axis ) ), axis, ! sign, extent.toArray() ) ) );
+						continue;
+
+					}
 					const [ u, v ] = axis === 0 ? [ 2, 1 ] : axis === 1 ? [ 0, 2 ] : [ 0, 1 ];
 					triangle.forEach( ( p, i ) => {
 
@@ -73,6 +90,7 @@ export function layoutUV( THREE, object, mode, projector, view, geometry = objec
 				}
 
 			}
+			if ( net && boxSides.size !== 6 ) throw new Error( 'A connected cube net needs six flat box sides.' );
 			if ( radial ) {
 
 				let max = 1;

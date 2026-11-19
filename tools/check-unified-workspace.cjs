@@ -668,6 +668,13 @@ async function checkUVIslands( page ) {
 		assert.ok( actual.every( ( pair, i ) => pair.every( ( value, axis ) => Math.abs( value - expected[ i ][ axis ] ) < .002 ) ), JSON.stringify( actual ) );
 
 	};
+	const frame = () => grid.evaluate( canvas => canvas.toDataURL() );
+	const initial = await frame();
+	await page.mouse.move( ...pixel( .5, .5 ) );
+	await page.mouse.wheel( 70, 45 );
+	await page.waitForFunction( previous => document.querySelector( '[aria-label="UV grid"]' ).toDataURL() !== previous, initial );
+	await grid.press( 'Home' );
+	assert.equal( await frame(), initial );
 	await uv.getByRole( 'button', { name: 'Select UV islands', exact: true } ).click();
 	await page.mouse.move( ...pixel( .22, .28 ) );
 	await page.mouse.down();
@@ -689,6 +696,22 @@ async function checkUVIslands( page ) {
 	await grid.press( 'Enter' );
 	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
 	await check( first.map( ( [ u, v ], i ) => [ u, v + ( i >= 6 ? .05 : 0 ) ] ) );
+	await grid.press( 'Escape' );
+	await uv.getByRole( 'button', { name: 'Push UV vertices', exact: true } ).click();
+	await uv.getByLabel( 'UV sculpt radius (px)', { exact: true } ).fill( '90' );
+	await uv.getByLabel( 'UV sculpt radius (px)', { exact: true } ).press( 'Tab' );
+	const beforeSculpt = await values();
+	await page.mouse.move( ...pixel( .68, .50 ) );
+	await page.mouse.down();
+	await page.mouse.move( ...pixel( .75, .50 ), { steps: 5 } );
+	await page.mouse.up();
+	await uv.getByRole( 'button', { name: 'Apply', exact: true } ).click();
+	const afterSculpt = await values();
+	assert.deepEqual( afterSculpt.slice( 0, 6 ), beforeSculpt.slice( 0, 6 ) );
+	assert.ok( afterSculpt[ 7 ][ 0 ] > beforeSculpt[ 7 ][ 0 ] + .015 );
+	await page.evaluate( () => editor.undo() );
+	assert.deepEqual( await values(), beforeSculpt );
+
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -705,7 +728,7 @@ async function checkUVUnwrap( page ) {
 	} );
 	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
 	const layout = page.getByRole( 'combobox', { name: 'UV layout' } );
-	for ( const mode of [ 'smart', 'lightmap', 'box', 'cylinder', 'sphere', 'view' ] ) {
+	for ( const mode of [ 'smart', 'lightmap', 'box', 'boxNet', 'cylinder', 'sphere', 'view' ] ) {
 
 		await layout.selectOption( mode );
 		await page.getByRole( 'button', { name: 'Auto layout' } ).click();

@@ -1,3 +1,4 @@
+import { cubeNetUV } from './CubeUV.js';
 import { modelGeometry } from './ModelGeometry.js';
 
 const length = ( id, label, value ) => ( { id, label, value, min: .001, max: 10000, step: 'any' } );
@@ -11,21 +12,18 @@ function cube( THREE, size ) {
 
 	const s = size / 2;
 	const faces = [ [ 0, 3, 2, 1 ], [ 4, 5, 6, 7 ], [ 0, 1, 5, 4 ], [ 3, 7, 6, 2 ], [ 0, 4, 7, 3 ], [ 1, 2, 6, 5 ] ];
-	const cells = [ [ 3, 1 ], [ 1, 1 ], [ 1, 0 ], [ 1, 2 ], [ 0, 1 ], [ 2, 1 ] ];
-	// Use separate UV islands with room for texture filtering at the seams.
-	for ( const [ index, [ column, row ] ] of cells.entries() ) {
+	const points = [ [ -s, -s, -s ], [ s, -s, -s ], [ s, s, -s ], [ -s, s, -s ],
+		[ -s, -s, s ], [ s, -s, s ], [ s, s, s ], [ -s, s, s ] ];
+	const planes = [ [ 2, false ], [ 2, true ], [ 1, false ], [ 1, true ], [ 0, false ], [ 0, true ] ];
+	for ( const [ index, [ axis, positive ] ] of planes.entries() ) {
 
-		const x = column / 4, y = row / 4 + .125;
-		const lo = 1 / 256, hi = .25 - lo;
-		faces[ index ].surface = { channels: { uv: [
-			[ x + lo, y + lo ], [ x + hi, y + lo ], [ x + hi, y + hi ], [ x + lo, y + hi ]
-		] } };
+		faces[ index ].surface = { channels: { uv: faces[ index ].map( vertex =>
+			cubeNetUV( points[ vertex ].map( value => value > 0 ? 1 : 0 ), axis, positive, [ size, size, size ] ) ) } };
 
 	}
 	return modelGeometry( THREE, {
 		kind: 'mesh',
-		points: [ [ -s, -s, -s ], [ s, -s, -s ], [ s, s, -s ], [ -s, s, -s ],
-			[ -s, -s, s ], [ s, -s, s ], [ s, s, s ], [ -s, s, s ] ],
+		points,
 		faces
 	} );
 

@@ -28,9 +28,12 @@ test( 'Cube and Plane primitives use authored quad topology and UVs', () => {
 	} );
 	for ( const [ index, island ] of islands.entries() ) for ( const other of islands.slice( index + 1 ) ) {
 
-		assert.ok( island.some( ( [ low, high ], axis ) => high < other[ axis ][ 0 ] || low > other[ axis ][ 1 ] ) );
+		assert.ok( island.some( ( [ low, high ], axis ) => high <= other[ axis ][ 0 ] || low >= other[ axis ][ 1 ] ) );
 
 	}
+	const distinct = new Set( faces.flatMap( face => face.surface.channels.uv.map( pair => pair.join( ',' ) ) ) );
+	assert.equal( distinct.size, 14, 'the six faces share hinges in a connected cross' );
+
 	const plane = build( 'plane' );
 	assert.equal( readModelGeometry( plane ).faces.length, 1 );
 	assert.equal( plane.attributes.normal.getY( 0 ), 1 );

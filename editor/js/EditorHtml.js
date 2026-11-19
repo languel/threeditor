@@ -91,7 +91,7 @@ async function exportEditorHtml( editor ) {
 
 	const loaders = [ ...modulePaths ].map( path => `[${ JSON.stringify( path ) }, () => import(${ JSON.stringify( editorSpecifier( path ) ) })]` );
 	const entry = `
-import { startEditor } from './js/EditorApp.js?v=uv-islands';
+import { startEditor } from './js/EditorApp.js?v=uv-sculpt';
 import { openPortableSession } from './js/PortableSession.js';
 await startEditor(await openPortableSession(new Map([${ loaders.join( ', ' ) }])));
 `;
