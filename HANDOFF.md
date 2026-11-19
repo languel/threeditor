@@ -285,6 +285,8 @@ Edit selection adapts ThreeGrease’s mesh selection flushing and drag-box rules
 
 Source geometry is separate from modifier output; metadata undo refreshes the active source cage as well as displayed buffers. Modifier expansion limits are checked before allocating copies. Browser checks exercise the full stack controls/Apply/serialization, independent edge toggles and region gestures, Knife undo, shared-edge attachment and closure, surface depth and axis constraints, hold-drag cuts/dissolution, and imported-mesh conversion undo. The 73-test suite covers deterministic modifier evaluation, material groups/UV seams, selection flushing/rings, and seeded cuts/quad strips/AutoQuad.
 
+The UV toolbar can opt into sharing vertex, edge, and face selection with the active Edit Mode mesh. `UVSelectionSync.js` maps UV buffer corners to mesh controls, including seam copies and triangles belonging to an authored polygon. The UV editor listens for modeling selection changes and can send a selection back without feeding its own event into the canvas again.
+
 ### Numeric scrubbing and brush shortcuts
 
 **Cmd-drag** a numeric field to adjust it, including while it is focused. **Shift-drag** uses one tenth the sensitivity. **Ctrl-drag** snaps to the control’s step; combine Shift+Ctrl for finer snap increments. These gestures respect numeric ranges and integer values. Each scrub commits once on release, and Escape cancels it. The same behavior covers native number inputs and unit-bearing sidebar fields. Click/type editing remains available.

@@ -952,6 +952,7 @@ export class ModelViewport {
 		this.onSelectionChange?.();
 		this.onChange?.();
 		this.onToolsChange?.();
+		this.editor.signals.modelingSelectionChanged.dispatch();
 
 	}
 

@@ -579,6 +579,51 @@ async function checkUVSelection( page ) {
 
 }
 
+async function checkUVSelectionSync( page ) {
+
+	await page.evaluate( () => {
+
+		const object = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), new THREE.MeshStandardMaterial() );
+		editor.addObject( object );
+		editor.select( object );
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	const uv = page.getByRole( 'region', { name: 'UV editor', exact: true } );
+	const sync = uv.getByRole( 'checkbox', { name: 'Sync UV and mesh selection' } );
+	await sync.check();
+	const grid = uv.getByLabel( 'UV grid', { exact: true } );
+	await page.evaluate( () => {
+
+		editor.modeling.setSelectionMode( 'vertex' );
+		editor.modeling.applyElementSelection( [ [ 0 ] ], 'set' );
+
+	} );
+	const highlighted = await grid.evaluate( canvas => [
+		...canvas.getContext( '2d' ).getImageData( 25, 25, 1, 1 ).data
+	] );
+	assert.deepEqual( highlighted, [ 255, 174, 98, 255 ], '3D vertex selection highlights the matching UV' );
+	const { x, y, width, height } = await grid.boundingBox();
+	await page.mouse.click( x + width * 615 / 640, y + height * 615 / 640 );
+	assert.deepEqual( await page.evaluate( () => editor.modeling.indices ), [ 3 ] );
+	for ( const [ mode, count ] of [ [ 'edge', 5 ], [ 'face', 2 ] ] ) {
+
+		await page.evaluate( mode => editor.modeling.setSelectionMode( mode ), mode );
+		await grid.press( 'a' );
+		assert.equal( await page.evaluate( () => editor.modeling.elements.size ), count );
+		await grid.press( 'Escape' );
+		assert.equal( await page.evaluate( () => editor.modeling.elements.size ), 0 );
+
+	}
+	await sync.uncheck();
+	await grid.press( 'a' );
+	assert.equal( await page.evaluate( () => editor.modeling.elements.size ), 0 );
+	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkUVSeams( page ) {
 
 	await page.evaluate( () => {
@@ -2736,6 +2781,7 @@ async function check() {
 		await checkPencilSplats( page );
 		await checkCompactPencil( page );
 		await checkUVSelection( page );
+		await checkUVSelectionSync( page );
 		await checkUVUnwrap( page );
 		await checkConformalSeamUnwrap( page );
 		await checkUVSeams( page );

@@ -13,13 +13,14 @@ import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { canvasView, createCanvasShelf, selectionTools2D, transformCanvasPoint, transformTools2D } from './Canvas2DTools.js?v=uv-sculpt';
-import { selectionRegionContains } from './MeshSelection.js?v=shape-selection';
+import { elementKey, selectionRegionContains } from './MeshSelection.js?v=shape-selection';
 import { brushPalette, brushPressure, brushStroke, pencilBrush, useBrushShortcut } from './PencilBrush.js?v=brush-presets';
 import { createBrushColorSampler } from './BrushColorSampler.js?v=brush-presets';
 import { TexturePaintStroke } from './TexturePaint.js?v=brush-presets';
 import { closestPointOnSegment } from './Contour.js';
 import { linkedUVVertices, uvComponents, uvCornerTopology, uvFaceAt } from './UVIslands.js?v=uv-pack';
 import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=surface-tools';
+import { uvSelectionCorrespondence } from './UVSelectionSync.js';
 import { packExistingUVs } from './UVPack.js';
 import { layoutUV } from './UVLayout.js?v=uv-sculpt';
 
@@ -85,6 +86,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	const source = () => modifierSource( object );
 	let geometry = source();
 	let selected = [], dragging, dirty = false;
+	let correspondence, syncedSelection, pushingSelection = false;
 	let tool = 'select', beforeColorPick = 'pencil', lastPoint, pivot = [ .5, .5 ];
 	const undo = [], redo = [];
 	let bake, showBake = true;
@@ -291,6 +293,63 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		catch ( error ) { status.textContent = error.message; }
 
 	}
+	const syncKey = 'settings/uvSelectionSync';
+	const sync = ! warp && modelField( toolbar, 'Sync UV and mesh selection', 'link', 'checkbox', editor.config.getKey( syncKey ) );
+	if ( sync ) sync.onchange = () => {
+
+		editor.config.setKey( syncKey, sync.checked );
+		pullMeshSelection();
+		draw();
+
+	};
+
+	function selectionMapping() {
+
+		const model = editor.modeling;
+		if ( ! sync?.checked || ! model.editMode || model.object !== object || ! points.length || source() !== original ||
+			! [ 'mesh', 'vertices' ].includes( model.data?.kind ) || model.data.profile || ! model.data.faces?.length ) return;
+		if ( correspondence?.geometry !== geometry || correspondence.data !== model.data ) {
+
+			const triangles = [];
+			eachTriangle( face => triangles.push( face ) );
+			correspondence = { geometry, data: model.data, mapping: uvSelectionCorrespondence( geometry, model.data, triangles ) };
+
+		}
+		return correspondence.mapping;
+
+	}
+
+	function pullMeshSelection( updatePoints = true ) {
+
+		if ( pushingSelection || dragging ) return;
+		const mapping = selectionMapping();
+		const model = editor.modeling;
+		const mode = model.selectionMode;
+		syncedSelection = mapping?.fromMesh( mode, mode === 'vertex' ? model.indices.map( String ) : model.elements.keys() );
+		if ( updatePoints && syncedSelection ) selected = syncedSelection.selection;
+
+	}
+
+	function publishUVSelection() {
+
+		const mapping = selectionMapping();
+		const model = editor.modeling;
+		if ( ! mapping || ! model.canSelectTopology ) return;
+		pushingSelection = true;
+		try { model.applyElementSelection( mapping.toMesh( model.selectionMode, selected ), 'set' ); }
+		finally { pushingSelection = false; }
+		pullMeshSelection( false );
+
+	}
+
+	function modelSelectionChanged() {
+
+		if ( ! sync?.checked || pushingSelection ) return;
+		pullMeshSelection();
+		draw();
+
+	}
+
 	let baking;
 	if ( ! warp ) {
 
@@ -369,6 +428,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			points = reset();
 			undo.length = redo.length = 0;
 			selected = [];
+			pullMeshSelection();
 			dirty = true;
 
 		} ) );
@@ -508,6 +568,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			if ( geometry !== original ) geometry.dispose();
 			original = geometry = source();
 			dirty = false;
+			pullMeshSelection( false );
 
 		}
 		undo.length = redo.length = 0;
@@ -583,9 +644,22 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			const polygonEdges = new Map();
 			eachTriangle( ( face, index ) => {
 
-				const active = face.every( index => selection.has( index ) );
+				const active = syncedSelection?.mode === 'face' ? syncedSelection.faces.has( index ) :
+					syncedSelection?.mode !== 'edge' && face.every( index => selection.has( index ) );
 				ctx.strokeStyle = active ? '#ffae62' : '#768597';
-				if ( ! authored ) line( face, true );
+				if ( ! authored ) {
+
+					line( face, true );
+					if ( syncedSelection?.mode === 'edge' ) for ( let i = 0; i < face.length; i ++ ) {
+
+						const edge = [ face[ i ], face[ ( i + 1 ) % face.length ] ];
+						if ( ! syncedSelection.edges.has( elementKey( edge ) ) ) continue;
+						ctx.strokeStyle = '#ffae62';
+						line( edge );
+
+					}
+
+				}
 				if ( active ) {
 
 					if ( authored ) {
@@ -605,14 +679,16 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 					const a = pointKey( from ), b = pointKey( to );
 					const key = authored[ index ] + ':' + ( a < b ? a + ';' + b : b + ';' + a );
 					if ( polygonEdges.has( key ) ) polygonEdges.delete( key );
-					else polygonEdges.set( key, [ from, to ] );
+					else polygonEdges.set( key, { edge: [ from, to ], triangle: index } );
 
 				} );
 
 			} );
-			for ( const edge of polygonEdges.values() ) {
+			for ( const { edge, triangle } of polygonEdges.values() ) {
 
-				ctx.strokeStyle = edge.every( index => selection.has( index ) ) ? '#ffae62' : '#768597';
+				const active = syncedSelection?.mode === 'edge' ? syncedSelection.edges.has( elementKey( edge ) ) :
+					syncedSelection?.mode === 'face' ? syncedSelection.faces.has( triangle ) : edge.every( index => selection.has( index ) );
+				ctx.strokeStyle = active ? '#ffae62' : '#768597';
 				line( edge );
 
 			}
@@ -716,6 +792,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		if ( event.ctrlKey ) selected = selected.filter( i => ! hits.includes( i ) );
 		else if ( event.shiftKey ) selected = [ ...new Set( [ ...selected, ...hits ] ) ];
 		else selected = hits;
+		publishUVSelection();
 
 	}
 
@@ -974,7 +1051,9 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			select( points.flatMap( ( point, i ) => selectionRegionContains( region, pixel( point ), 22 / view.scale ) ? [ i ] : [] ), region.event );
 
 		}
+		const region = dragging?.region;
 		if ( dragging && ! dragging.modal ) finishDrag();
+		if ( region ) { pullMeshSelection( false ); draw(); }
 
 	};
 	canvas.onpointercancel = () => { cancelDrag(); draw(); };
@@ -999,13 +1078,13 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			else if ( undo.length ) restore( undo, redo );
 			else if ( ! dragging ) editor.undo();
 
-		} else if ( ! dragging && key === 'a' && ! event.ctrlKey && ! event.metaKey ) selected = event.altKey ? [] : points.map( ( _, i ) => i );
+		} else if ( ! dragging && key === 'a' && ! event.ctrlKey && ! event.metaKey ) select( event.altKey ? [] : points.map( ( _, i ) => i ), {} );
 		else if ( ! dragging && ! warp && key === 'l' && ! event.ctrlKey && ! event.metaKey && ! event.altKey ) {
 
 			select( linkedSelection( lastPoint, ! event.shiftKey ), { ctrlKey: event.shiftKey, shiftKey: ! event.shiftKey } );
 
 		} else if ( ! dragging && ! warp && key === 'p' && ! event.ctrlKey && ! event.metaKey && ! event.shiftKey ) run( () => changePins( ! event.altKey ) );
-		else if ( ! dragging && key === 'escape' && selected.length ) selected = [];
+		else if ( ! dragging && key === 'escape' && selected.length ) select( [], {} );
 		else if ( ! dragging && key === 'home' ) view.fit();
 		else if ( ! dragging && ! warp && key === 'd' && ! event.ctrlKey && ! event.metaKey ) { tool = 'pencil'; palette.refresh(); }
 		else if ( ! dragging && modes[ key ] && ! event.ctrlKey && ! event.metaKey && selected.length ) beginTransform( modes[ key ], lastPoint || pixel( [ .5, .5 ] ), true );
@@ -1035,14 +1114,17 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		pins = readPins();
 		undo.length = redo.length = 0;
 		selected = [];
+		pullMeshSelection();
 		draw();
 
 	};
 	editor.signals.geometryChanged.add( updateGeometry );
+	editor.signals.modelingSelectionChanged.add( modelSelectionChanged );
 	editor.signals.materialChanged.add( draw );
 	editor.editWorkspace.mount( warp ? 'warp' : 'uv', object, workspacePanel, () => {
 
 		editor.signals.geometryChanged.remove( updateGeometry );
+		editor.signals.modelingSelectionChanged.remove( modelSelectionChanged );
 		editor.signals.materialChanged.remove( draw );
 		cancelDrag();
 		if ( ! warp && geometry !== original ) geometry.dispose();
@@ -1050,6 +1132,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 	}, () => dirty );
 	if ( focus ) canvas.focus();
+	pullMeshSelection();
 	draw();
 
 }

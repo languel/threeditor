@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=coverage-overlay';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=uv-selection-sync';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -35,7 +35,7 @@ import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=brush-presets';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=brush-response';
+import { ModelViewport } from './modeling/ModelViewport.js?v=uv-selection-sync';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

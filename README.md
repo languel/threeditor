@@ -162,6 +162,8 @@ Open **UV** or **Image & Vector** from **Editor Type**. When there is room, the 
 
 The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to select mesh elements and use modeling shortcuts there. Edit Mode draws selected vertices as small orange dots, selected edges in orange, and selected faces with an orange tint.
 
+Turn on **Sync UV and mesh selection** in the UV toolbar to share selection with the 3D pane for the active mesh in Edit Mode. The 3D vertex, edge, or face mode determines what UV selection sends back to the mesh. Select both UV endpoints to select an edge, or all its corners to select a face. Selecting an element in 3D highlights its UV copies across seams.
+
 ## Outliner and Properties
 
 The Outliner stays above Properties, with a divider you can drag or resize with the arrow keys. Search filters the hierarchy and includes parents of matching objects. Properties uses vertical glyph tabs for Scene, Object, Geometry, Material, Components, Modeling, Modifiers, and Animations. The available tabs follow the selection. Open **Scene** for Background, Environment, Fog, Bloom, and Focus.

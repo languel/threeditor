@@ -80,6 +80,7 @@ function Editor( portable = false ) {
 		cameraResetted: new Signal(),
 
 		geometryChanged: new Signal(),
+		modelingSelectionChanged: new Signal(),
 
 		objectSelected: new Signal(),
 		objectFocused: new Signal(),

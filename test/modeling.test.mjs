@@ -12,6 +12,8 @@ import { StrokeSampler } from '../editor/js/modeling/StrokeSampler.js';
 import { meshPrimitives } from '../editor/js/modeling/MeshPrimitives.js';
 import { layoutUV } from '../editor/js/modeling/UVLayout.js';
 import { uvComponents, uvCornerTopology } from '../editor/js/modeling/UVIslands.js';
+import { uvSelectionCorrespondence } from '../editor/js/modeling/UVSelectionSync.js';
+import { elementKey, meshEdges } from '../editor/js/modeling/MeshSelection.js';
 import { packExistingUVs } from '../editor/js/modeling/UVPack.js';
 import { pencilRibbon } from '../editor/js/modeling/PencilRibbon.js';
 import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
@@ -45,6 +47,42 @@ test( 'Cube and Plane primitives use authored quad topology and UVs', () => {
 	assert.deepEqual( plane.userData.modeling.points.map( point => point[ 1 ] ), [ 0, 0, 0, 0 ] );
 	cube.dispose();
 	plane.dispose();
+
+} );
+
+test( 'UV selection maps seam copies, authored edges and full polygon faces', () => {
+
+	const cube = meshPrimitives.find( ( [ kind ] ) => kind === 'box' )[ 2 ]( THREE, true );
+	for ( const geometry of [ cube, new THREE.BoxGeometry() ] ) {
+
+		const data = readModelGeometry( geometry );
+		const count = geometry.index?.count ?? geometry.attributes.position.count;
+		const triangles = Array.from( { length: count / 3 }, ( _, i ) => [ 0, 1, 2 ].map( offset => {
+
+			const row = 3 * i + offset;
+			return geometry.index ? geometry.index.getX( row ) : row;
+
+		} ) );
+		const map = uvSelectionCorrespondence( geometry, data, triangles );
+		const vertex = map.fromMesh( 'vertex', [ '0' ] );
+		assert.ok( vertex.selection.length > 1 );
+		for ( const corner of vertex.selection ) assert.deepEqual( map.toMesh( 'vertex', [ corner ] ), [ [ 0 ] ] );
+
+		const edge = meshEdges( data ).find( ids => map.fromMesh( 'edge', [ elementKey( ids ) ] ).selection.length === 4 );
+		const edgeCopies = map.fromMesh( 'edge', [ elementKey( edge ) ] );
+		assert.equal( edgeCopies.edges.size, 2 );
+		const [ first, second ] = [ ...edgeCopies.edges ].map( key => key.split( ':' ).map( Number ) );
+		assert.deepEqual( map.toMesh( 'edge', first ), [ edge ] );
+		assert.deepEqual( map.toMesh( 'edge', [ first[ 0 ], second[ 1 ] ] ), [] );
+
+		const face = data.faces[ 0 ];
+		const patch = map.fromMesh( 'face', [ elementKey( face ) ] );
+		assert.equal( patch.faces.size, face.length - 2 );
+		assert.deepEqual( map.toMesh( 'face', patch.selection.slice( 1 ) ), [] );
+		assert.deepEqual( map.toMesh( 'face', patch.selection ), [ face ] );
+		geometry.dispose();
+
+	}
 
 } );
 
