@@ -328,6 +328,91 @@ async function checkPencil( page ) {
 
 }
 
+async function checkPencilSplats( page ) {
+
+	const pixel = await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 6, 6 ), new THREE.MeshBasicMaterial() );
+		mesh.name = 'Pencil splat receiver';
+		editor.addObject( mesh );
+		editor.camera.position.set( 0, 0, 5 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		editor.config.setKey( 'settings/modelPlacement', 'surface' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+		const { left, top, width, height } = editor.renderer.domElement.getBoundingClientRect();
+		return [ left + width / 2, top + height / 2 ];
+
+	} );
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Draw Pencil splats', exact: true } ).click();
+	await page.getByLabel( 'Brush presets', { exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
+	const draw = async ( offset = 0 ) => {
+
+		await page.mouse.move( pixel[ 0 ] - 45, pixel[ 1 ] + offset );
+		await page.mouse.down();
+		await page.mouse.move( pixel[ 0 ] + 45, pixel[ 1 ] + offset, { steps: 12 } );
+		await page.mouse.up();
+
+	};
+	await draw();
+	const initialized = () => page.waitForFunction( () => {
+
+		const batch = editor.scene.getObjectByName( 'Pencil splats' );
+		const mesh = batch?.getObjectByName( 'SplatMesh' );
+		return mesh?.isInitialized && mesh.numSplats * 32 === atob( batch.userData.assetObject.splatData ).length;
+
+	} );
+	await initialized();
+	const saved = () => page.evaluate( () => editor.scene.getObjectByName( 'Pencil splats' )?.userData.assetObject.splatData );
+	const first = await saved();
+	const brush = await page.evaluate( () => {
+
+		const batch = editor.scene.getObjectByName( 'Pencil splats' );
+		const mesh = batch.getObjectByName( 'SplatMesh' );
+		const densities = [];
+		let flat = true;
+		mesh.forEachSplat( ( _, center, axes, rotation, opacity ) => {
+
+			const normal = new THREE.Vector3( 0, 0, 1 ).applyQuaternion( rotation );
+			flat &&= Math.abs( center.z ) < .002 && axes.z < axes.y && axes.y < axes.x && Math.abs( normal.z ) > .98;
+			densities.push( opacity );
+
+		} );
+		return [ batch.parent.name, densities.length > 50, flat, Math.max( ...densities ) - Math.min( ...densities ) > .15 ];
+
+	} );
+	assert.deepEqual( brush, [ 'Pencil splat receiver', true, true, true ] );
+	await draw( 35 );
+	await initialized();
+	const second = await saved();
+	assert.ok( second.length > first.length );
+	await page.evaluate( () => editor.undo() );
+	assert.equal( await saved(), first );
+	await page.evaluate( () => editor.redo() );
+	assert.equal( await saved(), second );
+	await initialized();
+	await page.getByRole( 'button', { name: 'Draw editable stroke', exact: true } ).click();
+	await page.getByLabel( 'Brush presets', { exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Pen', exact: true } ).click();
+	await page.evaluate( async () => {
+
+		const project = JSON.parse( JSON.stringify( editor.toJSON() ) );
+		editor.clear();
+		await editor.fromJSON( project );
+
+	} );
+	assert.equal( await saved(), second );
+	await initialized();
+	await page.evaluate( () => {
+		editor.clear();
+		editor.config.setKey( 'settings/modelPlacement', 'object' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+	} );
+
+}
+
 async function checkCompactPencil( page ) {
 
 	const originalViewport = page.viewportSize();
@@ -1684,6 +1769,7 @@ async function check() {
 		} ), [ 1, 2, 3 ] );
 		await checkSelectionShelf( page );
 		await checkPencil( page );
+		await checkPencilSplats( page );
 		await checkCompactPencil( page );
 		await checkUVSelection( page );
 		await checkUVUnwrap( page );

@@ -8,7 +8,7 @@ import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=unified-sync';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=pencil-grain';
+import { Viewport } from './Viewport.js?v=pencil-splats';
 import { Toolbar } from './Toolbar.js?v=pencil-placement';
 import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=pencil-guides';

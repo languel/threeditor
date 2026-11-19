@@ -145,7 +145,7 @@ export function useBrushShortcut( editor, event ) {
 
 }
 
-export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, addStrokeControls } = {} ) {
+export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, curveCleanup = true, addStrokeControls } = {} ) {
 
 	const brush = pencilBrush( editor );
 	const palette = document.createElement( 'div' );
@@ -255,6 +255,8 @@ export function brushPalette( editor, host, changed = () => {}, { strokeOptions 
 			[ 'smoothing', 'Stroke smoothing', 'sculptSmooth', 0, 1, .05 ],
 			[ 'simplify', 'Simplify tolerance (px)', 'toolPath', 0, 10, .25 ]
 		] ) {
+
+			if ( ! curveCleanup && ( key === 'smoothing' || key === 'simplify' ) ) continue;
 
 			const input = modelField( controls, label, glyph, 'number', brush[ key ] );
 			Object.assign( input, { min, max, step } );

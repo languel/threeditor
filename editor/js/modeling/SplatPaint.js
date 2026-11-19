@@ -19,13 +19,21 @@ function strokeRecords( mark, color, opacity ) {
 	for ( let i = 0; i < count; i ++ ) {
 
 		const offset = i * recordSize;
+		const kernel = mark.kernels?.[ i ];
 		for ( let axis = 0; axis < 3; axis ++ ) {
 
 			data.setFloat32( offset + axis * 4, mark.positions[ i * 3 + axis ], true );
-			data.setFloat32( offset + 12 + axis * 4, mark.radii[ i ] / Math.max( 1e-6, Math.abs( scale[ axis ] ) ), true );
+			data.setFloat32( offset + 12 + axis * 4, kernel?.axes[ axis ] ?? mark.radii[ i ] / Math.max( 1e-6, Math.abs( scale[ axis ] ) ), true );
 
 		}
-		bytes.set( [ Math.round( rgb.r * 255 ), Math.round( rgb.g * 255 ), Math.round( rgb.b * 255 ), Math.round( opacity * 255 ), 255, 128, 128, 128 ], offset + 24 );
+		bytes.set( [ Math.round( rgb.r * 255 ), Math.round( rgb.g * 255 ), Math.round( rgb.b * 255 ),
+			Math.round( opacity * ( kernel?.alpha ?? 1 ) * 255 ) ], offset + 24 );
+		const rotation = kernel?.rotation || [ 0, 0, 0, 1 ];
+		for ( const [ index, component ] of [ rotation[ 3 ], rotation[ 0 ], rotation[ 1 ], rotation[ 2 ] ].entries() ) {
+
+			bytes[ offset + 28 + index ] = Math.max( 0, Math.min( 255, Math.round( component * 128 + 128 ) ) );
+
+		}
 
 	}
 	return bytes;
@@ -40,10 +48,10 @@ function recordsToString( bytes ) {
 
 }
 
-function canAppend( editor, object ) {
+function canAppend( editor, object, pencil ) {
 
 	const data = object.userData.assetObject;
-	if ( ! data?.paintBatch || typeof data.splatData !== 'string' || ! isVisible( object ) || hasRestriction( object, 'locked' ) ) return false;
+	if ( ! data?.paintBatch || Boolean( data.pencilSplat ) !== pencil || typeof data.splatData !== 'string' || ! isVisible( object ) || hasRestriction( object, 'locked' ) ) return false;
 	const { position, quaternion, scale } = object;
 	if ( ! object.matrixAutoUpdate || position.lengthSq() || quaternion.x || quaternion.y || quaternion.z ||
 		scale.x !== 1 || scale.y !== 1 || scale.z !== 1 ) return false;
@@ -59,7 +67,8 @@ export function splatStrokeCommands( editor, mark, color, opacity ) {
 
 	const bytes = strokeRecords( mark, color, opacity );
 	const commands = [];
-	const batch = mark.receiver.children.findLast( object => canAppend( editor, object ) );
+	const pencil = Boolean( mark.kernels );
+	const batch = mark.receiver.children.findLast( object => canAppend( editor, object, pencil ) );
 	let offset = 0;
 	if ( batch ) {
 
@@ -79,9 +88,9 @@ export function splatStrokeCommands( editor, mark, color, opacity ) {
 	for ( ; offset < bytes.length; offset += batchBytes ) {
 
 		const object = new THREE.Group();
-		object.name = 'Splat paint';
+		object.name = pencil ? 'Pencil splats' : 'Splat paint';
 		object.userData.surfaceMark = true;
-		object.userData.assetObject = { type: 'gaussian-splat', paintBatch: true, splatData: btoa( recordsToString( bytes.subarray( offset, offset + batchBytes ) ) ) };
+		object.userData.assetObject = { type: 'gaussian-splat', paintBatch: true, ...( pencil ? { pencilSplat: true } : {} ), splatData: btoa( recordsToString( bytes.subarray( offset, offset + batchBytes ) ) ) };
 		commands.push( new AddObjectCommand( editor, object, mark.receiver, false ), new AddScriptCommand( editor, object, { ...defaultScript } ) );
 
 	}

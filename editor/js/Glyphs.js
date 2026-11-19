@@ -33,6 +33,7 @@ const ICONS = {
 	pathDraw: svg( '<path d="M3 18c8 0 1-12 10-12"/><circle cx="3" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><path d="m16 9 5-5 2 2-5 5-3 1 1-3Z"/>' ),
 	shapeDraw: svg( '<path d="M3 17 5 5l12-2 4 12-10 6-8-4Z"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/>' ),
 	meshBuild: svg( '<path d="m3 7 9-4 9 4v11l-9 3-9-4V7Zm0 0 9 5 9-5m-9 5v9"/><path d="M17 13h6m-3-3v6"/>' ),
+	pencilSplats: svg( '<path d="M3 19c4-8 7-11 15-14" stroke-dasharray="1 4"/><circle cx="5" cy="13" r="1.2"/><circle cx="12" cy="15" r="1.5"/><circle cx="15" cy="7" r="1.6"/><circle cx="20" cy="5" r="1.1"/>' ),
 	freehandDraw: svg( '<path d="M2 19c7-10 7 8 12-2M4 10c1-6 8-6 8-1"/><path d="m13 11 7-8 3 3-7 8-5 2 2-5Z"/>' ),
 	weldTool: svg( '<circle cx="4" cy="5" r="2"/><circle cx="20" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="m5 8 6 8m8-8-6 8m-5-5 3 1-1-3m6 2-3 1 1-3"/>' ),
 	splitTool: svg( '<path d="M3 18 21 6"/><circle cx="3" cy="18" r="2"/><circle cx="21" cy="6" r="2"/><rect x="9" y="9" width="6" height="6" fill="currentColor"/>' ),
