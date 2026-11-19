@@ -48,7 +48,7 @@ export function withViewportShading( scene, mode, draw ) {
 
 		scene.traverseVisible( object => {
 
-			if ( ! object.isMesh || ! object.material ) return;
+			if ( ! object.isMesh || ! object.material || object.userData.pencilStroke ) return;
 			const original = object.material;
 			originals.push( [ object, original ] );
 			object.material = Array.isArray( original ) ? original.map( material => meshOverride( mode, material ) ) : meshOverride( mode, original );

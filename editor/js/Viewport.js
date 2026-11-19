@@ -1,7 +1,7 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=pencil-guides';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=pencil-ribbon';
 import { transformSnapStep } from './TransformSettings.js?v=pencil-placement';
-import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=live-preview';
+import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
@@ -32,9 +32,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=pencil-guides';
+import { ViewportTools } from './modeling/ViewportTools.js?v=pencil-ribbon';
 import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=held-alt-constraint';
+import { ModelViewport } from './modeling/ModelViewport.js?v=pencil-ribbon';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

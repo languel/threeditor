@@ -209,7 +209,7 @@ class Keymap {
   if(id==='topologyPen')return m.canEdit()&&!!m.data.faces?.length;
   if(id==='weldPoints')return m.canEdit()&&m.data.kind==='mesh'&&!m.data.profile&&m.indices.length>=2;
   if(id==='brushWeaker'||id==='brushStronger')return ['paint','pencil'].includes(e.viewTools.mode)||(m.brush&&m.brush!=='freehand');
-  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||(e.viewTools.mode==='pencil'&&e.viewTools.pencilTool!=='vector')||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
+  if(id==='brushSmaller'||id==='brushLarger')return e.viewTools.mode==='paint'||e.viewTools.mode==='pencil'||(m.brush&&m.brush!=='freehand')||m.selectionTool==='circle';
   return true;
  }
 

@@ -1,3 +1,4 @@
+import { pencilRibbon } from './PencilRibbon.js';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
 
 export function modelData( kind ) {
@@ -308,7 +309,11 @@ export function modelGeometry( THREE, data ) {
 	} else {
 
 		const points = outlinePoints( THREE, data );
-		if ( data.kind === 'shape' && isClosedOutline( data ) && points.length >= 3 ) {
+		if ( data.kind === 'path' && data.pencilBrush?.samples?.length ) {
+
+			geometry = pencilRibbon( THREE, points, Boolean( data.closed && points.length > 2 ), data.pencilBrush );
+
+		} else if ( data.kind === 'shape' && isClosedOutline( data ) && points.length >= 3 ) {
 
 			const shape = new THREE.Shape( points.map( point => new THREE.Vector2( point.x, point.y ) ) );
 			const surface = data.depth > 0 ?
@@ -339,10 +344,15 @@ function savedModeling( data ) {
 export function modelObject( THREE, data, name ) {
 
 	const geometry = modelGeometry( THREE, data );
-	const object = data.kind === 'path' ? new THREE.Line( geometry, new THREE.LineBasicMaterial( { color: 0x73d9f5 } ) ) :
+	const object = data.kind === 'path' && data.pencilBrush?.samples?.length ?
+		new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( {
+			vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false,
+			polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, toneMapped: false
+		} ) ) : data.kind === 'path' ? new THREE.Line( geometry, new THREE.LineBasicMaterial( { color: 0x73d9f5 } ) ) :
 		new THREE.Mesh( geometry, new THREE.MeshStandardMaterial( { color: 0xeeeeee, roughness: .9, side: THREE.DoubleSide } ) );
 	object.name = name;
-	if ( object.isMesh ) object.castShadow = object.receiveShadow = true;
+	if ( data.pencilBrush ) Object.assign( object.userData, { pencilStroke: true, surfaceMark: true } );
+	if ( object.isMesh && data.kind !== 'path' ) object.castShadow = object.receiveShadow = true;
 	return object;
 
 }

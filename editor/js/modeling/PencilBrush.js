@@ -80,7 +80,7 @@ export function useBrushShortcut( editor, event ) {
 
 }
 
-export function brushPalette( editor, host, changed = () => {}, { vectorOnly = false, strokeOptions = false } = {} ) {
+export function brushPalette( editor, host, changed = () => {}, { strokeOptions = false, singleRow = false, addStrokeControls } = {} ) {
 
 	const brush = pencilBrush( editor );
 	const palette = document.createElement( 'div' );
@@ -90,16 +90,45 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 	host.append( palette );
 	const presets = document.createElement( 'div' );
 	presets.className = 'pencil-brush-presets';
-	palette.append( presets );
+	let summaryCanvas;
+	if ( singleRow ) {
+
+		const picker = document.createElement( 'details' );
+		picker.className = 'pencil-tip-picker';
+		const summary = document.createElement( 'summary' );
+		summary.setAttribute( 'aria-label', 'Brush presets' );
+		summaryCanvas = document.createElement( 'canvas' );
+		summaryCanvas.width = 44;
+		summaryCanvas.height = 24;
+		summaryCanvas.setAttribute( 'aria-hidden', 'true' );
+		summary.append( summaryCanvas );
+		picker.append( summary, presets );
+		picker.onkeydown = event => {
+
+			if ( event.key === 'Escape' && picker.open ) {
+				event.stopPropagation();
+				picker.open = false;
+				summary.focus();
+			}
+
+		};
+		palette.append( picker );
+
+	} else palette.append( presets );
 	const fields = [
 		[ 'color', 'Brush color', 'color', 'color' ],
 		[ 'size', 'Brush size (px)', 'brushWidth', 'number', 1, 256 ],
 		[ 'strength', 'Brush strength', 'opacity', 'number', .01, 1 ],
 		[ 'hardness', 'Brush hardness', 'brush', 'number', 0, 1 ]
-	].filter( ( [ key ] ) => ! vectorOnly || key === 'color' || key === 'strength' ).map( ( [ key, name, glyph, type, min, max ] ) => {
+	].map( ( [ key, name, glyph, type, min, max ] ) => {
 
 		const input = modelField( palette, name, glyph, type, brush[ key ] );
-		if ( type === 'number' ) Object.assign( input, { min, max, step: key === 'size' ? 1 : .05 } );
+		if ( type === 'number' ) {
+
+			Object.assign( input, { min, max, step: key === 'size' ? 1 : .05 } );
+			input.dataset.scrubSensitivity = key === 'size' ? '.5' : '.005';
+
+		}
 		input.onchange = () => {
 
 			if ( type === 'color' ) brush.color = input.value;
@@ -145,6 +174,7 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 		] ) guide.append( new Option( label, id ) );
 		guide.onchange = () => { brush.guide = guide.value; refresh(); changed(); };
 		controls.append( guide );
+		addStrokeControls?.( controls );
 		for ( const [ key, label, glyph, min, max, step ] of [
 			[ 'guideAngle', 'Guide angle (°)', 'rotate', -180, 180, 1 ],
 			[ 'stabilizeRadius', 'Stabilizer radius (px)', 'brushWidth', 1, 100, 1 ],
@@ -154,6 +184,7 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 
 			const input = modelField( controls, label, glyph, 'number', brush[ key ] );
 			Object.assign( input, { min, max, step } );
+			input.dataset.scrubSensitivity = String( step / 5 );
 			input.onchange = () => {
 
 				if ( Number.isFinite( input.valueAsNumber ) ) brush[ key ] = Math.max( min, Math.min( max, input.valueAsNumber ) );
@@ -173,6 +204,12 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 		const button = modelButton( presets, name, 'brush', () => {
 
 			Object.assign( brush, { name, size, strength, hardness, spacing, aspect, angle } );
+			if ( singleRow ) {
+
+				presets.parentElement.open = false;
+				presets.previousSibling.focus();
+
+			}
 			refresh(); changed();
 
 		} );
@@ -185,7 +222,7 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 		const style = { size: Math.min( 17, size * .58 ), strength, hardness, spacing, aspect, angle, color: '#263449' };
 		const draw = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => brushDab( context, x, y, pressure, style ) );
 		for ( let x = 8; x < 38; x ++ ) draw( x, 12 + Math.sin( x / 5 ) * 4, .35 + .65 * Math.sin( x / 15 ) );
-		return [ name, button ];
+		return [ name, button, sample ];
 
 	} );
 	function refresh() {
@@ -199,7 +236,19 @@ export function brushPalette( editor, host, changed = () => {}, { vectorOnly = f
 
 		}
 		if ( guide ) guide.value = brush.guide;
-		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( brush.name === name ) );
+		for ( const [ name, button, sample ] of buttons ) {
+
+			button.setAttribute( 'aria-pressed', String( brush.name === name ) );
+			if ( summaryCanvas && brush.name === name ) {
+
+				const context = summaryCanvas.getContext( '2d' );
+				context.clearRect( 0, 0, summaryCanvas.width, summaryCanvas.height );
+				context.drawImage( sample, 0, 0 );
+				summaryCanvas.parentElement.title = 'Brush presets · ' + name;
+
+			}
+
+		}
 
 	}
 	refresh();

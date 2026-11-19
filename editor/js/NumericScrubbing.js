@@ -61,7 +61,8 @@ export function installNumericScrubbing() {
 		const control = input.numericControl;
 		const configured = control?.step ?? Number( input.step );
 		const step = Number.isFinite( configured ) && configured > 0 ? configured : 1;
-		gesture = { input, control, step, start, raw: start, id: event.pointerId, x: event.clientX, y: event.clientY, travel: 0,
+		const sensitivity = Number( input.dataset?.scrubSensitivity );
+		gesture = { input, control, step, sensitivity: sensitivity > 0 ? sensitivity : step / 50, start, raw: start, id: event.pointerId, x: event.clientX, y: event.clientY, travel: 0,
 			min: control?.scrubRange?.[ 0 ] ?? control?.min ?? ( input.min !== '' ? Number( input.min ) : - Infinity ),
 			max: control?.scrubRange?.[ 1 ] ?? control?.max ?? ( input.max !== '' ? Number( input.max ) : Infinity ),
 			precision: control instanceof UIInteger ? 0 : control?.precision ?? 6, cursor: input.style.cursor };
@@ -78,7 +79,7 @@ export function installNumericScrubbing() {
 		const dx = event.clientX - state.x, dy = event.clientY - state.y;
 		state.x = event.clientX; state.y = event.clientY; state.travel += Math.abs( dx ) + Math.abs( dy );
 		if ( state.travel < 2 ) return;
-		state.raw = Math.min( state.max, Math.max( state.min, state.raw + ( dx - dy ) * state.step / ( event.shiftKey ? 500 : 50 ) ) );
+		state.raw = Math.min( state.max, Math.max( state.min, state.raw + ( dx - dy ) * state.sensitivity / ( event.shiftKey ? 10 : 1 ) ) );
 		const step = state.step * ( event.shiftKey ? .1 : 1 );
 		const value = event.ctrlKey ? Math.round( state.raw / step ) * step : state.raw;
 		write( state, Number( Math.min( state.max, Math.max( state.min, value ) ).toFixed( state.precision ) ) );

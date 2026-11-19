@@ -1,11 +1,11 @@
 import { icon } from '../Glyphs.js?v=element-select';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=mask-editor';
-import { editableMesh } from './ModelViewport.js?v=contour-editing';
+import { editableMesh } from './ModelViewport.js?v=pencil-ribbon';
 import { isProjector } from '../assets/Projector.js?v=mask-editor';
 import { modelButton } from './ModelControls.js?v=tool-layout';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-guides';
-import { openUVEditor } from './UVEditor.js?v=pencil-guides';
+import { openMaskEditor } from './MaskEditor.js?v=pencil-ribbon';
+import { openUVEditor } from './UVEditor.js?v=pencil-ribbon';
 
 export function createEditWorkspace( editor, viewport ) {
 
