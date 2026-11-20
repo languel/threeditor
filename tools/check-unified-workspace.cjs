@@ -3035,6 +3035,7 @@ async function checkDrawingAssets( page ) {
 	} );
 	await page.waitForFunction( () => editor.scene.getObjectByName( 'Drawing asset projector' )?.projectorOutput?.source?.width === 1024 );
 	await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Drawing asset projector' ) ) );
+	const savedDrawing = await page.evaluate( () => editor.scene.userData.vectorDrawing );
 	await ui.getByRole( 'button', { name: 'Open texture from Project assets', exact: true } ).click();
 	await page.locator( '.asset-picker' ).filter( { hasText: 'Choose an image to edit' } ).waitFor();
 	await card( 'reference.png' ).click();
@@ -3098,6 +3099,7 @@ async function checkDrawingAssets( page ) {
 	await saveAsset.click();
 	await status.getByText( 'Saved import-2/Annotation test.png to Project assets.', { exact: true } ).waitFor();
 	assert.deepEqual( await marks( 'import-2/Annotation test.png' ), [ 320, 192, true ] );
+	await page.evaluate( drawing => { editor.scene.userData.vectorDrawing = drawing; }, savedDrawing );
 	await page.locator( '.sidebar-inspector > .Tabs > #sceneTab' ).click();
 
 }
