@@ -1,6 +1,6 @@
 import { UIPanel, UIRow, UIHorizontalRule } from './libs/ui.js';
 import { PropertyBinding } from 'three';
-import { createExampleLibrary } from './ExampleLibrary.js?v=projector-mapping';
+import { createExampleLibrary } from './ExampleLibrary.js?v=example-open';
 import { openAssetBrowser } from './AssetBrowser.js';
 
 function MenubarFile( editor ) {

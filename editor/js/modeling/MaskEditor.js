@@ -16,6 +16,9 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=uv-sculpt';
 import { closestPointOnSegment, fitDrawingContour, insertContourPoint, segmentCount } from './Contour.js';
 
+const defaultTextureSize = 1024;
+const maxTextureSize = 4096;
+const isPencilContour = shape => shape?.pencilStroke === true || Number.isFinite( shape?.width );
 const referenceDefaults = { x: 0, y: 0, scale: 1, opacity: 1 };
 
 function readReferencePlacement( saved ) {
@@ -34,6 +37,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const saved = () => vectorMode ? scene.userData.vectorDrawing : light.userData.projectionMask;
 	let initial = saved();
 	let reference, referenceFile, referenceRequest, referenceURL;
+	let texture, textureRequest, upload, uploadTexture = false;
+	let texturePath = initial?.texturePath;
+	let textureName = initial?.textureName || 'drawing';
+	const readSize = value => Number.isInteger( value ) && value > 0 && value <= maxTextureSize ? value : defaultTextureSize;
+	let textureWidth = readSize( initial?.textureWidth );
+	let textureHeight = readSize( initial?.textureHeight );
 	let referencePath = vectorMode ? initial?.referencePath : undefined;
 	let includeReference = vectorMode && initial?.includeReference === true;
 	let referencePlacement = vectorMode && readReferencePlacement( initial?.referencePlacement );
@@ -44,8 +53,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const undo = [], redo = [];
 	let brushStrokes = vectorMode ? structuredClone( initial?.brushStrokes || [] ) : [];
 	const raster = vectorMode ? document.createElement( 'canvas' ) : null;
-	const rasterSize = 1024;
-	if ( raster ) raster.width = raster.height = rasterSize;
+
 	const rasterContext = raster?.getContext( '2d' );
 	const usesPalette = () => [ 'stroke', 'raster', 'erase', 'pickColor' ].includes( tool );
 	const pickColor = vectorMode && createBrushColorSampler( editor );
@@ -64,8 +72,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	workspacePanel.className = 'mapping-editor mask-editor';
 	if ( vectorMode ) workspacePanel.classList.add( 'vector-editor' );
 	workspacePanel.setAttribute( 'aria-label', vectorMode ? 'Image and vector editor' : '2D mask editor' );
-	node( 'h3', workspacePanel, vectorMode ? 'Image and vector editor' : ( light.name || light.type ) + ' · Mask editor' );
-	const toolbar = node( 'div', workspacePanel );
+	if ( ! vectorMode ) node( 'h3', workspacePanel, ( light.name || light.type ) + ' · Mask editor' );
+	const imageHeader = vectorMode && node( 'div', workspacePanel );
+	if ( imageHeader ) imageHeader.className = 'image-editor-header';
+	const toolbar = node( 'div' );
 	const tools = new Map();
 	const addTool = ( id, label, glyph ) => tools.set( id, modelButton( toolbar, label, glyph, () => {
 
@@ -110,6 +120,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	modelButton( toolbar, vectorMode ? 'Undo drawing edit' : 'Undo mask edit', 'undo', () => restore( undo, redo ) );
 	modelButton( toolbar, vectorMode ? 'Redo drawing edit' : 'Redo mask edit', 'redo', () => restore( redo, undo ) );
 	const workspace = node( 'section', workspacePanel );
+	workspace.className = 'mask-work-area';
 	toolbar.className = 'editor-2d-tools';
 	workspace.append( toolbar );
 	const canvas = node( 'canvas', workspace );
@@ -121,9 +132,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const view = canvasView( canvas, draw, () => tool === 'pan' && ! gesture, () => editor.config.getKey( 'settings/emulateThreeButtonMouse' ) );
 	const brushSettings = node( 'div' );
 	brushSettings.className = 'canvas-pencil-settings';
-	const palette = vectorMode && brushPalette( editor, brushSettings, draw, { strokeOptions: true } );
-	if ( palette ) workspace.after( brushSettings );
+	const palette = vectorMode && brushPalette( editor, brushSettings, draw, { strokeOptions: true, singleRow: true } );
+	if ( palette ) workspace.before( brushSettings );
 	const panel = node( 'aside', workspace );
+	if ( vectorMode ) panel.hidden = ! showPicker;
 	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
 	const layers = node( 'select', panel );
 	layers.id = 'mask-shape-list';
@@ -156,6 +168,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	const duplicate = modelButton( layerActions, 'Duplicate shape', 'add', () => addShape( structuredClone( shapes[ active ] ) ) );
 	const deletePoint = modelButton( layerActions, 'Delete point', 'remove', removeVertex );
 	const cyclic = vectorMode && modelButton( layerActions, 'Toggle Cyclic', 'closeTool', toggleCyclic );
+	const annotation = vectorMode && modelField( panel, 'Annotation', 'freehandDraw', 'checkbox', false );
+	if ( annotation ) annotation.onchange = () => change( () => { shapes[ active ].annotation = annotation.checked; } );
 	const createCurve = vectorMode && modelButton( layerActions, 'Create scene curve', 'toolPath', () => createSceneObject( 'path' ) );
 	const createShape = vectorMode && modelButton( layerActions, 'Create filled scene shape', 'fillTool', () => createSceneObject( 'shape' ) );
 
@@ -166,6 +180,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		const closed = shape.closed !== false;
 		const object = modelObject( THREE, { kind, points, closed, planar: true, smooth: false }, kind === 'shape' ? shape.name + ' fill' : shape.name );
 		object.material.color.set( color( shape ) );
+		if ( kind === 'path' && isPencilContour( shape ) ) {
+
+			object.userData.pencilStroke = true;
+			object.userData.annotation = shape.annotation === true;
+
+		}
 		editor.execute( new AddObjectCommand( editor, object ), kind === 'shape' ? 'Create filled scene shape' : 'Create scene curve' );
 		available.push( [ object, object.name ] );
 		filter();
@@ -215,25 +235,193 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	const footer = node( 'div', workspacePanel );
 	const status = node( 'output', footer );
+	if ( vectorMode ) footer.className = 'image-editor-status';
 	status.setAttribute( 'role', 'status' );
+	const imageLabel = vectorMode && node( 'span', imageHeader );
+	function syncImageLabel() {
+
+		if ( ! imageLabel ) return;
+		imageLabel.textContent = textureName + ' · ' + textureWidth + ' × ' + textureHeight;
+		imageLabel.title = texturePath || imageLabel.textContent;
+
+	}
+	if ( imageHeader ) {
+
+		modelButton( imageHeader, 'New texture', 'add', () => createTexture.showModal() );
+		modelButton( imageHeader, 'Open texture from Project assets', 'editorAssets', () => chooseImageAsset( true ) );
+		modelButton( imageHeader, 'Open image file', 'assets', () => { uploadTexture = true; upload.click(); } );
+		modelButton( imageHeader, 'Save texture to Project assets', 'save', saveDrawingAsset );
+		const inspector = modelButton( imageHeader, 'Contours and reference', 'editorProperties', () => {
+
+			panel.hidden = ! panel.hidden;
+			inspector.setAttribute( 'aria-expanded', String( ! panel.hidden ) );
+
+		} );
+		inspector.setAttribute( 'aria-expanded', String( ! panel.hidden ) );
+		const createTexture = node( 'dialog', workspacePanel );
+		createTexture.className = 'new-texture-dialog';
+		createTexture.setAttribute( 'aria-label', 'New texture' );
+		const form = node( 'form', createTexture );
+		const fields = [
+			[ 'Texture name', 'text', 'Texture' ],
+			[ 'Width (px)', 'number', defaultTextureSize ],
+			[ 'Height (px)', 'number', defaultTextureSize ]
+		].map( ( [ label, type, value ] ) => {
+
+			const input = node( 'input', node( 'label', form, label ) );
+			Object.assign( input, { type, value, required: true } );
+			if ( type === 'number' ) Object.assign( input, { min: 1, max: maxTextureSize, step: 1 } );
+			return input;
+
+		} );
+		const create = node( 'button', form, 'Create' );
+		create.type = 'submit';
+		const cancel = node( 'button', form, 'Cancel' );
+		cancel.type = 'button';
+		cancel.onclick = () => createTexture.close();
+		createTexture.addEventListener( 'keydown', event => {
+
+			if ( event.key === 'Escape' ) event.stopPropagation();
+
+		} );
+		form.onsubmit = event => {
+
+			event.preventDefault();
+			const [ label, width, height ] = fields;
+			cancelReferencePicker();
+			textureRequest = undefined;
+			setTexture( label.value.trim() || 'Texture', width.valueAsNumber, height.valueAsNumber );
+			createTexture.close();
+			status.textContent = 'Created ' + textureName + '.';
+			canvas.focus( { preventScroll: true } );
+
+		};
+		syncImageLabel();
+
+	}
+	function chooseImageAsset( asTexture ) {
+
+		const assets = editor.assetBrowser;
+		const picker = referencePicker = {
+			kind: 'reference',
+			label: asTexture ? 'Choose an image to edit' : undefined,
+			includeTextures: asTexture,
+			onPick: ( { file, path, texture: sourceTexture } ) => {
+
+				const isCurrent = () => assets.picker === picker;
+				if ( ! asTexture ) return loadReference( file, path, isCurrent );
+				if ( sourceTexture ) return loadMaterialTexture( sourceTexture, path, isCurrent );
+				return loadTexture( file, path, isCurrent );
+
+			}
+		};
+		assets.open( picker );
+
+	}
+	function setTexture( label, width, height, image, path ) {
+
+		remember();
+		texture = image;
+		texturePath = path;
+		textureName = label;
+		textureWidth = width;
+		textureHeight = height;
+		shapes = [];
+		brushStrokes = [];
+		cancelReferenceLoad();
+		reference = referenceFile = referencePath = undefined;
+		includeReference = false;
+		referenceVisible = true;
+		referencePlacement = { ...referenceDefaults };
+		if ( tool === 'reference' ) tool = 'edit';
+		updateReferenceControls();
+		active = vertex = -1;
+		draft = [];
+		repaint();
+		view.fit();
+		refresh();
+
+	}
+	async function loadMaterialTexture( sourceTexture, path, canApply ) {
+
+		const source = editor.sourceFiles.get( path )?.file;
+		if ( source ) return loadTexture( source, path, canApply );
+		try {
+
+			const image = sourceTexture.image;
+			const width = image.naturalWidth || image.width;
+			const height = image.naturalHeight || image.height;
+			if ( ! width || ! height || Math.max( width, height ) > maxTextureSize ) throw new Error();
+			const copy = document.createElement( 'canvas' );
+			copy.width = width;
+			copy.height = height;
+			copy.getContext( '2d' ).drawImage( image, 0, 0 );
+			const blob = await new Promise( resolve => copy.toBlob( resolve, 'image/png' ) );
+			if ( ! blob ) throw new Error();
+			if ( ! workspacePanel.isConnected || ! canApply() ) return false;
+			return loadTexture( new File( [ blob ], ( sourceTexture.name || 'Texture' ) + '.png', { type: 'image/png' } ), undefined, canApply );
+
+		} catch {
+
+			if ( workspacePanel.isConnected && canApply() ) status.textContent = 'Choose a readable still image up to 4096 px per side.';
+			return false;
+
+		}
+
+	}
+	async function loadTexture( file, path, canApply = () => true, restoring = false ) {
+
+		const image = textureRequest = new Image();
+		const url = URL.createObjectURL( file );
+		try {
+
+			image.src = url;
+			await image.decode();
+			if ( textureRequest !== image || ! workspacePanel.isConnected || ! canApply() ) return false;
+			if ( Math.max( image.naturalWidth, image.naturalHeight ) > maxTextureSize ) {
+
+				status.textContent = 'Choose an image up to 4096 px per side.';
+				return false;
+
+			}
+			if ( restoring ) {
+
+				texture = image;
+				repaint();
+				draw();
+
+			} else {
+
+				path ||= storeSourceFiles( editor, { [ file.name ]: file } ).get( file );
+				setTexture( file.name.replace( /\.[^.]+$/, '' ), image.naturalWidth, image.naturalHeight, image, path );
+
+			}
+			status.textContent = 'Loaded ' + file.name + '.';
+			return true;
+
+		} catch {
+
+			if ( textureRequest === image && workspacePanel.isConnected && canApply() ) status.textContent = 'The image could not be decoded.';
+			return false;
+
+		} finally {
+
+			URL.revokeObjectURL( url );
+			if ( textureRequest === image ) textureRequest = undefined;
+
+		}
+
+	}
+
 	if ( vectorMode ) {
 
 		const media = node( 'div', panel );
-		const upload = node( 'input', media );
+		upload = node( 'input', media );
 		upload.type = 'file';
 		upload.accept = 'image/*';
 		upload.hidden = true;
-		modelButton( media, 'Open reference image', 'page', () => upload.click() );
-		modelButton( media, 'Choose reference from assets', 'assets', () => {
-
-			const assets = editor.assetBrowser;
-			const picker = referencePicker = {
-				kind: 'reference',
-				onPick: ( { file, path } ) => loadReference( file, path, () => assets.picker === picker )
-			};
-			assets.open( picker );
-
-		} );
+		modelButton( media, 'Open reference image', 'page', () => { uploadTexture = false; upload.click(); } );
+		modelButton( media, 'Choose reference from assets', 'assets', () => chooseImageAsset( false ) );
 		const toggle = modelButton( media, 'Show reference image', 'scene', () => {
 
 			referenceVisible = ! referenceVisible;
@@ -303,13 +491,14 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( file ) {
 
 				cancelReferencePicker();
-				loadReference( file );
+				if ( uploadTexture ) loadTexture( file );
+				else loadReference( file );
 
 			}
+			uploadTexture = false;
 			upload.value = '';
 
 		};
-		modelButton( footer, 'Save texture to Project assets', 'add', saveDrawingAsset );
 		modelButton( footer, 'Export SVG', 'code', exportSVG );
 		modelButton( footer, 'Export PNG', 'save', exportPNG );
 
@@ -370,7 +559,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			if ( vectorMode && brushStrokes.length ) value.brushStrokes = structuredClone( brushStrokes );
 			if ( vectorMode ) {
 
-				if ( referenceRequest ) throw new Error( 'Wait for the reference image to load.' );
+				if ( textureRequest || referenceRequest ) throw new Error( 'Wait for the image to load.' );
+				Object.assign( value, { textureName, textureWidth, textureHeight } );
+				if ( texturePath ) value.texturePath = texturePath;
 				if ( referenceFile && ! referencePath ) {
 
 					referencePath = storeSourceFiles( editor, { [ referenceFile.name ]: referenceFile } ).get( referenceFile );
@@ -400,7 +591,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function snapshot() {
 
-		return { shapes: structuredClone( shapes ), brushStrokes: brushStrokes.slice(), active, vertex, referencePlacement };
+		return { shapes: structuredClone( shapes ), brushStrokes: brushStrokes.slice(), active, vertex,
+			referencePlacement, reference, referenceFile, referencePath, includeReference, referenceVisible,
+			texture, texturePath, textureName, textureWidth, textureHeight };
 
 	}
 	function remember( state = snapshot() ) {
@@ -414,7 +607,11 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		if ( ! from.length || gesture ) return;
 		to.push( snapshot() );
-		( { shapes, brushStrokes, active, vertex, referencePlacement } = from.pop() );
+		textureRequest = undefined;
+		cancelReferenceLoad();
+		( { shapes, brushStrokes, active, vertex, referencePlacement, reference, referenceFile, referencePath,
+			includeReference, referenceVisible, texture, texturePath, textureName, textureWidth, textureHeight } = from.pop() );
+		if ( ! reference && tool === 'reference' ) tool = 'edit';
 		updateReferenceControls?.();
 		repaint();
 		draft = [];
@@ -484,7 +681,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 				} ) : fitDrawingContour( outline.map( point => point.toArray() ) );
 				addShape( { name: object.name || object.type, points,
-					closed: isClosedOutline( data ), color: material?.color && '#' + material.color.getHexString() } );
+					closed: isClosedOutline( data ), pencilStroke: object.userData.pencilStroke,
+					annotation: object.userData.annotation, color: material?.color && '#' + material.color.getHexString() } );
 				return;
 
 			}
@@ -504,9 +702,16 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	}
 	function refresh() {
 
-		layers.replaceChildren( ...shapes.map( shape => new Option( ( shape.mode === 'cutout' ? '− ' : '+ ' ) + shape.name ) ) );
+		layers.replaceChildren( ...shapes.map( shape => new Option( ( shape.mode === 'cutout' ? '− ' : '+ ' ) + shape.name + ( shape.annotation ? ' · Annotation' : '' ) ) ) );
 		layers.selectedIndex = active;
 		const shape = shapes[ active ];
+		syncImageLabel();
+		if ( annotation ) {
+
+			annotation.parentElement.hidden = ! isPencilContour( shape );
+			annotation.checked = shape?.annotation === true;
+
+		}
 		name.value = shape?.name || '';
 		mode.value = shape?.mode || 'inside';
 		name.disabled = mode.disabled = remove.disabled = duplicate.disabled = ! shape;
@@ -514,7 +719,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			const closed = shape?.closed !== false;
 			createCurve.disabled = ! shape;
-			createShape.disabled = ! shape || ! closed || shape.mode === 'cutout' || shape.points.length < 3;
+			createShape.disabled = ! shape || shape.annotation || ! closed || shape.mode === 'cutout' || shape.points.length < 3;
 			cyclic.disabled = ! shape || shape.points.length < 3 || shape.mode === 'cutout';
 			cyclic.setAttribute( 'aria-pressed', String( !! shape && closed ) );
 			mode.disabled = ! shape || ! closed;
@@ -537,6 +742,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( closed ) ctx.closePath();
 
 	}
+	function pencilPoints( points ) {
+
+		if ( points.length !== 1 ) return points;
+		// Keep a tap as a round cap on a subpixel segment, editable like any other stroke.
+		const [ u, v ] = points[ 0 ];
+		return [ points[ 0 ], [ u + ( u > .5 ? -.25 : .25 ) / textureWidth, v ] ];
+
+	}
+
+	function texturePoint( point ) {
+
+		const [ u, v ] = uv( point );
+		return [ u * textureWidth, v * textureHeight ];
+
+	}
+
 	function color( shape ) {
 
 		return /^#[0-9a-f]{6}$/i.test( shape?.color ) ? shape.color : '#72cbef';
@@ -570,18 +791,18 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		return Number.isFinite( shape.opacity ) ? Math.max( 0, Math.min( 1, shape.opacity ) ) : 1;
 
 	}
-	function drawVectors( target, width, height ) {
+	function drawVectors( target, width, height, showAnnotations = false ) {
 
 		target.save();
 		for ( const operation of [ 'inside', 'cutout' ] ) for ( const shape of shapes ) {
 
-			if ( shape.mode !== operation ) continue;
+			if ( shape.mode !== operation || shape.annotation && ! showAnnotations ) continue;
 			target.globalCompositeOperation = operation === 'cutout' ? 'destination-out' : 'source-over';
 			target.beginPath();
 			shape.points.forEach( ( [ x, y ], i ) => target[ i ? 'lineTo' : 'moveTo' ]( x * width, y * height ) );
 			if ( shape.closed === false ) {
 
-				target.lineWidth = width * lineWidth( shape );
+				target.lineWidth = Math.min( width, height ) * lineWidth( shape );
 				target.strokeStyle = brushGrainFill( target, color( shape ), shape, target.lineWidth );
 				target.globalAlpha = lineOpacity( shape );
 				target.lineCap = target.lineJoin = 'round';
@@ -611,7 +832,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	function repaint() {
 
 		if ( ! rasterContext ) return;
-		rasterContext.clearRect( 0, 0, rasterSize, rasterSize );
+		if ( raster.width !== textureWidth ) raster.width = textureWidth;
+		if ( raster.height !== textureHeight ) raster.height = textureHeight;
+		rasterContext.clearRect( 0, 0, textureWidth, textureHeight );
+		if ( texture ) rasterContext.drawImage( texture, 0, 0, textureWidth, textureHeight );
 		for ( const stroke of brushStrokes ) for ( const [ x, y, force ] of stroke.samples ) rasterDab( stroke, x, y, force );
 
 	}
@@ -620,12 +844,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	function exportSVG() {
 
 		const patterns = [];
-		const layers = operation => shapes.filter( shape => shape.mode === operation ).map( shape => {
+		const layers = operation => shapes.filter( shape => shape.mode === operation && ! shape.annotation ).map( shape => {
 
-			const path = shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * 1000 ).toFixed( 2 ) + ' ' + ( y * 1000 ).toFixed( 2 ) ).join( ' ' );
+			const path = shape.points.map( ( [ x, y ], i ) => ( i ? 'L' : 'M' ) + ( x * textureWidth ).toFixed( 2 ) + ' ' + ( y * textureHeight ).toFixed( 2 ) ).join( ' ' );
 			if ( shape.closed === false ) {
 
-				const width = 1000 * lineWidth( shape );
+				const width = Math.min( textureWidth, textureHeight ) * lineWidth( shape );
 				let stroke = color( shape );
 				const tile = brushGrainTile( stroke, shape, width );
 				if ( tile ) {
@@ -645,11 +869,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} ).join( '' );
 		const cutouts = layers( 'cutout' ), drawing = layers( 'inside' );
-		let base = brushStrokes.length ? raster : null;
+		let base = texture || brushStrokes.length ? raster : null;
 		if ( includeReference && reference ) base = drawingCanvas( false );
-		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs>' + patterns.join( '' ) +
-			'<mask id="cutouts"><rect width="1000" height="1000" fill="white"/>' + cutouts + '</mask></defs><g mask="url(#cutouts)">' +
-			( base ? '<image width="1000" height="1000" href="' + base.toDataURL() + '"/>' : '' ) +
+		const dimensions = ' width="' + textureWidth + '" height="' + textureHeight + '"';
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + textureWidth + ' ' + textureHeight + '"><defs>' + patterns.join( '' ) +
+			'<mask id="cutouts"><rect' + dimensions + ' fill="white"/>' + cutouts + '</mask></defs><g mask="url(#cutouts)">' +
+			( base ? '<image' + dimensions + ' href="' + base.toDataURL() + '"/>' : '' ) +
 			drawing + '</g></svg>';
 		editor.utils.save( new Blob( [ svg ], { type: 'image/svg+xml' } ), 'drawing.svg' );
 
@@ -657,11 +882,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	function drawingCanvas( vectors = true ) {
 
 		const output = document.createElement( 'canvas' );
-		const side = output.width = output.height = rasterSize;
+		output.width = textureWidth;
+		output.height = textureHeight;
 		const target = output.getContext( '2d' );
-		if ( includeReference ) drawImage( target, reference, 0, 0, side, side, referencePlacement );
+		if ( includeReference ) drawImage( target, reference, 0, 0, textureWidth, textureHeight, referencePlacement );
 		target.drawImage( raster, 0, 0 );
-		if ( vectors ) drawVectors( target, side, side );
+		if ( vectors ) drawVectors( target, textureWidth, textureHeight );
 		return output;
 
 	}
@@ -674,9 +900,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	function saveDrawingAsset() {
 
-		if ( referenceRequest ) {
+		if ( referenceRequest || textureRequest ) {
 
-			status.textContent = 'Wait for the reference image to load.';
+			status.textContent = 'Wait for the image to load.';
 			return;
 
 		}
@@ -686,13 +912,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			return;
 
 		}
-		if ( ! shapes.length && ! brushStrokes.length && ! ( includeReference && reference ) ) {
-
-			status.textContent = 'Draw something or include a reference image before saving a texture.';
-			return;
-
-		}
 		const projectFiles = editor.sourceFiles;
+		const filename = textureName.replace( /[/\\]/g, '-' ) + '.png';
 		drawingCanvas().toBlob( blob => {
 
 			if ( editor.sourceFiles !== projectFiles || ! workspacePanel.isConnected ) return;
@@ -702,7 +923,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 				return;
 
 			}
-			const file = new File( [ blob ], 'drawing.png', { type: 'image/png' } );
+			const file = new File( [ blob ], filename, { type: 'image/png' } );
 			const path = storeSourceFiles( editor, { [ file.name ]: file } ).get( file );
 			status.textContent = 'Saved ' + path + ' to Project assets.';
 
@@ -714,21 +935,33 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		const output = light?.projectorOutput;
 		const image = vectorMode ? ( referenceVisible && reference ) : output?.source || ( ! output && light.map?.image );
-		const aspect = light?.projectorFrame?.aspect || 1;
-		const width = Math.min( canvas.width - 36, ( canvas.height - 36 ) * aspect ), height = width / aspect;
+		const aspect = vectorMode ? textureWidth / textureHeight : light?.projectorFrame?.aspect || 1;
+		const margin = Math.min( 36, canvas.width / 4, canvas.height / 4 );
+		const width = Math.min( canvas.width - margin, ( canvas.height - margin ) * aspect ), height = width / aspect;
 		frame = { x: ( canvas.width - width ) / 2, y: ( canvas.height - height ) / 2, width, height };
 		const { x, y } = frame;
-		ctx.fillStyle = '#13171e';
-		ctx.fillRect( 0, 0, canvas.width, canvas.height );
+		const gridColor = vectorMode ? getComputedStyle( canvas ).color : '#4f5a66';
+		ctx.clearRect( 0, 0, canvas.width, canvas.height );
+		if ( ! vectorMode ) {
+
+			ctx.fillStyle = '#13171e';
+			ctx.fillRect( 0, 0, canvas.width, canvas.height );
+
+		}
 		ctx.save();
 		view.apply( ctx );
 		ctx.save();
 		ctx.beginPath();
 		ctx.rect( x, y, width, height );
 		ctx.clip();
-		ctx.fillStyle = '#343d48';
-		ctx.fillRect( x, y, width, height );
-		ctx.strokeStyle = '#4f5a66';
+		if ( ! vectorMode ) {
+
+			ctx.fillStyle = '#343d48';
+			ctx.fillRect( x, y, width, height );
+
+		}
+		ctx.strokeStyle = gridColor;
+		if ( vectorMode ) ctx.globalAlpha = .12;
 		for ( let i = 1; i < 8; i ++ ) {
 
 			ctx.beginPath();
@@ -737,6 +970,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			ctx.stroke();
 
 		}
+		ctx.globalAlpha = 1;
 		if ( vectorMode ) {
 
 			const w = Math.ceil( width ), h = Math.ceil( height );
@@ -748,7 +982,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			drawImage( layer, image, 0, 0, w, h, referencePlacement );
 			layer.globalAlpha = 1;
 			layer.drawImage( raster, 0, 0, w, h );
-			drawVectors( layer, w, h );
+			drawVectors( layer, w, h, true );
 			ctx.drawImage( vectorCanvas, x, y, width, height );
 
 		} else {
@@ -759,9 +993,9 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		for ( const [ index, shape ] of shapes.entries() ) {
 
-			if ( vectorMode && shape.closed === false && shape.grain > 0 && ( index !== active || tool !== 'edit' ) ) continue;
+			if ( vectorMode && ! shape.annotation && shape.closed === false && shape.grain > 0 && ( index !== active || tool !== 'edit' ) ) continue;
 			trace( shape.points, shape.closed !== false );
-			ctx.strokeStyle = shape.mode === 'cutout' ? '#ff9e71' : '#74dcf3';
+			ctx.strokeStyle = shape.annotation ? '#e9cc7b' : shape.mode === 'cutout' ? '#ff9e71' : '#74dcf3';
 			ctx.lineWidth = active === index ? 2 : 1;
 			ctx.stroke();
 			if ( index === active && tool === 'edit' ) shape.points.forEach( ( point, i ) => {
@@ -774,12 +1008,12 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		}
 		if ( draft.length ) {
 
-			trace( draft, tool !== 'polygon' && tool !== 'stroke' );
+			trace( tool === 'stroke' ? pencilPoints( draft ) : draft, tool !== 'polygon' && tool !== 'stroke' );
 			if ( tool === 'stroke' && gesture?.brush ) {
 
 				const style = gesture.brush;
 				ctx.save();
-				ctx.lineWidth = width * style.size / rasterSize;
+				ctx.lineWidth = Math.min( width, height ) * style.size / Math.min( textureWidth, textureHeight );
 				ctx.strokeStyle = brushGrainFill( ctx, style.color, style, ctx.lineWidth );
 				ctx.globalAlpha = style.strength;
 				ctx.lineCap = ctx.lineJoin = 'round';
@@ -821,7 +1055,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( cursor && [ 'push', 'smooth', 'pinch', 'raster', 'erase' ].includes( tool ) ) {
 
 			ctx.strokeStyle = '#fff';
-			ctx.beginPath(); ctx.arc( ...cursor, usesPalette() ? pencilBrush( editor ).size * width / rasterSize / 2 : Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
+			ctx.beginPath(); ctx.arc( ...cursor, usesPalette() ? pencilBrush( editor ).size * width / textureWidth / 2 : Number( radius.value ), 0, Math.PI * 2 ); ctx.stroke();
 
 		}
 		if ( tool === 'reference' && referenceVisible ) {
@@ -840,7 +1074,8 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		}
 		ctx.restore();
-		ctx.strokeStyle = '#68778a';
+		ctx.strokeStyle = vectorMode ? gridColor : '#68778a';
+		if ( vectorMode ) ctx.globalAlpha = .22;
 		ctx.strokeRect( x, y, width, height );
 		ctx.restore();
 		brushSettings.hidden = ! usesPalette();
@@ -911,6 +1146,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( tool === 'edit' || transforms() && active < 0 ) [ active, vertex ] = hitShape( point );
 		if ( ( transforms() || [ 'edit', 'push', 'smooth', 'pinch' ].includes( tool ) ) && ! shapes[ active ] ) { refresh(); return; }
 		gesture = { start: point, last: point, before: snapshot(), moved: false };
+		cursor = point;
 		if ( tool === 'reference' ) gesture.referenceScale = event.shiftKey;
 		if ( tool === 'stroke' ) {
 
@@ -922,13 +1158,15 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 			const stroke = { brush: { ...pencilBrush( editor ) }, erase: tool === 'erase', samples: [] };
 			gesture.paint = stroke;
-			gesture.sample = brushStroke( stroke.brush, ...uv( point ).map( value => value * rasterSize ), brushPressure( event ), ( x, y, force ) => {
+			gesture.pressure = brushPressure( event );
+			gesture.dab = ( x, y, force ) => {
 
-				if ( x < 0 || x > rasterSize || y < 0 || y > rasterSize ) return;
+				if ( x < 0 || x > textureWidth || y < 0 || y > textureHeight || stroke.brush.pressureOpacity && force === 0 ) return;
 				stroke.samples.push( [ x, y, force ] );
 				rasterDab( stroke, x, y, force );
 
-			} );
+			};
+			gesture.sample = brushStroke( stroke.brush, ...texturePoint( point ), gesture.pressure, gesture.dab );
 
 		}
 		draft = [ 'freehand', 'stroke' ].includes( tool ) ? [ uv( point ) ] : [];
@@ -947,13 +1185,22 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 		} else if ( gesture ) gesture.stabilizer = null;
 		if ( ! gesture ) { draw(); return; }
-		if ( distance( point, gesture.last ) < 3 ) return;
+		if ( ! gesture.paint && tool !== 'stroke' && distance( point, gesture.last ) < 3 ) return;
 		if ( gesture.brush ) point = guidePencilPoint( point, gesture.start, pixel( guideCenter ), gesture.brush.guide,
 			THREE.MathUtils.degToRad( gesture.brush.guideAngle ) );
 		const start = bounded( gesture.start ), end = bounded( point );
 		const delta = end.map( ( value, i ) => value - start[ i ] );
 		const shape = shapes[ active ];
-		if ( gesture.paint ) gesture.sample( ...uv( point ).map( value => value * rasterSize ), brushPressure( event ) );
+		if ( gesture.paint ) {
+
+			const pressure = brushPressure( event );
+			if ( pressure > 0 ) {
+				gesture.pressure = pressure;
+				if ( ! gesture.paint.samples.length ) gesture.dab( ...texturePoint( point ), pressure );
+			}
+			gesture.sample( ...texturePoint( point ), pressure );
+
+		}
 		else if ( tool === 'reference' ) {
 
 			const placement = gesture.before.referencePlacement;
@@ -972,7 +1219,11 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 			const original = gesture.before.shapes[ active ].points;
 			shape.points = original.map( ( p, i ) => vertex >= 0 && vertex !== i ? p : p.map( ( value, axis ) => value + delta[ axis ] ) );
 
-		} else if ( tool === 'freehand' || tool === 'stroke' ) draft.push( end );
+		} else if ( tool === 'freehand' || tool === 'stroke' ) {
+
+			if ( distance( draft.at( -1 ), end ) > 1e-8 ) draft.push( end );
+
+		}
 		else if ( tool === 'rectangle' ) draft = [ start, [ end[ 0 ], start[ 1 ] ], end, [ start[ 0 ], end[ 1 ] ] ];
 		else if ( tool === 'ellipse' ) draft = Array.from( { length: 48 }, ( _, i ) => {
 
@@ -992,20 +1243,27 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		draw();
 
 	};
-	canvas.onpointerup = () => {
+	canvas.onpointerup = event => {
 
 		if ( ! gesture ) return;
 		if ( gesture.paint ) {
 
+			const { samples } = gesture.paint;
+			const end = texturePoint( pointer( event ) );
+			gesture.sample( ...end, gesture.pressure );
+			if ( ! samples.length ) gesture.dab( ...texturePoint( gesture.start ), gesture.pressure || .5 );
+			else if ( samples.length === 1 && distance( end, samples[ 0 ] ) >= .25 ) gesture.dab( ...end, gesture.pressure );
 			remember( gesture.before );
 			brushStrokes.push( gesture.paint );
 
-		} else if ( tool === 'stroke' && draft.length >= 2 ) {
+		} else if ( tool === 'stroke' && draft.length ) {
+
+			if ( distance( pointer( event ), cursor ) > 1e-8 ) canvas.onpointermove( event );
 
 			const { color, size, strength, smoothing, simplify, grain, grainScale, grainPattern } = gesture.brush;
 			const tolerance = simplify * canvas.width / canvas.getBoundingClientRect().width / view.scale;
-			const points = simplifyPencilStroke( smoothPencilStroke( draft, smoothing ), pixel, tolerance );
-			addShape( { points, closed: false, color, width: size / rasterSize, opacity: strength, grain, grainScale, grainPattern, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
+			const points = simplifyPencilStroke( smoothPencilStroke( pencilPoints( draft ), smoothing ), pixel, tolerance );
+			addShape( { points, closed: false, color, width: size / Math.min( textureWidth, textureHeight ), pencilStroke: true, opacity: strength, grain, grainScale, grainPattern, name: 'Stroke ' + ( shapes.length + 1 ) }, 'stroke' );
 
 		}
 		else if ( draft.length >= 3 && ( tool === 'freehand' || gesture.last.every( ( value, axis ) => Math.abs( value - gesture.start[ axis ] ) > 3 ) ) ) closeDraft();
@@ -1067,7 +1325,7 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 		if ( key === 'home' ) { event.preventDefault(); view.fit(); return; }
 		if ( vectorMode && ! gesture && ! event.ctrlKey && ! event.metaKey && ! event.altKey ) {
 
-			const next = { d: 'stroke', g: 'move', r: 'rotate', s: 'scale' }[ key ];
+			const next = { d: 'stroke', b: 'raster', g: 'move', r: 'rotate', s: 'scale' }[ key ];
 			if ( next ) { event.preventDefault(); tool = next; draw(); return; }
 
 		}
@@ -1096,15 +1354,36 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 
 	};
 	workspacePanel.addEventListener( 'keydown', abortDraft );
+	const resizeCanvas = vectorMode ? new ResizeObserver( ( [ entry ] ) => {
+
+		const width = Math.max( 1, Math.round( entry.contentRect.width ) );
+		const height = Math.max( 1, Math.round( entry.contentRect.height ) );
+		if ( canvas.width === width && canvas.height === height ) return;
+		if ( gesture ) canvas.onpointercancel();
+		canvas.width = width;
+		canvas.height = height;
+		draw();
+
+	} ) : null;
 	const tick = light?.projectorOutput && setInterval( draw, 150 );
 	editor.editWorkspace.mount( vectorMode ? 'image' : 'mask', light, workspacePanel, () => {
 
 		clearInterval( tick );
+		resizeCanvas?.disconnect();
+		textureRequest = undefined;
 		cancelReferenceLoad();
 		cancelReferencePicker();
 
 	} );
+	if ( resizeCanvas ) resizeCanvas.observe( canvas );
 	refresh();
+	if ( texturePath ) {
+
+		const file = editor.sourceFiles.get( texturePath )?.file;
+		if ( file ) loadTexture( file, texturePath, () => true, true );
+		else status.textContent = 'The source texture is missing from Project assets.';
+
+	}
 	if ( referencePath ) {
 
 		const file = editor.sourceFiles.get( referencePath )?.file;

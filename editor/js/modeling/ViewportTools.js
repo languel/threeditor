@@ -1,7 +1,7 @@
 import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush, pencilDropdown } from './PencilBrush.js?v=pencil-reference';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-placement';
 import { modelObject, outlinePoints } from './ModelGeometry.js?v=stroke-edit';
-import { icon } from '../Glyphs.js?v=pencil-reference';
+import { icon } from '../Glyphs.js?v=editor-glyphs';
 import { splatStrokeCommands } from './SplatPaint.js?v=pencil-splats';
 import { addPencilSplatDab } from './PencilSplats.js?v=brush-response';
 import { grainOpacity } from './PencilGrain.js';
@@ -19,11 +19,14 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-reference';
+import { openMaskEditor } from './MaskEditor.js?v=short-strokes';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
 import { StrokeSampler } from './StrokeSampler.js';
+import { interactionModes } from './InteractionModes.js';
+
+const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
 
 const selectionModes = [
 	[ 'select', 'Select', 'toolSelect' ], [ 'box', 'Box select', 'selectBox' ],
@@ -78,10 +81,25 @@ export class ViewportTools {
 		workspace.className = 'viewport-workspace';
 		workspace.setAttribute( 'role', 'group' );
 		workspace.setAttribute( 'aria-label', 'Viewport mode' );
-		this.modeSelect = select( workspace, 'Interaction mode', [
-			[ 'object', 'Object Mode' ], [ 'edit', 'Edit Mode' ],
-			[ 'sculpt', 'Sculpt Mode' ], [ 'paint', 'Surface Paint' ]
-		] );
+		this.modeSelect = select( workspace, 'Interaction mode', interactionModes );
+		this.modeSelect.className = 'Select viewport-mode-select';
+		if ( CSS.supports( 'appearance', 'base-select' ) ) {
+
+			const trigger = document.createElement( 'button' );
+			trigger.type = 'button';
+			trigger.dataset.uiRaw = 'keep';
+			trigger.append( document.createElement( 'selectedcontent' ) );
+			this.modeSelect.prepend( trigger );
+			for ( const [ index, option ] of Array.from( this.modeSelect.options ).entries() ) {
+
+				const label = document.createElement( 'span' );
+				label.textContent = option.textContent;
+				option.innerHTML = icon( interactionModes[ index ][ 2 ] );
+				option.append( label );
+
+			}
+
+		}
 		this.modeSelect.onchange = () => {
 
 			this.setWorkspaceMode( this.modeSelect.value );
@@ -114,9 +132,6 @@ export class ViewportTools {
 			[ 'cursor', '3D Cursor', 'pivotOrigin' ], [ 'mask', 'Edit light mask', 'toolMask' ],
 			[ 'path', 'Surface path', 'toolPath' ], [ 'paint', 'Surface paint', 'surfaceBrush' ]
 		];
-		this.selector = select( this.panel, 'Viewport tool', tools );
-		this.selector.className = 'viewport-tool-select';
-		this.selector.onchange = () => this.setMode( this.selector.value );
 		this.editMask = modelButton( this.panel, 'Edit mask', 'toolMask', () => this.setMode( 'mask' ) );
 		this.editMask.className = 'viewport-tool-mask-text';
 		const strip = element( 'div', this.panel );
@@ -302,6 +317,7 @@ export class ViewportTools {
 
 		} );
 		signals.sceneRendered.add( () => this.draw() );
+		signals.viewportShadingChanged.add( () => this.draw() );
 		signals.sceneGraphChanged.add( () => this.collectMeasurements() );
 		signals.objectChanged.add( ( object, property ) => {
 
@@ -345,7 +361,6 @@ export class ViewportTools {
 		const source = this.editor.viewportSource;
 		const editable = canEditLightMask( source );
 		if ( this.mode === 'mask' && ( ! editable || this.maskSource !== source ) ) this.setMode( '' );
-		this.selector.querySelector( 'option[value="mask"]' ).disabled = ! editable;
 		this.toolButtons.get( 'mask' ).disabled = ! editable;
 		for ( const [ mode, control ] of this.toolButtons ) control.setAttribute( 'aria-pressed', String( mode === this.mode || ! mode && ! this.mode ) );
 		this.editMask.hidden = ! editable || this.mode === 'mask';
@@ -407,12 +422,8 @@ export class ViewportTools {
 
 		}
 		this.modeSelect.value = this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
-		for ( const mode of [ 'path' ] ) {
-
-			this.toolButtons.get( mode ).hidden = ! edit;
-			this.selector.querySelector( 'option[value="' + mode + '"]' ).hidden = ! edit;
-
-		}
+		this.modeSelect.title = this.modeSelect.selectedOptions[ 0 ].textContent;
+		this.toolButtons.get( 'path' ).hidden = ! edit;
 		this.creation.hidden = this.primary.hidden = ! edit || !! this.mode;
 		this.actionMenu.hidden = ! edit || !! this.mode || ! model.object;
 		this.modelOptions.replaceChildren();
@@ -540,7 +551,6 @@ export class ViewportTools {
 
 		}
 		this.pathClosed = false;
-		this.selector.value = mode;
 		this.points = [];
 		this.target = this.ruler = null;
 		this.selected = - 1;
@@ -967,16 +977,19 @@ export class ViewportTools {
 		const path = this.pickPencilStroke( frame, x, y, 16, 'segment' );
 		const depth = point => -point.clone().applyMatrix4( frame.camera.matrixWorldInverse ).z;
 		const hit = path && ( ! surface || depth( path.point ) <= depth( surface.hit.point ) + .002 ) ? path : null;
-		if ( ! hit && ! surface ) {
+		const ground = ! hit && ! surface;
+		const point = hit?.point || surface?.hit.point ||
+			rayToView( this.ray, this.layout, frame, x, y ).ray.intersectPlane( pencilGroundPlane, new THREE.Vector3() );
+		if ( ! point ) {
 
-			this.status.textContent = 'Point at a surface or stroke to lock a reference.';
+			this.status.textContent = 'The pointer ray does not reach the ground plane.';
 			return;
 
 		}
-		const object = hit?.object || surface.source;
-		const normal = hit ? null : this.pencilSurfaceNormal( surface.hit, frame );
+		const object = hit?.object || surface?.source || scene;
+		const normal = ground ? pencilGroundPlane.normal.clone() : surface && ! hit ? this.pencilSurfaceNormal( surface.hit, frame ) : null;
 		this.pencilReference = {
-			object, path: !! hit, point: object.worldToLocal( ( hit?.point || surface.hit.point ).clone() ),
+			object, ground, path: !! hit, point: object.worldToLocal( point.clone() ),
 			normal: normal?.applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( object.matrixWorld.clone().invert() ) )
 		};
 		this.status.textContent = '';
@@ -1448,7 +1461,8 @@ export class ViewportTools {
 		let onSurface = false;
 		if ( ! plane && reference ) {
 
-			const followsSurface = ! reference.path && stroke.placement === 'surface' && stroke.orientation === 'placement';
+			const followsSurface = ! reference.path && ! reference.ground &&
+				stroke.placement === 'surface' && stroke.orientation === 'placement';
 			const source = reference.object;
 			const parent = reference.path ? source.parent : source;
 			receiver = parent && ! hasRestriction( parent, 'locked' ) ? parent : scene;
@@ -1467,7 +1481,7 @@ export class ViewportTools {
 
 				if ( stroke.placement === 'ground' ) axis.set( 0, 1, 0 );
 				if ( stroke.placement === 'object' && normal ) axis.copy( normal );
-				if ( followsSurface && normal ) axis.copy( surface ? this.pencilSurfaceNormal( surface.hit, frame ) : normal );
+				if ( stroke.placement === 'surface' && normal ) axis.copy( surface ? this.pencilSurfaceNormal( surface.hit, frame ) : normal );
 				if ( stroke.placement === 'surfacePerpendicular' && normal ) axis.copy( this.pencilPerpendicularNormal( viewNormal, normal ) );
 
 			}
@@ -1521,7 +1535,9 @@ export class ViewportTools {
 				}
 				plane = through( normal, point || origin );
 				point ||= intersect( plane );
-				if ( point && ! surfacePlacement && ! followDepth ) {
+				const perpendicular = stroke.placement === 'surfacePerpendicular' && stroke.orientation === 'placement';
+				if ( point && perpendicular ) plane = through( this.pencilPerpendicularNormal( viewNormal, normal ), point );
+				if ( point && ( perpendicular || ! surfacePlacement && ! followDepth ) ) {
 
 					stroke.plane = plane;
 					stroke.planeReceiver = receiver;
@@ -1702,7 +1718,8 @@ export class ViewportTools {
 			if ( ! center ) {
 
 				stroke.segment = null;
-				this.status.textContent = [ 'surface', 'surfacePerpendicular' ].includes( stroke.placement ) ? ( stroke.pencil ? 'Draw over a visible surface.' : 'Paint on a visible, unlocked surface.' ) : 'The brush ray does not reach the placement plane.';
+				this.status.textContent = ! stroke.pencil && [ 'surface', 'surfacePerpendicular' ].includes( stroke.placement ) ?
+					'Paint on a visible, unlocked surface.' : 'The brush ray does not reach the placement plane.';
 				return;
 
 			}

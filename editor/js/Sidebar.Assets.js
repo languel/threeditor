@@ -6,7 +6,7 @@ import { UISpan } from './libs/ui.js';
 import { isImageAsset } from './ProjectAssets.js';
 import { AssetLibrary, ASSET_MIME, fileKind, folderPath } from './assets/AssetLibrary.js';
 import { isProjector } from './assets/Projector.js';
-import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia, isReferenceImage } from './assets/AssetController.js?v=reference-assets';
+import { AssetController, isInputAsset, isMapAsset, isMovingAsset, isProjectorMedia, isReferenceImage } from './assets/AssetController.js?v=image-textures';
 import { loadCatalog, mediathequeBase, search, facet, creditLine, state } from './assets/Mediatheque.js';
 import { textureEntries } from './AssetBrowser.js';
 
@@ -101,7 +101,7 @@ export function SidebarAssets( editor ) {
 	controller.open = options => {
 		controller.picker = options; picker.hidden = false;
 		const labels = { texture: 'Choose a texture', input: 'Choose a media input asset', projector: 'Choose projector media', reference: 'Choose a reference image' };
-		pickerLabel.textContent = labels[ options.kind ] || 'Choose an asset to import';
+		pickerLabel.textContent = options.label || labels[ options.kind ] || 'Choose an asset to import';
 		if ( [ 'input', 'projector', 'reference' ].includes( options.kind ) ) { kind.value = 'all'; query.value = ''; }
 		if ( options.kind === 'reference' ) {
 
@@ -422,7 +422,7 @@ export function SidebarAssets( editor ) {
 			if ( controller.picker?.kind === 'texture' && r.kind !== 'texture' && ! ( controller.picker.moving && isMovingAsset( r ) ) ) return false;
 			if ( controller.picker?.kind === 'input' && ! isInputAsset( r ) ) return false;
 			if ( controller.picker?.kind === 'projector' && ! isProjectorMedia( r ) ) return false;
-			if ( controller.picker?.kind === 'reference' && ! isReferenceImage( r ) ) return false;
+			if ( controller.picker?.kind === 'reference' && ! isReferenceImage( r, controller.picker.includeTextures ) ) return false;
 			if ( controller.picker?.kind === 'import' && ! [ 'model', 'point-cloud', 'splat' ].includes( r.kind ) ) return false;
 			return true;
 		} ).sort( ( a, b ) => ( merged || kind.value === 'inputs' ? inputRank( a ) - inputRank( b ) : 0 ) || a.title.localeCompare( b.title ) );

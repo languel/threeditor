@@ -5,7 +5,7 @@ export const shadingModes = [
 	[ 'solid', 'Solid', 'shadingSolid' ],
 	[ 'materials', 'Material Preview', 'shadingMaterial' ],
 	[ 'wireframe', 'Wireframe', 'shadingWire' ],
-	[ 'preview', 'Live Preview', 'preview' ],
+	[ 'preview', 'Preview', 'preview' ],
 	[ 'normals', 'Normals', 'shadingNormals' ]
 ];
 

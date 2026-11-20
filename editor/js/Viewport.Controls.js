@@ -1,4 +1,4 @@
-import { shadingModes } from './ViewportShading.js?v=live-preview';
+import { shadingModes } from './ViewportShading.js?v=preview-menu';
 import { icon } from './Glyphs.js?v=viewport-tools';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { hasLightView } from './modeling/LightView.js';
@@ -61,19 +61,15 @@ function ViewportControls( editor ) {
 
 	const split = new UIButton( 'Split view' ).onClick( () => {
 
-		if ( ! editor.viewportSplit && ! editor.viewportSource && editor.viewportCamera === editor.camera ) {
-
-			if ( hasLightView( editor.selected ) ) editor.setViewportSource( editor.selected );
-			else if ( editor.activeSceneCamera ) editor.setViewportCamera( editor.activeSceneCamera.uuid );
-
-		}
-		editor.setViewportSplit( ! editor.viewportSplit );
+		const bounds = split.dom.getBoundingClientRect();
+		editor.splitWorkspace.showMenu( { x: bounds.left, y: bounds.bottom + 4 } );
 
 	} );
 	split.dom.classList.add( 'viewport-split-button' );
 	split.dom.setAttribute( 'aria-label', 'Split view' );
-	split.dom.title = 'Split view';
-	split.dom.innerHTML = '<span class="viewport-select-symbol">' + icon( 'viewportSplit' ) + '</span><span class="viewport-split-label">Split view</span>';
+	split.dom.title = 'Split view options';
+	split.dom.setAttribute( 'aria-haspopup', 'dialog' );
+	split.dom.innerHTML = '<span class="viewport-select-symbol">' + icon( 'viewportSplit' ) + icon( 'down' ) + '</span><span class="viewport-split-label">Split view</span>';
 	container.add( split );
 	const local = new UIButton( 'Local View' ).onClick( () => editor.viewportVisibility.toggleLocal() );
 	local.dom.classList.add( 'viewport-local-view' );

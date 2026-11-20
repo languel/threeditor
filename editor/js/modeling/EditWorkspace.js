@@ -1,13 +1,13 @@
-import { icon } from '../Glyphs.js?v=color-sampler';
+import { icon } from '../Glyphs.js?v=editor-glyphs';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=projector-shadows';
 import { editableMesh } from './ModelViewport.js?v=sculpt-targets';
 import { isProjector } from '../assets/Projector.js?v=projector-shadows';
 import { modelButton } from './ModelControls.js?v=color-sampler';
-import { openMaskEditor } from './MaskEditor.js?v=pencil-reference';
+import { openMaskEditor } from './MaskEditor.js?v=short-strokes';
 import { openUVEditor } from './UVEditor.js?v=pencil-reference';
 
-export function createEditWorkspace( editor, viewport ) {
+export function createEditWorkspace( editor ) {
 
 	const dock = document.createElement( 'section' );
 	dock.id = 'editor-2d';
@@ -19,24 +19,12 @@ export function createEditWorkspace( editor, viewport ) {
 	const target = document.createElement( 'span' );
 	target.className = 'editor-2d-target';
 	header.append( title, target );
-	const splitButton = modelButton( header, 'Show 3D view alongside', 'viewportSplit', () => toggleSplit() );
 	modelButton( header, 'Close editor area', 'exitTool', () => close() );
 	dock.append( header );
-	const divider = document.createElement( 'div' );
-	divider.className = 'editor-2d-divider';
-	divider.tabIndex = 0;
-	divider.setAttribute( 'role', 'separator' );
-	divider.setAttribute( 'aria-label', 'Resize editor and 3D areas' );
-	divider.setAttribute( 'aria-orientation', 'vertical' );
-	divider.setAttribute( 'aria-controls', 'editor-2d viewport' );
-	divider.setAttribute( 'aria-valuemin', '25' );
-	divider.setAttribute( 'aria-valuemax', '75' );
-	divider.setAttribute( 'aria-valuenow', '50' );
-	dock.append( divider );
 	const picker = document.createElement( 'details' );
 	picker.className = 'editor-picker';
 	const summary = document.createElement( 'summary' );
-	summary.innerHTML = icon( 'editorTypes' );
+	summary.innerHTML = icon( 'editorViewport' );
 	summary.title = 'Editor Type';
 	summary.setAttribute( 'aria-label', 'Editor Type' );
 	picker.append( summary );
@@ -48,19 +36,17 @@ export function createEditWorkspace( editor, viewport ) {
 	screen.className = 'viewport-edit-content';
 	dock.append( screen );
 	picker.append( modes );
-	let current;
-	let split = false, ratio = .5;
+	let current, host, requestedHost;
 	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window' };
-	const splitPreference = new Map( [ [ 'uv', true ], [ 'image', true ] ] );
 	const light = () => [ editor.selected, editor.viewportSource, current?.object ].find( canEditLightMask );
 	const mesh = () => [ editor.selected, current?.object ].find( object => editableMesh( object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) );
 	const projector = () => [ editor.selected, editor.viewportSource, current?.object ].find( object => isProjector( object ) && canEditLightMask( object ) );
-	const sceneButton = modelButton( modes, '3D View', 'objectMode', () => { picker.open = false; close(); } );
+	const sceneButton = modelButton( modes, '3D View', 'editorViewport', () => { picker.open = false; close(); } );
 	const maskButton = modelButton( modes, 'Mask mode', 'toolMask', () => switchMode( 'mask', light(), openMaskEditor ) );
-	const imageButton = modelButton( modes, 'Image and vector mode', 'surface', () => switchMode( 'image', null, () => openMaskEditor( editor, null, false, true ) ) );
-	const uvButton = modelButton( modes, 'UV mode', 'toolGrid', () => switchMode( 'uv', mesh(), openUVEditor ) );
+	const imageButton = modelButton( modes, 'Image and vector mode', 'editorImage', () => switchMode( 'image', null, () => openMaskEditor( editor, null, false, true ) ) );
+	const uvButton = modelButton( modes, 'UV mode', 'editorUV', () => switchMode( 'uv', mesh(), openUVEditor ) );
 	const warpButton = modelButton( modes, 'Projection warp mode', 'placePlane', () => switchMode( 'warp', projector(), openUVEditor ) );
-	const scriptButton = modelButton( modes, 'Script Window', 'code', () => editor.codePanel.open() );
+	const scriptButton = modelButton( modes, 'Script Window', 'editorScript', () => editor.codePanel.open() );
 	const buttons = { mask: maskButton, image: imageButton, uv: uvButton, warp: warpButton, script: scriptButton };
 	function switchMode( mode, object, open ) {
 
@@ -84,55 +70,38 @@ export function createEditWorkspace( editor, viewport ) {
 		return true;
 
 	}
-	function syncLayout() {
+	function exclusive() {
 
-		const sidebar = document.getElementById( 'sidebar' );
-		const occupied = sidebar?.dataset.dock === 'open' ? sidebar.offsetWidth : 0;
-		const canSplit = window.innerWidth - occupied >= 640;
-		split = !! ( current && canSplit && splitPreference.get( current.mode ) );
-		splitButton.disabled = ! canSplit;
-		splitButton.setAttribute( 'aria-pressed', String( split ) );
-		divider.hidden = ! split;
-		document.body.classList.toggle( 'workspace-2d-split', split );
-		viewport.classList.toggle( 'editing-2d', !! current && ! split );
+		return !! current && host === editor.viewLayout.viewport.parentElement;
 
 	}
-	function toggleSplit() {
 
-		if ( ! current || splitButton.disabled ) return;
-		splitPreference.set( current.mode, ! split );
-		editor.signals.windowResize.dispatch();
+	function placeDock( nextHost ) {
 
-	}
-	function resize( next ) {
+		if ( host ) delete host.dataset.overlayEditor;
+		host = nextHost;
+		if ( host ) {
 
-		ratio = Math.max( .25, Math.min( .75, next ) );
-		document.body.style.setProperty( '--editor-split-ratio', ratio );
-		divider.setAttribute( 'aria-valuenow', String( Math.round( ratio * 100 ) ) );
-		editor.signals.windowResize.dispatch();
+			host.dataset.overlayEditor = current.mode;
+			host.appendChild( dock );
+
+		} else if ( dock.parentElement !== document.body ) document.body.appendChild( dock );
 
 	}
-	divider.addEventListener( 'pointerdown', event => {
 
-		if ( event.button === 0 ) divider.setPointerCapture( event.pointerId );
+	function openIn( mode, area ) {
 
-	} );
-	divider.addEventListener( 'pointermove', event => {
+		if ( current?.mode === mode ) {
 
-		if ( ! divider.hasPointerCapture( event.pointerId ) ) return;
-		const start = dock.getBoundingClientRect().left;
-		const end = viewport.getBoundingClientRect().right;
-		resize( ( event.clientX - start ) / ( end - start ) );
+			placeDock( area );
+			editor.signals.windowResize.dispatch();
+			return true;
 
-	} );
-	divider.addEventListener( 'keydown', event => {
+		}
+		requestedHost = area;
+		try { return open( mode ); } finally { requestedHost = undefined; }
 
-		if ( ! [ 'ArrowLeft', 'ArrowRight' ].includes( event.key ) ) return;
-		event.preventDefault();
-		resize( ratio + ( event.key === 'ArrowLeft' ? -.05 : .05 ) );
-
-	} );
-	editor.signals.windowResize.add( syncLayout );
+	}
 	function refresh() {
 
 		maskButton.disabled = ! light();
@@ -163,28 +132,32 @@ export function createEditWorkspace( editor, viewport ) {
 		summary.focus();
 
 	} );
-	function close() {
+	function close( replacing = false ) {
 
 		if ( ! current ) return;
+		const previousHost = host;
 		current.dispose();
 		current = undefined;
 		screen.replaceChildren();
 		dock.hidden = true;
+		placeDock();
 		refresh();
+		if ( ! replacing ) editor.splitWorkspace?.closed( previousHost );
 		editor.signals.windowResize.dispatch();
 
 	}
 	editor.signals.objectSelected.add( object => {
 
-		if ( current?.mode === 'uv' && ( split || ! current.object ) && object && current.object !== object && mesh() === object && ! current.isDirty?.() ) {
+		if ( current?.mode === 'uv' && ( ! exclusive() || ! current.object ) && object && current.object !== object && mesh() === object && ! current.isDirty?.() ) {
 
-			openUVEditor( editor, object, { focus: false } );
+			requestedHost = host;
+			try { openUVEditor( editor, object, { focus: false } ); } finally { requestedHost = undefined; }
 
 		} else refresh();
 
 	} );
 	for ( const name of [ 'objectChanged', 'viewportCameraChanged' ] ) editor.signals[ name ].add( refresh );
-	for ( const name of [ 'editorCleared', 'projectLoaded', 'startPlayer' ] ) editor.signals[ name ].add( close );
+	for ( const name of [ 'editorCleared', 'projectLoaded', 'startPlayer' ] ) editor.signals[ name ].add( () => close() );
 	editor.signals.objectRemoved.add( object => {
 
 		if ( current?.object && ( current.object === object || object.getObjectById( current.object.id ) ) ) close();
@@ -199,18 +172,21 @@ export function createEditWorkspace( editor, viewport ) {
 	} );
 	refresh();
 	return {
-		picker, dock, open, toggleSplit,
+		picker, dock, open, openIn, placeDock,
+		available: mode => mode === 'uv' || !! buttons[ mode ] && ! buttons[ mode ].disabled,
+		get host() { return host; },
 		get mode() { return current?.mode; },
-		get exclusive() { return !! current && ! split; },
-		get canSplit() { return !! current && ! splitButton.disabled; },
+		get exclusive() { return exclusive(); },
 		close,
 		mount( mode, object, content, dispose, isDirty ) {
 
-			close();
+			const area = requestedHost || editor.splitWorkspace?.target();
+			close( true );
 			editor.viewTools.setMode( '' );
 			if ( editor.modeling.gesture?.modal ) editor.modeling.finishTransform( false );
 			editor.modeling.releaseDrag();
 			current = { mode, object, dispose, isDirty };
+			placeDock( area );
 			screen.append( content );
 			picker.open = false;
 			dock.hidden = false;

@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { UIPanel, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from './libs/ui.js';
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
+import { AddObjectCommand } from './commands/AddObjectCommand.js';
+import { changeParent, canParentSelection } from './ObjectParenting.js';
 import { isProjector } from './assets/Projector.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
 import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';
@@ -33,7 +35,7 @@ function glyph( type ) {
 
 }
 
-function SidebarScene( editor ) {
+function SidebarScene( editor, revealScene ) {
 
 	const signals = editor.signals;
 	const strings = editor.strings;
@@ -100,6 +102,14 @@ function SidebarScene( editor ) {
 			editor.codePanel.toggleScript( object, script );
 
 		} );
+		option.addEventListener( 'contextmenu', event => {
+
+			event.preventDefault();
+			event.stopPropagation();
+			if ( ! editor.selector.selection.includes( object ) ) editor.select( object );
+			openOutlinerMenu( event, object );
+
+		} );
 
 		// opener
 
@@ -114,8 +124,9 @@ function SidebarScene( editor ) {
 
 				option.setAttribute( 'aria-expanded', String( state ) );
 				opener.classList.add( state ? 'open' : 'closed' );
-				if ( ! filtering ) opener.addEventListener( 'click', function () {
+				if ( ! filtering ) opener.addEventListener( 'click', function ( event ) {
 
+					event.stopPropagation();
 					nodeStates.set( object, ! state );
 					refreshOutliner();
 
@@ -277,9 +288,35 @@ function SidebarScene( editor ) {
 
 	const outliner = new UIOutliner( editor );
 	outliner.setId( 'outliner' );
+	function openOutlinerMenu( event, object = editor.scene ) {
+
+		const parent = object?.isGroup || object === editor.scene ? object : object?.parent || editor.scene;
+		const add = collection => {
+
+			const child = collection ? new THREE.Group() : new THREE.Object3D();
+			child.name = collection ? 'Collection' : 'Empty';
+			editor.execute( new AddObjectCommand( editor, child, parent ) );
+
+		};
+		editor.contextMenu?.show( 'Outliner', [
+			{ label: 'New Collection', section: 'Add', run: () => add( true ) },
+			{ label: 'New Empty', section: 'Add', run: () => add( false ) },
+			{ label: 'Set Parent · Keep Transform', section: 'Hierarchy', disabled: ! canParentSelection( editor, false ), run: () => changeParent( editor, false, 'keepWorld' ) },
+			{ label: 'Clear Parent · Keep Transform', section: 'Hierarchy', disabled: ! canParentSelection( editor, true ), run: () => changeParent( editor, true, 'keepWorld' ) }
+		], { x: event.clientX, y: event.clientY } );
+
+	}
+	outliner.dom.addEventListener( 'contextmenu', event => {
+
+		if ( event.target.closest( '.option' ) ) return;
+		event.preventDefault();
+		openOutlinerMenu( event );
+
+	} );
 	outliner.onChange( function ( event ) {
 
 		const id = parseInt( outliner.getValue() );
+		if ( id === editor.scene.id ) revealScene();
 
 		if ( event.shiftKey === true && editor.selector.selection.length > 0 && editor.selected !== editor.scene && editor.selected !== editor.camera ) {
 
@@ -331,7 +368,9 @@ function SidebarScene( editor ) {
 
 	} );
 
-	backgroundRow.add( new UIText( strings.getKey( 'sidebar/scene/background' ) ).setClass( 'Label' ) );
+	const backgroundLabel = strings.getKey( 'sidebar/scene/background' );
+	backgroundType.dom.setAttribute( 'aria-label', backgroundLabel );
+	backgroundRow.add( new UIText( backgroundLabel ).setClass( 'Label' ) );
 	backgroundRow.add( backgroundType );
 
 	const backgroundColor = new UIColor().setValue( '#000000' ).setMarginLeft( '8px' ).onInput( onBackgroundChanged );
@@ -434,7 +473,9 @@ function SidebarScene( editor ) {
 
 	} );
 
-	environmentRow.add( new UIText( strings.getKey( 'sidebar/scene/environment' ) ).setClass( 'Label' ) );
+	const environmentLabel = strings.getKey( 'sidebar/scene/environment' );
+	environmentType.dom.setAttribute( 'aria-label', environmentLabel );
+	environmentRow.add( new UIText( environmentLabel ).setClass( 'Label' ) );
 	environmentRow.add( environmentType );
 
 	const environmentEquirectangularTexture = new UITexture( editor ).setMarginLeft( '8px' ).onChange( onEnvironmentChanged );
@@ -502,7 +543,9 @@ function SidebarScene( editor ) {
 
 	} );
 
-	fogTypeRow.add( new UIText( strings.getKey( 'sidebar/scene/fog' ) ).setClass( 'Label' ) );
+	const fogLabel = strings.getKey( 'sidebar/scene/fog' );
+	fogType.dom.setAttribute( 'aria-label', fogLabel );
+	fogTypeRow.add( new UIText( fogLabel ).setClass( 'Label' ) );
 	fogTypeRow.add( fogType );
 
 	container.add( fogTypeRow );
@@ -558,6 +601,7 @@ function SidebarScene( editor ) {
 	const bloomRow = new UIRow();
 	bloomRow.add( new UIText( 'Bloom' ).setClass( 'Label' ) );
 	const bloomEnabled = new UICheckbox( false ).onChange( updatePostProcessing );
+	bloomEnabled.dom.setAttribute( 'aria-label', 'Bloom' );
 	bloomRow.add( bloomEnabled );
 	const bloomStrength = new UINumber( DEFAULT_POSTPROCESSING.bloomStrength ).setWidth( '40px' ).setRange( 0, 5 ).setStep( 0.05 ).onChange( updatePostProcessing );
 	const bloomRadius = new UINumber( DEFAULT_POSTPROCESSING.bloomRadius ).setWidth( '40px' ).setRange( 0, 2 ).setStep( 0.05 ).onChange( updatePostProcessing );
@@ -569,6 +613,7 @@ function SidebarScene( editor ) {
 	const dofRow = new UIRow();
 	dofRow.add( new UIText( 'Focus' ).setClass( 'Label' ) );
 	const dofEnabled = new UICheckbox( false ).onChange( updatePostProcessing );
+	dofEnabled.dom.setAttribute( 'aria-label', 'Focus' );
 	dofRow.add( dofEnabled );
 	const dofFocus = new UINumber( DEFAULT_POSTPROCESSING.focus ).setWidth( '40px' ).setRange( 0.1, 1000 ).setStep( 0.1 ).onChange( updatePostProcessing );
 	const dofAperture = new UINumber( DEFAULT_POSTPROCESSING.aperture ).setWidth( '48px' ).setRange( 0, 0.05 ).setStep( 0.0005 ).setPrecision( 4 ).onChange( updatePostProcessing );
@@ -614,7 +659,8 @@ function SidebarScene( editor ) {
 
 		}
 		if ( query ) { match( camera ); match( scene ); }
-		const options = [ camera, scene ].filter( object => ! query || matches.has( object ) ).map( object => buildOption( object, false ) );
+		if ( ! nodeStates.has( scene ) ) nodeStates.set( scene, true );
+		const options = [ camera, scene ].filter( object => ! query || matches.has( object ) ).map( object => buildOption( object, false, Boolean( query ) ) );
 
 		( function addObjects( objects, pad ) {
 
@@ -642,7 +688,7 @@ function SidebarScene( editor ) {
 
 			}
 
-		} )( scene.children, 0 );
+		} )( query || nodeStates.get( scene ) ? scene.children : [], 0 );
 
 		outliner.setOptions( options );
 

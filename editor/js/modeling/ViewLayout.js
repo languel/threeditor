@@ -58,9 +58,7 @@ export class ViewLayout {
 		const editor = this.editor;
 		if ( ! editor.viewportSplit ) return;
 		const closing = pointer && this.at( pointer.x, pointer.y, 'area' );
-		if ( closing?.key !== 'director' ) editor.setViewportCamera( editor.camera.uuid );
-		this.activeKey = 'director';
-		editor.setViewportSplit( false );
+		editor.splitWorkspace.join( closing?.key === 'director' ? 'source' : 'director' );
 
 	}
 
@@ -72,11 +70,13 @@ export class ViewLayout {
 		if ( this.editor.viewportSplitAxis === 'horizontal' ) {
 
 			const edge = Math.max( 1, Math.floor( height * ratio ) );
-			return [ { ...whole, height: edge }, { ...whole, y: edge, height: height - edge } ];
+			const areas = [ { ...whole, height: edge }, { ...whole, y: edge, height: height - edge } ];
+			return this.swapped ? areas.reverse() : areas;
 
 		}
 		const edge = Math.max( 1, Math.floor( width * ratio ) );
-		return [ { ...whole, width: edge }, { ...whole, x: edge, width: width - edge } ];
+		const areas = [ { ...whole, width: edge }, { ...whole, x: edge, width: width - edge } ];
+		return this.swapped ? areas.reverse() : areas;
 
 	}
 
@@ -123,7 +123,7 @@ export class ViewLayout {
 
 			const horizontal = editor.viewportSplitAxis === 'horizontal';
 			this.divider.dataset.axis = editor.viewportSplitAxis;
-			this.divider.style.setProperty( '--split-edge', ( horizontal ? area.y : area.x ) + 'px' );
+			this.divider.style.setProperty( '--split-edge', ( horizontal ? Math.max( areas[ 0 ].y, area.y ) : Math.max( areas[ 0 ].x, area.x ) ) + 'px' );
 			this.divider.setAttribute( 'aria-orientation', horizontal ? 'horizontal' : 'vertical' );
 			this.divider.setAttribute( 'aria-valuemin', '15' );
 			this.divider.setAttribute( 'aria-valuemax', '85' );
@@ -163,19 +163,21 @@ export class ViewLayout {
 
 	get navigation() {
 
-		if ( this.frames.length === 1 ) {
+		const visible = this.frames.filter( frame => this.isViewportPane?.( frame.key ) !== false );
+		if ( ! visible.length ) return;
+		if ( visible.length === 1 ) {
 
-			const frame = this.frames[ 0 ];
+			const frame = visible[ 0 ];
 			return frame.source || ( this.maximizedPane && ! frame.director ) ? undefined : frame;
 
 		}
-		return this.frames.find( frame => frame.key === this.activeKey && frame.director ) || this.frames[ 0 ];
+		return visible.find( frame => frame.key === this.activeKey && frame.director ) || visible[ 0 ];
 
 	}
 
 	get optical() {
 
-		return this.frames.find( frame => frame.source );
+		return this.frames.find( frame => frame.source && this.isViewportPane?.( frame.key ) !== false );
 
 	}
 

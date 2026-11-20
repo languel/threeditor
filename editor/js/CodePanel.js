@@ -8,7 +8,7 @@
 // scene code scrolled to the object's lines.
 
 import { Color } from 'three';
-import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCodeExporter.js';
+import { generateThreeCode, assetsToBlobs, buildSceneFromCode } from './ThreeCodeExporter.js?v=image-textures';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 import { codeEditorSettings, setCodeEditorSettings } from './CodeEditorSettings.js';

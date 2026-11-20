@@ -1,6 +1,6 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=sculpt-targets';
-import { transformSnapStep } from './TransformSettings.js?v=mode-pie';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=short-strokes';
+import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import * as THREE from 'three';
@@ -13,7 +13,7 @@ import { UIPanel } from './libs/ui.js';
 import { EditorControls } from './EditorControls.js?v=unified-sync';
 
 import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
-import { ViewportControls } from './Viewport.Controls.js?v=component-layout';
+import { ViewportControls } from './Viewport.Controls.js?v=split-areas';
 import { FlyControls } from './FlyControls.js?v=ortho-fly';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
@@ -32,10 +32,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=sculpt-targets';
+import { ViewportTools } from './modeling/ViewportTools.js?v=short-strokes';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
-import { ViewLayout } from './modeling/ViewLayout.js?v=unified-sync';
-import { ModelViewport } from './modeling/ModelViewport.js?v=sculpt-targets';
+import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
+import { ModelViewport } from './modeling/ModelViewport.js?v=split-areas';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -109,7 +109,7 @@ function Viewport( editor ) {
 	signals.viewportVisibilityChanged.add( () => { initPT(); updateHelperVisibility(); syncTransformTarget(); render(); } );
 	signals.timelineFrameChanged.add( () => { initPT(); render(); } );
 	editor.viewTools = new ViewportTools( editor, container.dom, layout, render );
-	editor.editWorkspace = createEditWorkspace( editor, container.dom );
+	editor.editWorkspace = createEditWorkspace( editor );
 	editor.viewportSidebar = new ViewportSidebar( editor, container.dom, header, layout, render );
 	const splatHost = new SplatHost();
 	let secondarySplats = null;
@@ -1076,7 +1076,8 @@ function Viewport( editor ) {
 
 	signals.windowResize.add( function () {
 
-		const overlay = document.body.classList.contains( 'translucent-panels' );
+		const overlay = container.dom.parentElement?.id === 'workspace-viewport' &&
+			document.body.classList.contains( 'translucent-panels' ) && ! editor.viewportSplit;
 		const sidebar = document.getElementById( 'sidebar' );
 		const right = overlay && sidebar?.dataset.dock === 'open' && window.innerWidth > 600 ? sidebar.offsetWidth : 0;
 		const top = overlay ? parseFloat( getComputedStyle( document.body ).getPropertyValue( '--menubar-height' ) ) || 0 : 0;
@@ -1301,7 +1302,7 @@ function Viewport( editor ) {
 				renderedFallback = Boolean( effects?.bloom || effects?.dof || scene.fog );
 				scene.traverseVisible( object => {
 
-					if ( renderedFallback || ! isVisible( object ) ) return;
+					if ( renderedFallback || ! isVisible( object ) || object.userData.annotation === true ) return;
 					if ( object.splats || object.isPoints || isProjector( object ) ) renderedFallback = true;
 					else if ( object.isLine || object.isSprite ||
 						[ object.material ].flat().some( material => material?.isShaderMaterial ) ) renderedFallback = true;
@@ -1348,7 +1349,7 @@ function Viewport( editor ) {
 			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 			else raster();
 
-		} ), queueSplatRender ) );
+		} ), queueSplatRender ), editorView && editor.viewportOverlays && ! cleanShading( editor.viewportShading ) );
 
 	}
 
@@ -1483,7 +1484,7 @@ function Viewport( editor ) {
 				for ( const frame of frames ) {
 
 					const { rect, camera: view, key } = frame;
-					if ( ! rect.width || ! rect.height ) continue;
+					if ( ! rect.width || ! rect.height || layout.isViewportPane?.( key ) === false ) continue;
 
 					const y = renderer.isWebGPURenderer ? rect.y : height - rect.y - rect.height;
 					renderer.setViewport( rect.x, y, rect.width, rect.height );

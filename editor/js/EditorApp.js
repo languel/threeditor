@@ -8,20 +8,21 @@ import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=pencil-reference';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=mode-pie';
-import { Toolbar } from './Toolbar.js?v=mode-pie';
+import { Viewport } from './Viewport.js?v=short-strokes';
+import { Toolbar } from './Toolbar.js?v=editor-glyphs';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=sculpt-targets';
-import { Menubar } from './Menubar.js?v=uv-sculpt';
+import { Sidebar } from './Sidebar.js?v=image-textures';
+import { Menubar } from './Menubar.js?v=example-open';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=held-alt-constraint';
+import { ContextMenu } from './ContextMenu.js?v=split-areas';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
-import { Resizer } from './Resizer.js?v=script-window';
+import { Resizer } from './Resizer.js?v=dock-split-menu';
 import { PanelDock } from './PanelDock.js';
-import { WorkspaceArea } from './WorkspaceArea.js?v=script-window';
+import { WorkspaceArea } from './WorkspaceArea.js?v=split-areas';
+import { WorkspaceEditors } from './WorkspaceEditors.js?v=dock-split-menu';
 import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
-import { CodePanel } from './CodePanel.js?v=document-picker';
-import { AnimationResizer } from './AnimationResizer.js';
+import { CodePanel } from './CodePanel.js?v=image-textures';
+import { AnimationResizer } from './AnimationResizer.js?v=dock-split-menu';
 import { Animation } from './Animation.js?v=workspace-tabs';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
@@ -102,18 +103,19 @@ async function startEditor( portable = null ) {
 
 	const animationResizer = new AnimationResizer( editor );
 	document.body.appendChild( animationResizer.dom );
+	const areas = new WorkspaceEditors( editor, sidebar, viewport.dom, animation.dom, resizer.dom, animationResizer.dom );
 
 	const sidebarDock = new PanelDock( editor, sidebar.dom, resizer.dom, 'right' );
 	editor.modeling.show = () => { sidebar.select( 'scene' ); sidebarDock.toggle( true ); editor.modeling.reveal(); };
 	editor.assetBrowser.reveal = () => { sidebar.select( 'assets' ); sidebarDock.toggle( true ); };
 	editor.assetBrowser.bindViewport( viewport.dom );
-	const timelineDock = new PanelDock( editor, animation.dom, animationResizer.dom, 'bottom' );
+	const timelineDock = new PanelDock( editor, areas.timeline.dom, animationResizer.dom, 'bottom' );
 	editor.timeline.reveal = () => timelineDock.toggle( true );
 	editor.signals.animationPanelChanged.add( () => editor.signals.windowResize.dispatch() );
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
-	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, viewport.dom, sidebar.dom, editor.editWorkspace.dock, animation.dom );
+	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, areas.viewport.dom, sidebar.dom, editor.editWorkspace.dock, areas.timeline.dom );
 	editor.openComponentPicker = () => {
 
 		editor.workspaceArea.reveal( sidebar.dom );

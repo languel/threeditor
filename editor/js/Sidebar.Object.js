@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISelect, UITextArea, UIText, UINumber } from './libs/ui.js';
 import { UIBoolean } from './libs/ui.three.js';
 import { isProjector } from './assets/Projector.js';
+import { isPencilStroke } from './modeling/PencilSelection.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { ObjectTransformControls } from './ObjectTransformControls.js';
 
@@ -481,6 +482,20 @@ function SidebarObject( editor ) {
 	objectVisibleRow.add( objectVisible );
 
 	container.add( objectVisibleRow );
+
+	const annotation = new UICheckbox().onChange( () => {
+
+		const object = editor.selected;
+		if ( ! object || ! isPencilStroke( object ) || hasRestriction( object, 'locked' ) ) return;
+		const command = new SetValueCommand( editor, object, 'userData', { ...object.userData, annotation: annotation.getValue() } );
+		command.updatable = false;
+		editor.execute( command, 'Toggle pencil annotation' );
+
+	} );
+	annotation.dom.setAttribute( 'aria-label', 'Annotation' );
+	annotation.dom.title = 'Show this pencil mark only while editing';
+	const annotationRow = new UIRow().add( new UIText( 'Annotation' ).setClass( 'Label' ), annotation );
+	container.add( annotationRow );
 
 	// frustumCulled
 
@@ -989,6 +1004,8 @@ function SidebarObject( editor ) {
 
 		}
 
+		annotationRow.setDisplay( isPencilStroke( object ) ? '' : 'none' );
+		annotation.setValue( object.userData.annotation === true ).setDisabled( hasRestriction( object, 'locked' ) );
 		objectVisible.setValue( object.visible );
 		objectFrustumCulled.setValue( object.frustumCulled );
 		objectRenderOrder.setValue( object.renderOrder );

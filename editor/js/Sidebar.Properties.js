@@ -1,9 +1,9 @@
 import { SidebarModifiers } from './Sidebar.Modifiers.js?v=poly-context';
 import { canModify } from './modeling/Modifiers.js?v=poly-context';
 import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
-import { UIPanel, UITabbedPanel } from './libs/ui.js';
+import { UIPanel } from './libs/ui.js';
 
-import { SidebarObject } from './Sidebar.Object.js?v=unified-sync';
+import { SidebarObject } from './Sidebar.Object.js?v=image-textures';
 import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
 import { SidebarModeling } from './Sidebar.Modeling.js?v=sculpt-targets';
@@ -11,19 +11,11 @@ import { editableMesh } from './modeling/ModelViewport.js?v=sculpt-targets';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
-import { icon } from './Glyphs.js?v=mode-shelves';
-
-function SidebarProperties( editor, sceneSettings ) {
+function SidebarProperties( editor, sceneSettings, container ) {
 
 	const strings = editor.strings;
 
-	const container = new UITabbedPanel();
-	container.setId( 'properties' );
-	const strip = container.tabsDiv.dom;
-	strip.setAttribute( 'role', 'tablist' );
-	strip.setAttribute( 'aria-label', 'Property categories' );
-	strip.setAttribute( 'aria-orientation', 'vertical' );
-
+	container.addTab( 'sceneTab', strings.getKey( 'sidebar/scene' ), sceneSettings, 'sidebar/scene' );
 	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ), 'sidebar/properties/object' );
 	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ), 'sidebar/properties/geometry' );
 	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ), 'sidebar/properties/material' );
@@ -38,11 +30,16 @@ function SidebarProperties( editor, sceneSettings ) {
 	container.addTab( 'toolTab', 'Tool', toolPanel, 'sidebar/properties/tool' );
 	editor.modeling.reveal = () => container.select( 'modelingTab' );
 	editor.revealComponents = () => { container.select( 'scriptTab' ); scripts.openComponentPicker(); };
-	container.select( 'objectTab' );
 
-	for ( const tab of container.tabs ) tab.dom.addEventListener( 'dragenter', event => {
-		if ( event.dataTransfer.types.includes( 'application/x-threeditor-asset' ) ) container.select( tab.dom.id );
-	} );
+	const properties = { tabs: [ ...container.tabs ], selected: 'objectTab', select: id => container.select( id ) };
+	container.select( properties.selected );
+
+	function rememberTab( id, reveal = false ) {
+
+		properties.selected = id;
+		if ( reveal || properties.tabs.some( tab => tab.dom.id === container.selected ) ) container.select( id );
+
+	}
 
 	let previousSelection;
 	function toggleTabs( object ) {
@@ -59,9 +56,13 @@ function SidebarProperties( editor, sceneSettings ) {
 			animationsTab: !! object?.animations.length,
 			toolTab: !! editor.viewTools.toolPropertiesMode
 		};
-		for ( const tab of container.tabs ) tab.setHidden( ! visible[ tab.dom.id ] );
-		if ( scene && previousSelection !== object && container.selected !== 'toolTab' || ! visible[ container.selected ] ) container.select( scene ? 'sceneTab' : 'objectTab' );
-		else if ( ! scene && ( ! previousSelection || previousSelection === editor.scene ) && container.selected === 'sceneTab' ) container.select( 'objectTab' );
+		for ( const tab of properties.tabs ) tab.setHidden( ! visible[ tab.dom.id ] );
+		if ( object === editor.scene && previousSelection !== object ) rememberTab( 'sceneTab', true );
+		else if ( scene && previousSelection !== object && properties.selected !== 'toolTab' || ! visible[ properties.selected ] ) {
+
+			rememberTab( scene ? 'sceneTab' : 'objectTab' );
+
+		} else if ( ! scene && ( ! previousSelection || previousSelection === editor.scene ) && properties.selected === 'sceneTab' ) rememberTab( 'objectTab' );
 		previousSelection = object;
 
 	}
@@ -74,7 +75,7 @@ function SidebarProperties( editor, sceneSettings ) {
 		if ( ! force && tool === previousTool ) return;
 		editor.viewTools.buildToolProperties( toolPanel.dom );
 		toggleTabs( editor.selected );
-		if ( tool && tool !== previousTool ) container.select( 'toolTab' );
+		if ( tool && tool !== previousTool ) rememberTab( 'toolTab' );
 		previousTool = tool;
 
 	};
@@ -86,7 +87,7 @@ function SidebarProperties( editor, sceneSettings ) {
 
 	toggleTabs( editor.selected );
 
-	return container;
+	return properties;
 
 }
 

@@ -276,13 +276,13 @@ function ContextMenu( editor, viewport ) {
 
 		const rect = viewport.getBoundingClientRect();
 		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) && editor.keymap.inArea( action ) ).map( action => ( { ...action, section: action.section || action.category } ) );
-		if ( ! editor.editWorkspace.mode && ! document.body.dataset.maximizedArea ) {
+		if ( ! document.body.dataset.maximizedArea ) {
 
 			const areaPointer = pointer;
 			const section = 'Viewport areas';
 			actions.push(
-				{ label: 'Vertical Split', section, run: () => editor.setViewportSplit( true, 'vertical' ) },
-				{ label: 'Horizontal Split', section, run: () => editor.setViewportSplit( true, 'horizontal' ) }
+				{ label: 'Vertical Split', section, run: () => editor.splitWorkspace.split( 'vertical' ) },
+				{ label: 'Horizontal Split', section, run: () => editor.splitWorkspace.split( 'horizontal' ) }
 			);
 			if ( editor.viewportSplit ) actions.push( { label: 'Close Area', section, run: () => editor.viewLayout.closeArea( areaPointer ) } );
 

@@ -68,6 +68,98 @@ async function checkTextureProjection( page ) {
 
 }
 
+async function checkSceneProperties( page ) {
+
+	await page.getByRole( 'tree', { name: 'Outliner', exact: true } ).getByRole( 'treeitem', { name: /^Scene\b/ } ).click();
+	const panel = page.locator( '#properties .scene-properties' );
+	await panel.getByRole( 'combobox', { name: 'Background', exact: true } ).selectOption( 'Color' );
+	await panel.getByRole( 'combobox', { name: 'Environment', exact: true } ).selectOption( 'None' );
+	await panel.getByRole( 'combobox', { name: 'Fog', exact: true } ).selectOption( 'Fog' );
+	await panel.getByRole( 'checkbox', { name: 'Bloom', exact: true } ).check();
+	await panel.getByRole( 'checkbox', { name: 'Focus', exact: true } ).check();
+	assert.deepEqual( await page.evaluate( () => [
+		editor.scene.background.isColor, editor.environmentType, editor.scene.fog.isFog,
+		editor.scene.userData.postprocessing.bloom, editor.scene.userData.postprocessing.dof
+	] ), [ true, 'None', true, true, true ] );
+	await page.evaluate( () => editor.clear() );
+
+}
+
+async function checkWorkspaceEditors( page ) {
+
+	const rail = page.getByRole( 'tablist', { name: 'Sidebar panels' } );
+	for ( const name of [ 'Assets', 'Streams', 'Project', 'Settings' ] ) {
+
+		const tab = rail.getByRole( 'tab', { name, exact: true } );
+		await tab.click();
+		assert.equal( await tab.getAttribute( 'aria-selected' ), 'true' );
+		await page.getByRole( 'tabpanel', { name, exact: true } ).waitFor();
+
+	}
+	await rail.getByRole( 'tab', { name: 'Settings', exact: true } ).press( 'Home' );
+	assert.equal( await rail.getByRole( 'tab', { name: 'Scene', exact: true } ).getAttribute( 'aria-selected' ), 'true' );
+	const choose = async ( area, type ) => {
+
+		await page.getByRole( 'button', { name: 'Editor type for ' + area, exact: true } ).click();
+		await page.getByRole( 'dialog', { name: 'Choose editor' } ).getByRole( 'button', { name: type, exact: true } ).click();
+
+	};
+	const outliner = page.getByRole( 'tree', { name: 'Outliner', exact: true } );
+	const renderer = await page.locator( '#viewport canvas[data-engine]' ).elementHandle();
+	await choose( 'Outliner', '3D Viewport' );
+	assert.equal( await renderer.evaluate( canvas => canvas.closest( '.workspace-editor-slot' ).id ), 'workspace-outliner' );
+	assert.equal( await outliner.evaluate( node => node.closest( '.workspace-editor-slot' ).id ), 'workspace-viewport' );
+	await choose( '3D Viewport', '3D Viewport' );
+	await choose( 'Timeline', 'Outliner' );
+	assert.equal( await outliner.evaluate( node => node.closest( '.workspace-editor-slot' ).id ), 'workspace-timeline' );
+	await choose( 'Timeline', 'Timeline' );
+	const splitMenu = page.getByRole( 'dialog', { name: 'Split View', exact: true } );
+	const rightEdge = page.getByRole( 'separator', { name: 'Resize right sidebar', exact: true } );
+	const bottomEdge = page.getByRole( 'separator', { name: 'Resize timeline', exact: true } );
+	await rightEdge.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Vertical Split', exact: true } ).click();
+	await bottomEdge.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Join · Keep Left', exact: true } ).click();
+	await bottomEdge.press( 'Shift+F10' );
+	await splitMenu.getByRole( 'button', { name: 'Horizontal Split', exact: true } ).waitFor();
+	await page.keyboard.press( 'Escape' );
+	await choose( 'Properties', 'Script Window' );
+	const source = page.locator( '#workspace-source-pane' );
+	await source.locator( '#script-window .CodeMirror' ).waitFor();
+	const divider = page.locator( '.viewport-split-divider' );
+	await divider.click( { button: 'right' } );
+	await page.getByRole( 'dialog', { name: 'Split View', exact: true } ).getByRole( 'button', { name: 'Horizontal Split', exact: true } ).click();
+	await page.locator( '.viewport-split-divider[data-axis="horizontal"]' ).waitFor();
+	await page.getByRole( 'button', { name: 'Split view', exact: true } ).click();
+	await splitMenu.getByRole( 'button', { name: 'Swap Areas', exact: true } ).click();
+	assert.ok( ( await source.boundingBox() ).y < ( await page.locator( '#workspace-director-pane' ).boundingBox() ).y );
+	await choose( 'director pane', 'Properties' );
+	await page.locator( '#workspace-director-pane .sidebar-inspector' ).waitFor();
+	await divider.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Join · Keep Bottom', exact: true } ).click();
+	await divider.waitFor( { state: 'hidden' } );
+	await page.locator( '#workspace-viewport .sidebar-inspector' ).waitFor();
+	await choose( '3D Viewport', '3D Viewport' );
+	await rail.waitFor();
+
+}
+
+async function checkModeDropdown( page ) {
+
+	const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
+	const symbol = mode.locator( 'selectedcontent svg' );
+	const objectGlyph = await symbol.innerHTML();
+	assert.equal( await mode.locator( 'selectedcontent span' ).isVisible(), false );
+	await mode.click();
+	await page.getByRole( 'option', { name: 'Surface Paint', exact: true } ).click();
+	assert.equal( await mode.inputValue(), 'paint' );
+	assert.notEqual( await symbol.innerHTML(), objectGlyph );
+	await mode.selectOption( 'object' );
+	assert.equal( await symbol.innerHTML(), objectGlyph );
+	assert.equal( await page.getByRole( 'combobox', { name: 'Viewport tool', exact: true } ).count(), 0 );
+
+}
+
 async function checkSelectionShelf( page ) {
 
 	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
@@ -265,7 +357,7 @@ async function checkSculptTargets( page ) {
 	const initial = await history();
 	await page.mouse.move( ...center );
 	await page.keyboard.press( 'Shift+Q' );
-	const pie = page.getByRole( 'dialog', { name: 'Interaction mode', exact: true } );
+	const pie = page.getByRole( 'dialog', { name: 'Mode', exact: true } );
 	await pie.waitFor();
 	await page.keyboard.press( 'Escape' );
 	await pie.waitFor( { state: 'hidden' } );
@@ -666,6 +758,62 @@ async function checkPencilAttachments( page ) {
 
 }
 
+async function checkPencilGroundFallback( page ) {
+
+	const [ ground, start, end ] = await page.evaluate( () => {
+
+		editor.clear();
+		editor.config.setKey( 'settings/modelPlacement', 'surfacePerpendicular' );
+		editor.signals.transformSettingsChanged.dispatch( 'modelPlacement' );
+		editor.camera.position.set( 0, 3, 6 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		const frame = editor.viewLayout.frames.find( item => item.director );
+		const { left, top } = editor.viewLayout.clientRect( frame );
+		return [ [ -.6, 0, 0 ], [ -.2, .5, 0 ], [ .6, 1, 0 ] ].map( point => {
+
+			const [ x, y ] = editor.viewTools.project( new THREE.Vector3( ...point ), frame );
+			return [ x + left - frame.rect.x, y + top - frame.rect.y ];
+
+		} );
+
+	} );
+	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	const draw = async ( from, to ) => {
+
+		await page.mouse.move( ...from );
+		await page.mouse.down();
+		await page.mouse.move( ...to, { steps: 12 } );
+		await page.mouse.up();
+		return page.evaluate( () => editor.scene.children.find( object => object.userData.pencilStroke )?.geometry.userData.modeling.points );
+
+	};
+	const checkPlane = points => {
+
+		assert.ok( points?.length > 2 );
+		assert.ok( points.every( point => Math.abs( point[ 2 ] ) < .02 ) );
+		assert.ok( points.at( -1 )[ 1 ] > .8 );
+
+	};
+	const unbound = await draw( ground, end );
+	checkPlane( unbound );
+	assert.ok( Math.abs( unbound[ 0 ][ 1 ] ) < 1e-6 );
+	await page.evaluate( () => editor.undo() );
+	await page.mouse.move( ...ground );
+	await page.keyboard.press( 'b' );
+	const lock = page.getByRole( 'button', { name: 'Lock or release Pencil reference', exact: true } );
+	assert.equal( await lock.getAttribute( 'aria-pressed' ), 'true' );
+	const reference = await page.evaluate( () => editor.viewTools.pencilReference?.point.toArray() );
+	assert.ok( Math.abs( reference[ 0 ] + .6 ) < .02 && Math.abs( reference[ 1 ] ) < 1e-6 && Math.abs( reference[ 2 ] ) < .02 );
+	const bound = await draw( start, end );
+	checkPlane( bound );
+	assert.ok( bound[ 0 ][ 1 ] > .4, 'The locked ground point sets the plane even when the stroke starts above it' );
+	await page.keyboard.press( 'b' );
+	assert.equal( await lock.getAttribute( 'aria-pressed' ), 'false' );
+	await page.evaluate( () => { editor.config.setKey( 'settings/modelPlacement', 'object' ); editor.clear(); } );
+
+}
+
 async function checkPencilSplats( page ) {
 
 	const pixel = await page.evaluate( () => {
@@ -842,12 +990,12 @@ async function checkUVSelection( page ) {
 	assert.deepEqual( ( await vertex( 0 ) ).color, orange );
 
 	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
-	await page.locator( 'body.workspace-2d-split' ).waitFor();
+	await page.locator( 'body.workspace-split' ).waitFor();
 	const split = await vertex( 0 );
 	assert.deepEqual( split.color, orange );
 	assert.notDeepEqual( split.fringe, orange, 'Vertex selection uses a small dot' );
 
-	const divider = page.getByRole( 'separator', { name: 'Resize editor and 3D areas' } );
+	const divider = page.getByRole( 'separator', { name: 'Resize viewport areas' } );
 	await divider.press( 'ArrowLeft' );
 	assert.deepEqual( ( await vertex( 0 ) ).color, orange );
 	await divider.press( 'ArrowRight' );
@@ -1343,7 +1491,7 @@ async function checkProjectorCoverage( page ) {
 		editor.select( projector );
 
 	} );
-	await page.locator( '#properties > .Tabs > #modelingTab' ).click();
+	await page.locator( '.sidebar-inspector > .Tabs > #modelingTab' ).click();
 	const panel = page.locator( '.modeling-panel' );
 	const check = panel.getByRole( 'button', { name: 'Check projector coverage' } );
 	await check.click();
@@ -1408,7 +1556,7 @@ async function checkProjectorCoverage( page ) {
 	} );
 	assert.equal( await toggle.isVisible(), false );
 	assert.equal( await overlay.isVisible(), false );
-	await page.locator( '#properties > .Tabs > #modelingTab' ).click();
+	await page.locator( '.sidebar-inspector > .Tabs > #modelingTab' ).click();
 	await check.click();
 	await panel.getByText( /^0% blocked/ ).waitFor();
 	await page.evaluate( () => editor.clear() );
@@ -2712,6 +2860,9 @@ async function checkDrawingAssets( page ) {
 	const ui = page.getByRole( 'region', { name: 'Image and vector editor', exact: true } );
 	const status = ui.getByRole( 'status' );
 	const saveAsset = ui.getByRole( 'button', { name: 'Save texture to Project assets' } );
+	const inspector = ui.getByRole( 'button', { name: 'Contours and reference', exact: true } );
+	const showInspector = async () => { if ( await inspector.getAttribute( 'aria-expanded' ) === 'false' ) await inspector.click(); };
+	await showInspector();
 	const guide = await page.evaluate( () => {
 
 		const canvas = document.createElement( 'canvas' );
@@ -2758,6 +2909,7 @@ async function checkDrawingAssets( page ) {
 	await page.getByLabel( 'Editor Type', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
 	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
+	await showInspector();
 	assert.equal( await include.isChecked(), true );
 	await ui.getByRole( 'button', { name: 'Remove reference image' } ).click();
 	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
@@ -2808,20 +2960,24 @@ async function checkDrawingAssets( page ) {
 
 	const canvas = ui.getByLabel( 'Vector drawing canvas' );
 	const guideOpacity = ui.getByLabel( 'Reference guide opacity' );
+	await showInspector();
 	await ui.getByRole( 'button', { name: 'Place reference image' } ).click();
 	await canvas.scrollIntoViewIfNeeded();
 	const bounds = await canvas.boundingBox();
 	const center = [ bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 ];
+	const side = Math.min( bounds.width, bounds.height ) - Math.min( 36, bounds.width / 4, bounds.height / 4 );
+	await inspector.click();
 	await page.mouse.move( ...center );
 	await page.mouse.down();
-	await page.mouse.move( center[ 0 ] + bounds.width * 454 / 760 * .1, center[ 1 ], { steps: 5 } );
+	await page.mouse.move( center[ 0 ] + side * .1, center[ 1 ], { steps: 5 } );
 	await page.mouse.up();
 	await page.keyboard.down( 'Shift' );
 	await page.mouse.move( ...center );
 	await page.mouse.down();
-	await page.mouse.move( center[ 0 ], center[ 1 ] + bounds.height * 454 / 490 * .1, { steps: 5 } );
+	await page.mouse.move( center[ 0 ], center[ 1 ] + side * .1, { steps: 5 } );
 	await page.mouse.up();
 	await page.keyboard.up( 'Shift' );
+	await showInspector();
 	await guideOpacity.fill( '0.35' );
 	await guideOpacity.press( 'Tab' );
 	await include.check();
@@ -2879,7 +3035,70 @@ async function checkDrawingAssets( page ) {
 	} );
 	await page.waitForFunction( () => editor.scene.getObjectByName( 'Drawing asset projector' )?.projectorOutput?.source?.width === 1024 );
 	await page.evaluate( () => editor.removeObject( editor.scene.getObjectByName( 'Drawing asset projector' ) ) );
-	await page.locator( '#sidebar > .Tabs > #scene' ).click();
+	await ui.getByRole( 'button', { name: 'Open texture from Project assets', exact: true } ).click();
+	await page.locator( '.asset-picker' ).filter( { hasText: 'Choose an image to edit' } ).waitFor();
+	await card( 'reference.png' ).click();
+	await status.getByText( 'Loaded reference.png.', { exact: true } ).waitFor();
+	await saveAsset.click();
+	await status.getByText( 'Saved import-2/reference.png to Project assets.', { exact: true } ).waitFor();
+	assert.deepEqual( await sampleAsset( 'import-2/reference.png', 0, 0 ), [ 0, 68, 255, 255 ] );
+
+	await ui.getByRole( 'button', { name: 'New texture', exact: true } ).click();
+	const newTexture = ui.getByRole( 'dialog', { name: 'New texture', exact: true } );
+	await newTexture.getByLabel( 'Texture name' ).fill( 'Annotation test' );
+	await newTexture.getByLabel( 'Width (px)' ).fill( '320' );
+	await newTexture.getByLabel( 'Height (px)' ).fill( '192' );
+	await newTexture.getByRole( 'button', { name: 'Create', exact: true } ).click();
+	if ( await inspector.getAttribute( 'aria-expanded' ) === 'true' ) await inspector.click();
+	const frame = await canvas.boundingBox();
+	await ui.getByRole( 'button', { name: 'Brush', exact: true } ).click();
+	const pen = await page.context().newCDPSession( page );
+	const opacityPressure = ui.getByLabel( 'Use pen pressure for opacity', { exact: true } );
+	const previousPressure = await opacityPressure.isChecked();
+	await opacityPressure.check();
+	const point = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2, button: 'left', pointerType: 'pen', clickCount: 1 };
+	// Some pens send pointerdown and pointerup without a positive pressure sample for a quick tap.
+	await pen.send( 'Input.dispatchMouseEvent', { ...point, type: 'mousePressed', buttons: 1, force: 0 } );
+	await pen.send( 'Input.dispatchMouseEvent', { ...point, type: 'mouseReleased', buttons: 0, force: 0 } );
+	await pen.detach();
+	await ui.getByRole( 'button', { name: 'Apply drawing', exact: true } ).click();
+	assert.ok( await page.evaluate( () => editor.scene.userData.vectorDrawing.brushStrokes[ 0 ].samples[ 0 ][ 2 ] > 0 ) );
+	await opacityPressure.setChecked( previousPressure );
+	await ui.getByRole( 'button', { name: 'Undo drawing edit', exact: true } ).click();
+
+	await ui.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.mouse.click( point.x, point.y );
+	await ui.getByRole( 'button', { name: 'Apply drawing', exact: true } ).click();
+	assert.equal( await page.evaluate( () => editor.scene.userData.vectorDrawing.shapes[ 0 ].points.length ), 2 );
+	await ui.getByRole( 'button', { name: 'Undo drawing edit', exact: true } ).click();
+	await page.mouse.move( point.x, point.y );
+	await page.mouse.down();
+	await page.mouse.move( point.x + 2, point.y );
+	await page.mouse.up();
+	await showInspector();
+	const note = ui.getByLabel( 'Annotation', { exact: true } );
+	await note.check();
+	await saveAsset.click();
+	await status.getByText( 'Saved Annotation test.png to Project assets.', { exact: true } ).waitFor();
+	const marks = file => page.evaluate( async file => {
+
+		const image = await createImageBitmap( editor.sourceFiles.get( file ).file );
+		const output = document.createElement( 'canvas' );
+		output.width = image.width;
+		output.height = image.height;
+		const context = output.getContext( '2d' );
+		context.drawImage( image, 0, 0 );
+		image.close();
+		return [ output.width, output.height, context.getImageData( 0, 0, output.width, output.height ).data
+			.some( ( value, index ) => index % 4 === 3 && value > 0 ) ];
+
+	}, file );
+	assert.deepEqual( await marks( 'Annotation test.png' ), [ 320, 192, false ] );
+	await note.uncheck();
+	await saveAsset.click();
+	await status.getByText( 'Saved import-2/Annotation test.png to Project assets.', { exact: true } ).waitFor();
+	assert.deepEqual( await marks( 'import-2/Annotation test.png' ), [ 320, 192, true ] );
+	await page.locator( '.sidebar-inspector > .Tabs > #sceneTab' ).click();
 
 }
 
@@ -3108,11 +3327,15 @@ async function check() {
 
 		} ), [ 1, 2, 3 ] );
 		await checkBrushPresets( browser );
+		await checkSceneProperties( page );
+		await checkWorkspaceEditors( page );
+		await checkModeDropdown( page );
 		await checkSelectionShelf( page );
 		await checkPencilObjectSelection( page );
 		await checkSculptTargets( page );
 		await checkPencil( page );
 		await checkPencilAttachments( page );
+		await checkPencilGroundFallback( page );
 		await checkPencilSplats( page );
 		await checkCompactPencil( page );
 		await checkUVSelection( page );
@@ -3199,21 +3422,17 @@ async function check() {
 		const code = page.locator( '#script-window' );
 		const scriptWindow = page.getByRole( 'region', { name: 'Script Window', exact: true } );
 		assert.equal( await scriptWindow.isVisible(), true );
-		assert.equal( await page.locator( '#viewport' ).isVisible(), false );
-		assert.equal( await page.locator( '#code-resizer' ).count(), 0 );
-		const preview = scriptWindow.getByRole( 'button', { name: 'Show 3D view alongside', exact: true } );
-		await preview.click();
 		assert.equal( await page.locator( '#viewport' ).isVisible(), true );
-		assert.equal( await preview.getAttribute( 'aria-pressed' ), 'true' );
+		await page.locator( '#workspace-source-pane #script-window .CodeMirror' ).waitFor();
+		await page.locator( '.viewport-split-divider' ).waitFor();
 		await code.locator( '.CodeMirror' ).click( { position: { x: 100, y: 20 } } );
 		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '.CodeMirror' ) ), true );
 		await page.keyboard.press( 'Control+Space' );
 		assert.equal( ( await code.boundingBox() ).width, 1440 );
-		assert.equal( await page.locator( '#viewport' ).isVisible(), false );
+		assert.deepEqual( await page.evaluate( () => editor.viewLayout.frames.map( frame => frame.key ) ), [ 'source' ] );
 		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '#script-window' ) ), true );
 		await page.keyboard.press( 'Control+Space' );
 		assert.ok( ( await code.boundingBox() ).width < 1440 );
-		await preview.click();
 		await scriptWindow.getByRole( 'button', { name: 'Close editor area' } ).click();
 		await page.getByLabel( 'Editor Type', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Script Window', exact: true } ).click();
@@ -3371,15 +3590,19 @@ async function check() {
 		await page.mouse.move( ...end, { steps: 5 } );
 		await page.mouse.up();
 		await page.mouse.dblclick( ( start[ 0 ] + end[ 0 ] ) / 2, start[ 1 ] );
+		const contourPanel = page.getByRole( 'button', { name: 'Contours and reference', exact: true } );
+		await contourPanel.click();
 		await page.getByLabel( 'Contour color' ).fill( '#e4572e' );
 		await page.getByRole( 'button', { name: 'Create scene curve' } ).click();
 		await page.getByRole( 'button', { name: 'Create filled scene shape' } ).click();
+		await contourPanel.click();
 		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Sample Brush Color', exact: true } ).click();
 		await canvas.scrollIntoViewIfNeeded();
 		const swatch = await canvas.boundingBox();
 		await page.mouse.click( swatch.x + swatch.width / 2, swatch.y + swatch.height / 2 );
 		assert.equal( await page.getByLabel( 'Brush color', { exact: true } ).inputValue(), '#e4572e' );
 		await canvas.locator( '../..' ).getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+		await page.getByRole( 'region', { name: 'Image and vector editor' } ).getByLabel( 'Brush presets', { exact: true } ).click();
 		await page.getByRole( 'region', { name: 'Image and vector editor' } ).getByRole( 'button', { name: 'Pencil Soft', exact: true } ).click();
 		await canvas.scrollIntoViewIfNeeded();
 		const vectorFrame = await canvas.boundingBox();
@@ -3388,6 +3611,7 @@ async function check() {
 		await page.mouse.move( vectorFrame.x + vectorFrame.width * .34, vectorFrame.y + vectorFrame.height * .21, { steps: 4 } );
 		await page.mouse.move( vectorFrame.x + vectorFrame.width * .39, vectorFrame.y + vectorFrame.height * .27, { steps: 4 } );
 		await page.mouse.up();
+		await contourPanel.click();
 		const cyclic = page.getByRole( 'button', { name: 'Toggle Cyclic' } );
 		assert.equal( await cyclic.getAttribute( 'aria-pressed' ), 'false' );
 		await canvas.press( 'f' );
@@ -3436,9 +3660,11 @@ async function check() {
 		} );
 		await page.getByRole( 'button', { name: 'Undo drawing edit' } ).click();
 		await page.getByRole( 'button', { name: 'Apply drawing' } ).click();
+		await contourPanel.click();
 		const vectorTools = canvas.locator( '../..' );
 		await vectorTools.getByRole( 'button', { name: 'Brush', exact: true } ).click();
 		const palette = page.getByRole( 'region', { name: 'Image and vector editor' } ).getByRole( 'group', { name: 'Pencil brush palette' } );
+		await palette.getByLabel( 'Brush presets', { exact: true } ).click();
 		await palette.getByRole( 'button', { name: 'Marker', exact: true } ).click();
 		await canvas.scrollIntoViewIfNeeded();
 		const brushFrame = await canvas.boundingBox();
@@ -3458,6 +3684,20 @@ async function check() {
 		const viewport = await page.evaluate( () => editor.renderer.domElement.getBoundingClientRect().toJSON() );
 		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
 		await page.evaluate( () => editor.select( editor.scene.getObjectByName( 'Stroke 2' ) ) );
+		await page.locator( '#sidebar .Tab#objectTab' ).click();
+		const sceneNote = page.locator( '#sidebar' ).getByLabel( 'Annotation', { exact: true } );
+		await sceneNote.check();
+		assert.deepEqual( await page.evaluate( async () => {
+
+			const { withEnabledObjects, withViewportObjects } = await import( new URL( './js/ObjectRestrictions.js', document.baseURI ) );
+			const object = editor.selected;
+			return [ withEnabledObjects( editor.scene, () => object.visible ),
+				withViewportObjects( editor.scene, () => object.visible, true ), object.visible ];
+
+		} ), [ false, true, true ] );
+		await sceneNote.uncheck();
+		await sceneNote.blur();
+		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
 		await page.keyboard.press( 'Tab' );
 		await page.keyboard.press( 'f' );
 		assert.equal( await page.evaluate( () => editor.selected.geometry.userData.modeling.closed ), true );
@@ -3474,11 +3714,14 @@ async function check() {
 		} );
 		await page.keyboard.press( 'z' );
 		const shading = page.getByRole( 'dialog', { name: 'Viewport shading' } );
-		for ( const [ index, label ] of [ 'Rendered', 'Solid', 'Material Preview', 'Wireframe', 'Live Preview' ].entries() ) {
+		for ( const [ index, label ] of [ 'Preview', 'Solid', 'Material Preview', 'Wireframe' ].entries() ) {
 
 			assert.equal( await shading.getByRole( 'button', { name: label, exact: true } ).locator( 'kbd' ).textContent(), String( index + 1 ) );
 
 		}
+		assert.equal( await shading.getByRole( 'button' ).count(), 4 );
+		const shadingSelect = page.getByRole( 'combobox', { name: 'Viewport shading', exact: true } );
+		assert.equal( await shadingSelect.locator( 'option[value="realistic"]' ).textContent(), 'Rendered' );
 		const overlay = page.locator( '.viewport-tool-overlay' );
 		await shading.getByRole( 'button', { name: 'Material Preview', exact: true } ).click();
 		const passes = () => page.evaluate( () => {
@@ -3509,7 +3752,7 @@ async function check() {
 		assert.deepEqual( await passes(), { grid: true, gizmo: true, material: true } );
 		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
 		await page.keyboard.press( 'z' );
-		await shading.getByRole( 'button', { name: 'Live Preview', exact: true } ).click();
+		await page.keyboard.press( '1' );
 		assert.equal( await overlay.isVisible(), false );
 		assert.equal( await page.evaluate( () => editor.viewportShading ), 'preview' );
 		assert.deepEqual( await passes(), { grid: false, gizmo: false, material: true } );
@@ -3522,9 +3765,8 @@ async function check() {
 			editor.addObject( points );
 
 		} );
-		await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .5 );
-		await page.keyboard.press( 'z' );
-		await shading.getByRole( 'button', { name: 'Rendered', exact: true } ).click();
+		await shadingSelect.selectOption( 'realistic' );
+		await shadingSelect.blur();
 		assert.equal( await overlay.isVisible(), false );
 		await page.getByText( 'Raster · 32 samples', { exact: true } ).waitFor();
 		await page.evaluate( () => {
@@ -3541,7 +3783,7 @@ async function check() {
 		await page.keyboard.press( 'z' );
 		await shading.getByRole( 'button', { name: 'Solid', exact: true } ).click();
 		assert.equal( await overlay.isVisible(), true );
-		const tabOffsets = await page.locator( '#properties > .Tabs .Tab[data-glyph]:visible' ).evaluateAll( tabs => tabs.map( tab => {
+		const tabOffsets = await page.locator( '.sidebar-inspector > .Tabs .Tab:visible' ).evaluateAll( tabs => tabs.map( tab => {
 
 			const bounds = tab.getBoundingClientRect(), glyph = tab.querySelector( 'svg' ).getBoundingClientRect();
 			return Math.hypot( bounds.x + bounds.width / 2 - glyph.x - glyph.width / 2,

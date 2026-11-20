@@ -1,12 +1,10 @@
 import { placementModes } from './modeling/PlacementModes.js';
-import { shadingModes } from './ViewportShading.js?v=live-preview';
-import { icon } from './Glyphs.js?v=poly-context';
+import { shadingModes } from './ViewportShading.js?v=preview-menu';
+import { icon } from './Glyphs.js?v=editor-glyphs';
+import { interactionModes } from './modeling/InteractionModes.js';
 
 import { modelSnapMode, modelSnapTargets } from './modeling/ModelSnap.js';
 import { cursorSnapActions } from './modeling/CursorSnap.js';
-
-// Keep the four Blender shading choices on their familiar compass points.
-const shadingPiePositions = [ [ 50, 16 ], [ 82, 50 ], [ 50, 84 ], [ 18, 50 ], [ 74, 69 ] ];
 
 export function transformSnapStep( config, held = false ) {
 
@@ -27,16 +25,12 @@ export function addTransformSettings( editor, toolbar ) {
 
 	const configs = {
 		mode: {
-			label: 'Interaction mode',
+			label: 'Mode',
 			choices: () => {
 
 				const current = editor.viewTools.modeSelect.value;
-				return [
-					[ 'Object Mode', 'objectMode', 'object' ],
-					[ 'Edit Mode', 'editMode', 'edit' ],
-					[ 'Sculpt Mode', 'sculptTool', 'sculpt' ],
-					[ 'Surface Paint', 'surfaceBrush', 'paint' ]
-				].map( ( [ label, glyph, mode ] ) => [ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode ] );
+				return interactionModes.map( ( [ mode, label, glyph ] ) =>
+					[ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode ] );
 
 			}
 		},
@@ -51,8 +45,12 @@ export function addTransformSettings( editor, toolbar ) {
 		},
 		shading: {
 			label: 'Viewport shading',
-			choices: () => shadingModes.filter( ( [ mode ] ) => mode !== 'normals' ).map( ( [ mode, label, glyph ] ) =>
-				[ label, glyph, () => editor.setViewportShading( mode ), editor.viewportShading === mode ] )
+			choices: () => [ 'preview', 'solid', 'materials', 'wireframe' ].map( mode => {
+
+				const [ , label, glyph ] = shadingModes.find( ( [ value ] ) => value === mode );
+				return [ label, glyph, () => editor.setViewportShading( mode ), editor.viewportShading === mode ];
+
+			} )
 		},
 		placement: {
 			label: 'Placement', glyph: 'placePlane',
@@ -211,6 +209,14 @@ export function addTransformSettings( editor, toolbar ) {
 		center.textContent = kind === 'navigation' ? ( editor.camera.isOrthographicCamera ? 'Orthographic' : 'Perspective' ) :
 			kind === 'snap' ? ( config.getKey( 'settings/transformSnap' ) == null ? 'Snap off' : 'Snap on' ) : definition.label;
 		if ( ! dropdown || kind === 'snap' ) wheel.appendChild( center );
+		const indicator = document.createElement( 'span' );
+		if ( ! dropdown ) {
+
+			indicator.className = 'transform-pie-indicator';
+			indicator.setAttribute( 'aria-hidden', 'true' );
+			wheel.appendChild( indicator );
+
+		}
 		const choices = definition.choices();
 		entries = choices.map( ( [ label, glyph, apply, active, disabled ], index ) => {
 
@@ -230,10 +236,8 @@ export function addTransformSettings( editor, toolbar ) {
 			const angle = index / choices.length * Math.PI * 2 - Math.PI / 2;
 			if ( ! dropdown ) {
 
-				const [ x, y ] = kind === 'shading' ? shadingPiePositions[ index ] :
-					[ 50 + 32 * Math.cos( angle ), 50 + 34 * Math.sin( angle ) ];
-				button.style.left = x + '%';
-				button.style.top = y + '%';
+				button.style.left = ( 50 + 32 * Math.cos( angle ) ) + '%';
+				button.style.top = ( 50 + 34 * Math.sin( angle ) ) + '%';
 
 			}
 			button.onclick = () => {
@@ -246,6 +250,36 @@ export function addTransformSettings( editor, toolbar ) {
 			return button;
 
 		} );
+		const selected = entries.find( button => button.getAttribute( 'aria-pressed' ) === 'true' );
+		if ( ! dropdown ) {
+
+			let hovered = null;
+			const updateIndicator = () => {
+
+				const focused = document.activeElement;
+				const target = hovered || ( entries.includes( focused ) ? focused : selected );
+				if ( ! target ) {
+
+					indicator.removeAttribute( 'style' );
+					return;
+
+				}
+				const origin = indicator.getBoundingClientRect();
+				const choice = target.getBoundingClientRect();
+				const x = choice.left + choice.width / 2 - origin.left - origin.width / 2;
+				const y = choice.top + choice.height / 2 - origin.top - origin.height / 2;
+				indicator.style.setProperty( '--pie-direction', Math.atan2( x, - y ) + 'rad' );
+
+			};
+			wheel.addEventListener( 'focusin', updateIndicator );
+			for ( const button of entries ) {
+
+				button.addEventListener( 'pointerenter', () => { hovered = button; updateIndicator(); } );
+				button.addEventListener( 'pointerleave', () => { hovered = null; updateIndicator(); } );
+
+			}
+
+		}
 		dialog.appendChild( wheel );
 		dialog.showModal();
 		const bounds = dialog.getBoundingClientRect();
@@ -265,7 +299,6 @@ export function addTransformSettings( editor, toolbar ) {
 			dialog.style.top = clamp( y, window.innerHeight, bounds.height / 2 ) + 'px';
 
 		}
-		const selected = entries.find( button => button.getAttribute( 'aria-pressed' ) === 'true' );
 		( selected || entries[ 0 ] )?.focus( { preventScroll: true } );
 
 	}

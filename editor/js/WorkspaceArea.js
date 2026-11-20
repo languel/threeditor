@@ -3,7 +3,7 @@ function WorkspaceArea( editor, menubar, ...areas ) {
 	const body = document.body;
 	const layout = editor.viewLayout;
 	let current, previousFocus, lastPointerArea, lastPane;
-	for ( const area of areas ) area.dataset.workspaceArea = area.id;
+	for ( const area of areas ) area.dataset.workspaceArea = area.id.replace( 'workspace-', '' );
 	const restoreButton = document.createElement( 'button' );
 	restoreButton.type = 'button';
 	restoreButton.className = 'workspace-area-restore';
@@ -13,12 +13,19 @@ function WorkspaceArea( editor, menubar, ...areas ) {
 	restoreButton.addEventListener( 'click', restore );
 	menubar.querySelector( '.panel-toggles' ).prepend( restoreButton );
 
+	function containingArea( target ) {
+
+		if ( target?.closest?.( '.workspace-split-pane' ) ) return layout.viewport.closest( '[data-workspace-area]' );
+		return target?.closest?.( '[data-workspace-area]' );
+
+	}
+
 	function trackArea( event ) {
 
-		const area = event.target.closest?.( '[data-workspace-area]' );
+		const area = containingArea( event.target );
 		if ( ! area ) return;
 		lastPointerArea = area;
-		lastPane = area.id === 'viewport' ? layout.at( event.clientX, event.clientY, 'area' )?.key : undefined;
+		lastPane = event.target.closest( '#viewport' ) ? layout.at( event.clientX, event.clientY, 'area' )?.key : undefined;
 
 	}
 
@@ -47,14 +54,14 @@ function WorkspaceArea( editor, menubar, ...areas ) {
 		if ( editor.modeling.gesture || editor.modeling.drag || editor.viewTools.pointer ||
 			editor.modalTransform.active || editor.flyControls.active || body.classList.contains( 'presenting' ) ) return;
 		const visible = area => area && area.getClientRects().length > 0;
-		const area = [ lastPointerArea, document.activeElement?.closest( '[data-workspace-area]' ), areas[ 0 ] ].find( visible );
+		const area = [ lastPointerArea, containingArea( document.activeElement ), areas[ 0 ] ].find( visible );
 		if ( ! area ) return;
 		previousFocus = document.activeElement;
 		current = area;
-		body.dataset.maximizedArea = area.id;
-		if ( area.id === 'viewport' && editor.viewportSplit && ! editor.editWorkspace.mode ) {
+		body.dataset.maximizedArea = area.dataset.workspaceArea;
+		if ( area.dataset.workspaceArea === 'viewport' && area.contains( layout.viewport ) && editor.viewportSplit ) {
 
-			layout.maximizedPane = lastPointerArea === area && lastPane || 'director';
+			layout.maximizedPane = lastPointerArea === area && lastPane || layout.activeKey;
 
 		}
 		restoreButton.hidden = false;

@@ -3,7 +3,7 @@ import { UIPanel } from './libs/ui.js';
 
 import { MenubarAdd } from './Menubar.Add.js?v=uv-sculpt';
 import { MenubarEdit } from './Menubar.Edit.js?v=unified-sync';
-import { MenubarFile } from './Menubar.File.js?v=projector-mapping';
+import { MenubarFile } from './Menubar.File.js?v=example-open';
 import { MenubarView } from './Menubar.View.js?v=unified-sync';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';

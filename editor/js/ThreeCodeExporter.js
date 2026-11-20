@@ -237,6 +237,13 @@ function generateThreeCode( editor ) {
 	function transform( name, o ) {
 
 		if ( o.isCamera || o.userData.assetObject || followTargets.has( o.uuid ) || routedObjects.has( o.uuid ) || rulerTargets.has( o.uuid ) ) out( `${ name }.uuid = ${ q( o.uuid ) };` );
+		if ( o.userData.annotation === true ) {
+
+			annotations = true;
+			out( `${ name }.userData.annotation = true;` );
+
+		}
+		if ( o.userData.pencilStroke ) out( `${ name }.userData.pencilStroke = true;` );
 		if ( o.userData.asset ) out( `${ name }.userData.asset = ${ q( o.userData.asset ) };` );
 		if ( o.userData.assetObject ) out( `${ name }.userData.assetObject = ${ q( o.userData.assetObject ) };` );
 		if ( o.userData.vrmBones ) out( `${ name }.userData.vrmBones = ${ q( o.userData.vrmBones ) };` );
@@ -258,6 +265,7 @@ function generateThreeCode( editor ) {
 	}
 
 	const assetBehaviors = [];
+	let annotations = false;
 	function emitAssetBehavior( object, name ) {
 		if ( hasRestriction( object, 'disabled' ) ) return false;
 		const scripts = editor.scripts?.[ object.uuid ]?.filter( script => script.assetBehavior && script.assetBehavior !== 'stream' && script.enabled !== false ) || [];
@@ -686,9 +694,17 @@ if ( scene.userData.threeditor?.disabled === true ) out( 'scene.visible = false;
 	tail.push( '  last = t;' );
 	if ( useController ) tail.push( '  controls.update(dt);' );
 	if ( mainProjectorVariable ) tail.push( `  syncProjectorView(THREE, ${ mainProjectorVariable }, camera);` );
+	const render = mainProjectorVariable ?
+		'renderFittedView(THREE, renderer, scene, camera, innerWidth, innerHeight, () => renderer.render(scene, camera))' :
+		'renderer.render(scene, camera)';
 	if ( textureOutput && mainProjectorVariable ) tail.push( `  drawProjectorOutput(outputContext, ${ mainProjectorVariable });` );
-	else if ( mainProjectorVariable ) tail.push( '  renderFittedView(THREE, renderer, scene, camera, innerWidth, innerHeight, () => renderer.render(scene, camera));' );
-	else tail.push( '  renderer.render(scene, camera);' );
+	else if ( annotations ) {
+
+		tail.push( '  const annotations = [];' );
+		tail.push( '  scene.traverseVisible(object => { if (object.userData.annotation === true) { annotations.push(object); object.visible = false; } });' );
+		tail.push( `  try { ${ render }; } finally { for (const object of annotations) object.visible = true; }` );
+
+	} else tail.push( `  ${ render };` );
 	tail.push( '});' );
 	tail.push( '// @/key' );
 

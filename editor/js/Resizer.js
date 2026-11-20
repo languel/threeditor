@@ -4,6 +4,11 @@ function Resizer( editor ) {
 
 	const dom = document.createElement( 'div' );
 	dom.id = 'resizer';
+	dom.tabIndex = 0;
+	dom.setAttribute( 'role', 'separator' );
+	dom.setAttribute( 'aria-label', 'Resize right sidebar' );
+	dom.setAttribute( 'aria-orientation', 'vertical' );
+	dom.setAttribute( 'aria-controls', 'sidebar' );
 
 	dom.addEventListener( 'pointerdown', ( event ) => {
 

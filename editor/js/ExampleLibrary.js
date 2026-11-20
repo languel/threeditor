@@ -20,7 +20,7 @@ function createExampleLibrary( editor ) {
 	let storageError = '';
 	let busy = false;
 
-	function confirmOpen( title ) {
+	function confirmOpen( title, load ) {
 
 		return new Promise( resolve => {
 
@@ -33,17 +33,44 @@ function createExampleLibrary( editor ) {
 			message.textContent = editor.strings.getKey( 'prompt/file/open' );
 			const actions = document.createElement( 'div' );
 			actions.className = 'project-save-actions';
+			const result = document.createElement( 'p' );
+			result.setAttribute( 'role', 'status' );
+			let loading = false;
 			for ( const [ label, value ] of [ [ 'Cancel', '' ], [ 'Open', 'open' ] ] ) {
 
 				const button = document.createElement( 'button' );
 				button.textContent = label;
-				button.addEventListener( 'click', () => dialog.close( value ) );
+				button.addEventListener( 'click', async () => {
+
+					if ( ! value ) { dialog.close(); return; }
+					loading = true;
+					for ( const action of actions.children ) action.disabled = true;
+					result.textContent = 'Opening ' + title + '…';
+					try {
+
+						await load();
+						dialog.close();
+
+					} catch ( error ) {
+
+						result.textContent = error.message;
+						console.error( error );
+
+					} finally {
+
+						loading = false;
+						for ( const action of actions.children ) action.disabled = false;
+
+					}
+
+				} );
 				actions.append( button );
 
 			}
 			dialog.addEventListener( 'keydown', event => event.stopPropagation() );
-			dialog.addEventListener( 'close', () => { resolve( dialog.returnValue === 'open' ); dialog.remove(); }, { once: true } );
-			dialog.append( heading, message, actions );
+			dialog.addEventListener( 'cancel', event => { if ( loading ) event.preventDefault(); } );
+			dialog.addEventListener( 'close', () => { dialog.remove(); resolve(); }, { once: true } );
+			dialog.append( heading, message, result, actions );
 			document.body.append( dialog );
 			dialog.showModal();
 
@@ -55,55 +82,54 @@ function createExampleLibrary( editor ) {
 
 		if ( busy ) return;
 		busy = true;
-		if ( ! await confirmOpen( entry.title ) ) { busy = false; return; }
-		status.textContent = 'Opening ' + entry.title + '…';
 		try {
 
-			let record;
-			if ( entry.path ) {
-
-				record = await library.get( entry.path );
-				if ( ! record ) throw new Error( 'This saved project is no longer available.' );
-
-			} else {
-
-				const response = await fetch( entry.file, { cache: 'no-cache' } );
-				if ( ! response.ok ) throw new Error( 'Could not load ' + entry.title );
-				const project = await response.json();
-				project.project ||= {};
-				project.project.title ||= entry.title.replace( /^\d+\s*·\s*/, '' );
-				const sourceFiles = await Promise.all( ( entry.assets || [] ).map( async asset => {
-
-					const response = await fetch( asset.file );
-					if ( ! response.ok ) throw new Error( 'Could not load ' + asset.path );
-					const blob = await response.blob();
-					const file = new File( [ blob ], asset.path.split( '/' ).at( - 1 ), { type: blob.type || 'application/octet-stream' } );
-					return [ asset.path, { file, batch: ( entry.assets || [] ).map( asset => asset.path ), asset: asset.meta } ];
-
-				} ) );
-				record = { project, sourceFiles, shading: 'preview' };
-
-			}
-			if ( ! record.project?.scene || ! record.project?.camera ) throw new Error( 'This file is not an editor project.' );
-			editor.signals.stopPlayer.dispatch();
-			editor.clear();
-			editor.sourceFiles = new Map( record.sourceFiles || [] );
-			await editor.fromJSON( record.project );
-			editor.userProjectPath = entry.path || '';
-			if ( record.shading ) editor.setViewportShading( record.shading );
-			editor.signals.assetsChanged.dispatch();
-			status.textContent = 'Opened ' + entry.title;
-
-		} catch ( error ) {
-
-			status.textContent = error.message;
-			console.error( error );
+			await confirmOpen( entry.title, () => load( entry ) );
 
 		} finally {
 
 			busy = false;
 
 		}
+
+	}
+
+	async function load( entry ) {
+
+		let record;
+		if ( entry.path ) {
+
+			record = await library.get( entry.path );
+			if ( ! record ) throw new Error( 'This saved project is no longer available.' );
+
+		} else {
+
+			const response = await fetch( entry.file, { cache: 'no-cache' } );
+			if ( ! response.ok ) throw new Error( 'Could not load ' + entry.title );
+			const project = await response.json();
+			project.project ||= {};
+			project.project.title ||= entry.title.replace( /^\d+\s*·\s*/, '' );
+			const sourceFiles = await Promise.all( ( entry.assets || [] ).map( async asset => {
+
+				const response = await fetch( asset.file );
+				if ( ! response.ok ) throw new Error( 'Could not load ' + asset.path );
+				const blob = await response.blob();
+				const file = new File( [ blob ], asset.path.split( '/' ).at( - 1 ), { type: blob.type || 'application/octet-stream' } );
+				return [ asset.path, { file, batch: ( entry.assets || [] ).map( asset => asset.path ), asset: asset.meta } ];
+
+			} ) );
+			record = { project, sourceFiles, shading: 'preview' };
+
+		}
+		if ( ! record.project?.scene || ! record.project?.camera ) throw new Error( 'This file is not an editor project.' );
+		editor.signals.stopPlayer.dispatch();
+		editor.clear();
+		editor.sourceFiles = new Map( record.sourceFiles || [] );
+		await editor.fromJSON( record.project );
+		editor.userProjectPath = entry.path || '';
+		if ( record.shading ) editor.setViewportShading( record.shading );
+		editor.signals.assetsChanged.dispatch();
+		status.textContent = 'Opened ' + entry.title;
 
 	}
 

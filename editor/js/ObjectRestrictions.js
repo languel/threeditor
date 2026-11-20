@@ -16,10 +16,10 @@ function isVisible( object ) {
  return true;
 }
 
-function withViewportObjects( scene, render ) {
+function withViewportObjects( scene, render, showAnnotations = false ) {
 
  const state = viewports.get( scene );
- if ( ! state || ! state.local && ! state.hidden.size ) return withEnabledObjects( scene, render );
+ if ( ! state || ! state.local && ! state.hidden.size ) return withEnabledObjects( scene, render, showAnnotations );
  const lightAncestors = new Set();
  if ( state.local ) scene.traverseVisible( object => {
 
@@ -45,19 +45,19 @@ function withViewportObjects( scene, render ) {
 
  } );
  try {
-  return withEnabledObjects( scene, render );
+  return withEnabledObjects( scene, render, showAnnotations );
  } finally {
   for ( const object of hidden ) object.visible = true;
   for ( const [ object, mask ] of layers ) object.layers.mask = mask;
  }
 
 }
-function withEnabledObjects( scene, render ) {
+function withEnabledObjects( scene, render, showAnnotations = false ) {
 
  const hidden = [];
  scene.traverseVisible( object => {
 
-  if ( object.userData?.threeditor?.disabled !== true ) return;
+  if ( object.userData?.threeditor?.disabled !== true && ( showAnnotations || object.userData?.annotation !== true ) ) return;
   object.visible = false;
   hidden.push( object );
 

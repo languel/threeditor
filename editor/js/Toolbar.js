@@ -1,5 +1,5 @@
 import { icon } from './Glyphs.js?v=mode-shelves';
-import { addTransformSettings } from './TransformSettings.js?v=mode-pie';
+import { addTransformSettings } from './TransformSettings.js?v=editor-glyphs';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {
