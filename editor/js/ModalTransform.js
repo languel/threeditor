@@ -1,5 +1,5 @@
-import { automaticAxis, constraintHint, createSnapBaseMarker, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase,
- snapBaseHint, startConstraintDrag, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js?v=held-alt-constraint';
+import { automaticAxis, constraintHint, createSnapBaseMarker, createTransformPointer, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase, showTransformPointer,
+ snapBaseHint, startConstraintDrag, trackballDelta, transformFeature, transformHints, transformModes, transformNumber } from './modeling/TransformGesture.js?v=transform-gizmos';
 import * as THREE from 'three';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
 import { SetRotationCommand } from './commands/SetRotationCommand.js';
@@ -11,7 +11,7 @@ function ModalTransform( editor ) {
  let mode=null,states=[],originals=[],objects=[],selection=[],axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0,commitPreview=null;
  let pointer, trackball, auto, snapBase, pickingBase;
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
- let marker;
+ let marker, transformPointer;
  function movingSnapBase(){
 
   if(!snapBase)return null;
@@ -25,6 +25,7 @@ function ModalTransform( editor ) {
 
   if(!marker)return;
   showSnapBase(marker,editor.viewLayout.navigation,mode&&!pickingBase?movingSnapBase():null);
+  showTransformPointer(transformPointer,editor.viewLayout,pickingBase?null:mode,pointer);
 
  }
  editor.signals.sceneRendered.add(updateMarker);
@@ -36,6 +37,7 @@ function ModalTransform( editor ) {
   const constraint = constraintHint( auto, locked && locked + ( local ? ' (local)' : '' ) );
   const base = snapBaseHint( pickingBase, snapBase, mode === 'translate' );
   notice.textContent = [ name, constraint, numeric, base, transformHints ].filter( Boolean ).join( ' · ' );
+  updateMarker();
 
  }
  function rebase(){
@@ -59,6 +61,7 @@ function ModalTransform( editor ) {
   rebase();
   const viewport=document.getElementById('viewport');
   marker ||= createSnapBaseMarker(viewport);
+  transformPointer ||= createTransformPointer(viewport);
   commitPreview=commit;editor.controls.enabled=false;viewport.appendChild(notice);notice.hidden=false;label();
  }
  function isAncestor(a,o){for(let p=o.parent;p;p=p.parent)if(p===a)return true;return false;}
@@ -133,7 +136,7 @@ function ModalTransform( editor ) {
    }
    if(!accept){state.o.updateMatrixWorld(true);editor.signals.objectChanged.dispatch(state.o);}
   }
-  mode=null;states=[];originals=[];objects=[];selection=[];notice.hidden=true;marker.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
+  mode=null;states=[];originals=[];objects=[];selection=[];notice.hidden=true;marker.hidden=true;transformPointer.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
   const commit=commitPreview;commitPreview=null;
   if(commands.length){
    if(commit)commit();
@@ -155,6 +158,7 @@ function ModalTransform( editor ) {
    }
   }
   if(!pickingBase&&(!auto||auto.locked&&auto.button!==undefined))update();
+  updateMarker();
  }
 
  window.addEventListener('pointermove',e=>{lastX=e.clientX;lastY=e.clientY;pointer=e;if(mode)updatePointer(e);},true);

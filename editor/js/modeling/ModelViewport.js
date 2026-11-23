@@ -18,8 +18,8 @@ import { joinMeshGeometry } from './MeshJoin.js';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { modelSnapMode, snapIncrement, snapMeshFeature } from './ModelSnap.js';
-import { automaticAxis, constraintHint, createSnapBaseMarker, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase,
-	snapBaseHint, startConstraintDrag, trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=held-alt-constraint';
+import { automaticAxis, constraintHint, createSnapBaseMarker, createTransformPointer, endsConstraintDrag, isConstraintDrag, modalSnapMode, pickTransformSnapBase, showSnapBase, showTransformPointer,
+	snapBaseHint, startConstraintDrag, trackballDelta, transformHints, transformModes, transformNumber } from './TransformGesture.js?v=transform-gizmos';
 import { addFace, appendModelPoint, insertModelPoint, pencilSamples, boundaryEdge, extrudeEdge, extrudeFace, faceNormal, isClosedOutline, meshFromOutline, modelData, modelGeometry, modelObject, moveAuthoredMeshPoints, outlinePoints, readModelGeometry, pokeFace, removePoints, splitEdge, weldPoints } from './ModelGeometry.js?v=texture-projection';
 
 
@@ -101,7 +101,8 @@ export class ModelViewport {
 
 		}
 		this.snapBaseMarker = createSnapBaseMarker( viewport );
-		signals.sceneRendered.add( () => { this.draw(); this.refreshSnapBaseMarker(); } );
+		this.transformPointer = createTransformPointer( viewport );
+		signals.sceneRendered.add( () => { this.draw(); this.refreshSnapBaseMarker(); this.refreshTransformPointer(); } );
 		signals.transformSettingsChanged.add( () => { if ( this.object && ! this.gesture ) this.changed(); } );
 		signals.cursorChanged.add( () => {
 
@@ -1227,6 +1228,7 @@ export class ModelViewport {
 		this.gesture = null;
 		this.notice?.remove();
 		this.snapBaseMarker.hidden = true;
+		this.transformPointer.hidden = true;
 		if ( state.modal ) this.editor.controls.enabled = true;
 		if ( accept && state.geometry && this.canEdit() && state.extrusion ) {
 
@@ -1288,6 +1290,7 @@ export class ModelViewport {
 
 	labelModal() {
 
+		this.refreshTransformPointer();
 		const { mode, axis, numeric } = this.gesture;
 		if ( this.gesture.extrusion ) {
 
@@ -1302,6 +1305,14 @@ export class ModelViewport {
 		const constraint = constraintHint( state.auto, axis && axis + ( axis.length === 1 ? ' axis' : ' plane' ) );
 		this.refreshSnapBaseMarker();
 		this.notice.textContent = [ name, constraint, numeric, base, this.planar ? transformHints.replace( 'R twice trackball · ', '' ) : transformHints ].filter( Boolean ).join( ' · ' );
+
+	}
+
+	refreshTransformPointer() {
+
+		const state = this.gesture;
+		showTransformPointer( this.transformPointer, this.editor.viewLayout,
+			state?.modal && ! state.pickingBase ? state.extrusion ? 'extrude' : state.mode : null, this.lastPointer );
 
 	}
 

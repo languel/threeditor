@@ -234,6 +234,111 @@ async function checkWorkspaceEditors( page ) {
 
 }
 
+async function checkTransformGizmos( page ) {
+
+	await page.evaluate( () => {
+
+		const renderer = editor.renderer;
+		const draw = renderer.render;
+		renderer.render = function ( scene, ...args ) {
+
+			const helper = scene.children.find( object => object.isTransformControlsRoot );
+			if ( helper ) window.testTransformControls = helper.controls;
+			return draw.call( this, scene, ...args );
+
+		};
+		const plane = new THREE.Mesh( new THREE.PlaneGeometry( 4, 4 ), new THREE.MeshBasicMaterial( { side: THREE.DoubleSide } ) );
+		editor.addObject( plane );
+		editor.select( plane );
+		editor.camera.position.set( 3, 4, 7 );
+		editor.camera.lookAt( 0, 0, 0 );
+		editor.signals.cameraChanged.dispatch( editor.camera );
+		renderer.render = draw;
+
+	} );
+	const axes = page.getByRole( 'group', { name: 'Transform tools' } );
+	const dragAxis = async ( mode, cancel = false, precise = false ) => {
+
+		const hit = await page.evaluate( ( { mode, precise } ) => {
+
+			const control = window.testTransformControls;
+			const frame = editor.viewLayout.navigation;
+			const rect = editor.viewLayout.clientRect( frame );
+			for ( const handle of control._gizmo.gizmo[ mode ].children ) {
+
+				if ( ! handle.visible || handle.name !== 'X' || handle.tag === 'shaft' ) continue;
+				handle.geometry.computeBoundingBox();
+				const vertices = handle.geometry.attributes.position;
+				const points = [ handle.geometry.boundingBox.getCenter( new THREE.Vector3() ),
+					...Array.from( { length: vertices.count }, ( _, index ) => new THREE.Vector3().fromBufferAttribute( vertices, index ) ) ];
+				for ( const point of points ) {
+
+					const clip = point.applyMatrix4( handle.matrixWorld ).project( frame.camera );
+					const picked = control.pickHandle( clip, precise );
+					if ( picked?.mode === mode && picked.axis === 'X' ) return [ rect.left + ( clip.x + 1 ) * rect.width / 2, rect.top + ( 1 - clip.y ) * rect.height / 2 ];
+
+				}
+
+			}
+
+		}, { mode, precise } );
+		assert.ok( hit, 'Expected a visible ' + mode + ' handle' );
+		await page.mouse.move( ...hit );
+		await page.mouse.down();
+		assert.deepEqual( await page.evaluate( () => [ window.testTransformControls.dragging, window.testTransformControls.mode ] ), [ true, mode ] );
+		await page.mouse.move( hit[ 0 ] + 34, hit[ 1 ] + 17, { steps: 4 } );
+		if ( cancel ) await page.keyboard.press( 'Escape' );
+		await page.mouse.up();
+
+	};
+	await axes.getByRole( 'button', { name: 'Translate', exact: true } ).click();
+	await dragAxis( 'translate', true );
+	assert.equal( await page.evaluate( () => editor.selected.position.length() ), 0 );
+	await axes.getByRole( 'button', { name: 'Combined Transform' } ).click();
+	for ( const [ mode, property, original ] of [ [ 'translate', 'position', 0 ], [ 'rotate', 'rotation', 0 ], [ 'scale', 'scale', 1 ] ] ) {
+
+		await dragAxis( mode );
+		assert.notEqual( await page.evaluate( property => editor.selected[ property ].x, property ), original );
+		await page.evaluate( () => editor.undo() );
+
+	}
+	await page.evaluate( () => {
+
+		editor.viewTools.setWorkspaceMode( 'edit' );
+		editor.modeling.selectPoints( true );
+
+	} );
+	const firstPoint = await page.evaluate( () => editor.modeling.data.points[ 0 ][ 0 ] );
+	await dragAxis( 'translate', false, true );
+	assert.notEqual( await page.evaluate( () => editor.modeling.data.points[ 0 ][ 0 ] ), firstPoint );
+
+	const viewMenu = page.locator( '#menubar .menu' ).filter( { has: page.locator( '.title[data-glyph-key="menubar/view"]' ) } );
+	const toggleGizmo = async () => {
+
+		await viewMenu.locator( '.title' ).hover();
+		await viewMenu.getByText( 'Show transform gizmo', { exact: true } ).click();
+
+	};
+	await toggleGizmo();
+	assert.equal( await page.evaluate( () => window.testTransformControls.enabled ), false );
+	const canvas = await page.locator( '#viewport canvas[data-engine]' ).boundingBox();
+	await page.mouse.move( canvas.x + canvas.width * .55, canvas.y + canvas.height * .56 );
+	for ( const [ key, glyph ] of [ [ 'g', 'move' ], [ 'r', 'rotate' ], [ 's', 'scale' ] ] ) {
+
+		await page.keyboard.press( key );
+		await page.locator( '.transform-pointer[data-glyph="' + glyph + '"]:visible' ).waitFor();
+
+	}
+	await page.keyboard.press( 'Escape' );
+	assert.equal( await page.locator( '.transform-pointer:visible' ).count(), 0 );
+	assert.equal( await axes.getByRole( 'button', { name: 'Combined Transform' } ).getAttribute( 'aria-pressed' ), 'true' );
+	await toggleGizmo();
+	await axes.getByRole( 'button', { name: 'Translate', exact: true } ).click();
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => { delete window.testTransformControls; editor.clear(); } );
+
+}
+
 async function checkModeDropdown( page ) {
 
 	const mode = page.getByRole( 'combobox', { name: 'Interaction mode', exact: true } );
@@ -255,7 +360,7 @@ async function checkSelectionShelf( page ) {
 	const shelf = page.getByRole( 'group', { name: 'Viewport Toolbar', exact: true } );
 	const transforms = shelf.getByRole( 'group', { name: 'Transform tools' } );
 	const buttons = await transforms.getByRole( 'button' ).all();
-	assert.equal( buttons.length, 3 );
+	assert.equal( buttons.length, 4 );
 	const positions = await Promise.all( buttons.map( button => button.boundingBox() ) );
 	assert.equal( positions[ 0 ].x, positions[ 2 ].x );
 	assert.ok( positions[ 0 ].y < positions[ 2 ].y );
@@ -3482,6 +3587,7 @@ async function check() {
 		await checkWorkspaceEditors( page );
 		await checkModeDropdown( page );
 		await checkSelectionShelf( page );
+		await checkTransformGizmos( page );
 		await checkPencilObjectSelection( page );
 		await checkSculptTargets( page );
 		await checkPencil( page );

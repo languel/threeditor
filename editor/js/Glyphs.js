@@ -6,6 +6,7 @@
 const svg = ( inner ) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
 const ICONS = {
+	transformCombined: svg( '<circle cx="12" cy="12" r="7"/><path d="M12 2v20M2 12h20M9 5l3-3 3 3M19 9l3 3-3 3"/><rect x="8" y="8" width="8" height="8"/>' ),
 	knifeTool: svg( '<path d="m4 20 7-7m0 0L19 3l2 2-6 12-4-4Z"/><path d="M3 7h7m6 13h5" stroke-dasharray="2 2"/>' ),
 	surfacePerpendicular: svg( '<path d="m3 16 8-4 10 4-10 5-8-5Zm8-4V3m-3 3 3-3 3 3"/>' ),
 	selectBox: svg( '<rect x="4" y="4" width="16" height="16" stroke-dasharray="3 3"/><path d="m9 9 7 3-4 1-1 4-2-8Z"/>' ),

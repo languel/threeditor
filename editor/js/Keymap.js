@@ -266,7 +266,7 @@ class Keymap {
    case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;
    case 'save':e.saveProject?.();break;
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
-   case 'translate':case 'rotate':case 'scale': s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
+   case 'translate':case 'rotate':case 'scale': if(this.preset!=='blender'||e.transformGizmoMode!=='combined')s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;
    case 'delete':case 'deleteBack':{if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
    case 'selectAll':{if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(this.preset==='basic'&&objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}

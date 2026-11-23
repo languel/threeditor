@@ -11,7 +11,7 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=brush-presets';
+import { Config } from './Config.js?v=transform-gizmos';
 import { Loader } from './Loader.js?v=splat-filters';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';

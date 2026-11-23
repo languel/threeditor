@@ -99,6 +99,16 @@ function MenubarView( editor ) {
 	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Sidebar' ).onClick( () => editor.keymap.run( 'viewportSidebar' ) ) );
 	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Toolbar' ).onClick( () => editor.keymap.run( 'viewportToolbar' ) ) );
 	options.add( new UIRow().addClass( 'option' ).setTextContent( 'Toggle Viewport Overlays' ).onClick( () => editor.keymap.run( 'viewportOverlays' ) ) );
+	const showGizmo = new UIRow().addClass( 'option' ).addClass( 'toggle' ).setTextContent( 'Show transform gizmo' ).onClick( () => {
+
+		editor.config.setKey( 'settings/showTransformGizmo', ! editor.config.getKey( 'settings/showTransformGizmo' ) );
+		signals.transformSettingsChanged.dispatch( 'showTransformGizmo' );
+
+	} );
+	const refreshGizmo = () => showGizmo.toggleClass( 'toggle-on', editor.config.getKey( 'settings/showTransformGizmo' ) );
+	signals.transformSettingsChanged.add( key => { if ( key === 'showTransformGizmo' ) refreshGizmo(); } );
+	refreshGizmo();
+	options.add( showGizmo );
 	options.add( new UIRow().addClass( 'option' ).setTextContent( 'View Navigation…' ).onClick( () => editor.keymap.run( 'navigationPie' ) ) );
 	for ( const [ label, action ] of [
 		[ 'Toggle Local View', 'localView' ], [ 'Hide Selected in Viewport', 'hideSelection' ],

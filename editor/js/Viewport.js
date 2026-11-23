@@ -1,12 +1,12 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=texture-projection';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=transform-gizmos';
 import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js?v=transform-gizmos';
 
 import { UIPanel } from './libs/ui.js';
 
@@ -35,7 +35,7 @@ import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=texture-projection';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
-import { ModelViewport } from './modeling/ModelViewport.js?v=texture-projection';
+import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {
@@ -100,6 +100,8 @@ function Viewport( editor ) {
 		}
 
 	}, true );
+	container.dom.addEventListener( 'pointerdown', event => startGizmoDrag( event,
+		editor.modeling.editMode || editor.modeling.selectionTool !== 'select' ), true );
 	const labels = new ViewportLabels( editor, container.dom );
 	signals.viewportLabelsChanged.add( render );
 	signals.viewportOverlaysChanged.add( render );
@@ -197,6 +199,10 @@ function Viewport( editor ) {
 	const transformControls = new TransformControls( camera );
 	const model = editor.modeling;
 	sceneHelpers.add( model.proxy );
+	let gizmoDrag, cancelGizmoDrag = false;
+	const gizmoAllowed = () => editor.config.getKey( 'settings/showTransformGizmo' ) !== false &&
+		editor.viewportShading !== 'preview' && ! editor.viewTools.mode && ! editor.modalTransform.active &&
+		! editor.flyControls?.active && ! editor.editWorkspace.exclusive && ! model.gesture?.modal && ! model.pen && ! model.knife;
 
 	function syncTransformTarget() {
 
@@ -208,40 +214,89 @@ function Viewport( editor ) {
 			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
 		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
 		else if ( ! candidate && transformControls.object ) transformControls.detach();
-		transformControls.enabled = editor.viewportShading !== 'preview' && ! editor.viewTools.mode &&
-			( ! model.editMode || candidate === model.proxy && ! model.gesture?.modal );
+		transformControls.enabled = Boolean( candidate ) && gizmoAllowed();
+		transformControls.getHelper().visible = transformControls.enabled;
 		transformControls.setSpace( model.object || editor.config.getKey( 'settings/transformOrientation' ) === 'local' ? 'local' : 'world' );
 		setControlSnap( false );
 
 	}
 
 	model.onSelectionChange = syncTransformTarget;
-	model.gizmoUnderPointer = event => {
+	const controlPointer = ( event, rect ) => ( {
+		x: 2 * ( event.clientX - rect.left ) / rect.width - 1,
+		y: 1 - 2 * ( event.clientY - rect.top ) / rect.height,
+		button: event.button
+	} );
+	function startGizmoDrag( event, precise ) {
 
-		if ( ! layout.navigation || transformControls.object !== model.proxy || ! transformControls.enabled ) return false;
-		const rect = model.rect();
-		transformControls.pointerHover( {
-			x: 2 * ( event.clientX - rect.left ) / rect.width - 1, y: 1 - 2 * ( event.clientY - rect.top ) / rect.height
-		} );
-		return Boolean( transformControls.axis );
+		if ( event.button !== 0 || event.altKey || event.metaKey || event.shiftKey && ! event.ctrlKey || event.target !== renderer?.domElement ||
+			gizmoDrag || ! gizmoAllowed() || ! transformControls.enabled || model.drag ) return false;
+		const frame = layout.navigation;
+		if ( ! frame || layout.at( event.clientX, event.clientY ) !== frame ) return false;
+		const rect = layout.clientRect( frame );
+		const pointer = controlPointer( event, rect );
+		const hit = transformControls.pickHandle( pointer, precise );
+		if ( ! hit ) return false;
+		transformControls.mode = hit.mode;
+		transformControls.axis = hit.axis;
+		model.lastPointer = event;
+		setControlSnap( event.ctrlKey, event.shiftKey );
+		transformControls.pointerDown( pointer );
+		if ( ! transformControls.dragging ) return false;
+		gizmoDrag = { id: event.pointerId, target: event.target, rect };
+		event.target.setPointerCapture( event.pointerId );
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		return true;
 
-	};
-	let cancelModelDrag = false;
-	model.cancelGizmo = () => {
+	}
+	model.gizmoUnderPointer = event => startGizmoDrag( event, false );
+	function endGizmoDrag( cancel ) {
 
-		cancelModelDrag = true;
+		if ( ! gizmoDrag ) return;
+		const { target, id } = gizmoDrag;
+		gizmoDrag = null;
+		cancelGizmoDrag = cancel;
 		transformControls.pointerUp( null );
-		cancelModelDrag = false;
+		cancelGizmoDrag = false;
+		if ( target.hasPointerCapture( id ) ) target.releasePointerCapture( id );
+		syncTransformTarget();
+		render();
 
-	};
-	const cancelPointerTransform = () => {
+	}
+	model.cancelGizmo = () => endGizmoDrag( true );
+	container.dom.addEventListener( 'pointermove', event => {
 
-		if ( model.gesture && ! model.gesture.modal ) model.cancelGizmo();
+		if ( gizmoDrag?.id === event.pointerId ) {
 
-	};
-	container.dom.addEventListener( 'pointercancel', cancelPointerTransform, true );
-	container.dom.addEventListener( 'lostpointercapture', cancelPointerTransform, true );
-	transformControls.addEventListener( 'dragging-changed', event => { if ( ! event.value && model.object ) syncTransformTarget(); } );
+			model.lastPointer = event;
+			transformControls.pointerMove( controlPointer( event, gizmoDrag.rect ) );
+			event.stopImmediatePropagation();
+			return;
+
+		}
+		const frame = layout.navigation;
+		if ( ! transformControls.enabled || ! gizmoAllowed() || event.buttons || event.target !== renderer?.domElement ||
+			! frame || layout.at( event.clientX, event.clientY ) !== frame ) transformControls.axis = null;
+		else transformControls.pointerHover( controlPointer( event, layout.clientRect( frame ) ) );
+
+	}, true );
+	for ( const type of [ 'pointerup', 'pointercancel', 'lostpointercapture' ] ) container.dom.addEventListener( type, event => {
+
+		if ( gizmoDrag?.id !== event.pointerId || type === 'pointerup' && event.button !== 0 ) return;
+		endGizmoDrag( type !== 'pointerup' );
+		event.stopImmediatePropagation();
+
+	}, true );
+	window.addEventListener( 'keydown', event => {
+
+		if ( event.key !== 'Escape' || ! gizmoDrag ) return;
+		endGizmoDrag( true );
+		event.preventDefault();
+		event.stopImmediatePropagation();
+
+	}, true );
+	window.addEventListener( 'blur', () => endGizmoDrag( true ) );
 	transformControls.setSize( editor.config.getKey( 'settings/transformGizmoSize' ) );
 	signals.transformGizmoSizeChanged.add( () => {
 
@@ -353,7 +408,7 @@ function Viewport( editor ) {
 		setControlSnap( false );
 		if ( transformControls.object === model.proxy ) {
 
-			model.finishTransform( ! cancelModelDrag );
+			model.finishTransform( ! cancelGizmoDrag );
 			controls.enabled = true;
 			return;
 
@@ -367,6 +422,16 @@ function Viewport( editor ) {
 				const state = objectStatesOnDown[ i ];
 				const object = state.object;
 
+				if ( cancelGizmoDrag ) {
+
+					object.position.copy( state.position );
+					object.rotation.copy( state.rotation );
+					object.scale.copy( state.scale );
+					object.updateMatrixWorld( true );
+					signals.objectChanged.dispatch( object );
+					continue;
+
+				}
 				if ( ! state.position.equals( object.position ) ) {
 
 					commands.push( new SetPositionCommand( editor, object, object.position, state.position ) );
@@ -563,7 +628,10 @@ function Viewport( editor ) {
 
 	signals.transformModeChanged.add( function ( mode ) {
 
-		transformControls.setMode( mode );
+		endGizmoDrag( true );
+		editor.transformGizmoMode = mode;
+		transformControls.combined = mode === 'combined';
+		transformControls.setMode( transformControls.combined ? 'translate' : mode );
 
 		render();
 
@@ -646,6 +714,7 @@ function Viewport( editor ) {
 
 	signals.rendererCreated.add( function ( newRenderer ) {
 
+		endGizmoDrag( true );
 		const environment = scene.environment;
 		selectionOutline.dispose();
 		selectionOutline = new SelectionOutline();
@@ -675,16 +744,6 @@ function Viewport( editor ) {
 		}
 
 		controls.connect( newRenderer.domElement );
-		newRenderer.domElement.addEventListener( 'pointerdown', function ( event ) {
-
-			if ( controls.navigationMode() !== 'blender' || ! editor.config.getKey( 'settings/emulateThreeButtonMouse' ) || ! event.altKey || event.button !== 0 ) return;
-			transformControls.enabled = false;
-			const restore = () => { syncTransformTarget(); window.removeEventListener( 'pointerup', restore ); window.removeEventListener( 'pointercancel', restore ); };
-			window.addEventListener( 'pointerup', restore, { once: true } );
-			window.addEventListener( 'pointercancel', restore, { once: true } );
-
-		}, true );
-		transformControls.connect( newRenderer.domElement );
 
 		contextNotice.hidden = true;
 		renderer = newRenderer;
@@ -766,6 +825,7 @@ function Viewport( editor ) {
 
 	signals.objectSelected.add( function ( object ) {
 
+		endGizmoDrag( true );
 		selectionBox.visible = false;
 		transformControls.detach();
 
@@ -1414,10 +1474,11 @@ function Viewport( editor ) {
 			if ( mode === 'preview' ) return;
 			const view = frame.camera;
 			const gizmo = transformControls.getHelper();
-			const showModelGizmo = frame === nav && transformControls.object === model.proxy;
+			const showGizmo = frame === nav && gizmo.visible && gizmoAllowed();
+			const showModelGizmo = showGizmo && transformControls.object === model.proxy;
 			if ( ! overlays && ! clean ) {
 
-				if ( frame === nav && gizmo.visible && ! editor.viewTools.mode ) {
+				if ( showGizmo ) {
 
 					renderer.autoClear = false;
 					renderer.render( gizmo, view );
@@ -1450,7 +1511,7 @@ function Viewport( editor ) {
 			if ( sceneHelpers.visible ) {
 
 				const visible = gizmo.visible;
-				if ( frame !== nav || editor.viewTools.mode ) gizmo.visible = false;
+				gizmo.visible = showGizmo;
 				renderer.render( sceneHelpers, view );
 				gizmo.visible = visible;
 

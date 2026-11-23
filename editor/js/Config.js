@@ -33,6 +33,7 @@ function Config( persist = true ) {
 		'settings/showObjectNames': false,
 		'settings/selectionHighlight': 'outline',
 		'settings/transformGizmoSize': 0.75,
+		'settings/showTransformGizmo': true,
 		'settings/gridVisible': true,
 		'settings/viewportOverlays': true,
 		'settings/viewportToolbar': true,

@@ -1,4 +1,4 @@
-import { icon } from './Glyphs.js?v=mode-shelves';
+import { icon } from './Glyphs.js?v=transform-gizmos';
 import { addTransformSettings } from './TransformSettings.js?v=editor-glyphs';
 import { UIPanel, UIButton } from './libs/ui.js';
 
@@ -11,10 +11,11 @@ function Toolbar( editor ) {
 	container.setId( 'toolbar' );
 
 	const tools = editor.viewTools.transformTools;
-	const modes = new Map( [ [ 'translate', 'move' ], [ 'rotate', 'rotate' ], [ 'scale', 'scale' ] ].map( ( [ mode, glyph ] ) => {
+	const modes = new Map( [ [ 'translate', 'move' ], [ 'rotate', 'rotate' ], [ 'scale', 'scale' ],
+		[ 'combined', 'transformCombined' ] ].map( ( [ mode, glyph ] ) => {
 
 		const button = new UIButton();
-		button.dom.title = strings.getKey( 'toolbar/' + mode );
+		button.dom.title = mode === 'combined' ? 'Combined Transform' : strings.getKey( 'toolbar/' + mode );
 		button.dom.setAttribute( 'aria-label', button.dom.title );
 		button.dom.innerHTML = icon( glyph );
 		button.onClick( () => signals.transformModeChanged.dispatch( mode ) );

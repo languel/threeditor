@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { modelSnapMode, snapMeshFeature } from './ModelSnap.js';
+import { icon } from '../Glyphs.js?v=transform-gizmos';
 
 export const transformModes = new Map( [ [ 'g', 'translate' ], [ 'r', 'rotate' ], [ 's', 'scale' ] ] );
 
@@ -112,6 +113,36 @@ export function createSnapBaseMarker( viewport ) {
 	marker.hidden = true;
 	viewport.append( marker );
 	return marker;
+
+}
+
+const pointerGlyphs = { translate: 'move', rotate: 'rotate', scale: 'scale', extrude: 'move' };
+
+export function createTransformPointer( viewport ) {
+
+	const marker = document.createElement( 'span' );
+	marker.className = 'transform-pointer';
+	marker.setAttribute( 'aria-hidden', 'true' );
+	marker.hidden = true;
+	viewport.append( marker );
+	return marker;
+
+}
+
+export function showTransformPointer( marker, layout, mode, pointer ) {
+
+	const frame = layout.navigation;
+	const glyph = pointerGlyphs[ mode ];
+	marker.hidden = ! ( frame && glyph && pointer && layout.at( pointer.clientX, pointer.clientY ) === frame );
+	if ( marker.hidden ) return;
+	if ( marker.dataset.glyph !== glyph ) {
+
+		marker.dataset.glyph = glyph;
+		marker.innerHTML = icon( glyph );
+
+	}
+	marker.style.left = pointer.clientX + 'px';
+	marker.style.top = pointer.clientY + 'px';
 
 }
 

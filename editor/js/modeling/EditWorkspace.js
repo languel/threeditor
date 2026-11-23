@@ -1,7 +1,7 @@
-import { icon } from '../Glyphs.js?v=editor-glyphs';
+import { icon } from '../Glyphs.js?v=transform-gizmos';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=projector-shadows';
-import { editableMesh } from './ModelViewport.js?v=texture-projection';
+import { editableMesh } from './ModelViewport.js?v=transform-gizmos';
 import { isProjector } from '../assets/Projector.js?v=projector-shadows';
 import { modelButton } from './ModelControls.js?v=color-sampler';
 import { openMaskEditor } from './MaskEditor.js?v=expressive-pencil';

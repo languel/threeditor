@@ -148,6 +148,7 @@ class TransformControls extends Controls {
 		defineProperty( 'camera', camera );
 		defineProperty( 'object', undefined );
 		defineProperty( 'enabled', true );
+		defineProperty( 'combined', false );
 
 		/**
 		 * The current transformation axis.
@@ -459,18 +460,31 @@ class TransformControls extends Controls {
 	pointerHover( pointer ) {
 
 		if ( this.object === undefined || this.dragging === true ) return;
+		const hit = this.pickHandle( pointer );
+		if ( hit ) this.mode = hit.mode;
+		this.axis = hit?.axis ?? null;
 
+	}
+
+	pickHandle( pointer, precise = false ) {
+
+		if ( this.object === undefined || ! this.enabled ) return;
+		this._root.updateMatrixWorld( true );
 		if ( pointer !== null ) _raycaster.setFromCamera( pointer, this.camera );
+		const modes = this.combined ? [ 'scale', 'rotate', 'translate' ] : [ this.mode ];
+		if ( precise || this.combined ) for ( const mode of modes ) {
 
-		const intersect = intersectObjectWithRay( this._gizmo.picker[ this.mode ], _raycaster );
+			const hit = _raycaster.intersectObject( this._gizmo.gizmo[ mode ], true )
+				.find( item => item.object.visible && item.object.name.length === 1 && ( ! precise || item.object.tag !== 'shaft' ) );
+			if ( hit ) return { axis: hit.object.name, mode };
 
-		if ( intersect ) {
+		}
+		if ( precise ) return;
+		for ( const mode of modes ) {
 
-			this.axis = intersect.object.name;
-
-		} else {
-
-			this.axis = null;
+			if ( this.combined && mode === 'scale' ) continue;
+			const hit = intersectObjectWithRay( this._gizmo.picker[ mode ], _raycaster );
+			if ( hit ) return { axis: hit.object.name, mode };
 
 		}
 
@@ -482,24 +496,23 @@ class TransformControls extends Controls {
 
 		if ( this.axis !== null ) {
 
+			this._root.updateMatrixWorld( true );
 			if ( pointer !== null ) _raycaster.setFromCamera( pointer, this.camera );
 
 			const planeIntersect = intersectObjectWithRay( this._plane, _raycaster, true );
 
-			if ( planeIntersect ) {
+			if ( ! planeIntersect ) return;
 
-				this.object.updateMatrixWorld();
-				this.object.parent.updateMatrixWorld();
+			this.object.updateMatrixWorld();
+			this.object.parent.updateMatrixWorld();
 
-				this._positionStart.copy( this.object.position );
-				this._quaternionStart.copy( this.object.quaternion );
-				this._scaleStart.copy( this.object.scale );
+			this._positionStart.copy( this.object.position );
+			this._quaternionStart.copy( this.object.quaternion );
+			this._scaleStart.copy( this.object.scale );
 
-				this.object.matrixWorld.decompose( this.worldPositionStart, this.worldQuaternionStart, this._worldScaleStart );
+			this.object.matrixWorld.decompose( this.worldPositionStart, this.worldQuaternionStart, this._worldScaleStart );
 
-				this.pointStart.copy( planeIntersect.point ).sub( this.worldPositionStart );
-
-			}
+			this.pointStart.copy( planeIntersect.point ).sub( this.worldPositionStart );
 
 			this.dragging = true;
 			_mouseDownEvent.mode = this.mode;
@@ -1310,17 +1323,17 @@ class TransformControlsGizmo extends Object3D {
 			X: [
 				[ new Mesh( arrowGeometry, matRed ), [ 0.5, 0, 0 ], [ 0, 0, - Math.PI / 2 ]],
 				[ new Mesh( arrowGeometry, matRed ), [ - 0.5, 0, 0 ], [ 0, 0, Math.PI / 2 ]],
-				[ new Mesh( lineGeometry2, matRed ), [ 0, 0, 0 ], [ 0, 0, - Math.PI / 2 ]]
+				[ new Mesh( lineGeometry2, matRed ), [ 0, 0, 0 ], [ 0, 0, - Math.PI / 2 ], null, 'shaft' ]
 			],
 			Y: [
 				[ new Mesh( arrowGeometry, matGreen ), [ 0, 0.5, 0 ]],
 				[ new Mesh( arrowGeometry, matGreen ), [ 0, - 0.5, 0 ], [ Math.PI, 0, 0 ]],
-				[ new Mesh( lineGeometry2, matGreen ) ]
+				[ new Mesh( lineGeometry2, matGreen ), null, null, null, 'shaft' ]
 			],
 			Z: [
 				[ new Mesh( arrowGeometry, matBlue ), [ 0, 0, 0.5 ], [ Math.PI / 2, 0, 0 ]],
 				[ new Mesh( arrowGeometry, matBlue ), [ 0, 0, - 0.5 ], [ - Math.PI / 2, 0, 0 ]],
-				[ new Mesh( lineGeometry2, matBlue ), null, [ Math.PI / 2, 0, 0 ]]
+				[ new Mesh( lineGeometry2, matBlue ), null, [ Math.PI / 2, 0, 0 ], null, 'shaft' ]
 			],
 			XYZ: [
 				[ new Mesh( new OctahedronGeometry( 0.1, 0 ), matWhiteTransparent ), [ 0, 0, 0 ]]
@@ -1434,7 +1447,7 @@ class TransformControlsGizmo extends Object3D {
 			],
 			Y: [
 				[ new Mesh( scaleHandleGeometry, matGreen ), [ 0, 0.5, 0 ]],
-				[ new Mesh( lineGeometry2, matGreen ) ],
+				[ new Mesh( lineGeometry2, matGreen ), null, null, null, 'shaft' ],
 				[ new Mesh( scaleHandleGeometry, matGreen ), [ 0, - 0.5, 0 ], [ 0, 0, Math.PI ]],
 			],
 			Z: [
@@ -1535,6 +1548,8 @@ class TransformControlsGizmo extends Object3D {
 
 					object.updateMatrix();
 
+					object.baseMaterial = object.material;
+					object.material = object.material.clone();
 					const tempGeometry = object.geometry.clone();
 					tempGeometry.applyMatrix4( object.matrix );
 					object.geometry = tempGeometry;
@@ -1582,25 +1597,24 @@ class TransformControlsGizmo extends Object3D {
 
 	updateMatrixWorld( force ) {
 
-		const space = ( this.mode === 'scale' ) ? 'local' : this.space; // scale always oriented to local rotation
+		for ( const mode of [ 'translate', 'rotate', 'scale' ] ) {
 
-		const quaternion = ( space === 'local' ) ? this.worldQuaternion : _identityQuaternion;
+			const visible = this.combined || mode === this.mode;
+			this.gizmo[ mode ].visible = visible;
+			this.helper[ mode ].visible = mode === this.mode;
+			if ( visible ) this.updateHandles( mode );
 
-		// Show only gizmos for current transform mode
+		}
+		super.updateMatrixWorld( force );
 
-		this.gizmo[ 'translate' ].visible = this.mode === 'translate';
-		this.gizmo[ 'rotate' ].visible = this.mode === 'rotate';
-		this.gizmo[ 'scale' ].visible = this.mode === 'scale';
+	}
 
-		this.helper[ 'translate' ].visible = this.mode === 'translate';
-		this.helper[ 'rotate' ].visible = this.mode === 'rotate';
-		this.helper[ 'scale' ].visible = this.mode === 'scale';
+	updateHandles( mode ) {
 
-
-		let handles = [];
-		handles = handles.concat( this.picker[ this.mode ].children );
-		handles = handles.concat( this.gizmo[ this.mode ].children );
-		handles = handles.concat( this.helper[ this.mode ].children );
+		const space = mode === 'scale' ? 'local' : this.space;
+		const quaternion = space === 'local' ? this.worldQuaternion : _identityQuaternion;
+		const size = this.combined ? { translate: 1.5, rotate: 1.1, scale: .65 }[ mode ] : 1;
+		const handles = [ ...this.picker[ mode ].children, ...this.gizmo[ mode ].children, ...this.helper[ mode ].children ];
 
 		for ( let i = 0; i < handles.length; i ++ ) {
 
@@ -1609,6 +1623,13 @@ class TransformControlsGizmo extends Object3D {
 			// hide aligned to camera
 
 			handle.visible = true;
+			if ( this.combined && ( mode === 'rotate' && handle.name === 'XYZE' ||
+				mode === 'scale' && handle.tag !== 'helper' && ( handle.name.length > 1 || handle.tag === 'shaft' ) ) ) {
+
+				handle.visible = false;
+				continue;
+
+			}
 			handle.rotation.set( 0, 0, 0 );
 			handle.position.copy( this.worldPosition );
 
@@ -1624,7 +1645,7 @@ class TransformControlsGizmo extends Object3D {
 
 			}
 
-			handle.scale.set( 1, 1, 1 ).multiplyScalar( factor * this.size / 4 );
+			handle.scale.set( 1, 1, 1 ).multiplyScalar( factor * this.size * size / 4 );
 
 			// TODO: simplify helpers and consider decoupling from gizmo
 
@@ -1742,7 +1763,7 @@ class TransformControlsGizmo extends Object3D {
 
 			handle.quaternion.copy( quaternion );
 
-			if ( this.mode === 'translate' || this.mode === 'scale' ) {
+			if ( mode === 'translate' || mode === 'scale' ) {
 
 				// Hide translate and scale axis facing the camera
 
@@ -1815,7 +1836,7 @@ class TransformControlsGizmo extends Object3D {
 
 				}
 
-			} else if ( this.mode === 'rotate' ) {
+			} else if ( mode === 'rotate' ) {
 
 				// Align handles to current local or world rotation
 
@@ -1871,13 +1892,10 @@ class TransformControlsGizmo extends Object3D {
 
 			// highlight selected axis
 
-			handle.material._color = handle.material._color || handle.material.color.clone();
-			handle.material._opacity = handle.material._opacity || handle.material.opacity;
+			handle.material.color.copy( handle.baseMaterial.color );
+			handle.material.opacity = handle.baseMaterial.opacity;
 
-			handle.material.color.copy( handle.material._color );
-			handle.material.opacity = handle.material._opacity;
-
-			if ( this.enabled && this.axis ) {
+			if ( this.enabled && mode === this.mode && this.axis ) {
 
 				if ( handle.name === this.axis ) {
 
@@ -1898,8 +1916,6 @@ class TransformControlsGizmo extends Object3D {
 			}
 
 		}
-
-		super.updateMatrixWorld( force );
 
 	}
 

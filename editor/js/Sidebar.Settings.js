@@ -103,6 +103,24 @@ function SidebarSettings( editor ) {
 	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ).setGlyphKey( 'mouse' ), mouseNavigation );
 	general.add( mouseNavigationRow );
 
+	const showGizmo = new UIBoolean( config.getKey( 'settings/showTransformGizmo' ), 'Show transform gizmo' );
+	const gizmoLabel = document.createElement( 'label' );
+	gizmoLabel.className = 'settings-checkbox';
+	gizmoLabel.style.display = 'block';
+	gizmoLabel.append( showGizmo.dom );
+	general.dom.append( gizmoLabel );
+	showGizmo.onChange( () => {
+
+		config.setKey( 'settings/showTransformGizmo', showGizmo.getValue() );
+		signals.transformSettingsChanged.dispatch( 'showTransformGizmo' );
+
+	} );
+	signals.transformSettingsChanged.add( key => {
+
+		if ( key === 'showTransformGizmo' ) showGizmo.setValue( config.getKey( 'settings/showTransformGizmo' ) );
+
+	} );
+
 	const gizmoSizeRow = new UIRow();
 	const gizmoSize = new UINumber( config.getKey( 'settings/transformGizmoSize' ) * 100 )
 		.setRange( 25, 200 ).setStep( 5 ).setPrecision( 0 ).setUnit( '%' ).setWidth( '65px' );

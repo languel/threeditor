@@ -2989,6 +2989,16 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 .editor-2d-target { margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .72; }
 
 #viewport canvas.pencil-brush-cursor { cursor: none; }
+#viewport:has(.transform-pointer:not([hidden])) canvas[data-engine] { cursor: none; }
+.transform-pointer {
+	position: fixed;
+	z-index: 7;
+	transform: translate(-50%, -50%);
+	color: #fff;
+	filter: drop-shadow(0 1px 2px #000);
+	pointer-events: none;
+}
+.transform-pointer svg { display: block; width: 24px; height: 24px; }
 
 .viewport-edit-modes button[aria-pressed="true"],
 .viewport-edit-workspace button[aria-pressed="true"] {

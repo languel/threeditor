@@ -1,18 +1,18 @@
 import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=uv-selection-sync';
-import { Keymap } from './Keymap.js?v=editor-panes';
-import { ModalTransform } from './ModalTransform.js?v=held-alt-constraint';
+import { Editor } from './Editor.js?v=transform-gizmos';
+import { Keymap } from './Keymap.js?v=transform-gizmos';
+import { ModalTransform } from './ModalTransform.js?v=transform-gizmos';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
-import { applyGlyphMode } from './Glyphs.js?v=pencil-reference';
+import { applyGlyphMode } from './Glyphs.js?v=transform-gizmos';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=texture-projection';
-import { Toolbar } from './Toolbar.js?v=editor-glyphs';
+import { Viewport } from './Viewport.js?v=transform-gizmos';
+import { Toolbar } from './Toolbar.js?v=transform-gizmos';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=texture-projection';
-import { Menubar } from './Menubar.js?v=area-context-menu';
+import { Sidebar } from './Sidebar.js?v=transform-gizmos';
+import { Menubar } from './Menubar.js?v=transform-gizmos';
 import { MenuAutoHide } from './MenuAutoHide.js';
 import { ContextMenu } from './ContextMenu.js?v=optical-pane-menu';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
