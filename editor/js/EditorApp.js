@@ -14,7 +14,7 @@ import { Player } from './Player.js?v=timeline-keying';
 import { Sidebar } from './Sidebar.js?v=editor-panes';
 import { Menubar } from './Menubar.js?v=area-context-menu';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=close-viewport-pane';
+import { ContextMenu } from './ContextMenu.js?v=optical-pane-menu';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js?v=dock-split-menu';
 import { PanelDock } from './PanelDock.js';

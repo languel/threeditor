@@ -15,7 +15,8 @@ function ContextMenu( editor, viewport ) {
 	let pointer = null;
 	let previousFocus = null;
 	let rightDown = null;
-	viewport.addEventListener( 'pointerdown', event => {
+	// Optical panes stop the event at the viewport to keep Director controls idle.
+	window.addEventListener( 'pointerdown', event => {
 
 		rightDown = event.button === 2 && event.buttons === 2 && ! event.ctrlKey && event.target === editor.renderer?.domElement ?
 			{ id: event.pointerId, x: event.clientX, y: event.clientY } : null;
