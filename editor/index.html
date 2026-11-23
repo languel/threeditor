@@ -10,7 +10,7 @@
 		<link rel="shortcut icon" href="../files/favicon.ico" media="(prefers-color-scheme: light)" />
 	</head>
 	<body>
-		<link rel="stylesheet" href="css/main.css?v=short-strokes">
+		<link rel="stylesheet" href="css/main.css?v=editor-panes">
 
 		<script type="importmap">
 			{
@@ -67,7 +67,7 @@
 
 		<script type="module">
 
-			import { startEditor } from './js/EditorApp.js?v=short-strokes';
+			import { startEditor } from './js/EditorApp.js?v=editor-panes';
 
 			const editor = await startEditor();
 			if ( new URLSearchParams( location.search ).has( 'threecoder' ) ) {

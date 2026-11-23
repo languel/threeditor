@@ -1,4 +1,4 @@
-import { WorkspaceTabs } from './WorkspaceTabs.js?v=script-window';
+import { WorkspaceTabs } from './WorkspaceTabs.js?v=editor-panes';
 import { UIPanel } from './libs/ui.js';
 
 import { MenubarAdd } from './Menubar.Add.js?v=uv-sculpt';
@@ -7,7 +7,7 @@ import { MenubarFile } from './Menubar.File.js?v=example-open';
 import { MenubarView } from './Menubar.View.js?v=unified-sync';
 import { MenubarRender } from './Menubar.Render.js?v=scene-timeline';
 import { MenubarHelp } from './Menubar.Help.js';
-import { formatCombo } from './Keymap.js?v=script-window';
+import { formatCombo } from './Keymap.js?v=editor-panes';
 
 function Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar } ) {
 

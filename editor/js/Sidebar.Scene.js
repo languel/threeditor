@@ -5,7 +5,7 @@ import { UIPanel, UIRow, UIColor, UISelect, UIText, UINumber, UICheckbox } from 
 import { UIOutliner, UITexture } from './libs/ui.three.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
-import { changeParent, canParentSelection } from './ObjectParenting.js';
+import { changeParent, canParentSelection } from './ObjectParenting.js?v=editor-panes';
 import { isProjector } from './assets/Projector.js';
 import { ASSET_MIME } from './assets/AssetLibrary.js';
 import { DEFAULT_POSTPROCESSING } from './PostProcessing.js';

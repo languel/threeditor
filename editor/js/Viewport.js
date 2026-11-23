@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=short-strokes';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=editor-panes';
 import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -17,7 +17,7 @@ import { ViewportControls } from './Viewport.Controls.js?v=split-areas';
 import { FlyControls } from './FlyControls.js?v=ortho-fly';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
-import { ViewportSidebar } from './Viewport.Sidebar.js?v=pencil-reference';
+import { ViewportSidebar } from './Viewport.Sidebar.js?v=editor-panes';
 
 import { ViewHelper } from './Viewport.ViewHelper.js?v=viewport-tools';
 import { XR } from './Viewport.XR.js';
@@ -32,10 +32,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=short-strokes';
+import { ViewportTools } from './modeling/ViewportTools.js?v=editor-panes';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
-import { ModelViewport } from './modeling/ModelViewport.js?v=split-areas';
+import { ModelViewport } from './modeling/ModelViewport.js?v=editor-panes';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

@@ -23,7 +23,7 @@ export function selectionRoots( selection ) {
 
 function parentingTargets( editor, clearing ) {
 
-	if ( editor.modeling.editMode || editor.viewTools.mode || editor.editWorkspace.mode ||
+	if ( editor.modeling.editMode || editor.viewTools.mode || editor.editWorkspace.exclusive ||
 		editor.streams.playing || editor.modalTransform.active ) return [];
 	const selection = editor.selector.selection;
 	const active = selection.at( -1 );

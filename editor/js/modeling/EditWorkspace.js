@@ -1,26 +1,57 @@
 import { icon } from '../Glyphs.js?v=editor-glyphs';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { canEditLightMask } from './LightMask.js?v=projector-shadows';
-import { editableMesh } from './ModelViewport.js?v=sculpt-targets';
+import { editableMesh } from './ModelViewport.js?v=editor-panes';
 import { isProjector } from '../assets/Projector.js?v=projector-shadows';
 import { modelButton } from './ModelControls.js?v=color-sampler';
-import { openMaskEditor } from './MaskEditor.js?v=short-strokes';
+import { openMaskEditor } from './MaskEditor.js?v=editor-panes';
 import { openUVEditor } from './UVEditor.js?v=pencil-reference';
 
 export function createEditWorkspace( editor ) {
 
-	const dock = document.createElement( 'section' );
-	dock.id = 'editor-2d';
-	dock.className = 'viewport-edit-workspace';
-	dock.hidden = true;
-	const header = document.createElement( 'div' );
-	header.className = 'editor-2d-header';
-	const title = document.createElement( 'span' );
-	const target = document.createElement( 'span' );
-	target.className = 'editor-2d-target';
-	header.append( title, target );
-	modelButton( header, 'Close editor area', 'exitTool', () => close() );
-	dock.append( header );
+	const sessions = new Map();
+	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window' };
+	let current, requestedHost, nextId = 0;
+
+	function makeDock() {
+
+		const dock = document.createElement( 'section' );
+		nextId ++;
+		dock.id = nextId === 1 ? 'editor-2d' : 'editor-2d-' + nextId;
+		dock.className = 'viewport-edit-workspace';
+		const header = document.createElement( 'div' );
+		header.className = 'editor-2d-header';
+		const title = document.createElement( 'span' );
+		const target = document.createElement( 'span' );
+		target.className = 'editor-2d-target';
+		header.append( title, target );
+		const session = { dock, title, target };
+		modelButton( header, 'Close editor area', 'exitTool', () => closeSession( session ) );
+		const screen = document.createElement( 'div' );
+		screen.className = 'viewport-edit-content';
+		dock.append( header, screen );
+		session.screen = screen;
+		const activate = () => {
+			if ( current === session ) return;
+			current = session;
+			refresh();
+			editor.signals.windowResize.dispatch();
+		};
+		dock.addEventListener( 'focusin', activate );
+		dock.addEventListener( 'pointerdown', activate );
+		for ( const event of [ 'mousedown', 'touchstart', 'dblclick', 'contextmenu', 'drop' ] ) dock.addEventListener( event, e => e.stopPropagation() );
+		dock.addEventListener( 'keydown', event => {
+
+			event.stopPropagation();
+			if ( event.key === 'Escape' && ! event.defaultPrevented && ! event.target.closest?.( '.CodeMirror' ) ) closeSession( session );
+
+		} );
+		return session;
+
+	}
+
+	const first = makeDock();
+	first.dock.hidden = true;
 	const picker = document.createElement( 'details' );
 	picker.className = 'editor-picker';
 	const summary = document.createElement( 'summary' );
@@ -32,16 +63,11 @@ export function createEditWorkspace( editor ) {
 	modes.className = 'viewport-edit-modes';
 	modes.setAttribute( 'role', 'group' );
 	modes.setAttribute( 'aria-label', 'Editor workspace' );
-	const screen = document.createElement( 'div' );
-	screen.className = 'viewport-edit-content';
-	dock.append( screen );
 	picker.append( modes );
-	let current, host, requestedHost;
-	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window' };
 	const light = () => [ editor.selected, editor.viewportSource, current?.object ].find( canEditLightMask );
 	const mesh = () => [ editor.selected, current?.object ].find( object => editableMesh( object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) );
 	const projector = () => [ editor.selected, editor.viewportSource, current?.object ].find( object => isProjector( object ) && canEditLightMask( object ) );
-	const sceneButton = modelButton( modes, '3D View', 'editorViewport', () => { picker.open = false; close(); } );
+	const sceneButton = modelButton( modes, '3D View', 'editorViewport', () => { picker.open = false; closeSession( current ); } );
 	const maskButton = modelButton( modes, 'Mask mode', 'toolMask', () => switchMode( 'mask', light(), openMaskEditor ) );
 	const imageButton = modelButton( modes, 'Image and vector mode', 'editorImage', () => switchMode( 'image', null, () => openMaskEditor( editor, null, false, true ) ) );
 	const uvButton = modelButton( modes, 'UV mode', 'editorUV', () => switchMode( 'uv', mesh(), openUVEditor ) );
@@ -52,10 +78,26 @@ export function createEditWorkspace( editor ) {
 
 		picker.open = false;
 		if ( current?.mode !== mode || current.object !== object ) open( editor, object );
+		else if ( ! current.host.classList.contains( 'workspace-split-pane' ) ) placeDock( editor.splitWorkspace.target(), current );
 
 	}
 	function open( mode ) {
 
+		const existing = sessions.get( mode );
+		if ( existing && ! requestedHost && ! existing.host.classList.contains( 'workspace-split-pane' ) ) {
+
+			placeDock( editor.splitWorkspace.target(), existing );
+			return true;
+
+		}
+		if ( existing && ! requestedHost ) {
+
+			current = existing;
+			refresh();
+			editor.signals.windowResize.dispatch();
+			return true;
+
+		}
 		const button = buttons[ mode ];
 		if ( mode === 'uv' && button.disabled && current?.mode !== 'uv' ) {
 
@@ -70,31 +112,38 @@ export function createEditWorkspace( editor ) {
 		return true;
 
 	}
-	function exclusive() {
+	function sessionAt( area ) {
 
-		return !! current && host === editor.viewLayout.viewport.parentElement;
+		return [ ...sessions.values() ].find( session => session.host === area );
 
 	}
 
-	function placeDock( nextHost ) {
+	function placeDock( area, session = current ) {
 
-		if ( host ) delete host.dataset.overlayEditor;
-		host = nextHost;
-		if ( host ) {
+		if ( ! session || ! area ) return;
+		const previous = sessionAt( area );
+		if ( previous && previous !== session ) closeSession( previous, true );
+		if ( session.host !== area ) {
 
-			host.dataset.overlayEditor = current.mode;
-			host.appendChild( dock );
+			if ( session.host ) delete session.host.dataset.paneEditor;
+			session.host = area;
+			area.dataset.paneEditor = session.mode;
+			if ( area.moveBefore && session.dock.isConnected ) area.moveBefore( session.dock, null );
+			else area.append( session.dock );
 
-		} else if ( dock.parentElement !== document.body ) document.body.appendChild( dock );
+		}
+		current = session;
+		refresh();
+		editor.signals.windowResize.dispatch();
 
 	}
 
 	function openIn( mode, area ) {
 
-		if ( current?.mode === mode ) {
+		const existing = sessions.get( mode );
+		if ( existing ) {
 
-			placeDock( area );
-			editor.signals.windowResize.dispatch();
+			placeDock( area, existing );
 			return true;
 
 		}
@@ -110,12 +159,6 @@ export function createEditWorkspace( editor ) {
 		sceneButton.hidden = ! current;
 		summary.title = current ? names[ current.mode ] : 'Editor Type';
 		summary.setAttribute( 'aria-label', summary.title );
-		title.textContent = current ? names[ current.mode ] : '';
-		if ( current ) dock.dataset.editorMode = current.mode;
-		else delete dock.dataset.editorMode;
-		dock.setAttribute( 'aria-label', current?.mode === 'script' ? title.textContent : current ? title.textContent + ' editor area' : '2D editor area' );
-		target.textContent = current?.object?.name || current?.object?.type || '';
-		target.title = target.textContent;
 		for ( const [ mode, button ] of Object.entries( buttons ) ) button.setAttribute( 'aria-pressed', String( current?.mode === mode ) );
 
 	}
@@ -132,66 +175,90 @@ export function createEditWorkspace( editor ) {
 		summary.focus();
 
 	} );
-	function close( replacing = false ) {
+	function closeSession( session, replacing = false ) {
 
-		if ( ! current ) return;
-		const previousHost = host;
-		current.dispose();
-		current = undefined;
-		screen.replaceChildren();
-		dock.hidden = true;
-		placeDock();
+		if ( ! session || sessions.get( session.mode ) !== session ) return;
+		const area = session.host;
+		session.dispose();
+		sessions.delete( session.mode );
+		delete area.dataset.paneEditor;
+		session.host = undefined;
+		session.screen.replaceChildren();
+		session.dock.hidden = true;
+		session.dock.remove();
+		if ( current === session ) current = [ ...sessions.values() ].at( -1 );
 		refresh();
-		if ( ! replacing ) editor.splitWorkspace?.closed( previousHost );
+		if ( ! replacing ) editor.splitWorkspace?.closed( area );
 		editor.signals.windowResize.dispatch();
 
 	}
+
+	function close() {
+
+		for ( const session of [ ...sessions.values() ] ) closeSession( session );
+
+	}
+
 	editor.signals.objectSelected.add( object => {
 
-		if ( current?.mode === 'uv' && ( ! exclusive() || ! current.object ) && object && current.object !== object && mesh() === object && ! current.isDirty?.() ) {
+		const uv = sessions.get( 'uv' );
+		if ( uv && object && uv.object !== object && editableMesh( object ) && ! hasRestriction( object, 'locked' ) &&
+			! hasRestriction( object, 'disabled' ) && ! uv.isDirty?.() ) {
 
-			requestedHost = host;
+			const active = current;
+			requestedHost = uv.host;
 			try { openUVEditor( editor, object, { focus: false } ); } finally { requestedHost = undefined; }
+			if ( active !== uv && sessions.get( active?.mode ) === active ) current = active;
 
-		} else refresh();
+		}
+		refresh();
 
 	} );
 	for ( const name of [ 'objectChanged', 'viewportCameraChanged' ] ) editor.signals[ name ].add( refresh );
-	for ( const name of [ 'editorCleared', 'projectLoaded', 'startPlayer' ] ) editor.signals[ name ].add( () => close() );
+	for ( const name of [ 'editorCleared', 'projectLoaded', 'startPlayer' ] ) editor.signals[ name ].add( close );
 	editor.signals.objectRemoved.add( object => {
 
-		if ( current?.object && ( current.object === object || object.getObjectById( current.object.id ) ) ) close();
-
-	} );
-	for ( const event of [ 'mousedown', 'touchstart', 'dblclick', 'contextmenu', 'drop' ] ) dock.addEventListener( event, e => e.stopPropagation() );
-	dock.addEventListener( 'keydown', event => {
-
-		event.stopPropagation();
-		if ( event.key === 'Escape' && ! event.defaultPrevented && ! event.target.closest?.( '.CodeMirror' ) ) close();
+		for ( const session of [ ...sessions.values() ] ) if ( session.object &&
+			( session.object === object || object.getObjectById( session.object.id ) ) ) closeSession( session );
 
 	} );
 	refresh();
 	return {
-		picker, dock, open, openIn, placeDock,
+		picker, open, openIn, placeDock,
 		available: mode => mode === 'uv' || !! buttons[ mode ] && ! buttons[ mode ].disabled,
-		get host() { return host; },
+		hasMode: mode => sessions.has( mode ),
+		closeMode: mode => closeSession( sessions.get( mode ) ),
+		closeHost: ( area, replacing ) => closeSession( sessionAt( area ), replacing ),
+		sessionAt,
+		get host() { return current?.host; },
 		get mode() { return current?.mode; },
-		get exclusive() { return exclusive(); },
+		get exclusive() { return ! editor.viewportSplit && !! sessionAt( editor.viewLayout.viewport.parentElement ); },
 		close,
 		mount( mode, object, content, dispose, isDirty ) {
 
-			const area = requestedHost || editor.splitWorkspace?.target();
-			close( true );
-			editor.viewTools.setMode( '' );
-			if ( editor.modeling.gesture?.modal ) editor.modeling.finishTransform( false );
-			editor.modeling.releaseDrag();
-			current = { mode, object, dispose, isDirty };
-			placeDock( area );
-			screen.append( content );
+			const previous = sessions.get( mode );
+			const area = requestedHost || editor.splitWorkspace.target();
+			const displaced = sessionAt( area );
+			const available = previous || displaced || ( first.host ? makeDock() : first );
+			if ( previous ) closeSession( previous, true );
+			if ( displaced && displaced !== previous ) closeSession( displaced, true );
+			if ( ! requestedHost ) {
+
+				if ( editor.modeling.gesture?.modal ) editor.modeling.finishTransform( false );
+				editor.modeling.releaseDrag();
+
+			}
+			const session = Object.assign( available, { mode, object, dispose, isDirty } );
+			sessions.set( mode, session );
+			session.dock.dataset.editorMode = mode;
+			session.dock.setAttribute( 'aria-label', mode === 'script' ? names[ mode ] : names[ mode ] + ' editor area' );
+			session.title.textContent = names[ mode ];
+			session.target.textContent = object?.name || object?.type || '';
+			session.target.title = session.target.textContent;
+			session.screen.append( content );
+			session.dock.hidden = false;
 			picker.open = false;
-			dock.hidden = false;
-			refresh();
-			editor.signals.windowResize.dispatch();
+			placeDock( area, session );
 
 		}
 	};

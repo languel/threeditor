@@ -19,7 +19,7 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=short-strokes';
+import { openMaskEditor } from './MaskEditor.js?v=editor-panes';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -269,7 +269,7 @@ export class ViewportTools {
 
 			if ( editor.flyControls?.active ) return;
 
-			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open], .pencil-dropdown-menu:popover-open' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], #editor-2d' ) ) return;
+			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open], .pencil-dropdown-menu:popover-open' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], .viewport-edit-workspace' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
 			if ( ! this.stroke && ! ( event.key === 'Escape' && this.pencilReference ) && this.editor.keymap?.overEditableViewport === false ) return;
 			if ( [ 'cursor', 'pencil' ].includes( this.mode ) && event.key !== 'Escape' ) return;
@@ -1334,7 +1334,7 @@ export class ViewportTools {
 		const shortcut = event.button === 2 && event.shiftKey;
 		const tool = this.mode === 'cursor' && event.button === 0 && ! event.altKey;
 		if ( ! ( shortcut || tool ) || event.target !== editor.renderer?.domElement ||
-			this.pointer || editor.editWorkspace?.mode || editor.flyControls?.active || editor.modalTransform?.active ||
+			this.pointer || editor.editWorkspace?.exclusive || editor.flyControls?.active || editor.modalTransform?.active ||
 			editor.modeling.gesture || editor.modeling.drag ) return false;
 		const frame = layout.at( event.clientX, event.clientY );
 		if ( ! frame?.director ) return false;
@@ -2137,7 +2137,7 @@ export class ViewportTools {
 
 		if ( ! this.editor.renderer ) return;
 		const overlays = this.editor.viewportOverlays;
-		const showCursor = overlays && ! this.editor.editWorkspace?.mode && ! cleanShading( this.editor.viewportShading );
+		const showCursor = overlays && ! this.editor.editWorkspace?.exclusive && ! cleanShading( this.editor.viewportShading );
 		this.overlay.hidden = ! showCursor && ! this.mode && ! ( overlays && this.measurements.length );
 		if ( this.overlay.hidden ) return;
 		const { width, height } = this.editor.renderer.domElement.getBoundingClientRect();

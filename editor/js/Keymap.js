@@ -7,8 +7,8 @@ import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { canJoinMeshes, joinObjects } from './modeling/JoinObjects.js';
-import { canParentSelection } from './ObjectParenting.js';
-import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js';
+import { canParentSelection } from './ObjectParenting.js?v=editor-panes';
+import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=editor-panes';
 
 const control = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl' : 'mod';
 const alignCameraShortcut = control + '+alt+numpad0';
@@ -152,13 +152,13 @@ class Keymap {
  }
  get overEditableViewport() {
   const target = this.pointerTarget;
-  if ( this.editor.editWorkspace?.exclusive || target && ! target.closest( '#viewport, #toolbar' ) ) return false;
+  if ( this.editor.editWorkspace?.exclusive || target && ( ! target.closest( '#viewport, #toolbar' ) || target.closest( '.viewport-edit-workspace' ) ) ) return false;
   return ! this.editor.viewportSplit || this.viewFrame?.director !== false;
  }
  inArea( action ) {
   const { category, id } = action;
   const target = this.pointerTarget;
-  const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) ) && ! this.editor.editWorkspace?.exclusive;
+  const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) && ! target.closest( '.viewport-edit-workspace' ) ) && ! this.editor.editWorkspace?.exclusive;
   const inOutliner = !! target?.closest( '#outliner' ) && ! this.editor.modeling?.editMode && ! this.editor.viewTools?.mode;
   const inSourcePane = this.editor.viewportSplit && this.viewFrame?.director === false;
   if ( category === 'Navigation' ) return this.overEditableViewport;

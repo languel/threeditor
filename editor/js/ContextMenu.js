@@ -1,7 +1,7 @@
 import { originActions } from './modeling/OriginActions.js?v=poly-context';
 import { outlineActions } from './modeling/OutlineActions.js?v=pencil-layout';
 import { formatCombo } from './Keymap.js';
-import { changeParent } from './ObjectParenting.js';
+import { changeParent } from './ObjectParenting.js?v=editor-panes';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 
 function ContextMenu( editor, viewport ) {

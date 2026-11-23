@@ -71,7 +71,7 @@ export class ModelViewport {
 		viewport.addEventListener( 'pointerdown', event => {
 
 			const control = document.activeElement;
-			if ( event.target === editor.renderer?.domElement && control?.closest( '.viewport-tool-panel, .modeling-panel, #animation, #editor-2d' ) ) control.blur();
+			if ( event.target === editor.renderer?.domElement && control?.closest( '.viewport-tool-panel, .modeling-panel, #animation, .viewport-edit-workspace' ) ) control.blur();
 			this.pointerDown( event );
 
 		}, true );
@@ -224,7 +224,7 @@ export class ModelViewport {
 				return;
 
 			}
-			if ( ( ! this.object && ! this.drag?.sculpt ) || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu, #editor-2d' ) ) return;
+			if ( ( ! this.object && ! this.drag?.sculpt ) || editor.viewTools?.mode || editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open]' ) || event.target.closest?.( '.context-menu, .viewport-edit-workspace' ) ) return;
 			if ( this.gesture?.modal ) { this.modalKey( event ); return; }
 			if ( this.penChain && ! event.target.closest?.( 'input, textarea, select, [contenteditable]' ) && [ 'Escape', 'Enter', 'f', 'F' ].includes( event.key ) ) {
 
@@ -322,9 +322,8 @@ export class ModelViewport {
 
 	start( object ) {
 
-		this.editor.editWorkspace?.close();
 		if ( this.editor.viewTools?.mode ) this.editor.viewTools.setMode( '' );
-		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.setViewportSplit( true );
+		if ( this.editor.viewportSource && ! this.editor.viewportSplit ) this.editor.splitWorkspace.split( this.editor.viewportSplitAxis );
 		this.editMode = true;
 		this.setTarget( object );
 		if ( object?.userData.measurement ) this.editor.viewTools.setMode( 'measure' );

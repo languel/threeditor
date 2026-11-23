@@ -2,26 +2,26 @@ import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=uv-selection-sync';
-import { Keymap } from './Keymap.js?v=mode-shortcut';
+import { Keymap } from './Keymap.js?v=editor-panes';
 import { ModalTransform } from './ModalTransform.js?v=held-alt-constraint';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=pencil-reference';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=short-strokes';
+import { Viewport } from './Viewport.js?v=editor-panes';
 import { Toolbar } from './Toolbar.js?v=editor-glyphs';
 import { Player } from './Player.js?v=timeline-keying';
-import { Sidebar } from './Sidebar.js?v=image-textures';
-import { Menubar } from './Menubar.js?v=example-open';
+import { Sidebar } from './Sidebar.js?v=editor-panes';
+import { Menubar } from './Menubar.js?v=editor-panes';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=split-areas';
+import { ContextMenu } from './ContextMenu.js?v=editor-panes';
 import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
 import { Resizer } from './Resizer.js?v=dock-split-menu';
 import { PanelDock } from './PanelDock.js';
 import { WorkspaceArea } from './WorkspaceArea.js?v=split-areas';
-import { WorkspaceEditors } from './WorkspaceEditors.js?v=dock-split-menu';
-import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js';
-import { CodePanel } from './CodePanel.js?v=image-textures';
+import { WorkspaceEditors } from './WorkspaceEditors.js?v=editor-panes';
+import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js?v=editor-panes';
+import { CodePanel } from './CodePanel.js?v=editor-panes';
 import { AnimationResizer } from './AnimationResizer.js?v=dock-split-menu';
 import { Animation } from './Animation.js?v=workspace-tabs';
 
@@ -79,7 +79,7 @@ async function startEditor( portable = null ) {
 	editor.modalTransform = new ModalTransform( editor );
 	editor.p5Preview = new P5Preview( editor );
 	const viewport = new Viewport( editor );
-	document.body.append( viewport.dom, editor.editWorkspace.dock );
+	document.body.append( viewport.dom );
 	editor.primitiveAdjustment = new PrimitiveAdjustment( editor, viewport.dom );
 
 	const toolbar = new Toolbar( editor );
@@ -115,7 +115,7 @@ async function startEditor( portable = null ) {
 
 	const menubar = new Menubar( editor, { sidebar, sidebarDock, timelineDock, toolbar: toolbar.dom } );
 	document.body.appendChild( menubar.dom );
-	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, areas.viewport.dom, sidebar.dom, editor.editWorkspace.dock, areas.timeline.dom );
+	editor.workspaceArea = new WorkspaceArea( editor, menubar.dom, areas.viewport.dom, sidebar.dom, areas.timeline.dom );
 	editor.openComponentPicker = () => {
 
 		editor.workspaceArea.reveal( sidebar.dom );

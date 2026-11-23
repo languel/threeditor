@@ -136,9 +136,10 @@ export function openMaskEditor( editor, light, showPicker = false, vectorMode = 
 	if ( palette ) workspace.before( brushSettings );
 	const panel = node( 'aside', workspace );
 	if ( vectorMode ) panel.hidden = ! showPicker;
-	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = 'mask-shape-list';
+	const listId = vectorMode ? 'vector-shape-list' : 'mask-shape-list';
+	node( 'label', panel, vectorMode ? 'Contours' : 'Mask shapes' ).htmlFor = listId;
 	const layers = node( 'select', panel );
-	layers.id = 'mask-shape-list';
+	layers.id = listId;
 	layers.size = 5;
 	layers.onchange = () => { active = layers.selectedIndex; vertex = -1; refresh(); };
 	const name = node( 'input', panel );

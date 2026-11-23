@@ -17,7 +17,7 @@ export function PrimitiveAdjustment( editor, viewport ) {
 	function available() {
 
 		return !! current && editor.history.undos.at( -1 ) === current.command && ! editor.history.historyDisabled &&
-			! editor.editWorkspace.mode && ! editor.viewTools.mode && ! editor.modalTransform.active && current.available();
+			! editor.editWorkspace.exclusive && ! editor.viewTools.mode && ! editor.modalTransform.active && current.available();
 
 	}
 

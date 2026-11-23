@@ -1,6 +1,6 @@
 import { MathUtils, Object3D } from 'three';
 import { withoutRuntimeChildren, hasRestriction } from './ObjectRestrictions.js';
-import { selectionRoots } from './ObjectParenting.js';
+import { selectionRoots } from './ObjectParenting.js?v=editor-panes';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
@@ -9,7 +9,7 @@ import { timelineData } from './animation/TimelineData.js';
 
 function duplicateTargets( editor ) {
 
-	if ( editor.modeling.editMode || editor.viewTools.mode || editor.editWorkspace.mode || editor.streams.playing || editor.modalTransform.active ) return [];
+	if ( editor.modeling.editMode || editor.viewTools.mode || editor.editWorkspace.exclusive || editor.streams.playing || editor.modalTransform.active ) return [];
 	return selectionRoots( editor.selector.selection ).filter( object => object.parent &&
 		! object.userData.runtimeOnly && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) );
 

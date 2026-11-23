@@ -34,7 +34,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 	function refreshSlot( slot ) {
 
-		const id = slot.dom.dataset.overlayEditor || slot.editor;
+		const id = slot.dom.dataset.paneEditor || slot.editor;
 		if ( slot.trigger.dataset.type === id ) return;
 		const [ , label, glyph ] = types.get( id ) || [ '', 'Choose Editor', 'editorTypes' ];
 		slot.trigger.dataset.type = id;
@@ -135,10 +135,10 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 			return;
 
 		}
-		if ( slot.dom.dataset.overlayEditor ) {
+		if ( slot.dom.dataset.paneEditor ) {
 
 			if ( slot.key ) autoSplit = false;
-			flat.close( !! slot.key );
+			flat.closeHost( slot.dom, !! slot.key );
 
 		}
 		const target = kind || id;
@@ -195,11 +195,18 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 		if ( flat.host?.classList.contains( 'workspace-split-pane' ) ) return flat.host;
 		if ( ! editor.viewportSplit ) {
 
+			const fullEditor = flat.sessionAt( viewport.parentElement );
 			autoSplit = true;
-			editor.setViewportSplit( true, 'vertical' );
+			editor.setViewportSplit( true );
+			if ( fullEditor ) {
+
+				flat.placeDock( panes.source.dom, fullEditor );
+				return panes.source.dom;
+
+			}
 
 		}
-		const slot = panes.source.editor === 'viewport' ? panes.source : panes.director;
+		const slot = panes.source.editor === 'viewport' && ! panes.source.dom.dataset.paneEditor ? panes.source : panes.director;
 		release( slot );
 		return slot.dom;
 
@@ -208,7 +215,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 	function closed( host ) {
 
 		if ( autoSplit && Object.values( panes ).some( slot => slot.dom === host ) &&
-			Object.values( panes ).every( slot => slot.editor === 'viewport' ) ) {
+			Object.values( panes ).every( slot => slot.editor === 'viewport' && ! slot.dom.dataset.paneEditor ) ) {
 
 			autoSplit = false;
 			editor.setViewportSplit( false );
@@ -221,10 +228,10 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 		const slot = panes[ key ];
 		const main = viewportSlot();
-		const mode = slot.dom.dataset.overlayEditor;
+		const mode = slot.dom.dataset.paneEditor;
 		const id = slot.editor;
 		autoSplit = false;
-		if ( mode ) flat.placeDock( main.dom );
+		if ( mode ) flat.placeDock( main.dom, flat.sessionAt( slot.dom ) );
 		if ( ! mode && id === 'viewport' && key === 'director' ) editor.setViewportCamera( editor.camera.uuid );
 		editor.setViewportSplit( false );
 		if ( ! mode && id !== 'viewport' ) choose( main, id );
@@ -270,15 +277,16 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 	function split( axis ) {
 
 		autoSplit = false;
-		if ( flat.host === viewport.parentElement ) flat.placeDock( panes.source.dom );
-		if ( ! editor.viewportSplit && ! editor.viewportSource && editor.viewportCamera === editor.camera &&
-			! panes.source.dom.dataset.overlayEditor ) {
+		const fullEditor = flat.sessionAt( viewport.parentElement );
+		if ( ! fullEditor && ! editor.viewportSplit && ! editor.viewportSource && editor.viewportCamera === editor.camera &&
+			! panes.source.dom.dataset.paneEditor ) {
 
 			if ( hasLightView( editor.selected ) ) editor.setViewportSource( editor.selected );
 			else if ( editor.activeSceneCamera ) editor.setViewportCamera( editor.activeSceneCamera.uuid );
 
 		}
 		editor.setViewportSplit( true, axis );
+		if ( fullEditor ) flat.placeDock( panes.source.dom, fullEditor );
 		editor.signals.windowResize.dispatch();
 
 	}
@@ -311,7 +319,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 	}, true );
 	layout.isViewportPane = key => ! editor.viewportSplit ||
-		( panes[ key ].editor === 'viewport' && ! panes[ key ].dom.dataset.overlayEditor );
+		( panes[ key ].editor === 'viewport' && ! panes[ key ].dom.dataset.paneEditor );
 	editor.splitWorkspace = { target, closed, showMenu, split, join };
 	const header = viewport.querySelector( '.viewport-header' );
 	const headerControls = header.querySelectorAll( '.viewport-controls, .viewport-tool-panel, #toolbar, .viewport-tool-context' );
@@ -330,9 +338,9 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 			autoSplit = false;
 			layout.swapped = false;
 			activePane = layout.activeKey = 'director';
-			if ( flat.host?.classList.contains( 'workspace-split-pane' ) ) flat.close();
 			for ( const slot of Object.values( panes ) ) {
 
+				flat.closeHost( slot.dom, true );
 				slot.dom.hidden = true;
 				release( slot );
 
@@ -374,7 +382,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 		if ( picker.open || editor.viewTools.pointer || editor.modeling.gesture || editor.modeling.drag ||
 			editor.modalTransform.active || editor.flyControls.active || document.body.classList.contains( 'presenting' ) ) return;
 		currentTrigger = trigger;
-		const activeType = slot.dom.dataset.overlayEditor ||
+		const activeType = slot.dom.dataset.paneEditor ||
 			( slot.editor === 'properties' && types.get( sidebar.selected )?.[ 3 ] === 'properties' ? sidebar.selected : slot.editor );
 		picker.replaceChildren();
 		for ( const [ label, choices ] of groups ) {

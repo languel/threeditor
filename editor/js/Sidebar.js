@@ -1,8 +1,8 @@
 import { UITabbedPanel } from './libs/ui.js';
 import { icon, KEY_ICONS } from './Glyphs.js?v=mode-shelves';
 
-import { SidebarScene } from './Sidebar.Scene.js?v=outliner-menu';
-import { SidebarProperties } from './Sidebar.Properties.js?v=image-textures';
+import { SidebarScene } from './Sidebar.Scene.js?v=editor-panes';
+import { SidebarProperties } from './Sidebar.Properties.js?v=editor-panes';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';
 import { SidebarStreams } from './Sidebar.Streams.js';
@@ -18,7 +18,7 @@ function Sidebar( editor ) {
 
 	const { outlinerArea, settings: sceneSettings } = new SidebarScene( editor, () => {
 
-		if ( editor.editWorkspace.host === inspector.parentElement ) editor.editWorkspace.close();
+		editor.editWorkspace.closeHost( inspector.parentElement );
 		container.select( 'sceneTab' );
 
 	} );

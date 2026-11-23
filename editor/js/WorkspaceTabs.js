@@ -40,12 +40,8 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		[ 'Sculpting', 'sculptTool', () => show3D( 'sculpt' ) ],
 		[ 'UV Editing', 'toolGrid', () => {
 
-			if ( flat.mode !== 'uv' ) {
-
-				view.setWorkspaceMode( 'edit' );
-				flat.open( 'uv' );
-
-			}
+			view.setWorkspaceMode( 'edit' );
+			flat.open( 'uv' );
 
 		} ],
 		[ 'Image & Vector', 'pathDraw', () => flat.open( 'image' ) ],
@@ -83,7 +79,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 	let lastWorkspace = 'Layout';
 	function syncWorkspace() {
 
-		const active = flat.mode === 'script' ? 'Scripting' : lastWorkspace;
+		const active = { script: 'Scripting', uv: 'UV Editing', image: 'Image & Vector' }[ flat.mode ] || lastWorkspace;
 		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( name === active ) );
 
 	}
@@ -101,7 +97,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		button.onclick = () => {
 
 			if ( label === 'Sculpting' && ! editor.modeling.canEditTarget( editor.selected ) ) return;
-			if ( label !== 'Scripting' ) lastWorkspace = label;
+			if ( ! [ 'Scripting', 'UV Editing', 'Image & Vector' ].includes( label ) ) lastWorkspace = label;
 			open();
 			syncWorkspace();
 			const room = strip.getBoundingClientRect();

@@ -64,7 +64,9 @@ In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragmen
 
 ## 2D and 3D areas
 
-Opening UV, Image & Vector, Mask, Warp, or Script Window creates a split alongside the 3D view. Each pane has an editor-type picker. Drag the divider or use its arrow keys to resize. The **Split View** dropdown and right-click menus on the viewport, timeline, and right-sidebar dividers let you set the orientation, change either split editor, swap panes, join them, or close the active area. Focus a divider and press **Shift+F10** to open the menu with the keyboard.
+Opening **UV Editing**, **Image & Vector**, or **Scripting** from the workspace bar puts that editor beside the 3D view. Mask and Warp also open in split panes. Switching between editor workspaces keeps the split direction and divider position. Each pane has its own editor-type picker, so you can use two different editors side by side or switch either back to a 3D viewport. Changing the 3D interaction mode keeps the companion pane open.
+
+Drag the divider or use its arrow keys to resize. The **Split View** dropdown and right-click menus on the viewport, timeline, and right-sidebar dividers let you change the split direction, swap panes, join them, or close the active area. Focus a divider and press **Shift+F10** to open the menu with the keyboard.
 
 The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to select mesh elements and use modeling shortcuts there. Edit Mode draws selected vertices as small orange dots, selected edges in orange, and selected faces with an orange tint.
 

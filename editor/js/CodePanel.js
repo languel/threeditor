@@ -228,7 +228,7 @@ function CodePanel( editor ) {
 	} );
 	const sceneOnly = [ applyBtn, autoLabel, regenBtn ];
 	const sceneCode = () => target.kind === 'scene' ? getCode() : sceneText;
-	const isOpen = () => editor.editWorkspace.mode === 'script';
+	const isOpen = () => editor.editWorkspace.hasMode( 'script' );
 
 	// --- scene script (generated code mirrored onto the Scene) ---
 
@@ -1072,7 +1072,6 @@ function CodePanel( editor ) {
 	function open( { followSelection = true } = {} ) {
 
 		if ( isOpen() ) return;
-		editor.workspaceArea?.reveal( editor.editWorkspace.dock );
 		editor.editWorkspace.mount( 'script', null, dom, () => {
 
 			clearTimeout( applyTimer );
@@ -1092,7 +1091,7 @@ function CodePanel( editor ) {
 
 	function close() {
 
-		if ( isOpen() ) editor.editWorkspace.close();
+		if ( isOpen() ) editor.editWorkspace.closeMode( 'script' );
 
 	}
 

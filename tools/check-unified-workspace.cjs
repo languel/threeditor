@@ -142,6 +142,50 @@ async function checkWorkspaceEditors( page ) {
 	await choose( '3D Viewport', '3D Viewport' );
 	await rail.waitFor();
 
+	await page.evaluate( () => editor.setViewportSplit( false, 'vertical', .5 ) );
+	await page.getByRole( 'button', { name: 'Scripting', exact: true } ).click();
+	await source.getByRole( 'region', { name: 'Script Window' } ).waitFor();
+	await divider.press( 'ArrowLeft' );
+	await page.getByRole( 'button', { name: 'Image & Vector', exact: true } ).click();
+	await source.getByRole( 'region', { name: 'Image & Vector editor area' } ).waitFor();
+	await page.evaluate( () => {
+
+		const mesh = new THREE.Mesh( new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial() );
+		editor.addObject( mesh );
+		editor.select( mesh );
+
+	} );
+	await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+	const uv = source.getByRole( 'region', { name: 'UV editor area' } );
+	await uv.waitFor();
+	assert.equal( await divider.getAttribute( 'aria-valuenow' ), '45' );
+
+	const director = page.locator( '#workspace-director-pane' );
+	await choose( 'director pane', 'Script Window' );
+	await director.getByRole( 'region', { name: 'Script Window' } ).waitFor();
+	assert.equal( await uv.isVisible(), true );
+	await choose( 'director pane', '3D Viewport' );
+	assert.equal( await uv.isVisible(), true );
+	await divider.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Horizontal Split', exact: true } ).click();
+	assert.equal( await divider.getAttribute( 'aria-valuenow' ), '45' );
+	await divider.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Join · Keep Bottom', exact: true } ).click();
+	await page.locator( '#workspace-viewport > .viewport-edit-workspace[data-editor-mode="uv"]' ).waitFor();
+
+	await page.getByRole( 'button', { name: 'Image & Vector', exact: true } ).click();
+	await source.getByRole( 'region', { name: 'Image & Vector editor area' } ).waitFor();
+	assert.equal( await divider.getAttribute( 'aria-orientation' ), 'horizontal' );
+	assert.equal( await divider.getAttribute( 'aria-valuenow' ), '45' );
+	assert.equal( await page.locator( '#workspace-viewport > .viewport-edit-workspace' ).count(), 0 );
+	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await page.evaluate( () => {
+
+		editor.setViewportSplit( false, 'vertical', .5 );
+		editor.clear();
+
+	} );
+
 }
 
 async function checkModeDropdown( page ) {
