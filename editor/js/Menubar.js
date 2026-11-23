@@ -1,4 +1,4 @@
-import { WorkspaceTabs } from './WorkspaceTabs.js?v=editor-panes';
+import { WorkspaceTabs } from './WorkspaceTabs.js?v=area-context-menu';
 import { UIPanel } from './libs/ui.js';
 
 import { MenubarAdd } from './Menubar.Add.js?v=uv-sculpt';

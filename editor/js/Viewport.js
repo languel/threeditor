@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=editor-panes';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=area-context-menu';
 import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -35,7 +35,7 @@ import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=editor-panes';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
-import { ModelViewport } from './modeling/ModelViewport.js?v=editor-panes';
+import { ModelViewport } from './modeling/ModelViewport.js?v=area-context-menu';
 import { PostProcessingHost } from './PostProcessing.js';
 
 function Viewport( editor ) {

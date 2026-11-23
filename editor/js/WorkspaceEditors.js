@@ -214,7 +214,8 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 	function closed( host ) {
 
-		if ( autoSplit && Object.values( panes ).some( slot => slot.dom === host ) &&
+		const sharedCamera = ! editor.viewportSource && editor.viewportCamera === editor.camera;
+		if ( editor.viewportSplit && ( autoSplit || sharedCamera ) && Object.values( panes ).some( slot => slot.dom === host ) &&
 			Object.values( panes ).every( slot => slot.editor === 'viewport' && ! slot.dom.dataset.paneEditor ) ) {
 
 			autoSplit = false;
@@ -238,6 +239,29 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 		editor.signals.windowResize.dispatch();
 
 	}
+
+	function closeArea( slot ) {
+
+		if ( slot.key ) join( slot.key === 'director' ? 'source' : 'director' );
+		else flat.closeHost( slot.dom );
+
+	}
+
+	function openAreaMenu( event ) {
+
+		const header = event.target.closest( '.editor-2d-header' );
+		if ( ! header ) return;
+		const area = header.closest( '.workspace-editor-slot' );
+		const slot = allSlots().find( slot => slot.dom === area );
+		if ( ! slot ) return;
+		event.preventDefault();
+		event.stopPropagation();
+		editor.contextMenu.show( 'Editor Area', [ { label: 'Close Area', run: () => closeArea( slot ) } ],
+			{ x: event.clientX, y: event.clientY } );
+
+	}
+
+	for ( const slot of Object.values( slots ) ) slot.dom.addEventListener( 'contextmenu', openAreaMenu, true );
 
 	function showMenu( position ) {
 
@@ -267,7 +291,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 			} } );
 			const active = activePane;
-			actions.push( { label: 'Close Active Area', run: () => join( keys.find( key => key !== active ) ) } );
+			actions.push( { label: 'Close Active Area', run: () => closeArea( panes[ active ] ) } );
 
 		}
 		editor.contextMenu.show( 'Split View', actions, position );

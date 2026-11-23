@@ -85,6 +85,14 @@ async function checkSceneProperties( page ) {
 
 }
 
+async function closeEditorArea( page ) {
+
+	await page.locator( '.editor-2d-header' ).click( { button: 'right' } );
+	await page.getByRole( 'dialog', { name: 'Editor Area', exact: true } )
+		.getByRole( 'button', { name: 'Close Area', exact: true } ).click();
+
+}
+
 async function checkWorkspaceEditors( page ) {
 
 	const rail = page.getByRole( 'tablist', { name: 'Sidebar panels' } );
@@ -147,7 +155,9 @@ async function checkWorkspaceEditors( page ) {
 	await source.getByRole( 'region', { name: 'Script Window' } ).waitFor();
 	await divider.press( 'ArrowLeft' );
 	await page.getByRole( 'button', { name: 'Image & Vector', exact: true } ).click();
-	await source.getByRole( 'region', { name: 'Image & Vector editor area' } ).waitFor();
+	const image = source.getByRole( 'region', { name: 'Image & Vector editor area' } );
+	await image.waitFor();
+	assert.equal( await image.getByRole( 'button', { name: 'Close editor area' } ).count(), 0 );
 	await page.evaluate( () => {
 
 		const mesh = new THREE.Mesh( new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial() );
@@ -178,7 +188,19 @@ async function checkWorkspaceEditors( page ) {
 	assert.equal( await divider.getAttribute( 'aria-orientation' ), 'horizontal' );
 	assert.equal( await divider.getAttribute( 'aria-valuenow' ), '45' );
 	assert.equal( await page.locator( '#workspace-viewport > .viewport-edit-workspace' ).count(), 0 );
+	await divider.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Vertical Split', exact: true } ).click();
+	await image.locator( '.editor-2d-header' ).press( 'Escape' );
+	assert.equal( await image.isVisible(), true );
+	await closeEditorArea( page );
+	await divider.waitFor( { state: 'hidden' } );
+	await image.waitFor( { state: 'hidden' } );
+
+	await page.getByRole( 'button', { name: 'Image & Vector', exact: true } ).click();
+	await divider.click( { button: 'right' } );
+	await splitMenu.getByRole( 'button', { name: 'Horizontal Split', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+	await divider.waitFor( { state: 'hidden' } );
 	await page.evaluate( () => {
 
 		editor.setViewportSplit( false, 'vertical', .5 );
@@ -1059,7 +1081,7 @@ async function checkUVSelection( page ) {
 	await page.keyboard.press( 'Escape' );
 	assert.deepEqual( await page.evaluate( () => editor.modeling.indices ), [] );
 	assert.equal( await page.getByRole( 'region', { name: 'UV editor area' } ).isVisible(), true );
-	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await closeEditorArea( page );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -1104,7 +1126,7 @@ async function checkUVSelectionSync( page ) {
 	await sync.uncheck();
 	await grid.press( 'a' );
 	assert.equal( await page.evaluate( () => editor.modeling.elements.size ), 0 );
-	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await closeEditorArea( page );
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await page.evaluate( () => editor.clear() );
 
@@ -2449,7 +2471,7 @@ async function checkComponents( page ) {
 		return [ line, ch ];
 
 	} ), [ 2, 3 ] );
-	await page.getByRole( 'button', { name: 'Close editor area' } ).click();
+	await closeEditorArea( page );
 	await page.getByRole( 'checkbox', { name: 'Enable Spin' } ).uncheck();
 	const reloaded = await page.evaluate( async () => {
 
@@ -2949,7 +2971,7 @@ async function checkDrawingAssets( page ) {
 		return [ referencePath, includeReference, editor.sourceFiles.has( referencePath ) ];
 
 	} ), [ 'reference.png', true, true ] );
-	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await closeEditorArea( page );
 	await page.getByLabel( 'Editor Type', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
 	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
@@ -2989,7 +3011,7 @@ async function checkDrawingAssets( page ) {
 
 	await pick.click();
 	await pickerPanel.waitFor();
-	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await closeEditorArea( page );
 	await pickerPanel.waitFor( { state: 'hidden' } );
 	await page.getByLabel( 'Editor Type', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
@@ -3040,7 +3062,7 @@ async function checkDrawingAssets( page ) {
 	await ui.getByRole( 'button', { name: 'Undo drawing edit' } ).click();
 	await ui.getByRole( 'button', { name: 'Apply drawing' } ).click();
 	assert.deepEqual( await placement(), moved );
-	await page.getByRole( 'button', { name: 'Close editor area', exact: true } ).click();
+	await closeEditorArea( page );
 	await page.getByLabel( 'Editor Type', { exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Image and vector mode', exact: true } ).click();
 	await status.getByText( 'Reference image loaded.', { exact: true } ).waitFor();
@@ -3479,12 +3501,12 @@ async function check() {
 		assert.equal( await page.evaluate( () => !! document.activeElement.closest( '#script-window' ) ), true );
 		await page.keyboard.press( 'Control+Space' );
 		assert.ok( ( await code.boundingBox() ).width < 1440 );
-		await scriptWindow.getByRole( 'button', { name: 'Close editor area' } ).click();
+		await closeEditorArea( page );
 		await page.getByLabel( 'Editor Type', { exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Script Window', exact: true } ).click();
 		assert.equal( await scriptWindow.isVisible(), true );
 		assert.equal( await page.getByRole( 'button', { name: 'Scripting', exact: true } ).getAttribute( 'aria-pressed' ), 'true' );
-		await scriptWindow.getByRole( 'button', { name: 'Close editor area' } ).click();
+		await closeEditorArea( page );
 		for ( const area of [ '#sidebar', '#animation' ] ) {
 
 			const bounds = await page.locator( area ).boundingBox();

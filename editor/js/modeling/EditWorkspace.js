@@ -26,7 +26,6 @@ export function createEditWorkspace( editor ) {
 		target.className = 'editor-2d-target';
 		header.append( title, target );
 		const session = { dock, title, target };
-		modelButton( header, 'Close editor area', 'exitTool', () => closeSession( session ) );
 		const screen = document.createElement( 'div' );
 		screen.className = 'viewport-edit-content';
 		dock.append( header, screen );
@@ -40,12 +39,7 @@ export function createEditWorkspace( editor ) {
 		dock.addEventListener( 'focusin', activate );
 		dock.addEventListener( 'pointerdown', activate );
 		for ( const event of [ 'mousedown', 'touchstart', 'dblclick', 'contextmenu', 'drop' ] ) dock.addEventListener( event, e => e.stopPropagation() );
-		dock.addEventListener( 'keydown', event => {
-
-			event.stopPropagation();
-			if ( event.key === 'Escape' && ! event.defaultPrevented && ! event.target.closest?.( '.CodeMirror' ) ) closeSession( session );
-
-		} );
+		dock.addEventListener( 'keydown', event => event.stopPropagation() );
 		return session;
 
 	}
