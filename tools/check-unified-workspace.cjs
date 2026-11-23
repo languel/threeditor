@@ -201,6 +201,30 @@ async function checkWorkspaceEditors( page ) {
 	await splitMenu.getByRole( 'button', { name: 'Horizontal Split', exact: true } ).click();
 	await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
 	await divider.waitFor( { state: 'hidden' } );
+	const sceneCamera = await page.evaluate( () => {
+
+		const camera = new THREE.PerspectiveCamera();
+		editor.addObject( camera );
+		editor.select( null );
+		return camera.uuid;
+
+	} );
+	for ( const [ axis, pane, kept ] of [ [ 'vertical', 'source', 'director' ], [ 'horizontal', 'director', sceneCamera ] ] ) {
+
+		await page.evaluate( ( { axis, sceneCamera } ) => {
+
+			editor.setViewportCamera( sceneCamera );
+			editor.setViewportSplit( true, axis, .5 );
+
+		}, { axis, sceneCamera } );
+		const bounds = await page.locator( '#workspace-' + pane + '-pane' ).boundingBox();
+		await page.mouse.click( bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, { button: 'right' } );
+		const context = page.getByRole( 'dialog', { name: 'Scene', exact: true } );
+		await context.getByRole( 'button', { name: 'Close Pane', exact: true } ).click();
+		await divider.waitFor( { state: 'hidden' } );
+		assert.equal( await page.evaluate( () => editor.viewportCamera === editor.camera ? 'director' : editor.viewportCamera.uuid ), kept );
+
+	}
 	await page.evaluate( () => {
 
 		editor.setViewportSplit( false, 'vertical', .5 );

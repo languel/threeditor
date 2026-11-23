@@ -74,7 +74,7 @@ Turn on **Sync UV and mesh selection** in the UV toolbar to share selection with
 
 ## Split views
 
-In the 3D viewport, open the command palette with **F3**. **Vertical Split** places two areas side by side. **Horizontal Split** stacks them. Drag the divider to resize the areas, or focus it and use the arrow keys. Hover the area you want to remove and run **Close Area**. The other area fills the viewport.
+In the 3D viewport, open the command palette with **F3**. **Vertical Split** places two areas side by side. **Horizontal Split** stacks them. Drag the divider to resize the areas, or focus it and use the arrow keys. Right-click a 3D pane and choose **Close Pane** to expand the other pane. You can also hover a pane and run **Close Area** from the command palette.
 
 Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
 

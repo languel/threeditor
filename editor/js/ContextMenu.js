@@ -269,6 +269,13 @@ function ContextMenu( editor, viewport ) {
 			}
 
 		} );
+		const areaPointer = position ?? pointer;
+		if ( editor.viewportSplit && ! document.body.dataset.maximizedArea && areaPointer &&
+			editor.viewLayout.at( areaPointer.x, areaPointer.y, 'area' ) ) {
+
+			actions.push( { label: 'Close Pane', section: 'Viewport areas', run: () => editor.viewLayout.closeArea( areaPointer ) } );
+
+		}
 		show( edit ? 'Edit geometry' : editor.selected?.name || 'Scene', actions, position );
 	}
 
