@@ -2988,6 +2988,8 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 }
 .editor-2d-target { margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .72; }
 
+#viewport canvas.pencil-brush-cursor { cursor: none; }
+
 .viewport-edit-modes button[aria-pressed="true"],
 .viewport-edit-workspace button[aria-pressed="true"] {
 	background: #7099c442;

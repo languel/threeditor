@@ -1,5 +1,5 @@
 import { closestPointOnSegment, segmentCount } from './Contour.js';
-import { outlinePoints } from './ModelGeometry.js?v=pencil-grain';
+import { outlinePoints } from './ModelGeometry.js?v=expressive-pencil';
 import * as THREE from 'three';
 import { selectionRegionIntersectsSegment } from './MeshSelection.js?v=pencil-selection';
 

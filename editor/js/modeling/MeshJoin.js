@@ -1,4 +1,4 @@
-import { readModelGeometry } from './ModelGeometry.js';
+import { readModelGeometry } from './ModelGeometry.js?v=expressive-pencil';
 
 function component( THREE, attribute, index, axis ) {
 

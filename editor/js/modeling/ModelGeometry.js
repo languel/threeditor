@@ -1,5 +1,5 @@
-import { pencilRibbon } from './PencilRibbon.js?v=brush-response';
-import { pencilGrainTexture } from './PencilGrain.js';
+import { pencilRibbon } from './PencilRibbon.js?v=expressive-pencil';
+import { pencilGrainTexture } from './PencilGrain.js?v=expressive-pencil';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
 import { insertContourPoint } from './Contour.js';
 

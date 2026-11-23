@@ -1,5 +1,5 @@
 import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
-import { grainOpacity, grainTileSize } from './PencilGrain.js';
+import { grainOpacity, grainTileSize } from './PencilGrain.js?v=expressive-pencil';
 import { StrokeSampler } from './StrokeSampler.js';
 import { icon } from '../Glyphs.js?v=pencil-reference';
 
@@ -13,12 +13,18 @@ const tips = [
 	[ 'Pencil Soft', 10, .85, .7, .12, 1, 0, 0.48, 9, 'paper' ],
 	[ 'Pencil Hard', 5, .7, 1, .12, 1, 0, 0.62, 13, 'paper' ],
 	[ 'Ink Pooling', 14, 1, .95 ],
-	[ 'Brush Pen', 26, 1, .85 ],
+	[ 'Brush Pen', 26, 1, .85, .1, .8, 0, .28, 8, 'fiber' ],
 	[ 'Chalk', 30, .8, .4, .14, .75, .3, 0.8, 14, 'speckle' ],
 	[ 'Dry Brush', 34, .9, .5, .2, .5, 0, 0.95, 18, 'fiber' ],
 	[ 'Fading Marker', 24, .95, .8 ],
 	[ 'Calligraphy', 22, 1, 1, .06, .25, .9 ]
 ];
+const tipProfiles = {
+	'Brush Pen': { taperStart: .18, taperEnd: .3, sizeResponse: 1.5 },
+	'Ink Rough': { taperStart: .12, taperEnd: .24 },
+	'Dry Brush': { taperStart: .1, taperEnd: .28 }
+};
+const profileDefaults = { taperStart: 0, taperEnd: 0, sizeResponse: 1, opacityResponse: 1 };
 
 function brushFill( context, radius, color, hardness ) {
 
@@ -32,7 +38,7 @@ function brushFill( context, radius, color, hardness ) {
 
 export function pencilBrush( editor ) {
 
-	return editor.pencilBrush ||= { name: 'Pen', size: 8, strength: 1, hardness: 1, spacing: .12, aspect: 1, angle: 0, pressureSize: true, pressureOpacity: false, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#71bce7', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
+	return editor.pencilBrush ||= { ...profileDefaults, name: 'Pen', size: 8, strength: 1, hardness: 1, spacing: .12, aspect: 1, angle: 0, pressureSize: true, pressureOpacity: false, grain: 0, grainScale: 6, grainPattern: 'paper', color: '#71bce7', stabilize: false, stabilizeRadius: 30, smoothing: 0, simplify: 0, guide: 'off', guideAngle: 0 };
 
 }
 
@@ -135,13 +141,13 @@ export function brushPressure( event ) {
 
 export function brushSizeFactor( brush, pressure ) {
 
-	return brush.pressureSize === false ? 1 : Math.max( .2, pressure );
+	return brush.pressureSize === false ? 1 : Math.max( .2, pressure ** ( brush.sizeResponse ?? 1 ) );
 
 }
 
 export function brushOpacityFactor( brush, pressure ) {
 
-	return brush.pressureOpacity ? pressure : 1;
+	return brush.pressureOpacity ? pressure ** ( brush.opacityResponse ?? 1 ) : 1;
 
 }
 
@@ -165,7 +171,15 @@ function drawBrushSample( canvas, brush ) {
 	const context = canvas.getContext( '2d' );
 	const style = { ...brush, size: Math.min( 17, brush.size * .58 ) };
 	context.clearRect( 0, 0, canvas.width, canvas.height );
-	const dab = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => brushDab( context, x, y, pressure, style ) );
+	const dab = brushStroke( style, 7, 16, .7, ( x, y, pressure ) => {
+
+		const u = ( x - 7 ) / 30;
+		const start = brush.taperStart ? Math.min( 1, u / brush.taperStart ) : 1;
+		const end = brush.taperEnd ? Math.min( 1, ( 1 - u ) / brush.taperEnd ) : 1;
+		const t = Math.min( start, end );
+		brushDab( context, x, y, pressure, { ...style, size: style.size * ( .12 + .88 * t * t * ( 3 - 2 * t ) ) } );
+
+	} );
 	for ( let x = 8; x < 38; x ++ ) dab( x, 12 + Math.sin( x / 5 ) * 4, .35 + .65 * Math.sin( x / 15 ) );
 
 }
@@ -288,7 +302,7 @@ export function pencilDropdown( host, label, choices, read, write ) {
 }
 
 export function brushPalette( editor, host, changed = () => {}, {
-	strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, quick = false, addPlacementControls, addStrokeControls
+	strokeOptions = false, singleRow = false, curveCleanup = true, dabSpacing = true, quick = false, taper = false, addPlacementControls, addStrokeControls
 } = {} ) {
 
 	const brush = pencilBrush( editor );
@@ -346,7 +360,7 @@ export function brushPalette( editor, host, changed = () => {}, {
 
 		const saved = findPreset( name );
 		if ( ! saved ) return;
-		Object.assign( brush, saved );
+		Object.assign( brush, profileDefaults, saved );
 		refresh(); changed();
 
 	};
@@ -381,7 +395,7 @@ export function brushPalette( editor, host, changed = () => {}, {
 	if ( quick ) fieldRow.querySelector( '[aria-label="Save brush preset"]' ).remove();
 	palette.addEventListener( 'focusin', refresh );
 
-	const tipOptions = new Set( [ 'spacing', 'aspect', 'angle', 'pressureSize', 'pressureOpacity' ] );
+	const tipOptions = new Set( [ 'spacing', 'aspect', 'angle', 'pressureSize', 'pressureOpacity', 'sizeResponse', 'opacityResponse', 'taperStart', 'taperEnd' ] );
 	const displayValue = key => key === 'angle' ? Math.round( brush.angle * 180 / Math.PI ) : brush[ key ];
 	const fields = [
 		[ 'color', 'Brush color', 'color', 'color' ],
@@ -394,8 +408,13 @@ export function brushPalette( editor, host, changed = () => {}, {
 		[ 'aspect', 'Brush tip aspect', 'scale', 'number', .1, 1 ],
 		[ 'angle', 'Brush tip angle (°)', 'rotate', 'number', -180, 180 ],
 		[ 'pressureSize', 'Use pen pressure for size', 'brushWidth', 'checkbox' ],
-		[ 'pressureOpacity', 'Use pen pressure for opacity', 'opacity', 'checkbox' ]
-	].filter( ( [ key ] ) => quick ? [ 'color', 'size', 'strength' ].includes( key ) : dabSpacing || key !== 'spacing' ).map( ( [ key, name, glyph, type, min, max ] ) => {
+		[ 'sizeResponse', 'Size pressure response', 'brushWidth', 'number', .25, 3 ],
+		[ 'pressureOpacity', 'Use pen pressure for opacity', 'opacity', 'checkbox' ],
+		[ 'opacityResponse', 'Opacity pressure response', 'opacity', 'number', .25, 3 ],
+		[ 'taperStart', 'Start taper', 'toolPath', 'number', 0, .5 ],
+		[ 'taperEnd', 'End taper', 'toolPath', 'number', 0, .5 ]
+	].filter( ( [ key ] ) => quick ? [ 'color', 'size', 'strength' ].includes( key ) :
+		( dabSpacing || key !== 'spacing' ) && ( taper || ! key.startsWith( 'taper' ) ) ).map( ( [ key, name, glyph, type, min, max ] ) => {
 
 		const input = modelField( fieldRow, name, glyph, type, displayValue( key ) );
 		if ( type === 'number' ) {
@@ -425,7 +444,7 @@ export function brushPalette( editor, host, changed = () => {}, {
 	const pattern = document.createElement( 'select' );
 	pattern.setAttribute( 'aria-label', 'Brush grain pattern' );
 	pattern.title = 'Brush grain pattern';
-	for ( const [ id, label ] of [ [ 'paper', 'Paper' ], [ 'fiber', 'Fibers' ], [ 'speckle', 'Speckles' ] ] ) pattern.append( new Option( label, id ) );
+	for ( const [ id, label ] of [ [ 'paper', 'Paper' ], [ 'fiber', 'Fibers' ], [ 'speckle', 'Speckles' ], [ 'canvas', 'Canvas weave' ] ] ) pattern.append( new Option( label, id ) );
 	pattern.onchange = () => { brush.grainPattern = pattern.value; refresh(); changed(); };
 	if ( ! quick ) fieldRow.append( pattern );
 	let settings, guide;
@@ -478,9 +497,10 @@ export function brushPalette( editor, host, changed = () => {}, {
 
 	const buttons = tips.map( ( [ name, size, strength, hardness, spacing = .12, aspect = 1, angle = 0, grain = 0, grainScale = 6, grainPattern = 'paper' ] ) => {
 
+		const tip = { ...profileDefaults, ...tipProfiles[ name ], name, size, strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern };
 		const button = modelButton( presets, name, 'brush', () => {
 
-			Object.assign( brush, { name, size, strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern } );
+			Object.assign( brush, tip );
 			if ( singleRow ) {
 
 				presets.parentElement.open = false;
@@ -495,7 +515,7 @@ export function brushPalette( editor, host, changed = () => {}, {
 		sample.height = 24;
 		sample.setAttribute( 'aria-hidden', 'true' );
 		button.prepend( sample );
-		drawBrushSample( sample, { size, strength, hardness, spacing, aspect, angle, grain, grainScale, grainPattern, color: '#263449' } );
+		drawBrushSample( sample, { ...tip, color: '#263449' } );
 		return [ name, button ];
 
 	} );
@@ -507,6 +527,8 @@ export function brushPalette( editor, host, changed = () => {}, {
 			if ( input.type === 'checkbox' ) input.checked = brush[ key ];
 			else if ( document.activeElement !== input ) input.value = displayValue( key );
 			if ( key === 'guideAngle' ) input.disabled = brush.guide !== 'parallel';
+			if ( key === 'sizeResponse' ) input.disabled = ! brush.pressureSize;
+			if ( key === 'opacityResponse' ) input.disabled = ! brush.pressureOpacity;
 
 		}
 		if ( guide ) guide.value = brush.guide;
@@ -526,7 +548,8 @@ export function brushPalette( editor, host, changed = () => {}, {
 		if ( summaryCanvas ) {
 
 			const preview = [ brush.name, brush.color, brush.size, brush.strength, brush.hardness, brush.spacing, brush.aspect, brush.angle,
-				brush.grain, brush.grainScale, brush.grainPattern, brush.pressureSize, brush.pressureOpacity ].join( '/' );
+				brush.grain, brush.grainScale, brush.grainPattern, brush.pressureSize, brush.pressureOpacity,
+				brush.sizeResponse, brush.opacityResponse, brush.taperStart, brush.taperEnd ].join( '/' );
 			if ( preview !== lastPreview ) {
 
 				lastPreview = preview;

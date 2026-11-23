@@ -1,11 +1,11 @@
-import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush, pencilDropdown } from './PencilBrush.js?v=pencil-reference';
+import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush, pencilDropdown } from './PencilBrush.js?v=expressive-pencil';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-placement';
-import { modelObject, outlinePoints } from './ModelGeometry.js?v=stroke-edit';
+import { modelObject, outlinePoints } from './ModelGeometry.js?v=expressive-pencil';
 import { icon } from '../Glyphs.js?v=editor-glyphs';
 import { splatStrokeCommands } from './SplatPaint.js?v=pencil-splats';
-import { addPencilSplatDab } from './PencilSplats.js?v=brush-response';
-import { grainOpacity } from './PencilGrain.js';
-import { TexturePaintStroke } from './TexturePaint.js?v=pencil-reference';
+import { addPencilSplatDab, taperPencilSplats } from './PencilSplats.js?v=expressive-pencil';
+import { grainOpacity } from './PencilGrain.js?v=expressive-pencil';
+import { TexturePaintStroke } from './TexturePaint.js?v=expressive-pencil';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js?v=pencil-ribbon';
@@ -19,7 +19,7 @@ import { closestPointOnSegment, segmentCount } from './Contour.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
 import { maskShapes } from './ProjectionMask.js?v=mask-editor';
-import { openMaskEditor } from './MaskEditor.js?v=editor-panes';
+import { openMaskEditor } from './MaskEditor.js?v=expressive-pencil';
 import { rayToView, meshHit, paintSurfaces } from './SurfacePicking.js?v=surface-tools';
 import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, measurementLength, worldMeasurePoints } from './Measurements.js';
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
@@ -843,6 +843,7 @@ export class ViewportTools {
 
 			this.detailPencilPalette = brushPalette( this.editor, host, () => { this.quickPencilPalette?.refresh(); this.draw(); }, {
 				strokeOptions: this.pencilUsesPlacement(), curveCleanup: this.pencilTool === 'vector', dabSpacing: this.pencilTool !== 'vector',
+				taper: this.pencilUsesPlacement(),
 				addStrokeControls: controls => { this.buildPencilAttachmentControls( controls ); this.buildPencilStrokeControls( controls ); }
 			} );
 
@@ -1293,7 +1294,8 @@ export class ViewportTools {
 					erase: this.pencilTool === 'erase', color: style.color, diameter: this.pencilTool === 'vector' ? 6 : style.size,
 					opacity: style.strength, hardness: style.hardness, aspect: style.aspect, angle: style.angle,
 					grain: style.grain, grainScale: style.grainScale, grainPattern: style.grainPattern,
-					pressureSize: style.pressureSize, pressureOpacity: style.pressureOpacity
+					pressureSize: style.pressureSize, pressureOpacity: style.pressureOpacity,
+					sizeResponse: style.sizeResponse, opacityResponse: style.opacityResponse
 				} : this.brush;
 				const { output, diameter } = brush;
 				const pressure = pencil ? brushPressure( event ) : Math.max( .12, brushPressure( event ) );
@@ -1885,9 +1887,9 @@ export class ViewportTools {
 
 	pencilObject( stroke, points, samples, closed ) {
 
-		const { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern } = stroke.style;
+		const { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern, taperStart, taperEnd } = stroke.style;
 		return modelObject( THREE, { kind: 'path', points, smooth: false, closed, planar: false,
-			pencilBrush: { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern, samples } }, 'Pencil stroke' );
+			pencilBrush: { color, strength, hardness, aspect, angle, grain, grainScale, grainPattern, taperStart, taperEnd, samples } }, 'Pencil stroke' );
 
 	}
 
@@ -1948,6 +1950,8 @@ export class ViewportTools {
 		this.release();
 		if ( event.type === 'pointerup' && stroke ) {
 
+			const frame = this.layout.at( event.clientX, event.clientY );
+			if ( stroke.pencil && frame?.director ) this.brushCursor = { x: event.clientX, y: event.clientY, frame, ignoreAnchor: event.ctrlKey || event.metaKey };
 			if ( stroke.erased ) for ( const object of stroke.erased ) {
 
 				if ( object.parent && ! hasRestriction( object, 'locked' ) ) commands.push( new RemoveObjectCommand( this.editor, object ) );
@@ -1960,7 +1964,8 @@ export class ViewportTools {
 				if ( ( receiver !== this.editor.scene && ! receiver.parent ) || ! isVisible( receiver ) || hasRestriction( receiver, 'locked' ) ) continue;
 				if ( mark.radii ) {
 
-					commands.push( ...splatStrokeCommands( this.editor, mark, stroke.color, stroke.opacity ) );
+					const cloud = stroke.style ? taperPencilSplats( mark, stroke.style, stroke.grainTile ) : mark;
+					commands.push( ...splatStrokeCommands( this.editor, cloud, stroke.color, stroke.opacity ) );
 					continue;
 
 				}
@@ -2136,6 +2141,9 @@ export class ViewportTools {
 	draw() {
 
 		if ( ! this.editor.renderer ) return;
+		const brushFrame = this.brushCursor?.frame;
+		const pencilCursor = this.mode === 'pencil' && brushFrame?.director && this.layout.isViewportPane?.( brushFrame.key ) !== false;
+		this.editor.renderer.domElement.classList.toggle( 'pencil-brush-cursor', Boolean( pencilCursor ) );
 		const overlays = this.editor.viewportOverlays;
 		const showCursor = overlays && ! this.editor.editWorkspace?.exclusive && ! cleanShading( this.editor.viewportShading );
 		this.overlay.hidden = ! showCursor && ! this.mode && ! ( overlays && this.measurements.length );
@@ -2204,12 +2212,15 @@ export class ViewportTools {
 				ctx.stroke();
 
 			}
-			if ( ( this.mode === 'paint' || this.mode === 'pencil' && frame.director && this.pencilTool !== 'vector' ) &&
+			if ( ( this.mode === 'paint' || pencilCursor && frame.director ) &&
 				this.brushCursor?.frame.key === frame.key ) {
 
 				const bounds = this.layout.clientRect( frame );
 				ctx.beginPath();
 				ctx.arc( rect.x + this.brushCursor.x - bounds.left, rect.y + this.brushCursor.y - bounds.top, ( this.mode === 'pencil' ? pencilBrush( this.editor ).size : this.brush.diameter ) / 2, 0, 2 * Math.PI );
+				ctx.strokeStyle = '#111b';
+				ctx.lineWidth = 3;
+				ctx.stroke();
 				ctx.strokeStyle = this.mode === 'pencil' ? pencilBrush( this.editor ).color : this.brush.color;
 				ctx.lineWidth = 1.5;
 				ctx.stroke();

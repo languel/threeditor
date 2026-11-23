@@ -1,3 +1,5 @@
+import { pencilProfile } from './PencilProfile.js';
+
 // Store the brush as a regular mesh so the editable stroke also works in Play and exports.
 export function pencilRibbon( THREE, points, closed, brush ) {
 
@@ -35,8 +37,37 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 	};
 	if ( points.length > 1 ) {
 
-		const frames = points.map( frameAt );
+		let frames = points.map( frameAt );
+		const profile = pencilProfile( points, brush, closed );
+		if ( profile ) {
+
+			// Subdivide the ribbon through the taper, even when the authored path has only two points.
+			const centers = [ points[ 0 ] ], tapered = [ frames[ 0 ] ];
+			let stop = 0;
+			for ( let i = 1; i < points.length; i ++ ) {
+
+				const from = profile.lengths[ i - 1 ], to = profile.lengths[ i ];
+				while ( stop < profile.stops.length && profile.stops[ stop ] < to ) {
+
+					const length = profile.stops[ stop ++ ];
+					if ( length <= from + 1e-8 ) continue;
+					const t = ( length - from ) / ( to - from );
+					const a = frames[ i - 1 ], b = frames[ i ];
+					centers.push( points[ i - 1 ].clone().lerp( points[ i ], t ) );
+					tapered.push( { tangent: a.tangent.clone().lerp( b.tangent, t ).normalize(), side: a.side.clone().lerp( b.side, t ).normalize(),
+						radius: THREE.MathUtils.lerp( a.radius, b.radius, t ), opacity: THREE.MathUtils.lerp( a.opacity, b.opacity, t ) } );
+
+				}
+				centers.push( points[ i ] );
+				tapered.push( frames[ i ] );
+
+			}
+			points = centers;
+			frames = tapered;
+
+		}
 		let distance = 0;
+		let length = 0;
 		const ringCount = points.length + ( closed ? 1 : 0 );
 		for ( let i = 0; i < ringCount; i ++ ) {
 
@@ -46,10 +77,13 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 			if ( i ) {
 
 				const previous = ( i - 1 ) % points.length;
-				distance += point.distanceTo( points[ previous ] ) / Math.max( 1e-6, radius + frames[ previous ].radius );
+				const step = point.distanceTo( points[ previous ] );
+				distance += step / Math.max( 1e-6, radius + frames[ previous ].radius );
+				length += step;
 
 			}
-			for ( const [ u, alpha ] of rings ) add( point.clone().addScaledVector( side, u * radius ), alpha * opacity, distance, ( u + 1 ) / 2 );
+			const width = radius * ( profile?.factor( length ) ?? 1 );
+			for ( const [ u, alpha ] of rings ) add( point.clone().addScaledVector( side, u * width ), alpha * opacity, distance, ( u + 1 ) / 2 );
 
 		}
 		const count = rings.length;
@@ -63,6 +97,7 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 
 			const point = points[ end ], { tangent, side, radius, opacity } = frames[ end ];
 			const along = end ? distance : 0;
+			const width = radius * ( profile?.factor( end ? length : 0 ) ?? 1 );
 			const directionSign = end ? 1 : -1;
 			const center = add( point, opacity, along, .5 );
 			let previous;
@@ -72,8 +107,8 @@ export function pencilRibbon( THREE, points, closed, brush ) {
 				const x = Math.cos( angle ), y = directionSign * Math.sin( angle );
 				const direction = side.clone().multiplyScalar( x ).addScaledVector( tangent, y );
 				const core = 1 - fade;
-				const inner = add( point.clone().addScaledVector( direction, radius * core ), opacity, along + y * core / 2, ( x * core + 1 ) / 2 );
-				const outer = add( point.clone().addScaledVector( direction, radius ), 0, along + y / 2, ( x + 1 ) / 2 );
+				const inner = add( point.clone().addScaledVector( direction, width * core ), opacity, along + y * core / 2, ( x * core + 1 ) / 2 );
+				const outer = add( point.clone().addScaledVector( direction, width ), 0, along + y / 2, ( x + 1 ) / 2 );
 				if ( previous ) indices.push( center, previous[ 0 ], inner, previous[ 0 ], previous[ 1 ], inner, inner, previous[ 1 ], outer );
 				previous = [ inner, outer ];
 

@@ -1,5 +1,23 @@
 import * as THREE from 'three';
-import { grainTileSize } from './PencilGrain.js';
+import { grainTileSize } from './PencilGrain.js?v=expressive-pencil';
+import { pencilProfile } from './PencilProfile.js';
+
+export function taperPencilSplats( mark, brush, tile ) {
+
+	if ( ! ( brush.taperStart || brush.taperEnd ) ) return mark;
+	const points = mark.points.map( point => new THREE.Vector3().fromArray( point ) );
+	const profile = pencilProfile( points, brush );
+	if ( ! profile ) return mark;
+	const result = { receiver: mark.receiver, positions: [], radii: [], kernels: [], points: [], samples: [] };
+	for ( const [ index, point ] of mark.points.entries() ) {
+
+		const sample = mark.samples[ index ];
+		addPencilSplatDab( result, point, { ...sample, radius: sample.radius * profile.factor( profile.lengths[ index ] ) }, brush, tile );
+
+	}
+	return result;
+
+}
 
 // Emit ordinary .splat samples. Grain changes the Gaussian distribution
 // itself, so it stays visible from other views and in the exported cloud.

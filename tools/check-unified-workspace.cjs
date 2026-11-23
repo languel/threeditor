@@ -530,6 +530,8 @@ async function checkPencil( page ) {
 
 	};
 	await page.getByRole( 'button', { name: 'Pencil', exact: true } ).click();
+	await page.mouse.move( center[ 0 ], center[ 1 ] );
+	assert.equal( await page.evaluate( () => getComputedStyle( editor.renderer.domElement ).cursor ), 'none' );
 	await page.getByLabel( 'Brush presets', { exact: true } ).click();
 	await page.locator( '.viewport-pencil-controls' ).getByRole( 'button', { name: 'Charcoal', exact: true } ).click();
 	const size = page.locator( '.viewport-pencil-controls' ).getByLabel( 'Brush size (px)', { exact: true } );

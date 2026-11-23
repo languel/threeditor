@@ -21,6 +21,20 @@ import { generateThreeCode } from '../editor/js/ThreeCodeExporter.js';
 import { separateMesh } from '../editor/js/modeling/MeshSeparation.js';
 import { joinMeshGeometry } from '../editor/js/modeling/MeshJoin.js';
 
+test( 'Pencil taper widens a two-point ribbon between its tips and skips closed strokes', () => {
+
+	const points = [ new THREE.Vector3(), new THREE.Vector3( 10, 0, 0 ) ];
+	const sample = { radius: 1, opacity: 1, normal: [ 0, 0, 1 ], right: [ 1, 0, 0 ], up: [ 0, 1, 0 ] };
+	const brush = { color: '#ffffff', strength: 1, hardness: 1, samples: [ sample, sample ], taperStart: .2, taperEnd: .3 };
+	const positions = pencilRibbon( THREE, points, false, brush ).attributes.position;
+	assert.ok( Math.abs( positions.getY( 0 ) + .12 ) < 1e-6 );
+	assert.ok( Array.from( positions.array ).some( ( coordinate, index ) => index % 3 === 1 && coordinate === 1 ) );
+	const loop = [ ...points, new THREE.Vector3( 5, 5, 0 ) ];
+	assert.deepEqual( pencilRibbon( THREE, loop, true, brush ).attributes.position.array,
+		pencilRibbon( THREE, loop, true, { ...brush, taperStart: 0, taperEnd: 0 } ).attributes.position.array );
+
+} );
+
 test( 'Cube and Plane primitives use authored quad topology and UVs', () => {
 
 	const build = key => meshPrimitives.find( ( [ kind ] ) => kind === key )[ 2 ]( THREE, true );

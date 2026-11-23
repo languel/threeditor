@@ -1,4 +1,4 @@
-import { pencilBrush } from './PencilBrush.js?v=pencil-reference';
+import { pencilBrush } from './PencilBrush.js?v=expressive-pencil';
 
 export function createBrushColorSampler( editor ) {
 

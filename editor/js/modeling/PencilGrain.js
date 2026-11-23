@@ -19,7 +19,10 @@ export function grainOpacity( grain, pattern ) {
 		const coarse = noise( Math.floor( x / ( fiber ? 16 : 4 ) ), Math.floor( y / 4 ) );
 		const fleck = noise( Math.floor( x / ( fiber ? 4 : 1 ) ), y );
 		const tooth = coarse * .60 + fleck * .40;
-		const coverage = Math.min( 1, Math.max( 0, ( tooth - ( pattern === 'speckle' ? .32 : .19 ) ) * 2.5 ) );
+		const warp = Math.cos( x * Math.PI / 4 ), weft = Math.cos( y * Math.PI / 4 );
+		const weave = .5 + .25 * ( warp + weft ) * ( ( ( x >> 3 ) + ( y >> 3 ) ) % 2 ? -1 : 1 );
+		const surface = pattern === 'canvas' ? .7 * weave + .3 * tooth : tooth;
+		const coverage = Math.min( 1, Math.max( 0, ( surface - ( pattern === 'speckle' ? .32 : .19 ) ) * 2.5 ) );
 		opacity[ y * grainTileSize + x ] = Math.round( 255 * ( 1 - grain * ( 1 - coverage ) ) );
 
 	}
