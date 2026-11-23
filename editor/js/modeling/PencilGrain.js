@@ -32,16 +32,16 @@ export function grainOpacity( grain, pattern ) {
 
 const textures = new WeakMap();
 
-export function pencilGrainTexture( THREE, brush ) {
+export function pencilGrainTexture( THREE, brush, alphaMask = false ) {
 
 	if ( ! ( brush.grain > 0 ) ) return null;
 	const cache = textures.get( THREE ) || new Map();
 	textures.set( THREE, cache );
-	const key = [ brush.grain, brush.grainPattern ].join( '/' );
+	const key = [ brush.grain, brush.grainPattern, alphaMask ].join( '/' );
 	if ( cache.has( key ) ) return cache.get( key );
 	const alpha = grainOpacity( brush.grain, brush.grainPattern );
 	const rgba = new Uint8Array( alpha.length * 4 ).fill( 255 );
-	alpha.forEach( ( value, i ) => { rgba[ i * 4 + 3 ] = value; } );
+	alpha.forEach( ( value, i ) => { rgba[ i * 4 + ( alphaMask ? 1 : 3 ) ] = value; } );
 	const texture = new THREE.DataTexture( rgba, grainTileSize, grainTileSize, THREE.RGBAFormat );
 	texture.name = 'Pencil grain · ' + ( brush.grainPattern || 'paper' );
 	texture.wrapS = texture.wrapT = THREE.RepeatWrapping;

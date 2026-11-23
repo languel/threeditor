@@ -17,6 +17,7 @@ const fragmentShader = /* glsl */`
 	uniform vec2 depthScale;
 	uniform vec4 projectionCrop;
 	uniform bool projectorFrame;
+	uniform bool keepImageAlpha;
 	uniform bool strokeLayer;
 	uniform bool reversed;
 	varying vec3 worldPoint;
@@ -54,6 +55,9 @@ const fragmentShader = /* glsl */`
 			if ( color.a == 0.0 ) return;
 			// Normal blending accumulated premultiplied color in the source target.
 			gl_FragColor = vec4( toSRGB( color.rgb / color.a ), color.a );
+		} else if ( keepImageAlpha ) {
+			if ( color.a == 0.0 ) return;
+			gl_FragColor = vec4( toSRGB( color.rgb ), color.a );
 		} else {
 			gl_FragColor = vec4( toSRGB( color.rgb ), 1.0 );
 		}
@@ -183,7 +187,7 @@ function toCanvas( pixels, size, emptyMessage ) {
 
 }
 
-export function bakeTexture( renderer, scene, object, geometry, camera, { size, mode, output } ) {
+export function bakeTexture( renderer, scene, object, geometry, camera, { size, mode, output, applyImage = false } ) {
 
 	if ( ! renderer?.isWebGLRenderer || renderer.xr.isPresenting ) throw new Error( 'Texture baking requires the WebGL renderer.' );
 	if ( ! geometry.getAttribute( 'uv' ) ) throw new Error( 'Unwrap the mesh before baking.' );
@@ -211,7 +215,7 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 			sourceColor: { value: projectorTexture || source.texture }, sourceDepth: { value: source.depthTexture },
 			sourceViewProjection: { value: new THREE.Matrix4() }, depthScale: { value: new THREE.Vector2() },
 			projectionCrop: { value: crop }, projectorFrame: { value: Boolean( projectorTexture ) },
-			strokeLayer: { value: strokeLayer }, reversed: { value: false }
+			strokeLayer: { value: strokeLayer }, keepImageAlpha: { value: applyImage }, reversed: { value: false }
 		}
 	} );
 	const proxy = new THREE.Mesh( geometry, material );
@@ -226,8 +230,10 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 	const color = renderer.getClearColor( new THREE.Color() ), alpha = renderer.getClearAlpha(), auto = renderer.autoClear;
 	const shadowEnabled = renderer.shadowMap.enabled, shadowUpdate = renderer.shadowMap.autoUpdate, shadowNeedsUpdate = renderer.shadowMap.needsUpdate;
 	const background = scene.background, fog = scene.fog, override = scene.overrideMaterial, environment = scene.environment;
+	const depthMaterials = applyImage ? [].concat( object.material ).filter( item => item && ! item.depthWrite ) : [];
 	try {
 
+		for ( const item of depthMaterials ) item.depthWrite = true;
 		scene.background = scene.fog = scene.overrideMaterial = null;
 		if ( mode === 'guide' ) {
 
@@ -264,6 +270,7 @@ export function bakeTexture( renderer, scene, object, geometry, camera, { size, 
 
 	} finally {
 
+		for ( const item of depthMaterials ) item.depthWrite = false;
 		scene.background = background;
 		scene.fog = fog;
 		scene.overrideMaterial = override;

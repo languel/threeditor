@@ -1,5 +1,5 @@
 import { modelButton, modelField } from './ModelControls.js?v=pencil-stroke-depth';
-import { grainOpacity, grainTileSize } from './PencilGrain.js?v=expressive-pencil';
+import { grainOpacity, grainTileSize } from './PencilGrain.js?v=texture-projection';
 import { StrokeSampler } from './StrokeSampler.js';
 import { icon } from '../Glyphs.js?v=pencil-reference';
 

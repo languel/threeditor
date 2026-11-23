@@ -1,10 +1,10 @@
 import { brushOpacityFactor, brushPalette, brushPressure, brushSizeFactor, pencilBrush, pencilDropdown } from './PencilBrush.js?v=expressive-pencil';
 import { guidePencilPoint, simplifyPencilStroke, smoothPencilStroke, stabilizePointer } from './PencilStroke.js?v=pencil-placement';
-import { modelObject, outlinePoints } from './ModelGeometry.js?v=expressive-pencil';
+import { modelObject, outlinePoints } from './ModelGeometry.js?v=texture-projection';
 import { icon } from '../Glyphs.js?v=editor-glyphs';
 import { splatStrokeCommands } from './SplatPaint.js?v=pencil-splats';
 import { addPencilSplatDab, taperPencilSplats } from './PencilSplats.js?v=expressive-pencil';
-import { grainOpacity } from './PencilGrain.js?v=expressive-pencil';
+import { grainOpacity } from './PencilGrain.js?v=texture-projection';
 import { TexturePaintStroke } from './TexturePaint.js?v=expressive-pencil';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';

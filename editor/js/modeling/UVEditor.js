@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { unwrapUVs } from 'three/addons/utils/unwrapUVs.js?v=uv-pack';
 import { modifierSource, setModifierStack } from './Modifiers.js?v=poly-context';
-import { bakeTexture } from './TextureBake.js?v=stroke-bake';
+import { bakeTexture } from './TextureBake.js?v=texture-projection';
 import { addProjectorCoverageControl } from './ProjectorCoverage.js?v=coverage-overlay';
 import { lightViewCamera } from './LightView.js';
 import { AddObjectCommand } from '../commands/AddObjectCommand.js';
@@ -24,6 +24,7 @@ import { sculptNeighbors, sculptPoints } from './SculptBrush.js?v=stroke-edit';
 import { uvSelectionCorrespondence } from './UVSelectionSync.js';
 import { packExistingUVs } from './UVPack.js';
 import { layoutUV } from './UVLayout.js?v=uv-sculpt';
+import { applyTextureProjection, projectionImage } from './TextureProjection.js?v=texture-projection';
 
 export function setProjectorMapping( editor, projector, key, value ) {
 
@@ -351,7 +352,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 
 	}
 
-	let baking;
+	let baking, projectionPicker;
 	if ( ! warp ) {
 
 		const options = ( label, rows ) => {
@@ -473,18 +474,24 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 		resolution.append( ...[ 256, 512, 1024 ].map( side => new Option( side + ' × ' + side, side ) ) );
 		resolution.value = '512';
 		controls.append( bakeMode, bakeSource, resolution );
+		const sourceCamera = object => {
+
+			const view = object?.isCamera ? object : object ? lightViewCamera( THREE, object ) : editor.modeling.frame?.camera;
+			if ( ! view ) throw new Error( 'Choose a source camera, light or projector.' );
+			const camera = view.clone( false );
+			view.updateWorldMatrix( true, false );
+			view.matrixWorld.decompose( camera.position, camera.quaternion, camera.scale );
+			camera.updateMatrixWorld( true );
+			return camera;
+
+		};
 		modelButton( controls, 'Bake texture', 'regenerate', () => run( () => {
 
 			if ( object.userData.modifiers?.length ) throw new Error( 'Apply mesh modifiers before baking this UV layout.' );
 			if ( source() !== original ) throw new Error( 'The mesh changed. Reopen the UV editor to continue.' );
 			if ( ! points.length ) throw new Error( 'Unwrap the mesh before baking.' );
 			const sourceObject = editor.objectByUuid( bakeSource.value );
-			const view = sourceObject?.isCamera ? sourceObject : sourceObject ? lightViewCamera( THREE, sourceObject ) : editor.modeling.frame?.camera;
-			if ( ! view ) throw new Error( 'Choose a source camera, light or projector.' );
-			const camera = view.clone( false );
-			view.updateWorldMatrix( true, false );
-			view.matrixWorld.decompose( camera.position, camera.quaternion, camera.scale );
-			camera.updateMatrixWorld( true );
+			const camera = sourceCamera( sourceObject );
 			const target = new THREE.BufferGeometry().copy( geometry );
 			const uv = target.attributes.uv;
 			points.forEach( ( [ u, v ], i ) => uv.setXY( i, u, 1 - v ) );
@@ -501,6 +508,75 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 			guide.disabled = download.disabled = saveAsset.disabled = addGuide.disabled = false;
 			guide.setAttribute( 'aria-pressed', 'true' );
 			status.textContent = 'Bake ready. Preview it here, save or download the PNG, or add a guide mesh.';
+
+		} ) );
+		const checkProjection = () => {
+
+			if ( dirty || dragging ) throw new Error( 'Apply or finish the UV edits before projecting a texture.' );
+			if ( source() !== original || ! object.parent || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) {
+				throw new Error( 'Select an unlocked mesh or Pencil stroke to project onto.' );
+			}
+
+		};
+		const project = ( camera, output, size, slot ) => {
+
+			checkProjection();
+			applyTextureProjection( editor, object, camera, output, size, slot );
+			status.textContent = 'Projected image applied to the material.';
+			draw();
+
+		};
+		let projectionRequest = 0;
+		const imageInput = document.createElement( 'input' );
+		imageInput.type = 'file';
+		imageInput.accept = 'image/*';
+		imageInput.setAttribute( 'aria-label', 'Projection image file' );
+		imageInput.hidden = true;
+		controls.append( imageInput );
+		const loadAndProject = async file => {
+
+			const request = ++ projectionRequest;
+			try {
+
+				checkProjection();
+				const camera = sourceCamera( editor.objectByUuid( bakeSource.value ) );
+				const geometryAtStart = source(), slot = materialSlot(), size = Number( resolution.value );
+				const output = await projectionImage( file, camera, size );
+				if ( ! workspacePanel.isConnected || source() !== geometryAtStart || request !== projectionRequest ) return false;
+				project( camera, output, size, slot );
+				return true;
+
+			} catch ( error ) {
+
+				if ( workspacePanel.isConnected && request === projectionRequest ) status.textContent = error.message;
+				return false;
+
+			}
+
+		};
+		imageInput.onchange = () => {
+
+			const [ file ] = imageInput.files;
+			imageInput.value = '';
+			if ( file ) loadAndProject( file );
+
+		};
+		modelButton( controls, 'Project image…', 'editorImage', () => imageInput.click() );
+		modelButton( controls, 'Project image from assets…', 'assets', () => {
+
+			projectionPicker = {
+				kind: 'reference', label: 'Choose an image to project',
+				onPick: ( { file } ) => loadAndProject( file )
+			};
+			editor.assetBrowser.open( projectionPicker );
+
+		} );
+		modelButton( controls, 'Apply projector frame', 'toolMask', () => run( () => {
+
+			const projector = editor.objectByUuid( bakeSource.value );
+			if ( ! projector?.projectorOutput ) throw new Error( 'Choose a projector with an active texture output.' );
+			projectionRequest ++;
+			project( sourceCamera( projector ), projector.projectorOutput, Number( resolution.value ), materialSlot() );
 
 		} ) );
 		const guide = modelButton( controls, 'Show baked UV guide', 'viewportOverlays', () => {
@@ -1139,6 +1215,7 @@ export function openUVEditor( editor, object, { focus = true } = {} ) {
 	editor.signals.materialChanged.add( draw );
 	editor.editWorkspace.mount( warp ? 'warp' : 'uv', object, workspacePanel, () => {
 
+		if ( projectionPicker && editor.assetBrowser.picker === projectionPicker ) editor.assetBrowser.cancelPicker();
 		editor.signals.geometryChanged.remove( updateGeometry );
 		editor.signals.modelingSelectionChanged.remove( modelSelectionChanged );
 		editor.signals.materialChanged.remove( draw );

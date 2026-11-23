@@ -1,5 +1,21 @@
 import { pencilProfile } from './PencilProfile.js';
 
+export function pencilProjectionUV( geometry ) {
+
+	const grain = geometry.getAttribute( 'uv' );
+	let min = Infinity, max = -Infinity;
+	for ( let i = 0; i < grain.count; i ++ ) {
+
+		min = Math.min( min, grain.getX( i ) );
+		max = Math.max( max, grain.getX( i ) );
+
+	}
+	const uv = grain.clone();
+	for ( let i = 0; i < uv.count; i ++ ) uv.setXY( i, .02 + .96 * ( grain.getX( i ) - min ) / ( max - min || 1 ), .02 + .96 * grain.getY( i ) );
+	return uv;
+
+}
+
 // Store the brush as a regular mesh so the editable stroke also works in Play and exports.
 export function pencilRibbon( THREE, points, closed, brush ) {
 

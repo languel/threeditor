@@ -1,5 +1,5 @@
-import { pencilRibbon } from './PencilRibbon.js?v=expressive-pencil';
-import { pencilGrainTexture } from './PencilGrain.js?v=expressive-pencil';
+import { pencilProjectionUV, pencilRibbon } from './PencilRibbon.js?v=texture-projection';
+import { pencilGrainTexture } from './PencilGrain.js?v=texture-projection';
 import { faceCorners, inheritMaterial, interpolateFaceCorner, readFaceAttributes } from './FaceAttributes.js';
 import { insertContourPoint } from './Contour.js';
 
@@ -359,7 +359,10 @@ export function modelGeometry( THREE, data ) {
 		const points = outlinePoints( THREE, data );
 		if ( data.kind === 'path' && data.pencilBrush ) {
 
-			geometry = pencilRibbon( THREE, points, Boolean( data.closed && points.length > 2 ), { ...data.pencilBrush, samples: pencilSamples( data ) } );
+			const brush = data.pencilBrush;
+			geometry = pencilRibbon( THREE, points, Boolean( data.closed && points.length > 2 ), { ...brush,
+				color: brush.projected ? '#ffffff' : brush.color, samples: pencilSamples( data ) } );
+			if ( brush.projected ) geometry.setAttribute( 'uv1', pencilProjectionUV( geometry ) );
 
 		} else if ( data.kind === 'shape' && isClosedOutline( data ) && points.length >= 3 ) {
 

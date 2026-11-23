@@ -1,11 +1,11 @@
-import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=expressive-pencil';
+import { addProjectorTargetControl, openUVEditor } from './modeling/UVEditor.js?v=texture-projection';
 import { UIPanel } from './libs/ui.js';
 import { isProjector } from './assets/Projector.js';
 import { canEditLightMask } from './modeling/LightMask.js?v=mask-editor';
 import { openMaskEditor } from './modeling/MaskEditor.js?v=expressive-pencil';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
-import { isClosedOutline } from './modeling/ModelGeometry.js?v=expressive-pencil';
-import { editableMesh } from './modeling/ModelViewport.js?v=expressive-pencil';
+import { isClosedOutline } from './modeling/ModelGeometry.js?v=texture-projection';
+import { editableMesh } from './modeling/ModelViewport.js?v=texture-projection';
 import { modelButton, modelField } from './modeling/ModelControls.js?v=tool-layout';
 
 function element( tag, text, parent ) {

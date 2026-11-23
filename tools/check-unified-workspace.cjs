@@ -1744,6 +1744,63 @@ async function checkProjectorEdgeBlend( page ) {
 
 }
 
+async function checkTextureProjection( page ) {
+
+	const upload = Buffer.from( await page.evaluate( () => {
+
+		const canvas = document.createElement( 'canvas' );
+		canvas.width = canvas.height = 32;
+		const ctx = canvas.getContext( '2d' );
+		ctx.fillStyle = '#20d070';
+		ctx.fillRect( 0, 0, 32, 32 );
+		return canvas.toDataURL().split( ',' )[ 1 ];
+
+	} ), 'base64' );
+	for ( const pencil of [ false, true ] ) {
+
+		await page.evaluate( pencil => {
+
+			editor.clear();
+			const sample = { radius: .18, opacity: 1, normal: [ 0, 0, 1 ], right: [ 1, 0, 0 ], up: [ 0, 1, 0 ] };
+			const target = pencil ? editor.viewTools.pencilObject(
+				{ style: { color: '#71bce7', strength: 1, hardness: .9, aspect: 1, grain: .8, grainPattern: 'canvas', taperStart: .2 } },
+				[ [ -1, 0, 0 ], [ 1, 0, 0 ] ], [ sample, sample ], false
+			) : new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), new THREE.MeshBasicMaterial() );
+			editor.addObject( target );
+			editor.select( target );
+			editor.setViewportCamera( editor.camera.uuid );
+			editor.camera.position.set( 0, 0, 5 );
+			editor.camera.lookAt( 0, 0, 0 );
+			editor.signals.cameraChanged.dispatch( editor.camera );
+
+		}, pencil );
+		await page.getByRole( 'button', { name: 'UV Editing', exact: true } ).click();
+		const uv = page.getByRole( 'region', { name: 'UV editor area', exact: true } );
+		await uv.getByText( 'Texture Bake', { exact: true } ).click();
+		await uv.getByLabel( 'Bake resolution' ).selectOption( '256' );
+		await uv.getByLabel( 'Projection image file' ).setInputFiles( { name: 'projection.png', mimeType: 'image/png', buffer: upload } );
+		await uv.getByText( 'Projected image applied to the material.', { exact: true } ).waitFor();
+		const result = await page.evaluate( () => {
+
+			const target = editor.selected, material = target.material;
+			const image = material.map.image;
+			const pixels = image.getContext( '2d' ).getImageData( 0, 0, image.width, image.height ).data;
+			let green = 0;
+			for ( let i = 0; i < pixels.length; i += 4 ) if ( pixels[ i + 1 ] > 180 && pixels[ i + 3 ] > 240 ) green ++;
+			return { green, channel: material.map.channel, grain: Boolean( material.alphaMap ), uv1: Boolean( target.geometry.attributes.uv1 ) };
+
+		} );
+		assert.ok( result.green > 1000 );
+		assert.deepEqual( [ result.channel, result.grain, result.uv1 ], pencil ? [ 1, true, true ] : [ 0, false, false ] );
+		await page.evaluate( () => editor.undo() );
+		assert.equal( await page.evaluate( () => editor.selected.material.map?.name === 'Projected image' ), false );
+		await page.getByRole( 'button', { name: 'Layout', exact: true } ).click();
+
+	}
+	await page.evaluate( () => editor.clear() );
+
+}
+
 async function checkTextureBake( page ) {
 
 	const rigId = await page.evaluate( () => {
@@ -3438,6 +3495,7 @@ async function check() {
 		await checkConformalSeamUnwrap( page );
 		await checkUVSeams( page );
 		await checkUVIslands( page );
+		await checkTextureProjection( page );
 		await checkTextureBake( page );
 		await checkProjectorCoverage( page );
 		await checkProjectorEdgeBlend( page );

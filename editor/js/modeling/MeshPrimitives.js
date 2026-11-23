@@ -1,5 +1,5 @@
 import { cubeNetUV } from './CubeUV.js';
-import { modelGeometry } from './ModelGeometry.js?v=expressive-pencil';
+import { modelGeometry } from './ModelGeometry.js?v=texture-projection';
 
 const length = ( id, label, value ) => ( { id, label, value, min: .001, max: 10000, step: 'any' } );
 const segments = ( id, label, value, min = 3 ) => ( { id, label, value, min, max: 256, step: 1 } );

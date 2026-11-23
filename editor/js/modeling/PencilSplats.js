@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { grainTileSize } from './PencilGrain.js?v=expressive-pencil';
+import { grainTileSize } from './PencilGrain.js?v=texture-projection';
 import { pencilProfile } from './PencilProfile.js';
 
 export function taperPencilSplats( mark, brush, tile ) {

@@ -2,7 +2,7 @@ import { UITabbedPanel } from './libs/ui.js';
 import { icon, KEY_ICONS } from './Glyphs.js?v=mode-shelves';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=editor-panes';
-import { SidebarProperties } from './Sidebar.Properties.js?v=editor-panes';
+import { SidebarProperties } from './Sidebar.Properties.js?v=texture-projection';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=unified-sync';
 import { SidebarStreams } from './Sidebar.Streams.js';

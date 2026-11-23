@@ -10,7 +10,7 @@ import { createBrushColorSampler } from './BrushColorSampler.js?v=pencil-referen
 import { modelButton, modelField } from './ModelControls.js?v=uv-anchors';
 import { applyProjectionMask, maskFromOutline, maskShapes } from './ProjectionMask.js?v=mask-editor';
 import { canEditLightMask, setLightMask } from './LightMask.js?v=mask-editor';
-import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=expressive-pencil';
+import { isClosedOutline, modelObject, outlinePoints } from './ModelGeometry.js?v=texture-projection';
 import { lightViewCamera } from './LightView.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { sculptMask } from './MaskSculpt.js?v=uv-sculpt';

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modelObject } from './ModelGeometry.js?v=expressive-pencil';
+import { modelObject } from './ModelGeometry.js?v=texture-projection';
 
 export function localSurfacePoint( hit, ray, receiver = hit.object ) {
 

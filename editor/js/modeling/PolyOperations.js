@@ -1,4 +1,4 @@
-import { splitEdge, faceNormal } from './ModelGeometry.js?v=expressive-pencil';
+import { splitEdge, faceNormal } from './ModelGeometry.js?v=texture-projection';
 import { meshEdges, elementKey, edgeLoop } from './MeshSelection.js?v=shape-selection';
 import { faceCorners, mergeFaceCorners } from './FaceAttributes.js';
 
