@@ -4,7 +4,7 @@
 
 ## Workspaces
 
-The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Geometry Nodes, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens the Script Window editor area, and **Projection** opens a split light view when a projector or spotlight is selected. Compact mode uses workspace glyphs with tooltips. Clean and Default modes show workspace names.
+The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Geometry Nodes, Shading, Shader Graph, Animation, Scripting, Logic Nodes, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens the Script Window editor area, and **Projection** opens a split light view when a projector or spotlight is selected. Compact mode uses workspace glyphs with tooltips. Clean and Default modes show workspace names.
 
 Use the viewport mode picker for **Object**, **Edit**, **Sculpt**, and **Paint**. Workspace tabs arrange tools and editors for a task.
 
@@ -62,6 +62,24 @@ Choose **Disable look** to restore the material from before the stock look was a
 
 In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragment shader. Open **Material → Program** for the vertex shader or program info. A custom float such as `uniform float gain;` can be added to Program Info as `"gain": { "value": 1 }` under `uniforms`. Use a hex value such as `"#83a9e1"` for a color uniform declared as `vec3`. Numeric, color, and toggle uniforms appear under Material with keyframe diamonds. The shader and its uniforms save with the scene.
 
+## Shader Graph
+
+Select a mesh with a Standard or Physical material, choose the **Shader Graph** workspace, and click **New shader graph**. Select a material slot in the header when the mesh has more than one. Use **Use WebGPU** to enable the project's node-capable renderer. **Material Preview** and **Preview** show the graph alongside the editor, and **Play Scene** and playable exports use the same material.
+
+The **Material Output** node accepts base color, roughness, metalness, emission, opacity, normal, and vertex position. Unconnected inputs use the material's existing settings. Use **Checker** or **Perlin Noise** to drive **Mix Color**, or use **Base Color Texture** to sample the map assigned in the Material tab. **Transform UV** sets the pattern scale and offset. **Time** can drive an offset or another numeric socket.
+
+Graphs save with the material, so meshes sharing that material also share its graph. Graph edits and removal support undo. In a WebGL project, the authored material supplies the fallback appearance. [Animated TSL glaze tutorial](../editor/examples/lessons/README.md#animate-a-tsl-glaze)
+
+## Logic Nodes
+
+Select an object or the Scene, open **Logic Nodes**, and choose **New logic graph**. Connect the orange **Then** socket of an event to an action's **Run** socket, then choose **Play Scene**. Use the action's **Target** picker to choose another object. **Self** refers to the object that owns the graph.
+
+Events can fire on start, every frame, at an interval, or in response to keyboard, pointer, or overlap input. **On Overlap** compares the objects' bounding boxes and emits separate **Enter** and **Exit** events. A key input uses a physical key code such as `Space` or `ArrowRight`. Use **Scene Time → Delta Seconds** to make movement independent of frame rate.
+
+Use **Branch** with a Boolean condition or **Sequence** to run two chains in order. **Delay** schedules work for a future frame and allows feedback through **Merge Events**. **Send Event** and **Receive Event** pass named events between graphs and the Streams event bus. **Event Value** reads the numeric payload of the current event. **Set Variable** and **Get Variable** store numbers in the graph's playback instance.
+
+Graph changes save with the project and support undo. In Play, the graphs act on the playback scene. Stop and play again to restart from the authored scene. [Keyboard-controlled gate tutorial](../editor/examples/lessons/README.md#control-a-gate-with-logic-nodes)
+
 ## 2D and 3D areas
 
 Opening **UV Editing**, **Image & Vector**, **Geometry Nodes**, or **Scripting** from the workspace bar puts that editor beside the 3D view. Mask and Warp also open in split panes. Switching between editor workspaces keeps the split direction and divider position. Each pane has its own editor-type picker, so you can use two different editors side by side or switch either back to a 3D viewport. Changing the 3D interaction mode keeps the companion pane open.
@@ -74,11 +92,19 @@ Turn on **Sync UV and mesh selection** in the UV toolbar to share selection with
 
 ## Geometry Nodes
 
-Select a mesh, open **Geometry Nodes**, and choose **New graph**. The starter graph passes **Mesh Input** to **Mesh Output**. Use **Add node…** to insert **Transform Geometry** between them, or connect a **Box** or **Sphere** directly to **Mesh Output**. **Number**, **Add**, and **Multiply** can drive numeric sockets such as translation and radius.
+Select a mesh, open **Geometry Nodes**, and choose **New graph**. The starter graph passes **Mesh Input** to **Mesh Output**. Insert **Transform Geometry** between them or connect a **Box**, **Sphere**, **Grid**, or **Cylinder** directly to **Mesh Output**. **Join Geometry** combines two meshes, and **Set Material Index** assigns a branch to one of the object's material slots. **Number**, **Add**, and **Multiply** can drive sockets such as translation and radius.
 
 Drag between sockets or click a socket at each end. A new link replaces the existing link at that input. Use the × beside a linked input to disconnect it. Drag a node by its title, drag empty space to pan, scroll to zoom, and use **Frame all** to bring the nodes into view.
 
 The graph runs at its position in the mesh’s **Modifiers** stack. A disconnected output shows the geometry going into the modifier. Undo restores graph edits and node positions. Project JSON and Editable HTML retain the editable graph, and Play uses the evaluated mesh. Use the modifier’s apply action to bake the graph into the mesh.
+
+### Repeat and Simulation
+
+**Repeat** runs its body for the number of **Iterations** you set. Open the body on the node card. **Repeat Input** provides the geometry and numeric value carried from the previous iteration, plus a zero-based **Iteration** count. Connect the updated state to **Repeat Output**. The node returns the final state to the parent graph. Zero iterations pass through the starting state, and a Repeat body can contain another Repeat.
+
+**Simulation** carries geometry and a numeric value between fixed steps during **Play Scene**, video rendering, and playable exports. **Simulation Input** supplies the previous state, **Delta Seconds**, elapsed time, and the step number. **Simulation Output** becomes the state for the next step. The editor shows the authored starting state, and restarting Play starts the simulation from that state. Simulation zones live in the main geometry graph and can contain Repeat nodes in their bodies.
+
+Open **File → Examples → lessons → Stairs with Repeat** or **A simulated pinwheel** to inspect complete graphs. [Node lessons](../editor/examples/lessons/README.md#node-tutorials)
 
 ## Split views
 

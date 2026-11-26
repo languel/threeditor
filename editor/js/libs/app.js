@@ -11,6 +11,9 @@ import { createCameraController } from 'three/addons/controls/CameraController.j
 import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
 import { scriptSourceForExecution } from '../ScriptParams.js';
 import { createP5Sketch } from '../P5Sketch.js';
+import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
+import { LogicRuntime } from '../nodes/LogicRuntime.js';
+import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
 // Body for p5 sketch scripts: runs the student's global-mode source in a p5
 // instance and projects its canvas onto the host mesh as a live texture.
@@ -71,7 +74,7 @@ const APP = {
 		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
-		let camera, scene, projector, projectorContext, timeline;
+		let camera, scene, projector, projectorContext, timeline, geometrySimulation, logic;
 
 		let events = {};
 		let splatHost;
@@ -112,9 +115,10 @@ const APP = {
 				? project.renderer === 'WebGPURenderer'
 				: __THREEEDITOR_RENDERER__ === 'WebGPURenderer' ) {
 
-				const { WebGPURenderer } = await import( 'three/webgpu' );
+				const { TSL, WebGPURenderer } = await import( 'three/webgpu' );
 				renderer = new WebGPURenderer( { antialias: true, reversedDepthBuffer: true } );
 				await renderer.init();
+				installShaderGraphs( renderer, TSL );
 
 			} else {
 
@@ -292,7 +296,11 @@ const APP = {
 
 		this.setScene = function ( value ) {
 
+			geometrySimulation?.dispose();
+			logic?.stop();
 			scene = value;
+			geometrySimulation = new GeometrySimulation( THREE, scene );
+			logic = new LogicRuntime( THREE, scene, streams );
 
 		};
 
@@ -377,7 +385,7 @@ const APP = {
 
 		}
 
-		let time, startTime, prevTime;
+		let time, startTime, prevTime, focusBeforePlay;
 
 		const animate = () => {
 
@@ -386,7 +394,9 @@ const APP = {
 			try {
 
 				timeline.apply( timelineData( scene ), ( time - startTime ) / 1000 );
+				geometrySimulation.advanceTo( ( time - startTime ) / 1000, 8 );
 				dispatch( events.update, { time: time - startTime, delta: time - prevTime } );
+				logic.tick( ( time - startTime ) / 1000, ( time - prevTime ) / 1000 );
 
 			} catch ( e ) {
 
@@ -411,7 +421,7 @@ const APP = {
 				return;
 
 			}
-			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => {
+			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => withShaderGraphs( renderer, scene, () => {
 
 				const draw = () => renderer.render( scene, camera );
 				if ( projector ) {
@@ -425,21 +435,26 @@ const APP = {
 
 				}
 
-			} ) );
+			} ) ) );
 		};
 
 		this.play = function () {
 
 			playing = true;
 			startTime = prevTime = performance.now();
+			focusBeforePlay = document.activeElement;
+			this.canvas.tabIndex = - 1;
+			this.canvas.focus( { preventScroll: true } );
 
 			document.addEventListener( 'keydown', onKeyDown );
 			document.addEventListener( 'keyup', onKeyUp );
 			document.addEventListener( 'pointerdown', onPointerDown );
 			document.addEventListener( 'pointerup', onPointerUp );
 			document.addEventListener( 'pointermove', onPointerMove );
+			window.addEventListener( 'blur', onBlur );
 
 			dispatch( events.start, arguments );
+			logic.start();
 			if ( controllerOptions && ! controller ) controller = createCameraController( camera, renderer.domElement, controllerOptions );
 
 			renderer.setAnimationLoop( animate );
@@ -455,19 +470,35 @@ const APP = {
 			document.removeEventListener( 'pointerdown', onPointerDown );
 			document.removeEventListener( 'pointerup', onPointerUp );
 			document.removeEventListener( 'pointermove', onPointerMove );
+			window.removeEventListener( 'blur', onBlur );
 
 			renderer.setAnimationLoop( null );
 			controller?.dispose();
 			controller = undefined;
 			timeline?.clear();
-			dispatch( events.stop, arguments );
+			try {
+
+				dispatch( events.stop, arguments );
+
+			} finally {
+
+				geometrySimulation?.reset();
+				logic?.stop();
+				if ( focusBeforePlay?.isConnected ) focusBeforePlay.focus( { preventScroll: true } );
+				focusBeforePlay = null;
+
+			}
 
 		};
 
+		let lastRender = 0;
 		this.render = function ( time ) {
 
 			timeline.apply( timelineData( scene ), time );
+			geometrySimulation.advanceTo( time );
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
+			logic.tick( time, Math.max( 0, time - lastRender ) );
+			lastRender = time;
 			streams.tick( scene );
 
 			renderFrame();
@@ -478,6 +509,11 @@ const APP = {
 
 			timeline?.clear();
 			timeline = null;
+			geometrySimulation?.dispose();
+			geometrySimulation = null;
+			logic?.stop();
+			logic = null;
+			lastRender = 0;
 			postHost.dispose();
 			splatHost?.dispose();
 			splatHost = null;
@@ -502,7 +538,7 @@ const APP = {
 		function onKeyDown( event ) {
 
 			streams.publish( 'input.key.' + event.code, 1 );
-			streams.emit( 'keydown', { key: event.key, code: event.code } );
+			streams.emit( 'keydown', { key: event.key, code: event.code, repeat: event.repeat } );
 			dispatch( events.keydown, event );
 
 		}
@@ -512,6 +548,12 @@ const APP = {
 			streams.publish( 'input.key.' + event.code, 0 );
 			streams.emit( 'keyup', { key: event.key, code: event.code } );
 			dispatch( events.keyup, event );
+
+		}
+
+		function onBlur() {
+
+			logic?.releaseKeys();
 
 		}
 

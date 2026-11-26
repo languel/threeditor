@@ -6,12 +6,14 @@ export function createGraph( domain ) {
 
 }
 
-export function addNode( graph, type, x, y ) {
+export function addNode( graph, type, x, y, domain ) {
 
 	const ids = new Set( graph.nodes.map( node => node.id ) );
 	let id = type;
 	for ( let suffix = 2; ids.has( id ); suffix ++ ) id = type + '-' + suffix;
 	const node = { id, type, x, y, values: {} };
+	const body = domain?.nodes.get( type )?.bodyDomain?.();
+	if ( body ) node.body = body.createStarter();
 	graph.nodes.push( node );
 	return node;
 
@@ -47,8 +49,20 @@ function getSocket( sockets, name ) {
 
 }
 
-function validateValue( value, socket ) {
+export function validateSocketValue( value, socket ) {
 
+	if ( socket.type === 'color' && ( typeof value !== 'string' || ! /^#[\da-f]{6}$/i.test( value ) ) ) {
+
+		throw new Error( socket.label + ' must be a six-digit hex color.' );
+
+	}
+	if ( socket.type === 'boolean' && typeof value !== 'boolean' ) throw new Error( socket.label + ' must be true or false.' );
+	if ( ( socket.type === 'string' || socket.type === 'object' ) &&
+		( typeof value !== 'string' || value.length > ( socket.maxLength ?? 256 ) ) ) {
+
+		throw new Error( socket.label + ' must be text within ' + ( socket.maxLength ?? 256 ) + ' characters.' );
+
+	}
 	if ( socket.type === 'number' ) {
 
 		if ( ! Number.isFinite( value ) ) throw new Error( socket.label + ' must be a finite number.' );
@@ -89,7 +103,7 @@ export function indexGraph( graph, domain ) {
 
 			const socket = getSocket( def.inputs, name );
 			if ( ! socket || ! Object.hasOwn( socket, 'default' ) ) throw new Error( 'Invalid input value on ' + def.label + '.' );
-			validateValue( value, socket );
+			validateSocketValue( value, socket );
 
 		}
 		nodes.set( node.id, node );
@@ -156,7 +170,7 @@ export function planDataflow( graph, domain, target ) {
 			name, socket, from: inputs.get( id ).get( name ),
 			value: Object.hasOwn( node.values, name ) ? node.values[ name ] : socket.default
 		} ) );
-		const missing = bindings.find( binding => ! binding.from && binding.value === undefined );
+		const missing = bindings.find( binding => ! binding.from && binding.value === undefined && ! binding.socket.optional );
 		if ( missing ) return { missing: 'Connect ' + missing.socket.label + ' on ' + def.label + '.' };
 		steps.push( { node, bindings } );
 
@@ -167,27 +181,28 @@ export function planDataflow( graph, domain, target ) {
 
 // Evaluates each upstream node once. The target is a sink and receives the
 // resolved input values so it can feed a mesh, material, or any other host.
-export function evaluateDataflow( plan, runNode ) {
+export function evaluateDataflow( plan, runNode, validateLinked = validateSocketValue ) {
 
 	if ( plan.missing ) return;
 	const results = new Map();
 	const target = plan.steps.at( -1 ).node;
-	for ( const { node, bindings } of plan.steps ) {
+	for ( const step of plan.steps ) {
 
+		const { node, bindings } = step;
 		const inputs = Object.fromEntries( bindings.map( ( { name, socket, from, value } ) => {
 
 			if ( from ) {
 
 				value = results.get( from.node )?.[ from.socket ];
 				if ( value === undefined ) throw new Error( 'No value was produced for ' + socket.label + '.' );
-				validateValue( value, socket );
+				validateLinked( value, socket );
 
 			}
 			return [ name, value ];
 
 		} ) );
 		if ( node === target ) return inputs;
-		results.set( node.id, runNode( node, inputs ) );
+		results.set( node.id, runNode( node, inputs, step ) );
 
 	}
 

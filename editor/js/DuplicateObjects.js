@@ -6,6 +6,7 @@ import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { DuplicateObjectsCommand } from './commands/DuplicateObjectsCommand.js';
 import { timelineData } from './animation/TimelineData.js';
+import { remapLogicObjects } from './nodes/LogicNodes.js';
 
 function duplicateTargets( editor ) {
 
@@ -141,6 +142,7 @@ export function duplicateObjects( editor, move ) {
 		if ( copy.userData.projectorTarget ) copy.userData.projectorTarget = uuid( copy.userData.projectorTarget );
 		if ( copy.userData.threeditor?.cameraFollow ) copy.userData.threeditor.cameraFollow = uuid( copy.userData.threeditor.cameraFollow );
 		for ( const point of copy.userData.measurement?.points || [] ) if ( point.target ) point.target = uuid( point.target );
+		remapLogicObjects( copy.userData.logicGraph, uuid );
 
 		const clipIds = new Map();
 		copy.animations = source.animations.map( clip => {

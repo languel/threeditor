@@ -42,7 +42,7 @@ function archivePath( path, from ) {
 
 }
 
-function packageFiles( assets, webgpu = false ) {
+function packageFiles( assets ) {
 
 	const files = new Map();
 	const resources = new Map();
@@ -120,7 +120,7 @@ function packageFiles( assets, webgpu = false ) {
 		let path;
 		if ( Object.hasOwn( modules, specifier ) ) {
 
-			path = specifier === 'three' && webgpu ? modules[ 'three/webgpu' ] : modules[ specifier ];
+			path = modules[ specifier ];
 			imports[ specifier ] = './' + path;
 
 		} else if ( specifier.startsWith( 'three/addons/' ) ) {
@@ -332,7 +332,7 @@ async function collectPlayableProject( editor ) {
 
 	const assets = new Map();
 	for ( const [ path, { file } ] of editor.sourceFiles || [] ) assets.set( 'assets/' + path, file );
-	const project = packageFiles( assets, app.project.renderer === 'WebGPURenderer' );
+	const project = packageFiles( assets );
 
 	for ( const object of [ app.scene, app.camera ] ) {
 
@@ -377,6 +377,15 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ProjectionMask.js', 'editor/js/modeling/ProjectionMask.js' );
 	await project.copy( 'modeling/ProjectorMapping.js', 'editor/js/modeling/ProjectorMapping.js' );
 	await project.copy( 'modeling/ProjectorOutput.js', 'editor/js/modeling/ProjectorOutput.js' );
+	await project.copy( 'modeling/ModifierEvaluation.js', 'editor/js/modeling/ModifierEvaluation.js' );
+	for ( const module of [
+		'GeometrySimulation', 'GeometryNodes', 'GeometryOperations', 'NodeGraph', 'ValueNodes',
+		'ShaderGraphRuntime', 'ShaderNodes', 'LogicRuntime', 'LogicNodes'
+	] ) {
+
+		await project.copy( 'nodes/' + module + '.js', 'editor/js/nodes/' + module + '.js' );
+
+	}
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
 	for ( const module of [ 'TimelineData', 'TimelineBindings', 'TimelineRuntime' ] ) {

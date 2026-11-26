@@ -1,6 +1,9 @@
 import { addNode, connectNodes, disconnectInput, indexGraph, removeNode } from './NodeGraph.js';
 
-const PORT_COLORS = { geometry: '#59c6a1', number: '#91a8ff' };
+const PORT_COLORS = {
+	geometry: '#59c6a1', number: '#91a8ff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
+	boolean: '#f792a5', string: '#8cdbd1', object: '#efdb8b', event: '#ffad73'
+};
 const portColor = type => Object.hasOwn( PORT_COLORS, type ) ? PORT_COLORS[ type ] : '#b0a8c6';
 
 function element( tag, className, parent, text ) {
@@ -13,42 +16,95 @@ function element( tag, className, parent, text ) {
 
 }
 
-export function NodeGraphEditor( domain, { onChange, onError } ) {
+export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions } ) {
 
 	const dom = document.createElement( 'div' );
 	dom.className = 'node-graph';
 	const toolbar = element( 'div', 'node-graph-toolbar', dom );
+	const back = element( 'button', 'Button', toolbar, 'Back to parent' );
+	back.type = 'button';
+	back.hidden = true;
+	const scopeLabel = element( 'span', 'node-graph-scope', toolbar );
+	scopeLabel.hidden = true;
 	const palette = element( 'select', 'Select', toolbar );
 	palette.setAttribute( 'aria-label', 'Add node' );
-	palette.append( new Option( 'Add node…', '' ) );
-	const groups = new Map();
-	for ( const [ type, def ] of domain.nodes ) {
-
-		if ( def.fixed ) continue;
-		if ( ! groups.has( def.category ) ) {
-
-			const group = element( 'optgroup', '', palette );
-			group.label = def.category;
-			groups.set( def.category, group );
-
-		}
-		groups.get( def.category ).append( new Option( def.label, type ) );
-
-	}
 	const remove = element( 'button', 'Button', toolbar, 'Delete node' );
 	const frame = element( 'button', 'Button', toolbar, 'Frame all' );
 	remove.type = frame.type = 'button';
 	const board = element( 'div', 'node-graph-board', dom );
 	board.tabIndex = 0;
-	board.setAttribute( 'aria-label', domain.label + ' canvas' );
 	const wires = element( 'canvas', 'node-graph-wires', board );
 	wires.setAttribute( 'aria-hidden', 'true' );
 	const world = element( 'div', 'node-graph-world', board );
 	const context = wires.getContext( '2d' );
 	const view = { x: 0, y: 0, scale: 1 };
-	let graph, editable, selected, armed, gesture, needsFrame;
+	let root, graph, domain, editable, selected, armed, gesture, needsFrame;
+	const scopePath = [];
 	const cards = new Map();
 	const socketButtons = new WeakMap();
+
+	function selectScope( resetView ) {
+
+		graph = root;
+		let nextDomain = rootDomain;
+		for ( let i = 0; i < scopePath.length; i ++ ) {
+
+			const node = graph?.nodes.find( item => item.id === scopePath[ i ] );
+			const body = nextDomain.nodes.get( node?.type )?.bodyDomain?.();
+			if ( ! body || ! node.body ) {
+
+				// An undo step can remove a zone while its body is open.
+				scopePath.length = i;
+				resetView = true;
+				break;
+
+			}
+			graph = node.body;
+			nextDomain = body;
+
+		}
+		if ( domain !== nextDomain ) {
+
+			domain = nextDomain;
+			palette.replaceChildren( new Option( 'Add node…', '' ) );
+			const groups = new Map();
+			for ( const [ type, def ] of domain.nodes ) {
+
+				if ( def.fixed ) continue;
+				if ( ! groups.has( def.category ) ) {
+
+					const group = element( 'optgroup', '', palette );
+					group.label = def.category;
+					groups.set( def.category, group );
+
+				}
+				groups.get( def.category ).append( new Option( def.label, type ) );
+
+			}
+			board.setAttribute( 'aria-label', domain.label + ' canvas' );
+
+		}
+		back.hidden = scopeLabel.hidden = scopePath.length === 0;
+		scopeLabel.textContent = scopePath.length ? domain.label : '';
+		if ( resetView ) {
+
+			selected = null;
+			needsFrame = true;
+
+		}
+		gesture = null;
+		render();
+
+	}
+
+	back.onclick = () => {
+
+		const node = scopePath.pop();
+		selectScope( true );
+		select( cards.has( node ) ? node : null );
+		board.focus( { preventScroll: true } );
+
+	};
 
 	function point( event ) {
 
@@ -171,8 +227,9 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 		if ( ! graph || ! editable ) return;
 		try {
 
-			const draft = structuredClone( graph );
-			mutate( draft );
+			const draft = structuredClone( root );
+			const scope = scopePath.reduce( ( current, id ) => current.nodes.find( node => node.id === id ).body, draft );
+			mutate( scope );
 			onChange( draft, layoutOnly );
 
 		} catch ( error ) {
@@ -229,19 +286,49 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 			unlink.disabled = ! editable;
 			unlink.onclick = () => edit( draft => disconnectInput( draft, port ) );
 
-		} else if ( typeof spec.default === 'number' ) {
+		} else if ( Object.hasOwn( spec, 'default' ) ) {
 
-			const input = element( 'input', 'Input', row );
-			input.type = 'number';
-			input.step = 'any';
-			if ( spec.min !== undefined ) input.min = spec.min;
-			if ( spec.max !== undefined ) input.max = spec.max;
-			input.value = node.values[ name ] ?? spec.default;
+			const value = node.values[ name ] ?? spec.default;
+			const options = inputOptions?.( spec, value );
+			const input = element( options ? 'select' : 'input', options ? 'Select' : 'Input', row );
+			if ( options ) {
+
+				input.append( ...options.map( ( [ value, label ] ) => new Option( label, value ) ) );
+
+			} else if ( typeof value === 'number' ) {
+
+				input.type = 'number';
+				input.step = 'any';
+				if ( spec.min !== undefined ) input.min = spec.min;
+				if ( spec.max !== undefined ) input.max = spec.max;
+
+			} else if ( spec.type === 'boolean' ) {
+
+				input.type = 'checkbox';
+				input.checked = value;
+
+			} else if ( spec.type === 'color' ) {
+
+				input.type = 'color';
+
+			} else if ( spec.maxLength !== undefined ) {
+
+				input.maxLength = spec.maxLength;
+
+			}
+			if ( input.type !== 'checkbox' ) input.value = value;
 			input.disabled = ! editable;
 			input.dataset.focus = [ node.id, 'value', name ].join( '/' );
 			input.setAttribute( 'aria-label', def.label + ' / ' + spec.label );
-			input.onchange = () => edit( draft => { draft.nodes.find( item => item.id === node.id ).values[ name ] = input.valueAsNumber; } );
-			input.onkeydown = event => { if ( event.key === 'Enter' ) input.blur(); };
+			input.onchange = () => edit( draft => {
+
+				const target = draft.nodes.find( item => item.id === node.id );
+				if ( input.type === 'number' ) target.values[ name ] = input.valueAsNumber;
+				else if ( input.type === 'checkbox' ) target.values[ name ] = input.checked;
+				else target.values[ name ] = input.value;
+
+			} );
+			if ( ! options ) input.onkeydown = event => { if ( event.key === 'Enter' ) input.blur(); };
 
 		}
 
@@ -276,6 +363,20 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 				cards.set( node.id, card );
 				for ( const [ name, spec ] of Object.entries( def.outputs || {} ) ) socketRow( card, node, def, name, spec, 'output', outputs.get( node.id )?.has( name ) ?? false );
 				for ( const [ name, spec ] of Object.entries( def.inputs || {} ) ) socketRow( card, node, def, name, spec, 'input', inputs.get( node.id ).has( name ) );
+				if ( def.bodyDomain && node.body ) {
+
+					const body = element( 'button', 'Button node-graph-open-body', dom, 'Open body' );
+					body.type = 'button';
+					body.setAttribute( 'aria-label', 'Open ' + def.label + ' body' );
+					body.onclick = () => {
+
+						scopePath.push( node.id );
+						selectScope( true );
+						back.focus( { preventScroll: true } );
+
+					};
+
+				}
 
 			}
 
@@ -311,7 +412,7 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 				}
 
 			}
-			selected = addNode( draft, type, Math.round( x ), Math.round( y ) ).id;
+			selected = addNode( draft, type, Math.round( x ), Math.round( y ), domain ).id;
 
 		} );
 		const card = cards.get( selected );
@@ -340,7 +441,7 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 	board.addEventListener( 'keydown', event => {
 
 		if ( event.key === 'Escape' && armed ) arm( null );
-		if ( ( event.key === 'Delete' || event.key === 'Backspace' ) && ! event.target.closest( 'input' ) ) {
+		if ( ( event.key === 'Delete' || event.key === 'Backspace' ) && ! event.target.closest( 'input, select' ) ) {
 
 			event.preventDefault();
 			if ( ! gesture ) deleteSelected();
@@ -350,7 +451,7 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 	} );
 	board.addEventListener( 'wheel', event => {
 
-		if ( event.target.closest( 'input' ) ) return;
+		if ( event.target.closest( 'input, select' ) ) return;
 		event.preventDefault();
 		const p = point( event );
 		const scale = Math.max( .2, Math.min( 2, view.scale * Math.exp( - event.deltaY * .002 ) ) );
@@ -445,16 +546,10 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 		dom,
 		setGraph( next, canEdit, resetView ) {
 
-			graph = next;
+			root = next;
 			editable = canEdit;
-			gesture = null;
-			if ( resetView ) {
-
-				selected = null;
-				needsFrame = true;
-
-			}
-			render();
+			if ( resetView ) scopePath.length = 0;
+			selectScope( resetView );
 
 		},
 		dispose: () => resize.disconnect()

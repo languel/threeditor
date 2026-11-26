@@ -45,7 +45,10 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 	assert.equal( exampleCatalog[ 0 ].title, 'threejs' );
 	assert.equal( exampleCatalog[ 0 ].children.length, 5 );
 	const lessons = exampleCatalog.find( entry => entry.title === 'lessons' ).children;
-	assert.equal( lessons.length, 7 );
+	assert.ok( lessons.some( entry => entry.title.includes( 'Stairs with Repeat' ) ) );
+	assert.ok( lessons.some( entry => entry.title.includes( 'simulated pinwheel' ) ) );
+	assert.ok( lessons.some( entry => entry.title.includes( 'animated TSL glaze' ) ) );
+	assert.ok( lessons.some( entry => entry.title.includes( 'keyboard-controlled gate' ) ) );
 	assert.match( lessons.at( -1 ).title, /Fox/ );
 	for ( const entry of exampleCatalog.flatMap( folder => folder.children ) ) {
 
@@ -86,7 +89,7 @@ test( 'Catalog retains threejs demos, ordered lessons and Fox last; scenes round
 
 test( 'Editable HTML resources follow nested examples and include lesson source assets', async () => {
 	const resources = exampleResources();
-	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 28 );
+	assert.equal( resources.filter( path => path.endsWith( '.json' ) ).length, 32 );
 	assert.ok( resources.includes( '../demos/fox-follow/assets/fox.glb' ) );
 	assert.ok( resources.includes( 'examples/threejs/arkanoid.app.json' ) );
 	for ( const path of resources ) assert.ok( ( await readFile( new URL( '../editor/' + path, import.meta.url ) ) ).length > 0 );

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { WebGPURenderer } from 'three/webgpu';
+import { TSL, WebGPURenderer } from 'three/webgpu';
+import { installShaderGraphs } from './nodes/ShaderGraphRuntime.js';
 
 import { UINumber, UIPanel, UIRow, UISelect, UIText } from './libs/ui.js';
 import { UIBoolean } from './libs/ui.three.js';
@@ -146,7 +147,12 @@ function SidebarProjectRenderer( editor ) {
 		try {
 
 			nextRenderer = rendererType === 'WebGPURenderer' ? new WebGPURenderer( options ) : new THREE.WebGLRenderer( options );
-			if ( nextRenderer.isWebGPURenderer ) await nextRenderer.init();
+			if ( nextRenderer.isWebGPURenderer ) {
+
+				await nextRenderer.init();
+				installShaderGraphs( nextRenderer, TSL );
+
+			}
 
 		} catch ( error ) {
 
@@ -184,6 +190,13 @@ function SidebarProjectRenderer( editor ) {
 
 	}
 
+	editor.setProjectRenderer = type => {
+
+		if ( type === appliedRendererType && currentRenderer ) return;
+		rendererTypeSelect.setValue( type );
+		return createRenderer();
+
+	};
 	createRenderer();
 
 
