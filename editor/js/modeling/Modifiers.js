@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
+import { createGeometryGraph, evaluateGeometryGraph, GEOMETRY_MODIFIER } from '../nodes/GeometryNodes.js';
 
 // Stack workflow and deformation formulas adapted from ThreeGrease modifiers.
 // Sources stay separate from evaluated buffers so ordinary Three.js rendering,
@@ -14,7 +15,8 @@ export const MODIFIERS = {
 	SMOOTH: { name: 'Smooth', defaults: { factor: .5, iterations: 2 } },
 	SUBDIVIDE: { name: 'Subdivide', defaults: { level: 1 } },
 	SIMPLIFY: { name: 'Simplify curve', curveOnly: true, defaults: { factor: .01 } },
-	WAVE: { name: 'Wave', defaults: { amplitude: .2, period: 1.5, phase: 0, axis: 0 } }
+	WAVE: { name: 'Wave', defaults: { amplitude: .2, period: 1.5, phase: 0, axis: 0 } },
+	[ GEOMETRY_MODIFIER ]: { name: 'Geometry Nodes', meshOnly: true, defaults: {} }
 };
 
 export function canModify( object ) {
@@ -28,7 +30,8 @@ export function createModifier( type ) {
 
 	const def = MODIFIERS[ type ];
 	if ( ! def ) throw new Error( 'Unknown modifier' );
-	return { id: THREE.MathUtils.generateUUID(), type, name: def.name, enabled: true, params: { ...def.defaults } };
+	const params = type === GEOMETRY_MODIFIER ? { graph: createGeometryGraph() } : { ...def.defaults };
+	return { id: THREE.MathUtils.generateUUID(), type, name: def.name, enabled: true, params };
 
 }
 
@@ -151,6 +154,7 @@ function smooth( geometry, mesh, factor, iterations ) {
 export function evaluateModifiers( source, stack, mesh = true ) {
 
 	let geometry = plain( source );
+	let normalsDirty = mesh && ! stack.some( mod => mod.enabled && mod.type === GEOMETRY_MODIFIER );
 	try {
 
 		for ( const mod of stack ) {
@@ -160,7 +164,16 @@ export function evaluateModifiers( source, stack, mesh = true ) {
 			if ( ! def || def.curveOnly && mesh || def.meshOnly && ! mesh ) continue;
 			const p = { ...def.defaults, ...mod.params };
 			if ( Object.values( p ).some( v => typeof v === 'number' && ! Number.isFinite( v ) ) ) throw new Error( 'Modifier values must be finite.' );
-			if ( mod.type === 'ARRAY' || mod.type === 'MIRROR' ) {
+			if ( mod.type !== GEOMETRY_MODIFIER ) normalsDirty = mesh;
+			if ( mod.type === GEOMETRY_MODIFIER ) {
+
+				if ( normalsDirty ) geometry.computeVertexNormals();
+				normalsDirty = false;
+				const output = evaluateGeometryGraph( THREE, p.graph, geometry );
+				if ( output !== geometry ) geometry.dispose();
+				geometry = output;
+
+			} else if ( mod.type === 'ARRAY' || mod.type === 'MIRROR' ) {
 
 				const copiesCount = mod.type === 'ARRAY' ? THREE.MathUtils.clamp( Math.round( p.count ), 1, 50 ) : 1 + [ p.axisX, p.axisY, p.axisZ ].filter( Boolean ).length;
 				const size = geometry.index?.count ?? geometry.attributes.position.count;
@@ -224,7 +237,7 @@ export function evaluateModifiers( source, stack, mesh = true ) {
 		}
 		delete geometry.userData.modeling;
 		delete geometry.userData.triangleFaces;
-		if ( mesh ) geometry.computeVertexNormals();
+		if ( normalsDirty || mesh && ! geometry.hasAttribute( 'normal' ) ) geometry.computeVertexNormals();
 		geometry.computeBoundingBox(); geometry.computeBoundingSphere();
 		return geometry;
 
@@ -236,8 +249,16 @@ export function modifierStackCommands( editor, object, stack, source = modifierS
 
 	const base = plain( source );
 	const userData = { ...object.userData, modifiers: structuredClone( stack ), modifierBase: base.toJSON() };
-	const geometry = stack.length ? evaluateModifiers( base, stack, object.isMesh ) : plain( base );
-	base.dispose();
+	let geometry;
+	try {
+
+		geometry = stack.length ? evaluateModifiers( base, stack, object.isMesh ) : plain( base );
+
+	} finally {
+
+		base.dispose();
+
+	}
 	if ( ! stack.length ) { delete userData.modifierBase; delete userData.modifiers; }
 	const metadata = new SetValueCommand( editor, object, 'userData', userData ); metadata.updatable = false;
 	const buffer = new SetGeometryCommand( editor, object, geometry ); buffer.updatable = false;

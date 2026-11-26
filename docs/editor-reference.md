@@ -4,7 +4,7 @@
 
 ## Workspaces
 
-The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens the Script Window editor area, and **Projection** opens a split light view when a projector or spotlight is selected. Compact mode uses workspace glyphs with tooltips. Clean and Default modes show workspace names.
+The top bar opens Layout, Modeling, Sculpting, UV Editing, Image & Vector, Paint, Geometry Nodes, Shading, Animation, Scripting, and Projection views of the same project. **Layout** gives the viewport more room with a compact timeline. **Animation** expands the timeline for clips and keyframes. **Scripting** opens the Script Window editor area, and **Projection** opens a split light view when a projector or spotlight is selected. Compact mode uses workspace glyphs with tooltips. Clean and Default modes show workspace names.
 
 Use the viewport mode picker for **Object**, **Edit**, **Sculpt**, and **Paint**. Workspace tabs arrange tools and editors for a task.
 
@@ -64,13 +64,21 @@ In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragmen
 
 ## 2D and 3D areas
 
-Opening **UV Editing**, **Image & Vector**, or **Scripting** from the workspace bar puts that editor beside the 3D view. Mask and Warp also open in split panes. Switching between editor workspaces keeps the split direction and divider position. Each pane has its own editor-type picker, so you can use two different editors side by side or switch either back to a 3D viewport. Changing the 3D interaction mode keeps the companion pane open.
+Opening **UV Editing**, **Image & Vector**, **Geometry Nodes**, or **Scripting** from the workspace bar puts that editor beside the 3D view. Mask and Warp also open in split panes. Switching between editor workspaces keeps the split direction and divider position. Each pane has its own editor-type picker, so you can use two different editors side by side or switch either back to a 3D viewport. Changing the 3D interaction mode keeps the companion pane open.
 
 Drag the divider or use its arrow keys to resize. Right-click an editor header and choose **Close Area** to give the other pane the full space. The **Split View** dropdown and divider menus also let you change the split direction, swap panes, or choose which area to keep. Focus a divider and press **Shift+F10** to open the menu with the keyboard. Switching to **Layout** collapses an editor split when both remaining panes would show the same Director view.
 
 The UV editor follows the selected editable mesh while its current layout is clean. An unapplied UV draft stays attached to its current mesh, named in the editor header. Apply the draft before selecting another mesh to continue. Click inside the 3D area to select mesh elements and use modeling shortcuts there. Edit Mode draws selected vertices as small orange dots, selected edges in orange, and selected faces with an orange tint.
 
 Turn on **Sync UV and mesh selection** in the UV toolbar to share selection with the 3D pane for the active mesh in Edit Mode. The 3D vertex, edge, or face mode determines what UV selection sends back to the mesh. Select both UV endpoints to select an edge, or all its corners to select a face. Selecting an element in 3D highlights its UV copies across seams.
+
+## Geometry Nodes
+
+Select a mesh, open **Geometry Nodes**, and choose **New graph**. The starter graph passes **Mesh Input** to **Mesh Output**. Use **Add node…** to insert **Transform Geometry** between them, or connect a **Box** or **Sphere** directly to **Mesh Output**. **Number**, **Add**, and **Multiply** can drive numeric sockets such as translation and radius.
+
+Drag between sockets or click a socket at each end. A new link replaces the existing link at that input. Use the × beside a linked input to disconnect it. Drag a node by its title, drag empty space to pan, scroll to zoom, and use **Frame all** to bring the nodes into view.
+
+The graph runs at its position in the mesh’s **Modifiers** stack. A disconnected output shows the geometry going into the modifier. Undo restores graph edits and node positions. Project JSON and Editable HTML retain the editable graph, and Play uses the evaluated mesh. Use the modifier’s apply action to bake the graph into the mesh.
 
 ## Split views
 

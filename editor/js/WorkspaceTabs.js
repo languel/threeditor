@@ -46,6 +46,12 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		} ],
 		[ 'Image & Vector', 'pathDraw', () => flat.open( 'image' ) ],
 		[ 'Paint', 'surfaceBrush', () => show3D( 'paint' ) ],
+		[ 'Geometry Nodes', 'editorNodes', () => {
+
+			view.setWorkspaceMode( 'object' );
+			flat.open( 'nodes' );
+
+		} ],
 		[ 'Shading', 'shadingMaterial', () => {
 
 			show3D( 'object' );
@@ -79,7 +85,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 	let lastWorkspace = 'Layout';
 	function syncWorkspace() {
 
-		const active = { script: 'Scripting', uv: 'UV Editing', image: 'Image & Vector' }[ flat.mode ] || lastWorkspace;
+		const active = { script: 'Scripting', uv: 'UV Editing', image: 'Image & Vector', nodes: 'Geometry Nodes' }[ flat.mode ] || lastWorkspace;
 		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( name === active ) );
 
 	}
@@ -97,7 +103,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		button.onclick = () => {
 
 			if ( label === 'Sculpting' && ! editor.modeling.canEditTarget( editor.selected ) ) return;
-			if ( ! [ 'Scripting', 'UV Editing', 'Image & Vector' ].includes( label ) ) lastWorkspace = label;
+			if ( ! [ 'Scripting', 'UV Editing', 'Image & Vector', 'Geometry Nodes' ].includes( label ) ) lastWorkspace = label;
 			open();
 			syncWorkspace();
 			const room = strip.getBoundingClientRect();
