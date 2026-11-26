@@ -3019,6 +3019,8 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 	white-space: nowrap;
 }
 .node-graph-toolbar :is(button, select) { min-height: 25px; }
+.node-graph-scope { font-weight: 600; }
+.node-graph-open-body { margin: 4px 7px 0; }
 .node-graph-status {
 	flex: none;
 	padding: 6px 8px;

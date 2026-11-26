@@ -24,6 +24,8 @@ For example, `await threeditor.call('threeditor_object_create', { type: 'box', n
 
 The node subsystem lives in `editor/js/nodes`. `NodeGraph.js` defines the versioned graph format, typed links, and reusable dataflow planning. `NodeGraphEditor.js` renders nodes and sockets from a domain’s definitions. `GeometryNodes.js` supplies the geometry definitions and CPU evaluator, and the modifier stack owns the source mesh and serialized output. Shader and game-logic domains can supply their own node definitions and execution models using the shared format and editor.
 
+Nodes that define a body domain store a nested graph in `node.body`. The canvas edits that graph in place within the parent graph's undo history. Geometry evaluation compiles each reachable body with the parent. Repeat executes a body within a single evaluation. `GeometrySimulation.js` instead carries state across 60 fixed steps per second in the player and video renderer. The player owns transient buffers and restores frame zero on reset. Use `node tools/build-node-lessons.mjs` to regenerate the node lessons.
+
 GitHub Pages deploys the static site when `main` is pushed. The [handoff](../HANDOFF.md) covers the runtime, export paths, verification, and known gaps.
 
 The bundled formatter in `editor/js/libs/code-tools.js` is built from `tools/code-tools-entry.mjs` with Prettier 3.9.10, Terser 5.51.2, and esbuild: `esbuild tools/code-tools-entry.mjs --bundle --minify --format=esm --target=es2020 --legal-comments=inline --outfile=editor/js/libs/code-tools.js`.

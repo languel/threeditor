@@ -6,12 +6,14 @@ export function createGraph( domain ) {
 
 }
 
-export function addNode( graph, type, x, y ) {
+export function addNode( graph, type, x, y, domain ) {
 
 	const ids = new Set( graph.nodes.map( node => node.id ) );
 	let id = type;
 	for ( let suffix = 2; ids.has( id ); suffix ++ ) id = type + '-' + suffix;
 	const node = { id, type, x, y, values: {} };
+	const body = domain?.nodes.get( type )?.bodyDomain?.();
+	if ( body ) node.body = body.createStarter();
 	graph.nodes.push( node );
 	return node;
 
@@ -172,8 +174,9 @@ export function evaluateDataflow( plan, runNode ) {
 	if ( plan.missing ) return;
 	const results = new Map();
 	const target = plan.steps.at( -1 ).node;
-	for ( const { node, bindings } of plan.steps ) {
+	for ( const step of plan.steps ) {
 
+		const { node, bindings } = step;
 		const inputs = Object.fromEntries( bindings.map( ( { name, socket, from, value } ) => {
 
 			if ( from ) {
@@ -187,7 +190,7 @@ export function evaluateDataflow( plan, runNode ) {
 
 		} ) );
 		if ( node === target ) return inputs;
-		results.set( node.id, runNode( node, inputs ) );
+		results.set( node.id, runNode( node, inputs, step ) );
 
 	}
 

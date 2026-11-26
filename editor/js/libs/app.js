@@ -11,6 +11,7 @@ import { createCameraController } from 'three/addons/controls/CameraController.j
 import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
 import { scriptSourceForExecution } from '../ScriptParams.js';
 import { createP5Sketch } from '../P5Sketch.js';
+import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
 
 // Body for p5 sketch scripts: runs the student's global-mode source in a p5
 // instance and projects its canvas onto the host mesh as a live texture.
@@ -71,7 +72,7 @@ const APP = {
 		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
-		let camera, scene, projector, projectorContext, timeline;
+		let camera, scene, projector, projectorContext, timeline, geometrySimulation;
 
 		let events = {};
 		let splatHost;
@@ -292,7 +293,9 @@ const APP = {
 
 		this.setScene = function ( value ) {
 
+			geometrySimulation?.dispose();
 			scene = value;
+			geometrySimulation = new GeometrySimulation( THREE, scene );
 
 		};
 
@@ -386,6 +389,7 @@ const APP = {
 			try {
 
 				timeline.apply( timelineData( scene ), ( time - startTime ) / 1000 );
+				geometrySimulation.advanceTo( ( time - startTime ) / 1000, 8 );
 				dispatch( events.update, { time: time - startTime, delta: time - prevTime } );
 
 			} catch ( e ) {
@@ -461,12 +465,14 @@ const APP = {
 			controller = undefined;
 			timeline?.clear();
 			dispatch( events.stop, arguments );
+			geometrySimulation?.reset();
 
 		};
 
 		this.render = function ( time ) {
 
 			timeline.apply( timelineData( scene ), time );
+			geometrySimulation.advanceTo( time );
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 			streams.tick( scene );
 
@@ -478,6 +484,8 @@ const APP = {
 
 			timeline?.clear();
 			timeline = null;
+			geometrySimulation?.dispose();
+			geometrySimulation = null;
 			postHost.dispose();
 			splatHost?.dispose();
 			splatHost = null;

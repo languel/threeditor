@@ -377,6 +377,12 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ProjectionMask.js', 'editor/js/modeling/ProjectionMask.js' );
 	await project.copy( 'modeling/ProjectorMapping.js', 'editor/js/modeling/ProjectorMapping.js' );
 	await project.copy( 'modeling/ProjectorOutput.js', 'editor/js/modeling/ProjectorOutput.js' );
+	await project.copy( 'modeling/ModifierEvaluation.js', 'editor/js/modeling/ModifierEvaluation.js' );
+	for ( const module of [ 'GeometrySimulation', 'GeometryNodes', 'GeometryOperations', 'NodeGraph', 'ValueNodes' ] ) {
+
+		await project.copy( 'nodes/' + module + '.js', 'editor/js/nodes/' + module + '.js' );
+
+	}
 	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
 	for ( const module of [ 'TimelineData', 'TimelineBindings', 'TimelineRuntime' ] ) {

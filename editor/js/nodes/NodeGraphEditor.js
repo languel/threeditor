@@ -13,42 +13,95 @@ function element( tag, className, parent, text ) {
 
 }
 
-export function NodeGraphEditor( domain, { onChange, onError } ) {
+export function NodeGraphEditor( rootDomain, { onChange, onError } ) {
 
 	const dom = document.createElement( 'div' );
 	dom.className = 'node-graph';
 	const toolbar = element( 'div', 'node-graph-toolbar', dom );
+	const back = element( 'button', 'Button', toolbar, 'Back to parent' );
+	back.type = 'button';
+	back.hidden = true;
+	const scopeLabel = element( 'span', 'node-graph-scope', toolbar );
+	scopeLabel.hidden = true;
 	const palette = element( 'select', 'Select', toolbar );
 	palette.setAttribute( 'aria-label', 'Add node' );
-	palette.append( new Option( 'Add node…', '' ) );
-	const groups = new Map();
-	for ( const [ type, def ] of domain.nodes ) {
-
-		if ( def.fixed ) continue;
-		if ( ! groups.has( def.category ) ) {
-
-			const group = element( 'optgroup', '', palette );
-			group.label = def.category;
-			groups.set( def.category, group );
-
-		}
-		groups.get( def.category ).append( new Option( def.label, type ) );
-
-	}
 	const remove = element( 'button', 'Button', toolbar, 'Delete node' );
 	const frame = element( 'button', 'Button', toolbar, 'Frame all' );
 	remove.type = frame.type = 'button';
 	const board = element( 'div', 'node-graph-board', dom );
 	board.tabIndex = 0;
-	board.setAttribute( 'aria-label', domain.label + ' canvas' );
 	const wires = element( 'canvas', 'node-graph-wires', board );
 	wires.setAttribute( 'aria-hidden', 'true' );
 	const world = element( 'div', 'node-graph-world', board );
 	const context = wires.getContext( '2d' );
 	const view = { x: 0, y: 0, scale: 1 };
-	let graph, editable, selected, armed, gesture, needsFrame;
+	let root, graph, domain, editable, selected, armed, gesture, needsFrame;
+	const scopePath = [];
 	const cards = new Map();
 	const socketButtons = new WeakMap();
+
+	function selectScope( resetView ) {
+
+		graph = root;
+		let nextDomain = rootDomain;
+		for ( let i = 0; i < scopePath.length; i ++ ) {
+
+			const node = graph?.nodes.find( item => item.id === scopePath[ i ] );
+			const body = nextDomain.nodes.get( node?.type )?.bodyDomain?.();
+			if ( ! body || ! node.body ) {
+
+				// An undo step can remove a zone while its body is open.
+				scopePath.length = i;
+				resetView = true;
+				break;
+
+			}
+			graph = node.body;
+			nextDomain = body;
+
+		}
+		if ( domain !== nextDomain ) {
+
+			domain = nextDomain;
+			palette.replaceChildren( new Option( 'Add node…', '' ) );
+			const groups = new Map();
+			for ( const [ type, def ] of domain.nodes ) {
+
+				if ( def.fixed ) continue;
+				if ( ! groups.has( def.category ) ) {
+
+					const group = element( 'optgroup', '', palette );
+					group.label = def.category;
+					groups.set( def.category, group );
+
+				}
+				groups.get( def.category ).append( new Option( def.label, type ) );
+
+			}
+			board.setAttribute( 'aria-label', domain.label + ' canvas' );
+
+		}
+		back.hidden = scopeLabel.hidden = scopePath.length === 0;
+		scopeLabel.textContent = scopePath.length ? domain.label : '';
+		if ( resetView ) {
+
+			selected = null;
+			needsFrame = true;
+
+		}
+		gesture = null;
+		render();
+
+	}
+
+	back.onclick = () => {
+
+		const node = scopePath.pop();
+		selectScope( true );
+		select( cards.has( node ) ? node : null );
+		board.focus( { preventScroll: true } );
+
+	};
 
 	function point( event ) {
 
@@ -171,8 +224,9 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 		if ( ! graph || ! editable ) return;
 		try {
 
-			const draft = structuredClone( graph );
-			mutate( draft );
+			const draft = structuredClone( root );
+			const scope = scopePath.reduce( ( current, id ) => current.nodes.find( node => node.id === id ).body, draft );
+			mutate( scope );
 			onChange( draft, layoutOnly );
 
 		} catch ( error ) {
@@ -276,6 +330,20 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 				cards.set( node.id, card );
 				for ( const [ name, spec ] of Object.entries( def.outputs || {} ) ) socketRow( card, node, def, name, spec, 'output', outputs.get( node.id )?.has( name ) ?? false );
 				for ( const [ name, spec ] of Object.entries( def.inputs || {} ) ) socketRow( card, node, def, name, spec, 'input', inputs.get( node.id ).has( name ) );
+				if ( def.bodyDomain && node.body ) {
+
+					const body = element( 'button', 'Button node-graph-open-body', dom, 'Open body' );
+					body.type = 'button';
+					body.setAttribute( 'aria-label', 'Open ' + def.label + ' body' );
+					body.onclick = () => {
+
+						scopePath.push( node.id );
+						selectScope( true );
+						back.focus( { preventScroll: true } );
+
+					};
+
+				}
 
 			}
 
@@ -311,7 +379,7 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 				}
 
 			}
-			selected = addNode( draft, type, Math.round( x ), Math.round( y ) ).id;
+			selected = addNode( draft, type, Math.round( x ), Math.round( y ), domain ).id;
 
 		} );
 		const card = cards.get( selected );
@@ -445,16 +513,10 @@ export function NodeGraphEditor( domain, { onChange, onError } ) {
 		dom,
 		setGraph( next, canEdit, resetView ) {
 
-			graph = next;
+			root = next;
 			editable = canEdit;
-			gesture = null;
-			if ( resetView ) {
-
-				selected = null;
-				needsFrame = true;
-
-			}
-			render();
+			if ( resetView ) scopePath.length = 0;
+			selectScope( resetView );
 
 		},
 		dispose: () => resize.disconnect()

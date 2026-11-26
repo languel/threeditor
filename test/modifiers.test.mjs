@@ -7,7 +7,7 @@ import { addNode, connectNodes, disconnectInput } from '../editor/js/nodes/NodeG
 let source = await readFile( new URL( '../editor/js/modeling/Modifiers.js', import.meta.url ), 'utf8' );
 source = source.replace( "from 'three'", `from '${ new URL( '../build/three.module.js', import.meta.url ).href }'` )
 	.replace( /^import .* from '\.\.\/commands\/.*';\n/gm, '' )
-	.replace( /from '(\.\.\/nodes\/[^']+)'/g, ( _, path ) => `from '${ new URL( path, new URL( '../editor/js/modeling/Modifiers.js', import.meta.url ) ).href }'` );
+	.replace( /from '(\.{1,2}\/[^']+)'/g, ( _, path ) => `from '${ new URL( path, new URL( '../editor/js/modeling/Modifiers.js', import.meta.url ) ).href }'` );
 const { evaluateModifiers, createModifier } = await import( 'data:text/javascript;base64,' + Buffer.from( source ).toString( 'base64' ) );
 
 test( 'Modifier order is deterministic and preserves its source and UVs', () => {

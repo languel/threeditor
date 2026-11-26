@@ -74,11 +74,19 @@ Turn on **Sync UV and mesh selection** in the UV toolbar to share selection with
 
 ## Geometry Nodes
 
-Select a mesh, open **Geometry Nodes**, and choose **New graph**. The starter graph passes **Mesh Input** to **Mesh Output**. Use **Add node…** to insert **Transform Geometry** between them, or connect a **Box** or **Sphere** directly to **Mesh Output**. **Number**, **Add**, and **Multiply** can drive numeric sockets such as translation and radius.
+Select a mesh, open **Geometry Nodes**, and choose **New graph**. The starter graph passes **Mesh Input** to **Mesh Output**. Insert **Transform Geometry** between them or connect a **Box**, **Sphere**, **Grid**, or **Cylinder** directly to **Mesh Output**. **Join Geometry** combines two meshes, and **Set Material Index** assigns a branch to one of the object's material slots. **Number**, **Add**, and **Multiply** can drive sockets such as translation and radius.
 
 Drag between sockets or click a socket at each end. A new link replaces the existing link at that input. Use the × beside a linked input to disconnect it. Drag a node by its title, drag empty space to pan, scroll to zoom, and use **Frame all** to bring the nodes into view.
 
 The graph runs at its position in the mesh’s **Modifiers** stack. A disconnected output shows the geometry going into the modifier. Undo restores graph edits and node positions. Project JSON and Editable HTML retain the editable graph, and Play uses the evaluated mesh. Use the modifier’s apply action to bake the graph into the mesh.
+
+### Repeat and Simulation
+
+**Repeat** runs its body for the number of **Iterations** you set. Open the body on the node card. **Repeat Input** provides the geometry and numeric value carried from the previous iteration, plus a zero-based **Iteration** count. Connect the updated state to **Repeat Output**. The node returns the final state to the parent graph. Zero iterations pass through the starting state, and a Repeat body can contain another Repeat.
+
+**Simulation** carries geometry and a numeric value between fixed steps during **Play Scene**, video rendering, and playable exports. **Simulation Input** supplies the previous state, **Delta Seconds**, elapsed time, and the step number. **Simulation Output** becomes the state for the next step. The editor shows the authored starting state, and restarting Play starts the simulation from that state. Simulation zones live in the main geometry graph and can contain Repeat nodes in their bodies.
+
+Open **File → Examples → lessons → Stairs with Repeat** or **A simulated pinwheel** to inspect complete graphs. [Node lessons](../editor/examples/lessons/README.md#geometry-node-tutorials)
 
 ## Split views
 

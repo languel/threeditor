@@ -1,4 +1,4 @@
-import { GEOMETRY_DOMAIN, GEOMETRY_MODIFIER, planGeometryGraph } from './GeometryNodes.js';
+import { GEOMETRY_DOMAIN, GEOMETRY_MODIFIER, hasSimulation, planGeometryGraph } from './GeometryNodes.js';
 import { NodeGraphEditor } from './NodeGraphEditor.js';
 import { canModify, createModifier, setModifierStack } from '../modeling/Modifiers.js?v=poly-context';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
@@ -90,6 +90,7 @@ export function openGeometryNodes( editor ) {
 			else if ( ! next ) status.textContent = supported ? 'Create a graph to process this mesh.' : 'Select a mesh to start a geometry graph.';
 			else if ( ! next.enabled ) status.textContent = 'This modifier is disabled.';
 			else if ( plan.missing ) status.textContent = plan.missing + ' Showing modifier input.';
+			else if ( hasSimulation( plan ) ) status.textContent = 'Play Scene to run the simulation.';
 			else status.textContent = 'Drag between sockets or click a socket at each end.';
 
 		} catch ( problem ) {
