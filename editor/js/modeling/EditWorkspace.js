@@ -7,11 +7,16 @@ import { modelButton } from './ModelControls.js?v=color-sampler';
 import { openMaskEditor } from './MaskEditor.js?v=expressive-pencil';
 import { openUVEditor } from './UVEditor.js?v=texture-projection';
 import { openGeometryNodes } from '../nodes/GeometryNodesEditor.js';
+import { openShaderGraph } from '../nodes/ShaderGraphEditor.js';
+import { openLogicNodes } from '../nodes/LogicNodesEditor.js';
 
 export function createEditWorkspace( editor ) {
 
 	const sessions = new Map();
-	const names = { mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window', nodes: 'Geometry Nodes' };
+	const names = {
+		mask: 'Mask', image: 'Image & Vector', uv: 'UV', warp: 'Warp', script: 'Script Window',
+		nodes: 'Geometry Nodes', shader: 'Shader Graph', logic: 'Logic Nodes'
+	};
 	let current, requestedHost, nextId = 0;
 
 	function makeDock() {
@@ -69,7 +74,12 @@ export function createEditWorkspace( editor ) {
 	const warpButton = modelButton( modes, 'Projection warp mode', 'placePlane', () => switchMode( 'warp', projector(), openUVEditor ) );
 	const scriptButton = modelButton( modes, 'Script Window', 'editorScript', () => editor.codePanel.open() );
 	const nodesButton = modelButton( modes, 'Geometry Nodes', 'editorNodes', () => openGeometryNodes( editor ) );
-	const buttons = { mask: maskButton, image: imageButton, uv: uvButton, warp: warpButton, script: scriptButton, nodes: nodesButton };
+	const shaderButton = modelButton( modes, 'Shader Graph', 'editorShaderGraph', () => openShaderGraph( editor ) );
+	const logicButton = modelButton( modes, 'Logic Nodes', 'editorLogicNodes', () => openLogicNodes( editor ) );
+	const buttons = {
+		mask: maskButton, image: imageButton, uv: uvButton, warp: warpButton, script: scriptButton,
+		nodes: nodesButton, shader: shaderButton, logic: logicButton
+	};
 	function switchMode( mode, object, open ) {
 
 		picker.open = false;

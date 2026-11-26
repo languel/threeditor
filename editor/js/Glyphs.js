@@ -28,6 +28,8 @@ const ICONS = {
 	editorTimeline: svg( '<path d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19Zm2.3 3-4.6 6.1 4.9 4.7 1.5-1.5-3.4-3.4 3.3-4.6Z" fill="currentColor" fill-rule="evenodd" stroke="none"/>' ),
 	editorScript: svg( '<path d="M5 3h15v18H5Z" fill="currentColor" opacity=".27"/><path d="M3 4v16m5-13h9m-9 4h9m-9 4h9m-9 4h5"/>' ),
 	editorNodes: svg( '<rect x="2" y="4" width="7" height="7" rx="1"/><rect x="15" y="13" width="7" height="7" rx="1"/><path d="M9 8h2a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2"/>' ),
+	editorShaderGraph: svg( '<path d="M4 20 16 4m-4 0h4a4 4 0 1 1 0 8h-7m-.5 2H16a3 3 0 0 1 0 6h-3"/><circle cx="5" cy="20" r="1.5"/>' ),
+	editorLogicNodes: svg( '<path d="m12 3 5 5-5 5-5-5 5-5Zm0 10v3m0 0H5v4m7-4h7v4"/><circle cx="5" cy="20" r="1"/><circle cx="19" cy="20" r="1"/>' ),
 	editorOutliner: svg( '<path d="M5 6v13h5m-5-7h5" opacity=".75"/><path d="M2 3h7v5H2zm8 7h11v5H10zm0 7h11v5H10z" fill="currentColor" stroke="none"/>' ),
 	editorProperties: svg( '<rect x="2.5" y="4.5" width="19" height="6" rx="3"/><rect x="2.5" y="13.5" width="19" height="6" rx="3"/><path d="M6 5h6v5H6a2.5 2.5 0 0 1 0-5Zm12 9h-6v5h6a2.5 2.5 0 0 0 0-5Z" fill="currentColor" stroke="none"/>' ),
 	editorAssets: svg( '<path d="m2 20 5-13 3 1-5 13Zm9-16h4v17h-4zm6-2h5v19h-5z" fill="currentColor" stroke="none"/><path d="M19.5 5v12" stroke="var(--theme-surface)"/>' ),

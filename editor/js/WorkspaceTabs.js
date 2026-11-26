@@ -59,6 +59,12 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 			showProperty( 'materialTab' );
 
 		} ],
+		[ 'Shader Graph', 'editorShaderGraph', () => {
+
+			view.setWorkspaceMode( 'object' );
+			flat.open( 'shader' );
+
+		} ],
 		[ 'Animation', 'play', () => {
 
 			show3D( 'object' );
@@ -67,6 +73,12 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 
 		} ],
 		[ 'Scripting', 'code', () => flat.open( 'script' ) ],
+		[ 'Logic Nodes', 'editorLogicNodes', () => {
+
+			view.setWorkspaceMode( 'object' );
+			flat.open( 'logic' );
+
+		} ],
 		[ 'Projection', 'toolMask', () => {
 
 			show3D( 'object' );
@@ -82,10 +94,14 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		} ]
 	];
 	const buttons = new Map();
+	const editorWorkspaces = {
+		script: 'Scripting', uv: 'UV Editing', image: 'Image & Vector', nodes: 'Geometry Nodes',
+		shader: 'Shader Graph', logic: 'Logic Nodes'
+	};
 	let lastWorkspace = 'Layout';
 	function syncWorkspace() {
 
-		const active = { script: 'Scripting', uv: 'UV Editing', image: 'Image & Vector', nodes: 'Geometry Nodes' }[ flat.mode ] || lastWorkspace;
+		const active = editorWorkspaces[ flat.mode ] || lastWorkspace;
 		for ( const [ name, button ] of buttons ) button.setAttribute( 'aria-pressed', String( name === active ) );
 
 	}
@@ -103,7 +119,7 @@ export function WorkspaceTabs( editor, sidebar, sidebarDock ) {
 		button.onclick = () => {
 
 			if ( label === 'Sculpting' && ! editor.modeling.canEditTarget( editor.selected ) ) return;
-			if ( ! [ 'Scripting', 'UV Editing', 'Image & Vector', 'Geometry Nodes' ].includes( label ) ) lastWorkspace = label;
+			if ( ! Object.values( editorWorkspaces ).includes( label ) ) lastWorkspace = label;
 			open();
 			syncWorkspace();
 			const room = strip.getBoundingClientRect();

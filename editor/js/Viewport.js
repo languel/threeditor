@@ -37,6 +37,7 @@ import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js
 import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
 import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { PostProcessingHost } from './PostProcessing.js';
+import { beginShaderGraphFrame, shaderGraphsAnimate, withShaderGraphs } from './nodes/ShaderGraphRuntime.js';
 
 function Viewport( editor ) {
 
@@ -1244,7 +1245,7 @@ function Viewport( editor ) {
 		const delta = timer.getDelta();
 
 		const streamsChanged = ! editor.streams.playing && editor.streams.tick( scene );
-		let needsUpdate = ( editor.assetBrowser?.runtime?.update( delta ) || false ) || streamsChanged;
+		let needsUpdate = ( editor.assetBrowser?.runtime?.update( delta ) || false ) || streamsChanged || shaderGraphsAnimate( renderer );
 
 		// Animations
 
@@ -1405,7 +1406,7 @@ function Viewport( editor ) {
 		const shading = editorView && editor.viewportXRay ? 'xray' : editor.viewportShading;
 		visibility( scene, () => host.render( renderer, scene, () => withViewportShading( scene, shading, () => {
 
-			const raster = () => model.withPreview( () => renderer.render( scene, view ) );
+			const raster = () => model.withPreview( () => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) ) );
 			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 			else raster();
 
@@ -1416,6 +1417,7 @@ function Viewport( editor ) {
 	function render() {
 
 		if ( renderer === null ) return;
+		beginShaderGraphFrame( renderer );
 		if ( viewToolMode !== editor.viewTools.mode ) {
 
 			viewToolMode = editor.viewTools.mode;

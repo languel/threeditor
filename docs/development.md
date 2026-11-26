@@ -26,6 +26,10 @@ The node subsystem lives in `editor/js/nodes`. `NodeGraph.js` defines the versio
 
 Nodes that define a body domain store a nested graph in `node.body`. The canvas edits that graph in place within the parent graph's undo history. Geometry evaluation compiles each reachable body with the parent. Repeat executes a body within a single evaluation. `GeometrySimulation.js` instead carries state across 60 fixed steps per second in the player and video renderer. The player owns transient buffers and restores frame zero on reset. Use `node tools/build-node-lessons.mjs` to regenerate the node lessons.
 
+`ShaderNodes.js` compiles the same graph format into TSL expressions. The graph lives in ordinary material user data. `ShaderGraphRuntime.js` builds the node material for WebGPU draws and restores the authored material afterward, keeping JSON, material slots, and animation bindings in the existing formats.
+
+`LogicNodes.js` validates data and event links. Immediate feedback is rejected, and Delay breaks a feedback cycle across frames. `LogicRuntime.js` subscribes to the player’s StreamRouter and fires object-local graph instances against the playback scene. Variables, key state, overlap state, and timers belong to that instance. Object references are stored as UUIDs and remapped when their targets are duplicated together.
+
 GitHub Pages deploys the static site when `main` is pushed. The [handoff](../HANDOFF.md) covers the runtime, export paths, verification, and known gaps.
 
 The bundled formatter in `editor/js/libs/code-tools.js` is built from `tools/code-tools-entry.mjs` with Prettier 3.9.10, Terser 5.51.2, and esbuild: `esbuild tools/code-tools-entry.mjs --bundle --minify --format=esm --target=es2020 --legal-comments=inline --outfile=editor/js/libs/code-tools.js`.

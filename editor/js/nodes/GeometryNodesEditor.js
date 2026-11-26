@@ -3,14 +3,14 @@ import { NodeGraphEditor } from './NodeGraphEditor.js';
 import { canModify, createModifier, setModifierStack } from '../modeling/Modifiers.js?v=poly-context';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { comboFromEvent } from '../Keymap.js?v=transform-gizmos';
+import { bindGraphHistory } from './GraphWorkspace.js';
 
 export function openGeometryNodes( editor ) {
 
 	const panel = document.createElement( 'div' );
-	panel.className = 'geometry-nodes-editor';
+	panel.className = 'node-domain-editor';
 	const controls = document.createElement( 'div' );
-	controls.className = 'node-graph-toolbar geometry-nodes-target';
+	controls.className = 'node-graph-toolbar node-domain-target';
 	const target = document.createElement( 'span' );
 	const choose = document.createElement( 'select' );
 	choose.className = 'Select';
@@ -120,17 +120,7 @@ export function openGeometryNodes( editor ) {
 
 	};
 	choose.onchange = () => sync( choose.value );
-	panel.addEventListener( 'keydown', event => {
-
-		if ( event.defaultPrevented || event.repeat || event.isComposing || event.target.closest( 'input, select' ) ) return;
-		const combo = comboFromEvent( event );
-		if ( ! combo ) return;
-		if ( combo === editor.keymap.combo( 'undo' ) ) editor.undo();
-		else if ( combo === editor.keymap.combo( 'redo' ) ) editor.redo();
-		else return;
-		event.preventDefault();
-
-	} );
+	bindGraphHistory( editor, panel );
 	function scheduleSync() {
 
 		if ( queued ) return;

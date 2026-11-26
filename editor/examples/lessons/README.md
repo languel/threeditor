@@ -14,6 +14,8 @@ The Scene's user data records each lesson's source and purpose.
 | 04 | Paint marks in space | `09-ghost.js` / `lib/paint.js`: the actual Painter samples recorded hands, head and feet into editable colored line strokes. A script progressively reveals them. |
 | — | Stairs with Repeat | A loop adds one tread per iteration, using the loop index to set each tread's position. |
 | — | A simulated pinwheel | A fixed-step simulation applies a small rotation to its previous mesh on every step. |
+| — | An animated TSL glaze | One moving UV pattern controls both the color and roughness of a ceramic material. |
+| — | A keyboard-controlled gate | Keyboard and overlap events move a runner and open a gate through two logic graphs. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -32,7 +34,7 @@ than the source page's screen-facing brush ribbons. `Serpentine particles` demon
 in `ExampleCatalog.js`, with its original GLB retained as a project asset when
 opened from the library.
 
-## Geometry node tutorials
+## Node tutorials
 
 ### Build stairs with Repeat
 
@@ -47,3 +49,17 @@ opened from the library.
 2. Follow **Delta Seconds** into **Multiply**. With B at 120, each step turns the geometry by 2 degrees at 60 steps per second.
 3. Choose **Play Scene**. The result of each step becomes the geometry input for the next one.
 4. Stop Play, halve B to 60, and play again. The pinwheel starts from the same pose and turns half as fast.
+
+### Animate a TSL glaze
+
+1. Open **An animated TSL glaze**, select **Glazed knot**, and choose **Shader Graph**. This project opens with the WebGPU renderer.
+2. Adjust A and B on **Mix Color**. **Checker** switches between those colors across the UV surface.
+3. Follow the same **Checker** output to **Mix Number**. Its two values become the roughness of the tiles, so each color has a different highlight.
+4. Change B on **Multiply** to change the rate of the UV offset. Set it to zero to hold the pattern still.
+
+### Control a gate with Logic Nodes
+
+1. Open **A keyboard-controlled gate** and choose **Play Scene**. Hold the right arrow to move **Runner** into **Gate**. Press Space to reset them.
+2. Stop Play, select **Runner**, and open **Logic Nodes**. Find **While Key Is Held** and follow its **Then** link to **Move**. **Scene Time** supplies the time since the previous frame. **Multiply** converts that time into a movement distance.
+3. Find **On Overlap**. Its target is **Gate**. When the bounding boxes meet, the **Enter** socket triggers **Send Event** with the name `gate.open`.
+4. Select **Gate**. Its **Receive Event** node listens for `gate.open` and calls **Set Position**. Change the action's Y value and try the gate again.

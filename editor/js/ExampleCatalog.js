@@ -31,6 +31,8 @@ const exampleCatalog = [
 		{ title: '04 · Paint marks in space', file: 'examples/lessons/04-paint.app.json' },
 		{ title: 'Stairs with Repeat', file: 'examples/lessons/06-repeat-stairs.app.json' },
 		{ title: 'A simulated pinwheel', file: 'examples/lessons/07-simulation-pinwheel.app.json' },
+		{ title: 'An animated TSL glaze', file: 'examples/lessons/08-animated-glaze.app.json' },
+		{ title: 'A keyboard-controlled gate', file: 'examples/lessons/09-keyboard-gate.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

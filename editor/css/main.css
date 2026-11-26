@@ -2988,19 +2988,19 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 }
 .editor-2d-target { margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .72; }
 
-.viewport-edit-workspace[data-editor-mode="nodes"] > .viewport-edit-content {
+.viewport-edit-workspace:is([data-editor-mode="nodes"], [data-editor-mode="shader"], [data-editor-mode="logic"]) > .viewport-edit-content {
 	flex: 1;
 	padding: 0;
 	overflow: hidden;
 }
 
-.geometry-nodes-editor, .node-graph {
+.node-domain-editor, .node-graph {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	height: 100%;
 }
-.geometry-nodes-editor [hidden] { display: none; }
+.node-domain-editor [hidden] { display: none; }
 .node-graph { flex: 1; }
 .node-graph-toolbar {
 	display: flex;
@@ -3011,7 +3011,7 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 	padding: 5px 8px;
 	border-block-end: 1px solid var(--theme-surface);
 }
-.geometry-nodes-target > span {
+.node-domain-target > span {
 	flex: 1;
 	min-width: 0;
 	text-overflow: ellipsis;
@@ -3103,7 +3103,7 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 .node-graph-row.output .node-graph-port { inset-inline: auto -7px; }
 .node-graph-port:is(.is-linked, [aria-pressed="true"])::before { background: var(--port-color); }
 .node-graph-port:is(.is-compatible, :hover, :focus-visible)::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--port-color) 35%, transparent); }
-.node-graph-row input {
+.node-graph-row :is(input, select) {
 	width: 70px;
 	min-width: 0;
 	margin-inline-start: auto;

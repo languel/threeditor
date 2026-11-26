@@ -1,6 +1,9 @@
 import { addNode, connectNodes, disconnectInput, indexGraph, removeNode } from './NodeGraph.js';
 
-const PORT_COLORS = { geometry: '#59c6a1', number: '#91a8ff' };
+const PORT_COLORS = {
+	geometry: '#59c6a1', number: '#91a8ff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
+	boolean: '#f792a5', string: '#8cdbd1', object: '#efdb8b', event: '#ffad73'
+};
 const portColor = type => Object.hasOwn( PORT_COLORS, type ) ? PORT_COLORS[ type ] : '#b0a8c6';
 
 function element( tag, className, parent, text ) {
@@ -13,7 +16,7 @@ function element( tag, className, parent, text ) {
 
 }
 
-export function NodeGraphEditor( rootDomain, { onChange, onError } ) {
+export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions } ) {
 
 	const dom = document.createElement( 'div' );
 	dom.className = 'node-graph';
@@ -283,19 +286,49 @@ export function NodeGraphEditor( rootDomain, { onChange, onError } ) {
 			unlink.disabled = ! editable;
 			unlink.onclick = () => edit( draft => disconnectInput( draft, port ) );
 
-		} else if ( typeof spec.default === 'number' ) {
+		} else if ( Object.hasOwn( spec, 'default' ) ) {
 
-			const input = element( 'input', 'Input', row );
-			input.type = 'number';
-			input.step = 'any';
-			if ( spec.min !== undefined ) input.min = spec.min;
-			if ( spec.max !== undefined ) input.max = spec.max;
-			input.value = node.values[ name ] ?? spec.default;
+			const value = node.values[ name ] ?? spec.default;
+			const options = inputOptions?.( spec, value );
+			const input = element( options ? 'select' : 'input', options ? 'Select' : 'Input', row );
+			if ( options ) {
+
+				input.append( ...options.map( ( [ value, label ] ) => new Option( label, value ) ) );
+
+			} else if ( typeof value === 'number' ) {
+
+				input.type = 'number';
+				input.step = 'any';
+				if ( spec.min !== undefined ) input.min = spec.min;
+				if ( spec.max !== undefined ) input.max = spec.max;
+
+			} else if ( spec.type === 'boolean' ) {
+
+				input.type = 'checkbox';
+				input.checked = value;
+
+			} else if ( spec.type === 'color' ) {
+
+				input.type = 'color';
+
+			} else if ( spec.maxLength !== undefined ) {
+
+				input.maxLength = spec.maxLength;
+
+			}
+			if ( input.type !== 'checkbox' ) input.value = value;
 			input.disabled = ! editable;
 			input.dataset.focus = [ node.id, 'value', name ].join( '/' );
 			input.setAttribute( 'aria-label', def.label + ' / ' + spec.label );
-			input.onchange = () => edit( draft => { draft.nodes.find( item => item.id === node.id ).values[ name ] = input.valueAsNumber; } );
-			input.onkeydown = event => { if ( event.key === 'Enter' ) input.blur(); };
+			input.onchange = () => edit( draft => {
+
+				const target = draft.nodes.find( item => item.id === node.id );
+				if ( input.type === 'number' ) target.values[ name ] = input.valueAsNumber;
+				else if ( input.type === 'checkbox' ) target.values[ name ] = input.checked;
+				else target.values[ name ] = input.value;
+
+			} );
+			if ( ! options ) input.onkeydown = event => { if ( event.key === 'Enter' ) input.blur(); };
 
 		}
 
@@ -408,7 +441,7 @@ export function NodeGraphEditor( rootDomain, { onChange, onError } ) {
 	board.addEventListener( 'keydown', event => {
 
 		if ( event.key === 'Escape' && armed ) arm( null );
-		if ( ( event.key === 'Delete' || event.key === 'Backspace' ) && ! event.target.closest( 'input' ) ) {
+		if ( ( event.key === 'Delete' || event.key === 'Backspace' ) && ! event.target.closest( 'input, select' ) ) {
 
 			event.preventDefault();
 			if ( ! gesture ) deleteSelected();
@@ -418,7 +451,7 @@ export function NodeGraphEditor( rootDomain, { onChange, onError } ) {
 	} );
 	board.addEventListener( 'wheel', event => {
 
-		if ( event.target.closest( 'input' ) ) return;
+		if ( event.target.closest( 'input, select' ) ) return;
 		event.preventDefault();
 		const p = point( event );
 		const scale = Math.max( .2, Math.min( 2, view.scale * Math.exp( - event.deltaY * .002 ) ) );

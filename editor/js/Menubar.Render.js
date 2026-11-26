@@ -10,6 +10,7 @@ import { drawProjectorOutput, renderFittedView } from './modeling/ProjectorOutpu
 import { resolvePlaybackAssets } from './assets/AssetRuntime.js';
 import { APP } from './libs/app.js?v=scene-timeline';
 import { setupRenderEnvironment, setupPathTracingEnvironment } from './RenderEnvironment.js';
+import { installShaderGraphs, withShaderGraphs } from './nodes/ShaderGraphRuntime.js';
 
 function MenubarRender( editor ) {
 
@@ -297,6 +298,23 @@ class RenderImageDialog {
 
 				}
 
+			} else if ( project.renderer === 'WebGPURenderer' ) {
+
+				try {
+
+					const { TSL, WebGPURenderer } = await import( 'three/webgpu' );
+					renderer = new WebGPURenderer( { antialias: true, reversedDepthBuffer: true } );
+					await renderer.init();
+					installShaderGraphs( renderer, TSL );
+
+				} catch ( error ) {
+
+					renderer?.dispose();
+					alert( 'Could not start the WebGPU renderer: ' + error.message );
+					return;
+
+				}
+
 			} else {
 
 				renderer = new THREE.WebGLRenderer( { antialias: true, reversedDepthBuffer: true } );
@@ -351,7 +369,7 @@ class RenderImageDialog {
 				case 'wireframe':
 
 					const draw = () => withEnabledObjects( scene, () =>
-						withViewportShading( scene, shadingTypeSelect.getValue(), () => renderer.render( scene, camera ) )
+						withViewportShading( scene, shadingTypeSelect.getValue(), () => withShaderGraphs( renderer, scene, () => renderer.render( scene, camera ) ) )
 					);
 					if ( opticalCamera ) renderFittedView( THREE, renderer, scene, camera, outputWidth, outputHeight, draw );
 					else draw();
