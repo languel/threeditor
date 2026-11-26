@@ -6,6 +6,7 @@ const groups = [
 		[ 'viewport', '3D Viewport', 'editorViewport' ],
 		[ 'image', 'Image & Vector', 'editorImage', 'editor' ],
 		[ 'uv', 'UV Editor', 'editorUV', 'editor' ],
+		[ 'nodes', 'Geometry Nodes', 'editorNodes', 'editor' ],
 		[ 'mask', 'Mask Editor', 'toolMask', 'editor' ],
 		[ 'warp', 'Projection Warp', 'placePlane', 'editor' ]
 	] ],

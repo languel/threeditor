@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import * as THREE from '../build/three.module.js';
+import { GEOMETRY_DOMAIN, GEOMETRY_MODIFIER, planGeometryGraph } from '../editor/js/nodes/GeometryNodes.js';
+import { addNode, connectNodes, disconnectInput } from '../editor/js/nodes/NodeGraph.js';
 let source = await readFile( new URL( '../editor/js/modeling/Modifiers.js', import.meta.url ), 'utf8' );
-source = source.replace( "from 'three'", `from '${ new URL( '../build/three.module.js', import.meta.url ).href }'` ).replace( /^import .* from '\.\.\/commands\/.*';\n/gm, '' );
+source = source.replace( "from 'three'", `from '${ new URL( '../build/three.module.js', import.meta.url ).href }'` )
+	.replace( /^import .* from '\.\.\/commands\/.*';\n/gm, '' )
+	.replace( /from '(\.\.\/nodes\/[^']+)'/g, ( _, path ) => `from '${ new URL( path, new URL( '../editor/js/modeling/Modifiers.js', import.meta.url ) ).href }'` );
 const { evaluateModifiers, createModifier } = await import( 'data:text/javascript;base64,' + Buffer.from( source ).toString( 'base64' ) );
 
 test( 'Modifier order is deterministic and preserves its source and UVs', () => {
@@ -57,5 +61,77 @@ test( 'Curve subdivision, simplification, smoothing and wave retain finite geome
 	assert.equal( curve.attributes.position.getY( 1 ), 1 );
 	const array = createModifier( 'ARRAY' ); array.params.count = 2;
 	assert.equal( evaluateModifiers( curve, [ array ], false ).attributes.position.count, 3 );
+
+} );
+
+test( 'Geometry Nodes evaluates typed links in modifier order and round-trips with the mesh', () => {
+
+	const source = new THREE.BoxGeometry();
+	const before = JSON.stringify( source.toJSON() );
+	const graphModifier = createModifier( GEOMETRY_MODIFIER );
+	const graph = graphModifier.params.graph;
+	const transform = addNode( graph, 'geometry.transform', 120, 120 );
+	const number = addNode( graph, 'value.number', 24, 120 );
+	number.values.value = 3;
+	const connect = ( from, output, to, input ) => connectNodes( graph, GEOMETRY_DOMAIN, { node: from, socket: output }, { node: to, socket: input } );
+	connect( 'geometry.input', 'geometry', transform.id, 'geometry' );
+	connect( number.id, 'value', transform.id, 'x' );
+	connect( transform.id, 'geometry', 'geometry.output', 'geometry' );
+
+	const array = createModifier( 'ARRAY' );
+	const result = evaluateModifiers( source, [ graphModifier, array ] );
+	assert.equal( result.boundingBox.min.x, 2.5 );
+	assert.equal( result.boundingBox.max.x, 5.5 );
+	assert.equal( JSON.stringify( source.toJSON() ), before );
+
+	const mesh = new THREE.Mesh( result, new THREE.MeshStandardMaterial() );
+	mesh.userData.modifiers = [ graphModifier, array ];
+	const restored = new THREE.ObjectLoader().parse( JSON.parse( JSON.stringify( mesh.toJSON() ) ) );
+	assert.deepEqual( restored.userData.modifiers, mesh.userData.modifiers );
+	assert.deepEqual( Array.from( restored.geometry.attributes.position.array ), Array.from( result.attributes.position.array ) );
+	assert.equal( evaluateModifiers( source, restored.userData.modifiers ).boundingBox.max.x, 5.5 );
+
+} );
+
+test( 'Geometry Nodes rejects incompatible links, cycles and invalid linked values', () => {
+
+	const source = new THREE.BoxGeometry();
+	const modifier = createModifier( GEOMETRY_MODIFIER );
+	const graph = modifier.params.graph;
+	const a = addNode( graph, 'geometry.transform', 120, 120 );
+	const b = addNode( graph, 'geometry.transform', 240, 120 );
+	const number = addNode( graph, 'value.number', 24, 120 );
+	const connect = ( from, output, to, input ) => connectNodes( graph, GEOMETRY_DOMAIN, { node: from, socket: output }, { node: to, socket: input } );
+	connect( 'geometry.input', 'geometry', a.id, 'geometry' );
+	connect( a.id, 'geometry', b.id, 'geometry' );
+	const links = structuredClone( graph.links );
+	assert.throws( () => connect( b.id, 'geometry', a.id, 'geometry' ), /cycle/ );
+	assert.throws( () => connect( number.id, 'value', a.id, 'geometry' ), /same type/ );
+	assert.deepEqual( graph.links, links );
+
+	connect( number.id, 'value', a.id, 'scale' );
+	assert.equal( evaluateModifiers( source, [ modifier ] ).boundingBox.max.x, .5 );
+	connect( b.id, 'geometry', 'geometry.output', 'geometry' );
+	assert.throws( () => evaluateModifiers( source, [ modifier ] ), /Scale must be between/ );
+
+	disconnectInput( graph, { node: a.id, socket: 'geometry' } );
+	assert.match( planGeometryGraph( graph ).missing, /Connect Geometry/ );
+	assert.equal( evaluateModifiers( source, [ modifier ] ).boundingBox.max.x, .5 );
+
+} );
+
+test( 'Geometry Nodes primitive output preserves renderable groups across save and reload', () => {
+
+	const source = new THREE.BoxGeometry();
+	const modifier = createModifier( GEOMETRY_MODIFIER );
+	const graph = modifier.params.graph;
+	const box = addNode( graph, 'geometry.box', 120, 120 );
+	box.values.width = 4;
+	connectNodes( graph, GEOMETRY_DOMAIN, { node: box.id, socket: 'geometry' }, { node: 'geometry.output', socket: 'geometry' } );
+	const result = evaluateModifiers( source, [ modifier ] );
+	const json = JSON.parse( JSON.stringify( result.toJSON() ) );
+	const restored = new THREE.ObjectLoader().parseGeometries( [ json ] )[ json.uuid ];
+	assert.deepEqual( restored.groups, [ { start: 0, count: result.index.count, materialIndex: 0 } ] );
+	assert.equal( result.boundingBox.max.x, 2 );
 
 } );

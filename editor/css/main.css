@@ -2988,6 +2988,137 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 }
 .editor-2d-target { margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .72; }
 
+.viewport-edit-workspace[data-editor-mode="nodes"] > .viewport-edit-content {
+	flex: 1;
+	padding: 0;
+	overflow: hidden;
+}
+
+.geometry-nodes-editor, .node-graph {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+.geometry-nodes-editor [hidden] { display: none; }
+.node-graph { flex: 1; }
+.node-graph-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	border-block-end: 1px solid var(--theme-surface);
+}
+.geometry-nodes-target > span {
+	flex: 1;
+	min-width: 0;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+.node-graph-toolbar :is(button, select) { min-height: 25px; }
+.node-graph-status {
+	flex: none;
+	padding: 6px 8px;
+	font-size: 11px;
+	color: var(--theme-text);
+	border-block-start: 1px solid var(--theme-surface);
+}
+.node-graph-status.is-error { color: var(--theme-danger, #d45d52); }
+.node-graph-board {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow: clip;
+	isolation: isolate;
+	touch-action: none;
+	background-color: color-mix(in srgb, var(--theme-background) 96%, var(--theme-text));
+	background-image: radial-gradient(color-mix(in srgb, var(--theme-text) 25%, transparent) 1px, transparent 1px);
+}
+.node-graph-board:focus-visible { outline: 1px solid var(--theme-accent); outline-offset: -1px; }
+.node-graph-wires {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+.node-graph-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.node-graph-card {
+	position: absolute;
+	width: 188px;
+	padding-block-end: 5px;
+	border: 1px solid color-mix(in srgb, var(--theme-text) 28%, var(--theme-background));
+	border-radius: 8px;
+	background: var(--theme-background);
+	box-shadow: 0 3px 12px #0003;
+	font-size: 12px;
+}
+.node-graph-card.is-selected { z-index: 1; border-color: var(--theme-accent); }
+.node-graph-card-title {
+	padding: 7px 9px;
+	margin-block-end: 3px;
+	border-radius: 7px 7px 0 0;
+	background: color-mix(in srgb, var(--theme-accent) 22%, var(--theme-surface));
+	font-weight: 600;
+	cursor: grab;
+	user-select: none;
+}
+.node-graph-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 25px;
+	padding-inline: 11px;
+}
+.node-graph-row.output { justify-content: flex-end; }
+.node-graph-port {
+	appearance: none;
+	position: absolute;
+	inset-inline-start: -7px;
+	width: 14px;
+	height: 18px;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	background: transparent;
+	cursor: crosshair;
+}
+.node-graph-port::before {
+	content: '';
+	display: block;
+	width: 9px;
+	height: 9px;
+	margin: auto;
+	box-sizing: border-box;
+	border: 2px solid var(--port-color);
+	border-radius: 50%;
+	background: var(--theme-background);
+}
+.node-graph-row.output .node-graph-port { inset-inline: auto -7px; }
+.node-graph-port:is(.is-linked, [aria-pressed="true"])::before { background: var(--port-color); }
+.node-graph-port:is(.is-compatible, :hover, :focus-visible)::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--port-color) 35%, transparent); }
+.node-graph-row input {
+	width: 70px;
+	min-width: 0;
+	margin-inline-start: auto;
+	padding: 2px 3px;
+	font: inherit;
+}
+.node-graph-unlink {
+	margin-inline-start: auto;
+	padding: 0 4px;
+	border: 0;
+	background: none;
+	color: var(--theme-text);
+	cursor: pointer;
+	font-size: 16px;
+}
+.node-graph-unlink:hover { color: var(--theme-accent); }
+
 #viewport canvas.pencil-brush-cursor { cursor: none; }
 #viewport:has(.transform-pointer:not([hidden])) canvas[data-engine] { cursor: none; }
 .transform-pointer {

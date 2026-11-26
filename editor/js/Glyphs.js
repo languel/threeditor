@@ -27,6 +27,7 @@ const ICONS = {
 	editorUV: svg( '<path d="M8 21H4a1 1 0 0 1-1-1V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v13H9V7" stroke-width="2"/><path d="M10 4h3v3h-3zm6 0h3v3h-3zm-3 3h3v3h-3zm6 0h2v3h-2zm-9 3h3v3h-3zm6 0h3v3h-3zm-3 3h3v3h-3zm6 0h2v3h-2z" fill="currentColor" stroke="none"/>' ),
 	editorTimeline: svg( '<path d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19Zm2.3 3-4.6 6.1 4.9 4.7 1.5-1.5-3.4-3.4 3.3-4.6Z" fill="currentColor" fill-rule="evenodd" stroke="none"/>' ),
 	editorScript: svg( '<path d="M5 3h15v18H5Z" fill="currentColor" opacity=".27"/><path d="M3 4v16m5-13h9m-9 4h9m-9 4h9m-9 4h5"/>' ),
+	editorNodes: svg( '<rect x="2" y="4" width="7" height="7" rx="1"/><rect x="15" y="13" width="7" height="7" rx="1"/><path d="M9 8h2a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2"/>' ),
 	editorOutliner: svg( '<path d="M5 6v13h5m-5-7h5" opacity=".75"/><path d="M2 3h7v5H2zm8 7h11v5H10zm0 7h11v5H10z" fill="currentColor" stroke="none"/>' ),
 	editorProperties: svg( '<rect x="2.5" y="4.5" width="19" height="6" rx="3"/><rect x="2.5" y="13.5" width="19" height="6" rx="3"/><path d="M6 5h6v5H6a2.5 2.5 0 0 1 0-5Zm12 9h-6v5h6a2.5 2.5 0 0 0 0-5Z" fill="currentColor" stroke="none"/>' ),
 	editorAssets: svg( '<path d="m2 20 5-13 3 1-5 13Zm9-16h4v17h-4zm6-2h5v19h-5z" fill="currentColor" stroke="none"/><path d="M19.5 5v12" stroke="var(--theme-surface)"/>' ),
