@@ -29,7 +29,7 @@ function parentingTargets( editor, clearing ) {
 	const active = selection.at( -1 );
 	if ( ! clearing && ( ! editable( active ) || selection.some( object => object !== active && object.getObjectById( active.id ) ) ) ) return [];
 	const roots = selectionRoots( selection.filter( object => clearing || object !== active ) );
-	return roots.filter( object => editable( object ) && object.parent !== ( clearing ? editor.scene : active ) );
+	return roots.filter( object => editable( object ) && ! object.userData.armatureBone && object.parent !== ( clearing ? editor.scene : active ) );
 
 }
 

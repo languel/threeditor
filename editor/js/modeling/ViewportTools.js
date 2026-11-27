@@ -25,6 +25,8 @@ import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, meas
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
 import { StrokeSampler } from './StrokeSampler.js';
 import { interactionModes } from './InteractionModes.js';
+import { armatureOf } from '../rigging/Armature.js';
+import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js';
 import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js';
 
 const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
@@ -64,6 +66,7 @@ export class ViewportTools {
 
 		Object.assign( this, { editor, viewport, layout, render } );
 		this.weightPaint = new ArmatureWeightPaint( this );
+		this.armature = new ArmatureWorkspace( editor, action => this.run( action ) );
 		viewport.addEventListener( 'pointerleave', () => { if ( this.brushCursor ) { this.brushCursor = null; this.draw(); } } );
 		this.mode = '';
 		this.points = [];
@@ -330,6 +333,7 @@ export class ViewportTools {
 		signals.transformSettingsChanged.add( key => {
 
 			if ( key === 'modelPlacement' && this.mode === 'pencil' ) this.buildOptions();
+			if ( key === 'armatureMode' ) { this.buildOptions(); this.refreshWorkspace(); }
 
 		} );
 		signals.sceneRendered.add( () => this.draw() );
@@ -357,9 +361,9 @@ export class ViewportTools {
 			this.syncMaskControls();
 
 		} );
-		signals.editorCleared.add( () => { this.setMode( '' ); this.collectMeasurements(); } );
+		signals.editorCleared.add( () => { this.armature.setMode( '' ); this.setMode( '' ); this.collectMeasurements(); } );
 		signals.projectLoaded.add( () => this.collectMeasurements() );
-		signals.startPlayer.add( () => this.setMode( '' ) );
+		signals.startPlayer.add( () => { this.armature.setMode( '' ); this.setMode( '' ); } );
 		signals.objectRemoved.add( object => {
 
 			const includes = target => target && !! object.getObjectByProperty( 'uuid', target.uuid );
@@ -387,6 +391,18 @@ export class ViewportTools {
 	setWorkspaceMode( mode ) {
 
 		const model = this.editor.modeling;
+		if ( mode === 'edit' && armatureOf( this.editor.selected ) ) mode = 'armature-edit';
+		if ( mode === 'armature-edit' || mode === 'pose' ) {
+
+			if ( this.mode ) this.setMode( '' );
+			if ( model.editMode ) model.setMode( 'object' );
+			model.setSelectionTool( 'select' );
+			this.armature.setMode( mode );
+			this.refreshWorkspace();
+			return;
+
+		}
+		this.armature.setMode( '' );
 		if ( mode === 'weights' ) {
 
 			if ( model.editMode ) model.setMode( 'object' );
@@ -406,7 +422,7 @@ export class ViewportTools {
 
 	toggleWorkspaceMode() {
 
-		this.setWorkspaceMode( this.editor.modeling.editMode ? 'object' : 'edit' );
+		this.setWorkspaceMode( this.editor.modeling.editMode || this.armature.editing ? 'object' : 'edit' );
 
 	}
 
@@ -444,8 +460,20 @@ export class ViewportTools {
 			button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
 
 		}
-		this.modeSelect.querySelector( 'option[value="weights"]' ).disabled = ! this.editor.selected?.userData.armatureBinding;
-		this.modeSelect.value = this.mode === 'weights' ? 'weights' : this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
+		const rig = armatureOf( this.editor.selected );
+		const available = rig && ! hasRestriction( rig, 'locked' ) && ! hasRestriction( rig, 'disabled' );
+		for ( const option of this.modeSelect.options ) {
+
+			if ( [ 'armature-edit', 'pose' ].includes( option.value ) ) {
+
+				option.hidden = ! rig;
+				option.disabled = ! available;
+
+			} else if ( [ 'edit', 'sculpt' ].includes( option.value ) ) option.hidden = !! rig;
+			else if ( option.value === 'weights' ) option.disabled = ! this.editor.selected?.userData.armatureBinding;
+
+		}
+		this.modeSelect.value = this.armature.mode || ( this.mode === 'weights' ? 'weights' : this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object' );
 		this.modeSelect.title = this.modeSelect.selectedOptions[ 0 ].textContent;
 		this.toolButtons.get( 'path' ).hidden = ! edit;
 		this.creation.hidden = this.primary.hidden = ! edit || !! this.mode;
@@ -456,12 +484,13 @@ export class ViewportTools {
 		const pen = model.pen && ! model.adding;
 		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
 		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );
-		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', pencil: 'Pencil', path: 'Surface path', paint: 'Surface paint', weights: 'Weight paint' }[ this.mode ] :
+		const name = this.armature.mode ? this.modeSelect.title : this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', pencil: 'Pencil', path: 'Surface path', paint: 'Surface paint', weights: 'Weight paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( model.sculptBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
 		const [ , selectionLabel, selectionGlyph ] = selectionModes.find( option => option[ 0 ] === model.selectionTool );
 		const selectTool = this.toolButtons.get( '' );
+		selectTool.disabled = !! this.armature.mode;
 		selectTool.innerHTML = icon( selectionGlyph );
 		selectTool.title = selectionLabel + ' · Selection tools';
 		selectTool.setAttribute( 'aria-label', selectTool.title );
@@ -545,6 +574,7 @@ export class ViewportTools {
 
 	setMode( mode ) {
 
+		if ( mode ) this.armature.setMode( '' );
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
 		if ( this.mode === 'weights' ) this.weightPaint.stop();
@@ -656,6 +686,19 @@ export class ViewportTools {
 		const parent = this.controls;
 		this.maskLayers = this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
 		this.cursorFields = null;
+		if ( this.armature.editing ) {
+
+			modelButton( parent, 'Add Bone at Cursor', 'add', () => this.run( () => this.armature.addRoot() ) );
+			modelButton( parent, 'Extrude Bone', 'extrude', () => this.run( () => this.armature.extrude() ) );
+			return;
+
+		}
+		if ( this.armature.mode === 'pose' ) {
+
+			modelButton( parent, 'Clear Pose Transforms', 'undo', () => this.run( () => this.armature.clearPose( 'all' ) ) );
+			return;
+
+		}
 		if ( ! this.mode ) return;
 		if ( this.mode === 'weights' ) {
 

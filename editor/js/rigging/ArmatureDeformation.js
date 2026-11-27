@@ -248,13 +248,13 @@ function deform( THREE, object, rig, entry ) {
 
 // Scope the posed geometry to presentation and ray queries. Modeling tools and
 // scene serialization can continue to use the original editable rest geometry.
-export function withArmatureDeformation( THREE, scene, draw, skip = null ) {
+export function withArmatureDeformation( THREE, scene, draw, skip = null, skipRig = null ) {
 
-	return withArmatureIK( THREE, scene, () => withWeightedPose( THREE, scene, draw, skip ) );
+	return withArmatureIK( THREE, scene, () => withWeightedPose( THREE, scene, draw, skip, skipRig ), skipRig );
 
 }
 
-function withWeightedPose( THREE, scene, draw, skip ) {
+function withWeightedPose( THREE, scene, draw, skip, skipRig ) {
 
 	if ( activeScenes.has( scene ) ) return draw();
 	activeScenes.add( scene );
@@ -270,7 +270,7 @@ function withWeightedPose( THREE, scene, draw, skip ) {
 				return;
 
 			}
-			if ( object === skip || ! canDeformWithArmature( object ) || hasRestriction( object, 'disabled' ) ) return;
+			if ( object === skip || binding.rig === skipRig?.uuid || ! canDeformWithArmature( object ) || hasRestriction( object, 'disabled' ) ) return;
 			if ( ! Array.isArray( binding.objectToRig ) || binding.objectToRig.length !== 16 || ! binding.objectToRig.every( Number.isFinite ) ||
 				! Number.isInteger( binding.influences ) || binding.influences < 1 || binding.influences > 4 ) return;
 			const rig = scene.getObjectByProperty( 'uuid', binding.rig );

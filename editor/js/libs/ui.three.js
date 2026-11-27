@@ -375,6 +375,7 @@ class UIOutliner extends UIDiv {
 			if ( newParentIsChild ) return;
 
 			const editor = scope.editor;
+			if ( object.userData.armatureBone && object.parent !== newParent ) return;
 			editor.execute( new MoveObjectCommand( editor, object, newParent, nextObject ) );
 
 			const changeEvent = new Event( 'change', { bubbles: true, cancelable: true } );

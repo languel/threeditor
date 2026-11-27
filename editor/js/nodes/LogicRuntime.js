@@ -1,4 +1,4 @@
-import { armatureOf, findBone, resetBoneTransform } from '../rigging/Armature.js';
+import { armatureOf, bonePoseOffsets, bonePoseTransform, findBone, resetBoneTransform } from '../rigging/Armature.js';
 import { withArmatureIK } from '../rigging/ArmatureIK.js';
 import { armatureVertexWeights, weightsForVertexEdits } from '../rigging/ArmatureDeformation.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
@@ -146,6 +146,14 @@ export class LogicRuntime {
 				} );
 
 			}
+			case 'logic.bonePose': {
+
+				const bone = this.target( instance, inputs.target );
+				const pose = bone && bonePoseOffsets( this.THREE, bone );
+				return pose ? { ...pose, rotation: pose.rotation.map( value => value / degrees ) } :
+					{ location: [ 0, 0, 0 ], rotation: [ 0, 0, 0 ], scale: [ 1, 1, 1 ] };
+
+			}
 			case 'logic.boolean': return { value: inputs.value };
 			case 'logic.string': return { value: inputs.value };
 			case 'logic.eventValue': return { value: numeric( context.detail?.value ?? context.detail, inputs.fallback ) };
@@ -278,6 +286,22 @@ export class LogicRuntime {
 
 				}
 				break;
+			case 'logic.setBonePose': {
+
+				if ( ! object.isBone || object.userData.armaturePhysics?.mode === 'dynamic' ) return;
+				const offsets = { location: inputs.location, rotation: inputs.rotation.map( value => value * degrees ), scale: inputs.scale };
+				const channel = inputs.channels.toLowerCase();
+				const pose = bonePoseTransform( this.THREE, object, channel === 'all' ? offsets : { [ channel ]: offsets[ channel ] } );
+				if ( pose ) {
+
+					object.position.copy( pose.position );
+					object.quaternion.copy( pose.quaternion );
+					object.scale.copy( pose.scale );
+
+				}
+				break;
+
+			}
 			case 'logic.boneImpulse':
 				this.physics?.impulse( object, inputs.impulse );
 				break;

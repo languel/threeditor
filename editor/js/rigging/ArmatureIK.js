@@ -239,16 +239,16 @@ function solve( THREE, entry, snapshots ) {
 
 // Keep authored rotations separate from the evaluated pose used by rendering,
 // picking, graph queries and kinematic physics.
-export function withArmatureIK( THREE, scene, evaluate ) {
+export function withArmatureIK( THREE, scene, evaluate, skipRig = null ) {
 
 	if ( solving.has( scene ) ) return evaluate();
 	const entries = orderedConstraints( scene );
-	if ( ! entries.length ) return evaluate();
+	if ( ! entries.length && ! skipRig ) return evaluate();
 	const snapshots = new Map();
 	solving.add( scene );
 	try {
 
-		for ( const entry of entries ) solve( THREE, entry, snapshots );
+		for ( const entry of entries ) if ( ! skipRig || armatureOf( entry.owner ) !== skipRig ) solve( THREE, entry, snapshots );
 		scene.updateMatrixWorld( true );
 		return evaluate();
 
