@@ -1,6 +1,7 @@
-import { addNode, connectNodes, createGraph, dataflowOrder, evaluateDataflow, planDataflow } from './NodeGraph.js';
+import { addNode, connectNodes, createGraph, dataflowOrder, evaluateDataflow, planDataflow, validateSocketValue } from './NodeGraph.js';
 import { numberInput, VALUE_NODES, VALUE_OPERATIONS } from './ValueNodes.js';
 import { joinGeometry } from './GeometryOperations.js';
+import { attributeInput, FIELD_NODES, FIELD_OPERATIONS, fieldInput, forEachVertex, sampleField, validAttributeName } from './GeometryFields.js';
 
 export const GEOMETRY_MODIFIER = 'GEOMETRY_NODES';
 const sourceType = 'geometry.input';
@@ -16,6 +17,7 @@ const size = label => numberInput( label, 1, .0001, 1e6 );
 const numberOutput = label => ( { label, type: 'number' } );
 const stateOutputs = { ...geometry, value: numberOutput( 'Value' ) };
 const stateInputs = { ...geometry, value: numberInput( 'Value' ) };
+const axes = [ 'x', 'y', 'z' ];
 
 const geometryNodes = [
 	[ 'geometry.box', {
@@ -42,6 +44,14 @@ const geometryNodes = [
 		label: 'Set Material Index', category: 'Geometry', outputs: geometry,
 		inputs: { ...geometry, index: numberInput( 'Material Index', 0, 0, 65535 ) }
 	} ],
+	[ 'geometry.setPosition', {
+		label: 'Set Position', category: 'Geometry', outputs: geometry,
+		inputs: { ...geometry, selection: fieldInput( 'Selection', 1 ), x: fieldInput( 'Offset X' ), y: fieldInput( 'Offset Y' ), z: fieldInput( 'Offset Z' ) }
+	} ],
+	[ 'geometry.storeAttribute', {
+		label: 'Store Named Attribute', category: 'Geometry', outputs: geometry,
+		inputs: { ...geometry, ...attributeInput, value: fieldInput( 'Value' ) }
+	} ],
 	[ 'geometry.transform', {
 		label: 'Transform Geometry', category: 'Geometry', outputs: geometry,
 		inputs: {
@@ -54,7 +64,8 @@ const geometryNodes = [
 		label: 'Repeat', category: 'Zones', inputs: { ...stateInputs, count: numberInput( 'Iterations', 5, 0, 128 ) }, outputs: stateOutputs,
 		bodyDomain: () => REPEAT_BODY_DOMAIN
 	} ],
-	...VALUE_NODES
+	...VALUE_NODES,
+	...FIELD_NODES
 ];
 
 const REPEAT_BODY_DOMAIN = {
@@ -192,6 +203,7 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 	}
 	const operations = new Map( [
 		...VALUE_OPERATIONS,
+		...FIELD_OPERATIONS,
 		[ sourceType, () => ( { geometry: source } ) ],
 		[ 'geometry.box', ( { width, height, depth } ) => primitive( new THREE.BoxGeometry( width, height, depth ) ) ],
 		[ 'geometry.sphere', ( { radius, segments, rings } ) => primitive( new THREE.SphereGeometry( radius, Math.round( segments ), Math.round( rings ) ) ) ],
@@ -210,6 +222,54 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 			const output = copy( geometry );
 			output.clearGroups();
 			output.addGroup( 0, output.index?.count ?? output.attributes.position.count, Math.round( index ) );
+			return { geometry: output };
+
+		} ],
+		[ 'geometry.setPosition', inputs => {
+
+			const output = copy( inputs.geometry );
+			const positions = new Float32Array( output.attributes.position.count * 3 );
+			forEachVertex( THREE, inputs.geometry, element => {
+
+				const values = element.position;
+				const selected = sampleField( inputs.selection, element ) > 0;
+				for ( let i = 0; i < axes.length; i ++ ) {
+
+					const axis = axes[ i ];
+					const value = values[ axis ] + ( selected ? sampleField( inputs[ axis ], element ) : 0 );
+					const distance = Math.fround( value );
+					if ( ! Number.isFinite( distance ) ) throw new Error( 'Set Position produced a position outside the supported range.' );
+					positions[ element.index * 3 + i ] = distance;
+
+				}
+
+			} );
+			output.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+			output.computeVertexNormals();
+			output.computeBoundingBox();
+			output.computeBoundingSphere();
+			return { geometry: output };
+
+		} ],
+		[ 'geometry.storeAttribute', ( { geometry, name, value } ) => {
+
+			const existing = Object.hasOwn( geometry.attributes, name ) && geometry.getAttribute( name );
+			if ( ! validAttributeName( name ) || [ 'position', 'normal', 'tangent', 'color', 'skinIndex', 'skinWeight' ].includes( name ) ||
+				/^uv\d*$/.test( name ) || ( existing && existing.itemSize !== 1 ) ) {
+
+				throw new Error( 'Choose a custom scalar attribute name.' );
+
+			}
+			const output = copy( geometry );
+			const values = new Float32Array( output.attributes.position.count );
+			forEachVertex( THREE, geometry, element => {
+
+				const sample = Math.fround( sampleField( value, element ) );
+				if ( ! Number.isFinite( sample ) ) throw new Error( 'An attribute value is outside the supported range.' );
+				values[ element.index ] = sample;
+
+			} );
+			output.setAttribute( name, new THREE.BufferAttribute( values, 1 ) );
 			return { geometry: output };
 
 		} ],
@@ -265,6 +325,11 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 
 			}
 			return operations.get( node.type )( inputs );
+
+		}, ( value, socket ) => {
+
+			if ( socket.type !== 'field' ) validateSocketValue( value, socket );
+			else if ( typeof value !== 'function' ) throw new Error( socket.label + ' needs a geometry field.' );
 
 		} );
 

@@ -1,5 +1,6 @@
 import { addNode, connectNodes, createGraph, dataflowOrder, evaluateDataflow, planDataflow } from './NodeGraph.js';
 import { numberInput, VALUE_NODES } from './ValueNodes.js';
+import { attributeInput, validAttributeName } from './GeometryFields.js';
 
 const outputType = 'shader.output';
 const socket = ( label, type, optional = false ) => ( { label, type, optional } );
@@ -60,6 +61,10 @@ export const SHADER_DOMAIN = {
 		[ 'shader.checker', patternNode( 'Checker', 6 ) ],
 		[ 'shader.noise', patternNode( 'Perlin Noise', 5 ) ],
 		[ 'shader.baseMap', { label: 'Base Color Texture', category: 'Textures', inputs: { uv: inputUV }, outputs: color } ],
+		[ 'shader.attribute', {
+			label: 'Named Attribute', category: 'Coordinates',
+			inputs: { ...attributeInput, fallback: numberInput( 'Fallback' ) }, outputs: numeric
+		} ],
 		[ 'shader.mixColor', {
 			label: 'Mix Color', category: 'Color', outputs: color,
 			inputs: { a: colorInput( 'A', '#2856a0' ), b: colorInput( 'B', '#f9bc55' ), factor: factors.factor }
@@ -116,6 +121,13 @@ export function compileShaderGraph( tsl, graph, material ) {
 		[ 'shader.checker', values => ( { value: tsl.checker( uv( values.uv ).mul( values.scale ) ) } ) ],
 		[ 'shader.noise', values => ( { value: tsl.mx_noise_float( uv( values.uv ).mul( values.scale ), .5, .5 ).clamp( 0, 1 ) } ) ],
 		[ 'shader.baseMap', values => ( { color: material.map ? tsl.texture( material.map, uv( values.uv ) ).rgb : tsl.color( 0xffffff ) } ) ],
+		[ 'shader.attribute', ( { name, fallback } ) => {
+
+			if ( ! validAttributeName( name ) ) throw new Error( 'Use letters, digits, and underscores for an attribute name.' );
+			return { value: tsl.Fn( ( _, builder ) => builder.hasGeometryAttribute( name ) &&
+				builder.geometry.getAttribute( name ).itemSize === 1 ? tsl.attribute( name, 'float' ) : tsl.float( fallback ) )() };
+
+		} ],
 		[ 'shader.mixColor', ( { a, b, factor } ) => ( { color: tsl.mix( asColor( a ), asColor( b ), factor ) } ) ],
 		[ 'shader.tint', ( { a, b } ) => ( { color: tsl.mul( asColor( a ), asColor( b ) ) } ) ],
 		[ 'shader.grayscale', ( { value } ) => ( { color: tsl.vec3( value ) } ) ],

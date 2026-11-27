@@ -63,7 +63,7 @@ export function validateSocketValue( value, socket ) {
 		throw new Error( socket.label + ' must be text within ' + ( socket.maxLength ?? 256 ) + ' characters.' );
 
 	}
-	if ( socket.type === 'number' ) {
+	if ( socket.type === 'number' || socket.type === 'field' ) {
 
 		if ( ! Number.isFinite( value ) ) throw new Error( socket.label + ' must be a finite number.' );
 		if ( value < socket.min || value > socket.max ) {
