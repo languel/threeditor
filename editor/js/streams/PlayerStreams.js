@@ -1,4 +1,5 @@
 import { LOGIC_DOMAIN } from '../nodes/LogicNodes.js';
+import { expandNodeGroups } from '../nodes/NodeGroups.js';
 import { MidiDevice, SerialDevice, bindDeviceOutputs } from './DeviceStreams.js';
 import { MediaStreams } from './MediaStreams.js';
 
@@ -40,7 +41,8 @@ function playerStreamNeeds( scene ) {
 
 	scene.traverse( object => {
 
-		const graph = object.userData?.logicGraph;
+		let graph = object.userData?.logicGraph;
+		try { graph = expandNodeGroups( graph, LOGIC_DOMAIN ); } catch { /* The player reports invalid graphs when loading Logic Nodes. */ }
 		for ( const node of Array.isArray( graph?.nodes ) ? graph.nodes : [] ) {
 
 			if ( ! node || node.muted || ! LOGIC_DOMAIN.nodes.has( node.type ) ) continue;

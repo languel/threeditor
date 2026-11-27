@@ -1,4 +1,5 @@
 import { addNode, connectNodes, createGraph, dataflowOrder, evaluateDataflow, planDataflow } from './NodeGraph.js';
+import { expandNodeGroups } from './NodeGroups.js';
 import { numberInput, shaderValueOperations, VALUE_NODES } from './ValueNodes.js';
 import { attributeInput, validAttributeName } from './GeometryFields.js';
 
@@ -142,6 +143,7 @@ export function createShaderGraph( hex = '#ffffff' ) {
 
 export function compileShaderGraph( tsl, graph, material ) {
 
+	graph = expandNodeGroups( graph, SHADER_DOMAIN );
 	const outputs = Array.isArray( graph?.nodes ) ? graph.nodes.filter( node => node?.type === outputType ) : [];
 	if ( outputs.length !== 1 ) throw new Error( 'A shader graph needs one Material Output.' );
 	const plan = planDataflow( graph, SHADER_DOMAIN, outputs[ 0 ].id );

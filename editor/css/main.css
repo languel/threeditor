@@ -3020,6 +3020,8 @@ body[data-ui-style="compact"] .modeling-coordinates .model-control-label { displ
 }
 .node-graph-toolbar :is(button, select) { min-height: 25px; }
 .node-graph-scope { font-weight: 600; }
+.node-graph-group-name { width: 120px; }
+.node-graph-row input.node-graph-interface-name { width: 100%; min-width: 0; }
 .node-graph-open-body { margin: 4px 7px 0; }
 .node-graph-status {
 	flex: none;

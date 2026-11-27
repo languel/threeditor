@@ -21,6 +21,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A stream-reactive sculpture | A stream sample drives a sculpture's scale. The starter graph generates its own signal. |
 | — | A tapered curve sweep | A circle profile follows a spiral and shrinks along the path. |
 | — | A pointer and gamepad control deck | A switch responds to hover, clicks, or controller input. A deck marker follows pointer hits and joystick movement. |
+| — | Reusable ripple groups | Two geometry instances share a ripple formula, a shader group colors the heights, and a logic group turns the surface. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -104,3 +105,10 @@ opened from the library.
 2. Stop and select **Beacon switch** in **Logic Nodes**. **Pointer Over Object** sets the highlight and restores its color on exit. **On Object Press** and **Gamepad Button** feed **Merge Events**, so either input toggles the same beacon.
 3. Open the graph on **Navigation deck**. **On Object Press** gates **Set Position by Vector**, which takes the world-space point from **Pointer Ray**. The final **Move** raises the marker above the deck.
 4. Play again. With a standard gamepad connected, use its bottom face button to toggle the beacon and its left stick to move the marker. In the marker graph, **Scene Time → Delta Seconds** makes the movement independent of frame rate. Try changing **Dead Zone** or the speed coefficient in either math expression. A pointer is enough to complete the first three steps.
+
+### Reuse a node group
+
+1. Open **Reusable ripple groups**, select **Ripple panel**, and open **Geometry Nodes**. The two **Ripple pass** instances read X and Z, respectively. Change **Amplitude** on one instance to change the ripple along that axis.
+2. Select a **Ripple pass** card and press **Tab**. Change the **Math Expression Field** formula from `sin(5*x) * y` to `sin(3*x) * y`. Both instances pick up the new wavelength. Press **Ctrl+Tab** to return.
+3. Open **Shader Graph** and edit **Elevation colors**. The group maps local height into the blend between two colors. In **Logic Nodes**, two **Turn panel** instances take different yaw angles. Choose **Play Scene** and use the left and right arrow keys to trigger them.
+4. To make your own group, select connected nodes and press **Ctrl/Cmd+G**. Check the sockets on the Group Input and Group Output cards. Press **Shift+A** in the parent graph and search for the group's name to add another instance.
