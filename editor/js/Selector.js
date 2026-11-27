@@ -2,6 +2,7 @@ import { hitPencilStroke, isPencilStroke } from './modeling/PencilSelection.js';
 import { worldMeasurePoints } from './modeling/Measurements.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
 
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
@@ -148,7 +149,9 @@ class Selector {
 
 		} );
 
-		return raycaster.intersectObjects( objects, false ).filter( hit => {
+		const model = this.editor.modeling;
+		const hits = withArmatureDeformation( THREE, this.editor.scene, () => raycaster.intersectObjects( objects, false ), model?.editMode ? model.object : null );
+		return hits.filter( hit => {
 
 			const object = ( hit.object.userData.nodeComponentOutput ? hit.object.parent : hit.object.userData.object ) || hit.object;
 			return isVisible( object ) && ! hasRestriction( object, 'unselectable' );
@@ -171,7 +174,7 @@ class Selector {
 		const pencilHits = [];
 		this.editor.scene.traverseVisible( object => {
 
-			if ( exact.has( object ) || object.userData.runtimeOnly || ! isPencilStroke( object ) ||
+			if ( exact.has( object ) || object.userData.runtimeOnly || object.userData.armatureBinding || ! isPencilStroke( object ) ||
 				! isVisible( object ) || hasRestriction( object, 'unselectable' ) ) return;
 			const at = hitPencilStroke( object, camera, rect.width, rect.height, cursor.toArray() );
 			if ( ! at ) return;

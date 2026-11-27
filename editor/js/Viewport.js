@@ -3,6 +3,7 @@ import { createEditWorkspace } from './modeling/EditWorkspace.js?v=transform-giz
 import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
+import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
@@ -1186,6 +1187,7 @@ function Viewport( editor ) {
 				}
 
 				case 'SkeletonHelper':
+				case 'ArmatureBoneHelper':
 
 				{
 
@@ -1334,7 +1336,8 @@ function Viewport( editor ) {
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
 		const active = editor.selected;
 		const mask = () => host.render( renderer, scene,
-			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () => renderer.render( scene, view ) ) ), queueSplatRender );
+			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () =>
+				withArmatureDeformation( THREE, scene, () => renderer.render( scene, view ) ) ) ), queueSplatRender );
 		withViewportObjects( scene, () => {
 
 			selectionOutline.draw( renderer, scene, view, roots.filter( object => object !== active ), mask );
@@ -1364,7 +1367,7 @@ function Viewport( editor ) {
 				scene.traverseVisible( object => {
 
 					if ( renderedFallback || ! isVisible( object ) || object.userData.annotation === true ) return;
-					if ( object.splats || object.isPoints || isProjector( object ) ) renderedFallback = true;
+					if ( object.splats || object.isPoints || object.userData.armatureBinding || isProjector( object ) ) renderedFallback = true;
 					else if ( object.isLine || object.isSprite ||
 						[ object.material ].flat().some( material => material?.isShaderMaterial ) ) renderedFallback = true;
 
@@ -1406,7 +1409,8 @@ function Viewport( editor ) {
 		const shading = editorView && editor.viewportXRay ? 'xray' : editor.viewportShading;
 		visibility( scene, () => host.render( renderer, scene, () => withViewportShading( scene, shading, () => {
 
-			const raster = () => model.withPreview( () => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) ) );
+			const raster = () => model.withPreview( () => withArmatureDeformation( THREE, scene,
+				() => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) ), model.editMode ? model.object : null ) );
 			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 			else raster();
 

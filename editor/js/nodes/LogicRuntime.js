@@ -1,3 +1,4 @@
+import { armatureOf, findBone, resetBoneTransform } from '../rigging/Armature.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
 import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
@@ -115,6 +116,17 @@ export class LogicRuntime {
 			case 'logic.clock': return { elapsed: this.time, delta: this.delta };
 			case 'logic.object': return { object: inputs.object };
 			case 'logic.host': return { object: instance.owner.uuid };
+			case 'logic.bone': {
+
+				let rig;
+				for ( let object = this.target( instance, inputs.armature ); object && ! rig; object = object.parent ) rig = armatureOf( object );
+				const bone = findBone( rig, inputs.name.trim() );
+				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return { object: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ] };
+				const head = bone.getWorldPosition( this.motion ).toArray();
+				const tail = bone.localToWorld( this.motion.set( 0, bone.userData.armatureBone?.length ?? 1, 0 ) ).toArray();
+				return { object: bone.uuid, found: true, head, tail };
+
+			}
 			case 'logic.boolean': return { value: inputs.value };
 			case 'logic.string': return { value: inputs.value };
 			case 'logic.eventValue': return { value: numeric( context.detail?.value ?? context.detail, inputs.fallback ) };
@@ -239,6 +251,9 @@ export class LogicRuntime {
 		const { x, y, z, local } = inputs;
 		switch ( node.type ) {
 
+			case 'logic.resetBone':
+				if ( object.isBone ) resetBoneTransform( object );
+				break;
 			case 'logic.move':
 				this.motion.set( x, y, z );
 				if ( local ) this.motion.applyQuaternion( object.quaternion );

@@ -39,7 +39,7 @@ export function canParentSelection( editor, clearing ) {
 
 }
 
-function keepWorldTransform( object, parent ) {
+export function keepWorldTransform( object, parent ) {
 
 	if ( ! object.matrixAutoUpdate ) throw new Error( 'Keep Transform requires editable location, rotation, and scale.' );
 	parent.updateWorldMatrix( true, false );

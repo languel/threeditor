@@ -13,6 +13,8 @@ import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
+import { armatureBones, boneRestTail, isArmature } from './rigging/Armature.js';
+import { addRigBone, attachToBone, bindArmature, createRig, editBoneRest, resetArmaturePose } from './rigging/ArmatureTools.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -25,6 +27,88 @@ function AgentAPI( editor ) {
  const add=(name,description,properties,required,run,readOnly=false)=>tools.push({name:'threeditor_'+name,description,inputSchema:{type:'object',properties,required,additionalProperties:false},run,readOnly});
  const str={type:'string'},vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
  function vector(v){if(!Array.isArray(v)||v.length!==3||v.some(n=>typeof n!=='number'||!Number.isFinite(n)))throw new Error('Expected three finite numbers');return v;}
+ const restVector = description => ( { ...vec, description } );
+ const float = description => ( { type: 'number', description } );
+ function describeBone( bone ) {
+
+  const rest = bone.userData.armatureBone;
+  return {
+   uuid: bone.uuid, name: bone.name, parent: bone.parent?.uuid, attached: bone.children.filter( child => ! child.isBone && ! child.userData.runtimeOnly ).map( child => child.uuid ),
+   position: bone.position.toArray(), rotation: bone.rotation.toArray().slice( 0, 3 ), scale: bone.scale.toArray(),
+   rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, connected: rest.connected } : null
+  };
+
+ }
+ add( 'armature_create', 'Create a rest-pose armature with one root bone. Selects the new armature and supports undo.', {
+  name: { ...str, description: 'Name for the armature object.' },
+  position: restVector( 'World location for the armature origin. Defaults to the 3D cursor.' )
+ }, [], a => {
+
+  const rig = createRig( editor, a.name, a.position );
+  return { uuid: rig.uuid, name: rig.name, bones: armatureBones( rig ).map( describeBone ) };
+
+ } );
+ add( 'armature_get', 'Inspect an armature’s bone hierarchy, rest and current pose transforms, and attached scene objects.', {
+  uuid: { ...str, description: 'Armature object UUID.' }
+ }, [ 'uuid' ], a => {
+
+  const rig = object( a.uuid );
+  if ( ! isArmature( rig ) ) throw new Error( 'Expected an authored armature object.' );
+  return { uuid: rig.uuid, name: rig.name, bones: armatureBones( rig ).map( describeBone ) };
+
+ }, true );
+ add( 'bone_add', 'Insert a root bone or extrude a child from an existing bone’s tail. Selects the new bone and supports undo.', {
+  armature: { ...str, description: 'Armature object UUID.' },
+  parent: { ...str, description: 'Parent bone UUID. Omit for a root bone.' },
+  name: { ...str, description: 'Bone name. Identical names receive a numeric suffix.' },
+  head: restVector( 'Rest head in parent-local space. Omit to start at the parent bone tail or armature origin.' ),
+  tail: restVector( 'Rest tail in parent-local space. Defaults to one unit along local Y from the head.' ),
+  roll: float( 'Rest roll in radians about the bone’s local Y axis.' )
+ }, [ 'armature' ], a => describeBone( addRigBone( editor, object( a.armature ), {
+  parent: a.parent === undefined ? undefined : object( a.parent ), name: a.name, head: a.head, tail: a.tail, roll: a.roll
+ } ) ) );
+ add( 'bone_edit_rest', 'Edit a bone’s rest endpoints and roll while preserving its pose offset. Supports undo.', {
+  uuid: { ...str, description: 'Authored bone UUID.' },
+  head: restVector( 'Rest head in parent-local space.' ),
+  tail: restVector( 'Rest tail in parent-local space.' ),
+  roll: float( 'Rest roll in radians about the bone’s local Y axis.' )
+ }, [ 'uuid' ], a => {
+
+  const bone = object( a.uuid );
+  editBoneRest( editor, bone, a );
+  return describeBone( bone );
+
+ } );
+ add( 'armature_reset_pose', 'Restore the rest transforms on one bone or all bones in an armature. Supports undo.', {
+  uuid: { ...str, description: 'Armature or bone UUID.' }
+ }, [ 'uuid' ], a => {
+
+  resetArmaturePose( editor, object( a.uuid ) );
+  return { uuid: a.uuid };
+
+ } );
+ add( 'bone_attach', 'Parent a scene object to a bone, or clear its bone parent. Supports meshes, strokes, curves, lights, cameras, and other scene objects.', {
+  uuid: { ...str, description: 'Object to attach or detach.' },
+  bone: { ...str, description: 'Target bone UUID. Omit to clear the bone parent.' },
+  keepWorld: { type: 'boolean', description: 'Preserve the object’s world transform at the time of parenting. Defaults to true.' }
+ }, [ 'uuid' ], a => {
+
+  const child = object( a.uuid );
+  attachToBone( editor, child, a.bone === undefined ? null : object( a.bone ), a.keepWorld );
+  return { uuid: child.uuid, parent: child.parent?.uuid };
+
+ } );
+ add( 'armature_bind', 'Bind editable geometry to an armature with distance-based weights. Supports meshes, strokes, curves, and points. Omit the armature UUID to clear the binding.', {
+  uuid: { ...str, description: 'Geometry object UUID.' },
+  armature: { ...str, description: 'Armature object UUID. Omit to clear the binding.' },
+  influences: { type: 'integer', minimum: 1, maximum: 4, description: 'Maximum number of bones per vertex. Defaults to four.' }
+ }, [ 'uuid' ], a => {
+
+  const target = object( a.uuid );
+  bindArmature( editor, target, a.armature === undefined ? null : object( a.armature ), a.influences );
+  return { uuid: target.uuid, binding: target.userData.armatureBinding || null };
+
+ } );
  add('state','Inspect the scene hierarchy, selection, camera, renderer, keymap and editor state.',{},[],()=>{const objects=[];editor.scene.traverse(o=>objects.push(describe(o)));return {objects,selection:editor.selector.selection.map(o=>o.uuid),editorCamera:describe(editor.camera),viewportCamera:editor.viewportCamera.uuid,shading:editor.viewportShading,renderer:editor.config.getKey('project/renderer/type'),projectTitle:editor.config.getKey('project/title'),keymap:editor.keymap.preset,errors:errors.slice(-20)};},true);
  add('object_get','Inspect a scene object by UUID.',{uuid:str},['uuid'],a=>describe(object(a.uuid)),true);
  add('object_create','Create an ordinary three.js primitive, group, camera or light as an undoable editor action.',{type:{type:'string',enum:['box','sphere','plane','cylinder','cone','group','perspectiveCamera','orthographicCamera','ambientLight','directionalLight','pointLight']},name:str,position:vec},['type'],a=>{const constructors={box:()=>new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()),sphere:()=>new THREE.Mesh(new THREE.SphereGeometry(.5,32,16),new THREE.MeshStandardMaterial()),plane:()=>new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshStandardMaterial()),cylinder:()=>new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,32),new THREE.MeshStandardMaterial()),cone:()=>new THREE.Mesh(new THREE.ConeGeometry(.5,1,32),new THREE.MeshStandardMaterial()),group:()=>new THREE.Group(),perspectiveCamera:()=>new THREE.PerspectiveCamera(50,1,.1,2000),orthographicCamera:()=>new THREE.OrthographicCamera(-5,5,5,-5,.1,2000),ambientLight:()=>new THREE.AmbientLight(0xffffff,1),directionalLight:()=>new THREE.DirectionalLight(0xffffff,1),pointLight:()=>new THREE.PointLight(0xffffff,1)};if(!constructors[a.type])throw new Error('Unknown object type');const o=constructors[a.type]();o.name=a.name||a.type;if(a.position)o.position.fromArray(vector(a.position));editor.execute(new AddObjectCommand(editor,o));return describe(o);});

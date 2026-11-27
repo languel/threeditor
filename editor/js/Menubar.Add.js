@@ -10,6 +10,7 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { meshPrimitives } from './modeling/MeshPrimitives.js?v=uv-sculpt';
 import { createEmpty, emptyDisplays } from './modeling/ReferenceObjects.js';
 import { addEmptyImage, chooseImageReference, chooseReferenceFile } from './assets/ReferenceAssets.js';
+import { createRig } from './rigging/ArmatureTools.js';
 
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
@@ -290,7 +291,8 @@ function MenubarAdd( editor ) {
 
 	}, cameras.label ) );
 
-	editor.sceneAddMenu = { label, actions, items: [ mesh, curve, text, sprite, empty, image, references, lights, cameras, group ] };
+	const armature = add( 'Armature', () => createRig( editor ) );
+	editor.sceneAddMenu = { label, actions, items: [ mesh, curve, text, sprite, armature, empty, image, references, lights, cameras, group ] };
 
 	const container = new UIPanel().setClass( 'menu scene-add-menu' );
 	container.dom.dataset.sceneAddMenu = 'true';

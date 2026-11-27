@@ -59,6 +59,14 @@ Use **Add → Empty** to place an axes, arrow, circle, cube, sphere, or cone han
 
 In **Build mesh** or **Polybuild**, choose **Surface / reference** as the placement. New points use the closest visible mesh, point-cloud sample, or splat hit under the cursor. **Face project** also uses those hits when snapping an existing selection. Keep the reference visible with viewport overlays and hide any object covering the surface you want to use. Reference guides are excluded from scene playback.
 
+## Armatures
+
+Choose **Add → Armature** to create a rig with one root bone at the 3D cursor. Use the **Armature** properties tab to select a bone, add a root, or extrude a child from the selected bone’s tail. **Rest Head**, **Rest Tail**, and **Roll** describe the bone in its parent’s local space. Moving the bone with the regular transform tools changes its pose. **Reset Pose** restores the selected bone or the whole armature to its saved rest transforms. [Blender armature and rest pose reference](https://docs.blender.org/manual/en/2.81/animation/armatures/introduction.html)
+
+To keep an object rigid as the rig moves, select it and then add the desired bone to the selection so the bone is active. Press **Ctrl+P** and choose **Bone (Keep Transform)**. This also works for curves, pencil strokes, lights, cameras, and empties. For weighted deformation, select a mesh, stroke, curve, or point cloud, choose a rig in its **Armature** tab, and click **Bind Automatic Weights**. The binding blends one to four bones by distance to their rest segments. Edit Mode shows the original geometry, and Play uses the deformed geometry.
+
+In Logic Nodes, **Armature Bone** finds a bone by name or UUID and exposes its world-space head and tail. Connect its **Bone** socket to a transform action or **Reset Bone Pose**. The editor API and WebMCP expose the same authoring operations as `threeditor_armature_create`, `threeditor_armature_get`, `threeditor_bone_add`, `threeditor_bone_edit_rest`, `threeditor_armature_reset_pose`, `threeditor_bone_attach`, and `threeditor_armature_bind`. [Bending signal flag tutorial](../editor/examples/lessons/README.md#rig-a-bending-signal-flag)
+
 ## Stock material looks
 
 Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. Switch to **Preview** to see the shader. Look parameters appear below the selector and include fill color, ink color, and outline width. Click a diamond to keyframe a parameter. On a group with a common look, edits and keys apply to all its mesh material slots.

@@ -98,6 +98,12 @@ export const LOGIC_DOMAIN = {
 		} ],
 		[ 'logic.object', { label: 'Object', category: 'Values', inputs: { object: target }, outputs: { object: { label: 'Object', type: 'object' } } } ],
 		[ 'logic.host', { label: 'Host Object', category: 'Values', outputs: { object: { label: 'Object', type: 'object' } } } ],
+		[ 'logic.bone', {
+			label: 'Armature Bone', category: 'Rigging',
+			inputs: { armature: object( 'Armature' ), name: text( 'Bone Name or UUID', 'Bone' ) },
+			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ) }
+		} ],
+		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
 		[ 'logic.boolean', { label: 'Boolean', category: 'Values', inputs: { value: flag( 'Value' ) }, outputs: condition } ],
 		[ 'logic.string', { label: 'Text', category: 'Values', inputs: { value: text( 'Text' ) }, outputs: stringOutput } ],
 		[ 'logic.eventValue', { label: 'Event Value', category: 'Values', inputs: { fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],
