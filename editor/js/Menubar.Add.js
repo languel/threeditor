@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { UIPanel, UIRow } from './libs/ui.js';
+import { UIPanel } from './libs/ui.js';
 
 import { projectorScript } from './assets/Projector.js?v=projector-shadows';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
@@ -24,98 +24,53 @@ function MenubarAdd( editor ) {
 
 	};
 
-	const container = new UIPanel();
-	container.setClass( 'menu' );
-	container.dom.dataset.sceneAddMenu = 'true';
+	const label = strings.getKey( 'menubar/add' );
+	const actions = [];
+	function add( name, run, section = label, primitive = false ) {
 
-	const title = new UIPanel();
-	title.setClass( 'title' );
-	title.setTextContent( strings.getKey( 'menubar/add' ) );
-	title.dom.dataset.glyphKey = 'menubar/add';
-	container.add( title );
-
-	const options = new UIPanel();
-	options.setClass( 'options' );
-	container.add( options );
-
-	// Group
-
-	let option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/group' ) );
-	option.onClick( function () {
-
-		const mesh = new THREE.Group();
-		mesh.name = 'Group';
-
-		editor.execute( atCursor( mesh ) );
-
-	} );
-	options.add( option );
-
-	function submenu( label, actions ) {
-
-		const title = new UIRow().setTextContent( label ).addClass( 'option' ).addClass( 'submenu-title' );
-		const menu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
-		title.add( menu );
-		title.onMouseOver( () => {
-
-			const { top, right } = title.dom.getBoundingClientRect();
-			menu.setLeft( right + 'px' ).setTop( Math.min( top, window.innerHeight - actions.length * 28 - 8 ) + 'px' ).setDisplay( 'block' );
-
-		} );
-		title.onMouseOut( () => menu.setDisplay( 'none' ) );
-		for ( const [ text, run ] of actions ) menu.add( new UIRow().setClass( 'option' ).setTextContent( text ).onClick( run ) );
-		options.add( title );
+		const available = () => ! editor.modeling.editMode || ( primitive && editor.modeling.canInsertPrimitive );
+		const action = { label: name, section, available, run: () => { if ( available() ) run(); } };
+		actions.push( action );
+		return action;
 
 	}
 
-	submenu( 'Empty', emptyDisplays.map( ( [ style, name ] ) => [ name, () => editor.execute( atCursor( createEmpty( style ) ) ) ] ) );
-	submenu( 'Image', [
+	function submenu( name, entries ) {
+
+		return { label: name, children: entries.map( ( [ text, run ] ) => add( text, run, name ) ) };
+
+	}
+
+	const group = add( strings.getKey( 'menubar/add/group' ), () => {
+
+		const group = new THREE.Group();
+		group.name = 'Group';
+		editor.execute( atCursor( group ) );
+
+	} );
+	const empty = submenu( 'Empty', emptyDisplays.map( ( [ style, name ] ) => [ name, () => editor.execute( atCursor( createEmpty( style ) ) ) ] ) );
+	const image = submenu( 'Image', [
 		[ 'Reference…', () => chooseImageReference( editor ) ],
 		[ 'Background…', () => chooseImageReference( editor, 'back' ) ],
 		[ 'Mesh Plane…', () => chooseImageReference( editor, 'mesh' ) ],
 		[ 'Empty Image', () => addEmptyImage( editor ) ]
 	] );
-	submenu( 'Modeling Reference', [
+	const references = submenu( 'Modeling Reference', [
 		[ 'Point Cloud…', () => chooseReferenceFile( editor, '.ply,.pcd,.xyz' ) ],
 		[ 'Gaussian Splat…', () => chooseReferenceFile( editor, '.ply,.splat,.spz,.sog,.rad' ) ],
 		[ 'OpenVDB…', () => chooseReferenceFile( editor, '.vdb' ) ]
 	] );
 
-	// Mesh
+	const mesh = { label: strings.getKey( 'menubar/add/mesh' ), children: [] };
+	const curve = { label: 'Curve', children: [] };
+	for ( const [ kind, name, category ] of [ [ 'path', 'Editable path', curve ], [ 'shape', 'Editable shape', curve ], [ 'mesh', 'Editable mesh', mesh ] ] ) {
 
-	const meshSubmenuTitle = new UIRow().setTextContent( strings.getKey( 'menubar/add/mesh' ) ).addClass( 'option' ).addClass( 'submenu-title' );
-	meshSubmenuTitle.onMouseOver( function () {
-
-		const { top, right } = meshSubmenuTitle.dom.getBoundingClientRect();
-		const { paddingTop } = getComputedStyle( this.dom );
-		meshSubmenu.setLeft( right + 'px' );
-		meshSubmenu.setTop( top - parseFloat( paddingTop ) + 'px' );
-		meshSubmenu.setStyle( 'max-height', [ `calc( 100vh - ${top}px )` ] );
-		meshSubmenu.setDisplay( 'block' );
-
-	} );
-	meshSubmenuTitle.onMouseOut( function () {
-
-		meshSubmenu.setDisplay( 'none' );
-
-	} );
-	options.add( meshSubmenuTitle );
-
-	const meshSubmenu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
-	meshSubmenuTitle.add( meshSubmenu );
-
-	for ( const [ kind, label ] of [ [ 'path', 'Editable path' ], [ 'shape', 'Editable shape' ], [ 'mesh', 'Editable mesh' ] ] ) {
-
-		option = new UIRow().setClass( 'option' ).setTextContent( label );
-		option.onClick( () => {
+		category.children.push( add( name, () => {
 
 			editor.modeling.create( kind );
 			editor.modeling.show?.();
 
-		} );
-		meshSubmenu.add( option );
+		}, category.label ) );
 
 	}
 
@@ -123,9 +78,7 @@ function MenubarAdd( editor ) {
 
 		const translated = strings.getKey( 'menubar/add/mesh/' + kind );
 		const label = translated === '???' ? name : translated;
-		option = new UIRow().setClass( 'option' ).setTextContent( label );
-		option.dom.dataset.meshPrimitive = 'true';
-		option.onClick( () => editor.viewTools.run( () => {
+		mesh.children.push( add( label, () => editor.viewTools.run( () => {
 
 			const model = editor.modeling;
 			const blender = editor.keymap.preset === 'blender';
@@ -159,17 +112,11 @@ function MenubarAdd( editor ) {
 				replace: next => new SetGeometryCommand( editor, mesh, next ).execute()
 			} );
 
-		} ) );
-		meshSubmenu.add( option );
+		} ), mesh.label, true ) );
 
 	}
 
-	// Mesh / Sprite
-
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/mesh/sprite' ) );
-	option.onClick( function () {
+	const sprite = add( strings.getKey( 'menubar/add/mesh/sprite' ), () => {
 
 		const sprite = new THREE.Sprite( new THREE.SpriteMaterial() );
 		sprite.name = 'Sprite';
@@ -177,14 +124,8 @@ function MenubarAdd( editor ) {
 		editor.execute( atCursor( sprite ) );
 
 	} );
-	meshSubmenu.add( option );
 
-	// Mesh / Text
-
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/text' ) );
-	option.onClick( function () {
+	const text = add( strings.getKey( 'menubar/add/text' ), () => {
 
 		const loader = new FontLoader();
 		loader.load( '../examples/fonts/helvetiker_bold.typeface.json', function ( font ) {
@@ -214,38 +155,11 @@ function MenubarAdd( editor ) {
 		} );
 
 	} );
-	meshSubmenu.add( option );
-
-	// Light
-
-	const lightSubmenuTitle = new UIRow().setTextContent( strings.getKey( 'menubar/add/light' ) ).addClass( 'option' ).addClass( 'submenu-title' );
-	lightSubmenuTitle.onMouseOver( function () {
-
-		const { top, right } = lightSubmenuTitle.dom.getBoundingClientRect();
-		const { paddingTop } = getComputedStyle( this.dom );
-
-		lightSubmenu.setLeft( right + 'px' );
-		lightSubmenu.setTop( top - parseFloat( paddingTop ) + 'px' );
-		lightSubmenu.setStyle( 'max-height', [ `calc( 100vh - ${top}px )` ] );
-		lightSubmenu.setDisplay( 'block' );
-
-	} );
-	lightSubmenuTitle.onMouseOut( function () {
-
-		lightSubmenu.setDisplay( 'none' );
-
-	} );
-	options.add( lightSubmenuTitle );
-
-	const lightSubmenu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
-	lightSubmenuTitle.add( lightSubmenu );
+	const lights = { label: strings.getKey( 'menubar/add/light' ), children: [] };
 
 	// Light / Ambient
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/light/ambient' ) );
-	option.onClick( function () {
+	lights.children.push( add( strings.getKey( 'menubar/add/light/ambient' ), () => {
 
 		const color = 0x222222;
 
@@ -254,15 +168,11 @@ function MenubarAdd( editor ) {
 
 		editor.execute( atCursor( light ) );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
 	// Light / Directional
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/light/directional' ) );
-	option.onClick( function () {
+	lights.children.push( add( strings.getKey( 'menubar/add/light/directional' ), () => {
 
 		const color = 0xffffff;
 		const intensity = 1;
@@ -278,15 +188,11 @@ function MenubarAdd( editor ) {
 			atCursor( light )
 		] ) );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
 	// Light / Hemisphere
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/light/hemisphere' ) );
-	option.onClick( function () {
+	lights.children.push( add( strings.getKey( 'menubar/add/light/hemisphere' ), () => {
 
 		const skyColor = 0x00aaff;
 		const groundColor = 0xffaa00;
@@ -299,15 +205,11 @@ function MenubarAdd( editor ) {
 
 		editor.execute( atCursor( light ) );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
 	// Light / Point
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/light/point' ) );
-	option.onClick( function () {
+	lights.children.push( add( strings.getKey( 'menubar/add/light/point' ), () => {
 
 		const color = 0xffffff;
 		const intensity = 1;
@@ -318,15 +220,11 @@ function MenubarAdd( editor ) {
 
 		editor.execute( atCursor( light ) );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
 	// Light / Spot
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/light/spot' ) );
-	option.onClick( function () {
+	lights.children.push( add( strings.getKey( 'menubar/add/light/spot' ), () => {
 
 		const color = 0xffffff;
 		const intensity = 1;
@@ -345,13 +243,11 @@ function MenubarAdd( editor ) {
 			atCursor( light )
 		] ) );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
 	// Light / Projector
 
-	option = new UIRow().setClass( 'option' ).setTextContent( 'Projector' );
-	option.onClick( function () {
+	lights.children.push( add( 'Projector', () => {
 
 		const rig = new THREE.Group();
 		rig.name = 'Projector';
@@ -365,39 +261,13 @@ function MenubarAdd( editor ) {
 		command.name = 'Add Projector';
 		editor.execute( command );
 
-	} );
-	lightSubmenu.add( option );
+	}, lights.label ) );
 
-	// Camera
-
-	const cameraSubmenuTitle = new UIRow().setTextContent( strings.getKey( 'menubar/add/camera' ) ).addClass( 'option' ).addClass( 'submenu-title' );
-	cameraSubmenuTitle.onMouseOver( function () {
-
-		const { top, right } = cameraSubmenuTitle.dom.getBoundingClientRect();
-		const { paddingTop } = getComputedStyle( this.dom );
-
-		cameraSubmenu.setLeft( right + 'px' );
-		cameraSubmenu.setTop( top - parseFloat( paddingTop ) + 'px' );
-		cameraSubmenu.setStyle( 'max-height', [ `calc( 100vh - ${top}px )` ] );
-		cameraSubmenu.setDisplay( 'block' );
-
-	} );
-	cameraSubmenuTitle.onMouseOut( function () {
-
-		cameraSubmenu.setDisplay( 'none' );
-
-	} );
-	options.add( cameraSubmenuTitle );
-
-	const cameraSubmenu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
-	cameraSubmenuTitle.add( cameraSubmenu );
+	const cameras = { label: strings.getKey( 'menubar/add/camera' ), children: [] };
 
 	// Camera / Orthographic
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/camera/orthographic' ) );
-	option.onClick( function () {
+	cameras.children.push( add( strings.getKey( 'menubar/add/camera/orthographic' ), () => {
 
 		const aspect = editor.camera.isPerspectiveCamera
 			? editor.camera.aspect
@@ -407,41 +277,43 @@ function MenubarAdd( editor ) {
 
 		editor.execute( atCursor( camera ) );
 
-	} );
-	cameraSubmenu.add( option );
+	}, cameras.label ) );
 
 	// Camera / Perspective
 
-	option = new UIRow();
-	option.setClass( 'option' );
-	option.setTextContent( strings.getKey( 'menubar/add/camera/perspective' ) );
-	option.onClick( function () {
+	cameras.children.push( add( strings.getKey( 'menubar/add/camera/perspective' ), () => {
 
 		const camera = new THREE.PerspectiveCamera();
 		camera.name = 'PerspectiveCamera';
 
 		editor.execute( atCursor( camera ) );
 
-	} );
-	cameraSubmenu.add( option );
+	}, cameras.label ) );
 
-	const canUse = row => ! editor.modeling.editMode || ( row.dataset.meshPrimitive && editor.modeling.canInsertPrimitive );
-	title.onMouseOver( () => {
+	editor.sceneAddMenu = { label, actions, items: [ mesh, curve, text, sprite, empty, image, references, lights, cameras, group ] };
 
-		for ( const row of options.dom.querySelectorAll( ':is(.option, .inactive):not(.submenu-title)' ) ) {
+	const container = new UIPanel().setClass( 'menu scene-add-menu' );
+	container.dom.dataset.sceneAddMenu = 'true';
+	const trigger = document.createElement( 'button' );
+	trigger.type = 'button';
+	trigger.className = 'title';
+	trigger.dataset.glyphKey = 'menubar/add';
+	trigger.textContent = label;
+	trigger.setAttribute( 'aria-label', label );
+	trigger.setAttribute( 'aria-haspopup', 'dialog' );
+	trigger.setAttribute( 'aria-expanded', 'false' );
+	trigger.addEventListener( 'click', () => {
 
-			row.classList.toggle( 'option', Boolean( canUse( row ) ) );
-			row.classList.toggle( 'inactive', ! canUse( row ) );
+		if ( trigger.getAttribute( 'aria-expanded' ) === 'true' ) editor.contextMenu?.close();
+		else {
+
+			const bounds = trigger.getBoundingClientRect();
+			editor.contextMenu?.openAdd( { x: bounds.left, y: bounds.bottom }, trigger );
 
 		}
 
 	} );
-	options.dom.addEventListener( 'click', event => {
-
-		const row = event.target.closest( ':is(.option, .inactive):not(.submenu-title)' );
-		if ( row && ! canUse( row ) ) event.stopImmediatePropagation();
-
-	}, true );
+	container.dom.appendChild( trigger );
 
 	return container;
 

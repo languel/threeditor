@@ -1,7 +1,7 @@
 import { WorkspaceTabs } from './WorkspaceTabs.js?v=area-context-menu';
 import { UIPanel } from './libs/ui.js';
 
-import { MenubarAdd } from './Menubar.Add.js?v=uv-sculpt';
+import { MenubarAdd } from './Menubar.Add.js?v=nested-add';
 import { MenubarEdit } from './Menubar.Edit.js?v=unified-sync';
 import { MenubarFile } from './Menubar.File.js?v=example-open';
 import { MenubarView } from './Menubar.View.js?v=transform-gizmos';
