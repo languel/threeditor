@@ -22,6 +22,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A tapered curve sweep | A circle profile follows a spiral and shrinks along the path. |
 | — | A pointer and gamepad control deck | A switch responds to hover, clicks, or controller input. A deck marker follows pointer hits and joystick movement. |
 | — | Reusable ripple groups | Two geometry instances share a ripple formula, a shader group colors the heights, and a logic group turns the surface. |
+| — | A generative Empty | Geometry, shading, and keyboard logic are attached to one Empty. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -112,3 +113,9 @@ opened from the library.
 2. Select a **Ripple pass** card and press **Tab**. Change the **Math Expression Field** formula from `sin(5*x) * y` to `sin(3*x) * y`. Both instances pick up the new wavelength. Press **Ctrl+Tab** to return.
 3. Open **Shader Graph** and edit **Elevation colors**. The group maps local height into the blend between two colors. In **Logic Nodes**, two **Turn panel** instances take different yaw angles. Choose **Play Scene** and use the left and right arrow keys to trigger them.
 4. To make your own group, select connected nodes and press **Ctrl/Cmd+G**. Check the sockets on the Group Input and Group Output cards. Press **Shift+A** in the parent graph and search for the group's name to add another instance.
+
+### Generate a mesh from an Empty
+
+1. Open **A generative Empty** and select **Orb generator** in the Outliner. In **Components**, open **Geometry Nodes**. Trace the sphere and ring into **Join Geometry**, then into **Mesh Output**.
+2. Open the **Shader Graph** component and change **Color**. Start **Play Scene** and press Space to rotate the Empty and its generated mesh. The **Logic Nodes** component takes its target from **Host Object**.
+3. To start from scratch, use **Add → Empty → Plain Axes**. On the Empty, choose **Components → Add Component → Blank Geometry Nodes**. Add a primitive with **Shift+A** and connect its Geometry output to **Mesh Output**.

@@ -7,6 +7,7 @@ import { addNode, connectNodes, removeNode } from '../editor/js/nodes/NodeGraph.
 import { createShaderGraph, SHADER_DOMAIN } from '../editor/js/nodes/ShaderNodes.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { exposeGroupSocket, groupNodes, nodeGroupsDomain } from '../editor/js/nodes/NodeGroups.js';
+import { nodeComponentData } from '../editor/js/nodes/NodeComponents.js';
 
 function newGraph( type, settings = {} ) {
 
@@ -472,3 +473,34 @@ wire( rippleLogic, nodeGroupsDomain( LOGIC_DOMAIN, rippleLogic.groups ), turnLef
 await save( '15-reusable-ripples', 'Reusable ripple groups', ripplePanel,
 	'Inspect Geometry Nodes on Ripple panel. Two Ripple pass instances share the same field expression and have separate amplitudes. Shader Graph uses a group to color the elevations. In Play Scene, the left and right arrow keys reuse the same event group with opposite rotation angles.',
 	[ 3.8, 3.5, 5 ], 'WebGPURenderer' );
+
+const generator = new THREE.Object3D();
+generator.name = 'Orb generator';
+generator.userData.emptyDisplay = { style: 'axes', size: .65 };
+const generated = createGeometryGraph( true );
+const orb = addNode( generated, 'geometry.icoSphere', 24, 32 );
+Object.assign( orb.values, { radius: .86, detail: 3 } );
+const ring = addNode( generated, 'geometry.torus', 24, 242 );
+Object.assign( ring.values, { radius: 1.24, tube: .12, segments: 48, sides: 12 } );
+const tilt = addNode( generated, 'geometry.transform', 270, 236 );
+tilt.values.rotationZ = 28;
+const joinOrb = addNode( generated, 'geometry.join', 516, 32 );
+generated.nodes.find( node => node.type === 'geometry.output' ).x = 762;
+for ( const connection of [
+	[ orb.id, 'geometry', joinOrb.id, 'a' ], [ ring.id, 'geometry', tilt.id, 'geometry' ],
+	[ tilt.id, 'geometry', joinOrb.id, 'b' ], [ joinOrb.id, 'geometry', 'geometry.output', 'geometry' ]
+] ) wire( generated, GEOMETRY_DOMAIN, ...connection );
+generator.userData = nodeComponentData( generator, 'geometry', generated );
+generator.userData = nodeComponentData( generator, 'shader', createShaderGraph( '#b771ec' ) );
+
+const orbLogic = createLogicGraph();
+removeNode( orbLogic, 'logic.start' );
+const orbKey = logicNode( orbLogic, 'logic.keyDown', 24, 35, { key: 'Space' } );
+const orbHost = logicNode( orbLogic, 'logic.host', 24, 185 );
+const orbTurn = logicNode( orbLogic, 'logic.rotate', 274, 35, { y: 40 } );
+wire( orbLogic, LOGIC_DOMAIN, orbKey, 'then', orbTurn, 'run' );
+wire( orbLogic, LOGIC_DOMAIN, orbHost, 'object', orbTurn, 'target' );
+generator.userData = nodeComponentData( generator, 'logic', orbLogic );
+await save( '16-generative-empty', 'A generative Empty', generator,
+	'Select Orb generator and inspect Components. Geometry Nodes generates the orb and its ring without any input mesh. Shader Graph gives the generated mesh its color. Press Space in Play Scene to rotate the Empty and the geometry it generates.',
+	[ 3.5, 2.6, 4.5 ], 'WebGPURenderer' );

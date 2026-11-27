@@ -97,6 +97,7 @@ export const LOGIC_DOMAIN = {
 			outputs: { elapsed: { label: 'Elapsed Seconds', type: 'number' }, delta: { label: 'Delta Seconds', type: 'number' } }
 		} ],
 		[ 'logic.object', { label: 'Object', category: 'Values', inputs: { object: target }, outputs: { object: { label: 'Object', type: 'object' } } } ],
+		[ 'logic.host', { label: 'Host Object', category: 'Values', outputs: { object: { label: 'Object', type: 'object' } } } ],
 		[ 'logic.boolean', { label: 'Boolean', category: 'Values', inputs: { value: flag( 'Value' ) }, outputs: condition } ],
 		[ 'logic.string', { label: 'Text', category: 'Values', inputs: { value: text( 'Text' ) }, outputs: stringOutput } ],
 		[ 'logic.eventValue', { label: 'Event Value', category: 'Values', inputs: { fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],

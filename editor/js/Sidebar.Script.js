@@ -9,6 +9,13 @@ import { P5_TEMPLATE } from './P5Sketch.js';
 import { scriptParams, scriptParamValue } from './ScriptParams.js';
 import { scriptParameterControl } from './ScriptParameterControl.js?v=component-layout';
 import { modelButton } from './modeling/ModelControls.js';
+import { hasRestriction } from './ObjectRestrictions.js';
+import { SetValueCommand } from './commands/SetValueCommand.js';
+import { addGeometryGraph } from './nodes/GeometryNodesEditor.js';
+import { GEOMETRY_MODIFIER } from './nodes/GeometryNodes.js';
+import { createShaderGraph } from './nodes/ShaderNodes.js';
+import { createLogicGraph } from './nodes/LogicNodes.js';
+import { nodeComponentData, supportsNodeComponents } from './nodes/NodeComponents.js';
 
 const spinSource = `// @param speed = 45 (-360..360)
 // @label speed = "Degrees per second"
@@ -32,13 +39,33 @@ function SidebarScript( editor ) {
 
 	const scriptsContainer = new UIPanel();
 	let parameterControls = [];
-	let trackingStatus;
+	let trackingStatus, lastUserData;
 	container.add( scriptsContainer );
 
 	const addComponent = modelButton( container.dom, 'Add Component', 'add', openComponentPicker );
 	addComponent.classList.add( 'script-add-component' );
 	addComponent.setAttribute( 'aria-haspopup', 'dialog' );
 	container.openComponentPicker = openComponentPicker;
+
+	function graphEntries( object ) {
+
+		const graphs = [];
+		if ( object.userData.nodeComponents?.geometry ) graphs.push( { name: 'Geometry Nodes', mode: 'nodes' } );
+		for ( const modifier of object.userData.modifiers || [] ) {
+
+			if ( modifier.type === GEOMETRY_MODIFIER ) graphs.push( { name: modifier.name || 'Geometry Nodes', mode: 'nodes', id: modifier.id } );
+		}
+		if ( object.userData.nodeComponents?.shader ) graphs.push( { name: 'Shader Graph', mode: 'shader' } );
+		if ( object.userData.logicGraph ) graphs.push( { name: 'Logic Nodes', mode: 'logic' } );
+		return graphs;
+
+	}
+
+	function openGraph( mode, id ) {
+
+		editor.editWorkspace.open( mode );
+		if ( id ) editor.geometryNodesEditor?.selectModifier( id );
+	}
 
 	function openComponentPicker() {
 
@@ -49,6 +76,16 @@ function SidebarScript( editor ) {
 			{ label: 'New p5 sketch', section: 'New', run: () => attach( { name: 'sketch', type: 'p5', source: P5_TEMPLATE, preview: true } ) },
 			{ label: 'Spin', section: 'Behaviors', run: () => attach( { name: 'Spin', source: spinSource } ) }
 		];
+		if ( supportsNodeComponents( editor.scene, object ) && ! hasRestriction( object, 'locked' ) && ! hasRestriction( object, 'disabled' ) ) {
+
+			if ( ! graphEntries( object ).some( entry => entry.mode === 'nodes' ) ) {
+
+				actions.push( { label: 'Geometry Nodes', section: 'Node Graphs', run: () => attachGraph( 'nodes', false ) } );
+				actions.push( { label: 'Blank Geometry Nodes', section: 'Node Graphs', run: () => attachGraph( 'nodes', true ) } );
+			}
+			if ( ! object.userData.nodeComponents?.shader ) actions.push( { label: 'Shader Graph', section: 'Node Graphs', run: () => attachGraph( 'shader' ) } );
+			if ( ! object.userData.logicGraph ) actions.push( { label: 'Logic Nodes', section: 'Node Graphs', run: () => attachGraph( 'logic' ) } );
+		}
 		editor.scene.traverse( source => {
 
 			for ( const script of editor.scripts[ source.uuid ] || [] ) {
@@ -63,6 +100,24 @@ function SidebarScript( editor ) {
 		addComponent.focus();
 		const bounds = addComponent.getBoundingClientRect();
 		editor.contextMenu.show( 'Add Component', actions, [ bounds.left, bounds.bottom + 4 ] );
+
+		function attachGraph( mode, blank ) {
+
+			if ( editor.selected !== object || ! supportsNodeComponents( editor.scene, object ) || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) return;
+			if ( mode === 'nodes' ) {
+
+				openGraph( mode, addGeometryGraph( editor, object, blank ) );
+				return;
+
+			}
+			const color = ( typeof object.material?.color?.getHexString === 'function' ) ? '#' + object.material.color.getHexString() : '#a8b4c2';
+			const graph = mode === 'shader' ? createShaderGraph( color ) : createLogicGraph();
+			const command = new SetValueCommand( editor, object, 'userData', nodeComponentData( object, mode, graph ) );
+			command.updatable = false;
+			editor.execute( command, 'Add node graph component' );
+			openGraph( mode );
+
+		}
 
 		function attach( template, edit = false ) {
 
@@ -98,7 +153,19 @@ function SidebarScript( editor ) {
 
 		}
 
+		lastUserData = object.userData;
 		const scripts = editor.scripts[ object.uuid ];
+		for ( const graph of graphEntries( object ) ) {
+
+			scriptsContainer.setDisplay( 'block' );
+			const component = new UIPanel().addClass( 'script-component' );
+			component.dom.setAttribute( 'role', 'group' );
+			component.dom.setAttribute( 'aria-label', graph.name );
+			const edit = new UIButton( 'Edit' ).onClick( () => openGraph( graph.mode, graph.id ) );
+			edit.dom.setAttribute( 'aria-label', 'Edit ' + graph.name );
+			component.add( new UIRow().addClass( 'script-component-header' ).add( new UIText( graph.name ), edit ) );
+			scriptsContainer.add( component );
+		}
 
 		if ( scripts !== undefined && scripts.length > 0 ) {
 
@@ -255,6 +322,7 @@ function SidebarScript( editor ) {
 
 	signals.scriptAdded.add( update );
 	signals.scriptRemoved.add( update );
+	signals.objectChanged.add( object => { if ( object === editor.selected && object.userData !== lastUserData ) { lastUserData = object.userData; update(); } } );
 	signals.scriptChanged.add( ( script, attribute ) => {
 
 		if ( attribute !== 'paramValues' ) {

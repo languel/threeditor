@@ -1,9 +1,26 @@
-import { GEOMETRY_DOMAIN, GEOMETRY_MODIFIER, hasSimulation, planGeometryGraph } from './GeometryNodes.js';
+import { createGeometryGraph, GEOMETRY_DOMAIN, GEOMETRY_MODIFIER, hasSimulation, planGeometryGraph } from './GeometryNodes.js';
 import { NodeGraphEditor } from './NodeGraphEditor.js';
 import { canModify, createModifier, setModifierStack } from '../modeling/Modifiers.js?v=poly-context';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { bindGraphHistory } from './GraphWorkspace.js';
+import { nodeComponentData, supportsNodeComponents } from './NodeComponents.js';
+
+export function addGeometryGraph( editor, object, blank ) {
+
+	if ( object.isMesh && canModify( object ) && ! object.userData.modelReference ) {
+
+		const modifier = createModifier( GEOMETRY_MODIFIER );
+		if ( blank ) modifier.params.graph = createGeometryGraph( true );
+		setModifierStack( editor, object, [ ...( object.userData.modifiers || [] ), modifier ], undefined, 'Add geometry nodes' );
+		return modifier.id;
+
+	}
+	const command = new SetValueCommand( editor, object, 'userData', nodeComponentData( object, 'geometry', createGeometryGraph( blank ) ) );
+	command.updatable = false;
+	editor.execute( command, 'Add geometry nodes' );
+
+}
 
 export function openGeometryNodes( editor ) {
 
@@ -19,11 +36,15 @@ export function openGeometryNodes( editor ) {
 	create.type = 'button';
 	create.className = 'Button';
 	create.textContent = 'New graph';
-	controls.append( target, choose, create );
+	const blank = create.cloneNode();
+	blank.textContent = 'New blank graph';
+	const remove = create.cloneNode();
+	remove.textContent = 'Remove graph';
+	controls.append( target, choose, create, blank, remove );
 	const status = document.createElement( 'div' );
 	status.className = 'node-graph-status';
 	status.setAttribute( 'role', 'status' );
-	let object, modifier, canEdit, queued, closed;
+	let object, modifier, component, canEdit, queued, closed;
 	const graphEditor = NodeGraphEditor( GEOMETRY_DOMAIN, { onChange: save, onError: error } );
 	panel.append( controls, graphEditor.dom, status );
 
@@ -38,6 +59,16 @@ export function openGeometryNodes( editor ) {
 
 		if ( editor.selected !== object || ! canEdit || hasRestriction( object, 'locked' ) ||
 			hasRestriction( object, 'disabled' ) ) return;
+		if ( component ) {
+
+			if ( graph ) planGeometryGraph( graph );
+			const command = new SetValueCommand( editor, object, 'userData', nodeComponentData( object, 'geometry', graph ) );
+			command.updatable = false;
+			editor.execute( command, layoutOnly ? 'Move node' : graph ? 'Edit geometry nodes' : 'Remove geometry nodes' );
+			sync();
+			return;
+
+		}
 		const stack = object.userData.modifiers;
 		if ( ! stack.includes( modifier ) ) return;
 		planGeometryGraph( graph );
@@ -60,36 +91,41 @@ export function openGeometryNodes( editor ) {
 	function sync( preferred = modifier?.id ) {
 
 		const selected = editor.selected;
-		const supported = !! selected?.isMesh && canModify( selected );
+		const supported = supportsNodeComponents( editor.scene, selected );
 		const locked = hasRestriction( selected, 'locked' ) || hasRestriction( selected, 'disabled' );
 		const graphs = supported ? ( selected.userData.modifiers || [] ).filter( item => item.type === GEOMETRY_MODIFIER ) : [];
 		const next = graphs.find( item => item.id === preferred ) || graphs[ 0 ];
+		const nextComponent = supported ? selected.userData.nodeComponents?.geometry : undefined;
 		const resetView = object !== selected || modifier?.id !== next?.id;
 		const editable = supported && ! locked;
-		const changed = resetView || next !== modifier || canEdit !== editable;
+		const changed = resetView || next !== modifier || nextComponent !== component || canEdit !== editable;
 		object = selected;
 		modifier = next;
+		component = nextComponent;
 		canEdit = editable;
-		target.textContent = supported ? selected.name || selected.type : 'No editable mesh selected';
+		target.textContent = supported ? selected.name || selected.type : 'No object selected';
 		target.title = target.textContent;
-		create.hidden = ! supported || !! next;
-		create.disabled = ! canEdit;
+		create.hidden = blank.hidden = ! supported || !! ( next || component );
+		remove.hidden = ! component;
+		create.disabled = blank.disabled = remove.disabled = ! canEdit;
 		choose.hidden = graphs.length < 2;
 		choose.replaceChildren( ...graphs.map( ( item, i ) => new Option( item.name + ' ' + ( i + 1 ), item.id ) ) );
 		choose.value = next?.id || '';
 		if ( ! changed ) return;
 
 		status.classList.remove( 'is-error' );
-		graphEditor.dom.hidden = ! next;
+		const graph = component || next?.params.graph;
+		graphEditor.dom.hidden = ! graph;
 		try {
 
-			const graph = next?.params.graph;
-			const plan = next && planGeometryGraph( graph );
+			const plan = graph && planGeometryGraph( graph );
 			graphEditor.setGraph( graph, canEdit, resetView );
-			if ( locked && supported ) status.textContent = 'This mesh is locked or disabled.';
-			else if ( ! next ) status.textContent = supported ? 'Create a graph to process this mesh.' : 'Select a mesh to start a geometry graph.';
-			else if ( ! next.enabled ) status.textContent = 'This modifier is disabled.';
-			else if ( plan.missing ) status.textContent = plan.missing + ' Showing modifier input.';
+			const problem = component && editor.nodeComponentRuntime.error( object );
+			if ( problem ) error( problem );
+			else if ( locked && supported ) status.textContent = 'This object is locked or disabled.';
+			else if ( ! graph ) status.textContent = supported ? 'Choose a host input or start with a blank graph.' : 'Select a scene object to attach a geometry graph.';
+			else if ( next?.enabled === false && ! component ) status.textContent = 'This modifier is disabled.';
+			else if ( plan.missing ) status.textContent = plan.missing;
 			else if ( hasSimulation( plan ) ) status.textContent = 'Play Scene to run the simulation.';
 			else status.textContent = 'Drag between sockets or click a socket at each end.';
 
@@ -103,14 +139,12 @@ export function openGeometryNodes( editor ) {
 
 	}
 
-	create.onclick = () => {
+	function createGraph( blank ) {
 
 		if ( ! canEdit || object !== editor.selected ) return;
 		try {
 
-			const nodeModifier = createModifier( GEOMETRY_MODIFIER );
-			setModifierStack( editor, object, [ ...( object.userData.modifiers || [] ), nodeModifier ], undefined, 'Add geometry nodes' );
-			sync( nodeModifier.id );
+			sync( addGeometryGraph( editor, object, blank ) );
 
 		} catch ( problem ) {
 
@@ -118,7 +152,10 @@ export function openGeometryNodes( editor ) {
 
 		}
 
-	};
+	}
+	create.onclick = () => createGraph( false );
+	blank.onclick = () => createGraph( true );
+	remove.onclick = () => save();
 	choose.onchange = () => sync( choose.value );
 	bindGraphHistory( editor, panel );
 	function scheduleSync() {

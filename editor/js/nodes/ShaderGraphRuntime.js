@@ -4,7 +4,7 @@ const renderers = new WeakMap();
 
 export function installShaderGraphs( renderer, tsl ) {
 
-	renderers.set( renderer, { tsl, materials: new WeakMap() } );
+	renderers.set( renderer, { tsl, materials: new WeakMap(), hosts: new WeakMap() } );
 
 }
 
@@ -21,15 +21,23 @@ export function shaderGraphsAnimate( renderer ) {
 
 }
 
-function shaderMaterial( renderer, runtime, source ) {
+function shaderMaterial( renderer, runtime, source, host ) {
 
 	if ( ! source?.isMeshStandardMaterial || source.isNodeMaterial ) return source;
-	const graph = source.userData?.shaderGraph;
-	let record = runtime.materials.get( source );
+	const component = host?.userData.nodeComponents.shader;
+	const graph = component || source.userData?.shaderGraph;
+	let materials = runtime.materials;
+	if ( host ) {
+
+		if ( ! runtime.hosts.has( host ) ) runtime.hosts.set( host, new Map() );
+		materials = runtime.hosts.get( host );
+
+	}
+	let record = materials.get( source );
 	if ( ! graph ) {
 
 		record?.material?.dispose();
-		runtime.materials.delete( source );
+		materials.delete( source );
 		return source;
 
 	}
@@ -37,7 +45,7 @@ function shaderMaterial( renderer, runtime, source ) {
 
 		record?.material?.dispose();
 		record = { graph, version: source.version, map: source.map };
-		runtime.materials.set( source, record );
+		materials.set( source, record );
 		try {
 
 			const { properties, animated } = compileShaderGraph( runtime.tsl, graph, source );
@@ -75,10 +83,18 @@ export function withShaderGraphs( renderer, scene, draw ) {
 
 		scene.traverseVisible( object => {
 
+			if ( ! object.userData.nodeComponents?.shader && runtime.hosts.has( object ) ) {
+
+				for ( const record of runtime.hosts.get( object ).values() ) record.material?.dispose();
+				runtime.hosts.delete( object );
+
+			}
 			if ( ! object.isMesh || ! object.material ) return;
 			const source = object.material;
+			let host = object;
+			while ( host && ! host.userData.nodeComponents?.shader ) host = host.parent;
 			const compiled = Array.isArray( source ) ?
-				source.map( material => shaderMaterial( renderer, runtime, material ) ) : shaderMaterial( renderer, runtime, source );
+				source.map( material => shaderMaterial( renderer, runtime, material, host ) ) : shaderMaterial( renderer, runtime, source, host );
 			if ( compiled === source || Array.isArray( source ) && compiled.every( ( material, i ) => material === source[ i ] ) ) return;
 			originals.push( [ object, source ] );
 			object.material = compiled;
