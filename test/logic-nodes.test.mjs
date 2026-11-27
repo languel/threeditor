@@ -117,3 +117,70 @@ test( 'Overlap and branch pulses support object references and run nested sequen
 	runtime.stop();
 
 } );
+
+test( 'Stream samples drive logic from numeric inputs and preserve edge transitions in a burst', () => {
+
+	const scene = new THREE.Scene();
+	const owner = new THREE.Object3D();
+	scene.add( owner );
+	const graph = owner.userData.logicGraph = createLogicGraph();
+	const threshold = node( graph, 'logic.streamThreshold', { topic: 'serial.A0', threshold: 30 } );
+	const rise = node( graph, 'logic.move', { x: 1 } );
+	const fall = node( graph, 'logic.move', { z: 1 } );
+	wire( graph, threshold, 'above', rise, 'run' );
+	wire( graph, threshold, 'below', fall, 'run' );
+	const sample = node( graph, 'logic.streamSample', { topic: 'midi.cc.1.1' } );
+	const pressure = node( graph, 'logic.midiCC' );
+	const move = node( graph, 'logic.move' );
+	wire( graph, sample, 'then', move, 'run' );
+	wire( graph, pressure, 'normalized', move, 'y' );
+	const streams = new StreamRouter();
+	const runtime = new LogicRuntime( THREE, scene, streams, error => { throw error; } );
+	runtime.start();
+	for ( const value of [ 10, 60, 70, 20, 50 ] ) streams.publish( 'serial.A0', value );
+	streams.publish( 'midi.cc.1.1', 127 );
+	runtime.tick( 1, .1 );
+	assert.deepEqual( owner.position.toArray(), [ 2, 1, 1 ] );
+	runtime.stop();
+	streams.publish( 'serial.A0', 2 );
+	assert.equal( runtime.pending.length, 0 );
+
+} );
+
+test( 'MediaPipe vector data moves an object and preview data cannot drive hardware', () => {
+
+	const scene = new THREE.Scene();
+	const owner = new THREE.Object3D();
+	scene.add( owner );
+	const graph = owner.userData.logicGraph = createLogicGraph();
+	const landmark = node( graph, 'logic.landmark' );
+	const sample = node( graph, 'logic.streamSample', { topic: 'vision.pose.16.z' } );
+	const move = node( graph, 'logic.moveVector' );
+	wire( graph, sample, 'then', move, 'run' );
+	wire( graph, landmark, 'vector', move, 'vector' );
+
+	const update = node( graph, 'logic.update' );
+	const serial = node( graph, 'logic.serialValue' );
+	const store = node( graph, 'logic.setVariable' );
+	const get = node( graph, 'logic.variable' );
+	const send = node( graph, 'logic.sendSerial' );
+	wire( graph, update, 'then', store, 'run' );
+	wire( graph, serial, 'value', store, 'value' );
+	wire( graph, store, 'then', send, 'run' );
+	wire( graph, get, 'value', send, 'value' );
+	const streams = new StreamRouter();
+	const writes = [];
+	streams.outputs.set( 'serial', ( target, value ) => writes.push( [ target.key, value ] ) );
+	const runtime = new LogicRuntime( THREE, scene, streams, error => { throw error; } );
+	runtime.start();
+	streams.publish( 'serial.A0', 9, true );
+	for ( const [ i, axis ] of [ 'x', 'y', 'z' ].entries() ) streams.publish( 'vision.pose.16.' + axis, i + 1 );
+	runtime.tick( 1, .1 );
+	assert.deepEqual( owner.position.toArray(), [ 1, 2, 3 ] );
+	assert.deepEqual( writes, [] );
+	streams.publish( 'serial.A0', 12, false );
+	runtime.tick( 2, .1 );
+	assert.deepEqual( writes, [ [ 'LED', 12 ] ] );
+	runtime.stop();
+
+} );

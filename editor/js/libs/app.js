@@ -80,6 +80,8 @@ const APP = {
 		let splatHost;
 		const postHost = new PostProcessingHost();
 		const scriptParameters = new Map();
+		const pressedKeys = new Set();
+		const pressedButtons = new Set();
 		let playing = false;
 
 		const dom = document.createElement( 'div' );
@@ -471,6 +473,8 @@ const APP = {
 			document.removeEventListener( 'pointerup', onPointerUp );
 			document.removeEventListener( 'pointermove', onPointerMove );
 			window.removeEventListener( 'blur', onBlur );
+			pressedKeys.clear();
+			pressedButtons.clear();
 
 			renderer.setAnimationLoop( null );
 			controller?.dispose();
@@ -535,8 +539,16 @@ const APP = {
 
 		//
 
+		function isPlayerControl( event ) {
+
+			return event.target?.closest?.( '[data-player-controls]' );
+
+		}
+
 		function onKeyDown( event ) {
 
+			if ( isPlayerControl( event ) ) return;
+			pressedKeys.add( event.code );
 			streams.publish( 'input.key.' + event.code, 1 );
 			streams.emit( 'keydown', { key: event.key, code: event.code, repeat: event.repeat } );
 			dispatch( events.keydown, event );
@@ -545,6 +557,8 @@ const APP = {
 
 		function onKeyUp( event ) {
 
+			const wasPressed = pressedKeys.delete( event.code );
+			if ( isPlayerControl( event ) && ! wasPressed ) return;
 			streams.publish( 'input.key.' + event.code, 0 );
 			streams.emit( 'keyup', { key: event.key, code: event.code } );
 			dispatch( events.keyup, event );
@@ -553,12 +567,16 @@ const APP = {
 
 		function onBlur() {
 
+			pressedKeys.clear();
+			pressedButtons.clear();
 			logic?.releaseKeys();
 
 		}
 
 		function onPointerDown( event ) {
 
+			if ( isPlayerControl( event ) ) return;
+			pressedButtons.add( event.button );
 			streams.publish( 'input.pointer', 1 );
 			streams.emit( 'pointerdown', { button: event.button } );
 			dispatch( events.pointerdown, event );
@@ -567,6 +585,8 @@ const APP = {
 
 		function onPointerUp( event ) {
 
+			const wasPressed = pressedButtons.delete( event.button );
+			if ( isPlayerControl( event ) && ! wasPressed ) return;
 			streams.publish( 'input.pointer', 0 );
 			streams.emit( 'pointerup', { button: event.button } );
 			dispatch( events.pointerup, event );
@@ -575,6 +595,7 @@ const APP = {
 
 		function onPointerMove( event ) {
 
+			if ( isPlayerControl( event ) ) return;
 			dispatch( events.pointermove, event );
 
 		}

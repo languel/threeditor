@@ -253,3 +253,57 @@ const waveMesh = geometryMesh( 'Wave surface', new THREE.PlaneGeometry( 4.8, 3.1
 await save( '10-field-colored-wave', 'A field-colored wave', waveMesh,
 	'Use Geometry Nodes to change the frequency and height of the wave. Store Named Attribute writes ridge onto the mesh. Open Shader Graph to see how Named Attribute reads ridge and uses it to mix two colors on the surface.',
 	[ 3.9, 3.5, 5.2 ], 'WebGPURenderer' );
+
+const garden = createGeometryGraph();
+const scatter = addNode( garden, 'geometry.distribute', 270, 32 );
+Object.assign( scatter.values, { count: 150, seed: 28 } );
+const center = addNode( garden, 'geometry.sphere', 24, 247 );
+Object.assign( center.values, { radius: .46, segments: 16, rings: 12 } );
+const proximity = addNode( garden, 'geometry.proximity', 270, 247 );
+const falloff = addNode( garden, 'field.expression', 516, 247 );
+falloff.values.expression = '0.18 + 1.1 * exp(-2.8 * x)';
+const stem = addNode( garden, 'geometry.cone', 516, 32 );
+Object.assign( stem.values, { radius: .17, height: 1.05, segments: 5 } );
+const grow = addNode( garden, 'geometry.onPoints', 762, 32 );
+const realized = addNode( garden, 'geometry.realize', 1008, 32 );
+garden.nodes.find( node => node.type === 'geometry.output' ).x = 1254;
+for ( const [ from, output, to, input ] of [
+	[ 'geometry.input', 'geometry', scatter.id, 'geometry' ],
+	[ center.id, 'geometry', proximity.id, 'target' ],
+	[ proximity.id, 'distance', falloff.id, 'x' ],
+	[ scatter.id, 'points', grow.id, 'points' ],
+	[ stem.id, 'geometry', grow.id, 'mesh' ],
+	[ falloff.id, 'value', grow.id, 'scale' ],
+	[ grow.id, 'instances', realized.id, 'instances' ],
+	[ realized.id, 'geometry', 'geometry.output', 'geometry' ]
+] ) wire( garden, GEOMETRY_DOMAIN, from, output, to, input );
+const gardenMesh = geometryMesh( 'Proximity garden', new THREE.PlaneGeometry( 4.6, 4.6 ).rotateX( - Math.PI / 2 ),
+	garden, new THREE.MeshStandardMaterial( { color: 0x80d7a2, roughness: .52 } ) );
+await save( '11-proximity-garden', 'A proximity garden', gardenMesh,
+	'Open Geometry Nodes on Proximity garden. Distribute Points on Faces scatters the planting positions. Geometry Proximity measures their distance to a sphere. Math Expression Field converts that distance into instance scale. Try changing the radius or the falloff in the expression.',
+	[ 4.4, 3.6, 5.6 ] );
+
+const sculpture = new THREE.Mesh( new THREE.TorusKnotGeometry( .8, .18, 110, 18 ), new THREE.MeshStandardMaterial( { color: 0xf9bb6e, roughness: .28 } ) );
+sculpture.name = 'Stream sculpture';
+sculpture.castShadow = true;
+const pulse = sculpture.userData.logicGraph = createLogicGraph();
+removeNode( pulse, 'logic.start' );
+const update = logicNode( pulse, 'logic.update', 24, 35 );
+const timeValue = logicNode( pulse, 'logic.clock', 24, 178 );
+const oscillator = logicNode( pulse, 'math.expression', 270, 178, { expression: '0.5 + 0.4 * sin(x * 2)' } );
+const sendPulse = logicNode( pulse, 'logic.publishStream', 516, 178, { topic: 'map.pulse' } );
+const received = logicNode( pulse, 'logic.streamSample', 24, 373, { topic: 'map.pulse' } );
+const payload = logicNode( pulse, 'logic.eventValue', 24, 522 );
+const remap = logicNode( pulse, 'math.maprange', 270, 495, { b: 0, c: 1, d: .55, e: 1.5 } );
+const scale = logicNode( pulse, 'logic.setScale', 516, 385 );
+for ( const [ from, output, to, input ] of [
+	[ update, 'then', sendPulse, 'run' ],
+	[ timeValue, 'elapsed', oscillator, 'x' ],
+	[ oscillator, 'value', sendPulse, 'value' ],
+	[ received, 'then', scale, 'run' ],
+	[ payload, 'value', remap, 'a' ],
+	[ remap, 'value', scale, 'y' ]
+] ) wire( pulse, LOGIC_DOMAIN, from, output, to, input );
+await save( '12-stream-pulse', 'A stream-reactive sculpture', sculpture,
+	'Play Scene to pulse the sculpture through a stream topic. Open Logic Nodes and follow On Stream Sample to Event Value, Map Range, and Set Scale. Use Browse stream topics to substitute a live MIDI control, serial signal, or tracked landmark coordinate.',
+	[ 3.1, 2.3, 4.1 ] );

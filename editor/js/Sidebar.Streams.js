@@ -7,7 +7,7 @@ import { scriptParams } from './ScriptParams.js';
 import { AnimationClip, QuaternionKeyframeTrack } from 'three';
 import { UIPanel } from './libs/ui.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
-import { SerialDevice, midiTopics } from './streams/DeviceStreams.js';
+import { SerialDevice, MidiDevice, bindDeviceOutputs } from './streams/DeviceStreams.js';
 import { MediaStreams } from './streams/MediaStreams.js';
 import { objectChannels } from './streams/StreamRouter.js?v=drivers';
 
@@ -75,13 +75,6 @@ function SidebarStreams( editor ) {
 	button( serial, 'Connect', () => serialDevice.connect( Number( baud.value ) ), serialStatus );
 	button( serial, 'Disconnect', () => serialDevice.disconnect(), serialStatus );
 	button( serial, 'Send', () => serialDevice.send( line.value ), serialStatus );
-	bus.outputs.set( 'serial', ( target, value ) => {
-
-		if ( ! hardware.checked || ! serialDevice.writer ) return false;
-		const text = Number( value.toFixed( 4 ) );
-		serialDevice.send( target.key ? target.key + ':' + text : text, target.key );
-
-	} );
 	const monitor = node( 'output', '', serial );
 	bus.subscribe( 'serial.line', value => { if ( serial.open ) monitor.textContent = value; } );
 
@@ -90,101 +83,46 @@ function SidebarStreams( editor ) {
 	const midiInput = select( midi, 'Input', [] );
 	const midiOutput = select( midi, 'Output', [] );
 	const bytes = input( midi, 'Send hex', 'B0 01 40' );
-	let access, listening;
-	const sounding = new Map();
-	function releaseNotes() {
+	const midiDevice = new MidiDevice( bus, access => {
 
-		for ( const [ port, notes ] of sounding ) for ( const [ , message ] of notes ) {
-
-			try { port.send( message ); } catch { /* The port may have been unplugged. */ }
-
-		}
-		sounding.clear();
-
-	}
-	hardware.onchange = () => { if ( ! hardware.checked ) releaseNotes(); };
-	midiOutput.onchange = releaseNotes;
-	function listen() {
-
-		if ( listening ) listening.onmidimessage = null;
-		bus.clear( 'midi.' );
-		listening = access?.inputs.get( midiInput.value );
-		if ( listening ) listening.onmidimessage = event => {
-
-			bus.publish( 'midi.message', Array.from( event.data ) );
-			for ( const [ topic, value ] of Object.entries( midiTopics( event.data ) ) ) bus.publish( topic, value );
-			if ( midi.open ) midiStatus.textContent = Array.from( event.data, n => n.toString( 16 ).padStart( 2, '0' ) ).join( ' ' );
-
-		};
-
-	}
-	function midiPorts() {
-
-		for ( const [ control, ports ] of [ [ midiInput, access.inputs ], [ midiOutput, access.outputs ] ] ) {
+		for ( const [ control, ports ] of [ [ midiInput, access?.inputs ], [ midiOutput, access?.outputs ] ] ) {
 
 			const previous = control.value;
 			control.replaceChildren( new Option( 'None', '' ) );
-			for ( const port of ports.values() ) if ( port.state === 'connected' ) control.add( new Option( port.name || port.id, port.id ) );
+			for ( const port of ports?.values() || [] ) if ( port.state === 'connected' ) control.add( new Option( port.name || port.id, port.id ) );
 			control.value = [ ...control.options ].some( option => option.value === previous ) ? previous : '';
 
 		}
-		listen();
+		midiDevice.selectInput( midiInput.value );
+		midiDevice.selectOutput( midiOutput.value );
 
-	}
-	function sendMIDI( message ) {
+	}, data => {
+		if ( midi.open ) midiStatus.textContent = Array.from( data, n => n.toString( 16 ).padStart( 2, '0' ) ).join( ' ' );
+	} );
 
-		const port = access?.outputs.get( midiOutput.value );
-		if ( ! port ) return false;
-		port.send( message );
-		return true;
-
-	}
+	hardware.onchange = () => { if ( ! hardware.checked ) midiDevice.releaseNotes(); };
+	midiInput.onchange = () => midiDevice.selectInput( midiInput.value );
+	midiOutput.onchange = () => midiDevice.selectOutput( midiOutput.value );
 	button( midi, 'Connect', async () => {
 
-		if ( ! navigator.requestMIDIAccess ) throw new Error( 'Web MIDI requires a supported browser on HTTPS or localhost.' );
-		access = await navigator.requestMIDIAccess( { sysex: false } );
-		access.onstatechange = midiPorts;
-		midiPorts();
+		await midiDevice.connect();
 		midiStatus.textContent = 'Select an input or output';
 
 	}, midiStatus );
 	button( midi, 'Disconnect', () => {
 
-		if ( access ) access.onstatechange = null;
-		const port = access?.outputs.get( midiOutput.value );
-		port?.clear();
-		releaseNotes();
-		access = null;
-		midiInput.replaceChildren();
-		midiOutput.replaceChildren();
-		listen();
+		midiDevice.disconnect();
 		midiStatus.textContent = 'Disconnected';
 
 	}, midiStatus );
-	midiInput.onchange = listen;
 	button( midi, 'Send', () => {
 
 		const parts = bytes.value.trim().split( /\s+/ );
 		if ( ! parts.every( part => /^[\da-f]{2}$/i.test( part ) ) ) throw new Error( 'Enter space-separated hex bytes.' );
-		sendMIDI( parts.map( part => parseInt( part, 16 ) ) );
+		midiDevice.send( parts.map( part => parseInt( part, 16 ) ) );
 
 	}, midiStatus );
-	const byte = value => Math.max( 0, Math.min( 127, Math.round( value ) ) );
-	bus.outputs.set( 'midi.cc', ( target, value ) => hardware.checked && sendMIDI( [ 175 + target.channel, target.controller, byte( value ) ] ) );
-	bus.outputs.set( 'midi.note', ( target, value ) => {
-
-		const port = access?.outputs.get( midiOutput.value );
-		if ( ! hardware.checked || ! port ) return false;
-		const velocity = byte( value );
-		port.send( [ ( velocity > 0 ? 143 : 127 ) + target.channel, target.note, velocity ] );
-		if ( ! sounding.has( port ) ) sounding.set( port, new Map() );
-		const notes = sounding.get( port );
-		const id = target.channel + ':' + target.note;
-		if ( velocity ) notes.set( id, [ 127 + target.channel, target.note, 0 ] );
-		else notes.delete( id );
-		return true;
-
-	} );
+	bindDeviceOutputs( bus, serialDevice, midiDevice, () => hardware.checked );
 
 	const mediaPanel = section( panel.dom, 'Audio and video' );
 	const mediaStatus = node( 'output', 'Stopped', mediaPanel );
@@ -696,6 +634,7 @@ function SidebarStreams( editor ) {
 		...getEvents().flatMap( rule => [ rule.source, rule.fallback, rule.action?.topic,
 			rule.action?.name && 'event.' + rule.action.name ] )
 	], () => inputs.keys() );
+	editor.pickStreamTopic = pickTopic;
 
 	function topicInput( parent, label, numeric = false ) {
 
@@ -1116,9 +1055,9 @@ function SidebarStreams( editor ) {
 	}, eventStatus );
 
 	editor.signals.sceneGraphChanged.add( refresh );
-	const reset = () => { editing = editingEvent = - 1; capture = undefined; hardware.checked = false; releaseNotes(); bus.clear( 'demo.' ); bus.clear( 'map.' ); refresh(); };
+	const reset = () => { editing = editingEvent = - 1; capture = undefined; hardware.checked = false; midiDevice.releaseNotes(); bus.clear( 'demo.' ); bus.clear( 'map.' ); refresh(); };
 	editor.signals.projectLoaded.add( reset );
-	editor.signals.stopPlayer.add( releaseNotes );
+	editor.signals.stopPlayer.add( () => midiDevice.releaseNotes() );
 	editor.signals.editorCleared.add( reset );
 	editor.signals.objectRemoved.add( object => {
 

@@ -62,6 +62,27 @@ Choose **Disable look** to restore the material from before the stock look was a
 
 In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragment shader. Open **Material → Program** for the vertex shader or program info. A custom float such as `uniform float gain;` can be added to Program Info as `"gain": { "value": 1 }` under `uniforms`. Use a hex value such as `"#83a9e1"` for a color uniform declared as `vec3`. Numeric, color, and toggle uniforms appear under Material with keyframe diamonds. The shader and its uniforms save with the scene.
 
+## Editing node graphs
+
+These shortcuts apply in **Geometry Nodes**, **Shader Graph**, and **Logic Nodes**. Hover the graph canvas, or focus it with Tab. **Shift+A** and **F3** open the compact Add Node catalog. Search by node name or browse by category, then choose a result. Move the node into place and click or press Enter to confirm.
+
+| Shortcut or gesture | Action |
+| --- | --- |
+| **A**, **Alt+A**, **B**, **Shift+click** | Select all, clear selection, box select, or toggle one node |
+| **G**, **Shift+D** | Move or duplicate the selection. Click or press Enter to place it, or press Esc to cancel |
+| **Shift+S** | Swap the selected node for another type and reconnect compatible sockets |
+| **Ctrl/Cmd+C**, **Ctrl/Cmd+V** | Copy or paste nodes and their internal links |
+| **J**, **Shift+J** | Connect compatible sockets from left to right. Hold Shift to replace existing links |
+| **X**, **Delete**, **Ctrl+X** | Delete nodes. Use Ctrl+X to reconnect compatible links through the deleted nodes |
+| **M** | Mute selected nodes and bypass matching connected sockets |
+| **Ctrl+right-drag**, **Ctrl+Alt+right-drag** | Cut or mute the links crossed by the stroke |
+| **Alt+drag** a node title | Detach its links and move it |
+| **Home**, **Numpad Decimal** | Frame all nodes or frame the selection |
+
+Drag an existing input link away to disconnect it. Drag an unused socket into empty space to open the catalog filtered by socket type. Move an unconnected compatible node onto a link to insert it. [Blender node editing reference](https://docs.blender.org/manual/en/5.0/interface/controls/nodes/editing.html)
+
+All three catalogs include scalar math, remapping, and vector operations. **Math Expression** accepts X, Y, Z, constants such as `pi`, arithmetic, and functions such as `sin`, `clamp`, and `maprange`. For example, `0.5 + sin(x * 2) * 0.5` oscillates between zero and one. **Math Expression Field** evaluates the formula separately at each geometry sample.
+
 ## Shader Graph
 
 Select a mesh with a Standard or Physical material, choose the **Shader Graph** workspace, and click **New shader graph**. Select a material slot in the header when the mesh has more than one. Use **Use WebGPU** to enable the project's node-capable renderer. **Material Preview** and **Preview** show the graph alongside the editor, and **Play Scene** and playable exports use the same material.
@@ -69,6 +90,8 @@ Select a mesh with a Standard or Physical material, choose the **Shader Graph** 
 The **Material Output** node accepts base color, roughness, metalness, emission, opacity, normal, and vertex position. Unconnected inputs use the material's existing settings. Use **Checker** or **Perlin Noise** to drive **Mix Color**, or use **Base Color Texture** to sample the map assigned in the Material tab. **Transform UV** sets the pattern scale and offset. **Time** can drive an offset or another numeric socket.
 
 Graphs save with the material, so meshes sharing that material also share its graph. Graph edits and removal support undo. In a WebGL project, the authored material supplies the fallback appearance. [Animated TSL glaze tutorial](../editor/examples/lessons/README.md#animate-a-tsl-glaze)
+
+**Gradient**, **Wave**, **Voronoi**, **White Noise**, and **Fractal Noise** produce procedural patterns. Use **Color Ramp** to map a pattern to two color stops. **Bump** takes a height signal, and **Normal Map** samples the material's assigned normal texture. **Fresnel** and **Layer Facing** respond to the viewing angle. [Blender shader node reference](https://docs.blender.org/manual/en/5.0/render/shader_nodes/)
 
 ## Logic Nodes
 
@@ -79,6 +102,14 @@ Events can fire on start, every frame, at an interval, or in response to keyboar
 Use **Branch** with a Boolean condition or **Sequence** to run two chains in order. **Delay** schedules work for a future frame and allows feedback through **Merge Events**. **Send Event** and **Receive Event** pass named events between graphs and the Streams event bus. **Event Value** reads the numeric payload of the current event. **Set Variable** and **Get Variable** store numbers in the graph's playback instance.
 
 Graph changes save with the project and support undo. In Play, the graphs act on the playback scene. Stop and play again to restart from the authored scene. [Keyboard-controlled gate tutorial](../editor/examples/lessons/README.md#control-a-gate-with-logic-nodes)
+
+### Streams and devices
+
+In **Streams**, connect Web MIDI or Web Serial, or enable MediaPipe tracking on an input. In the Logic Nodes **Streams** category, use **On Stream Sample**, **On Stream Change**, or **Stream Threshold** and click **Browse stream topics**. Read the current event with **Event Value** or **Event Text**. Use **MIDI Control**, **MIDI Note**, **Serial Value**, and **MediaPipe Landmark** to read device data directly. Landmark outputs include X, Y, Z, a vector, and whether coordinates are available.
+
+**Publish Stream Value** shares values through `map.*` topics. In the editor, **Send MIDI Control**, **Send MIDI Note**, and **Send Serial Value** use the existing device connections and the **Arm routed hardware output** switch. Preview samples can animate the scene, and routed hardware output requires a live signal. [Stream-reactive sculpture tutorial](../editor/examples/lessons/README.md#drive-a-sculpture-from-a-stream)
+
+Playable HTML and ZIP exports include a **Live inputs** panel when the scene's Logic Nodes or Streams routes refer to a device. Open the export in a supported browser on HTTPS or localhost and connect MIDI or serial there. For MIDI, select the port. For serial, enter your device's baud rate before connecting. Start the camera or microphone from the panel. For MediaPipe, the player selects a tracker based on the graph, and you can change it before starting the camera. Tracking downloads the model and runtime when first enabled. Device connections and permissions are selected again in the published player. Enable **Arm hardware output** in that player to send MIDI or serial commands. [Web Serial requirements](https://developer.chrome.com/docs/capabilities/serial/) · [Web MIDI specification](https://www.w3.org/TR/webmidi/)
 
 ## 2D and 3D areas
 
@@ -103,6 +134,8 @@ The graph runs at its position in the mesh’s **Modifiers** stack. A disconnect
 **Position**, **Normal**, **Index**, and **Random Field** vary per vertex. Connect them through field math to **Set Position** for a deformation, or use **Greater Than Field** to select which vertices move. Field sockets also accept constant numbers, and **Constant Field** converts a linked Number or math result into a field.
 
 **Store Named Attribute** writes a scalar field to the mesh. **Read Named Attribute** reads it in a later geometry step. The Shader Graph's **Named Attribute** can use the same value to drive color, roughness, or another numeric socket. [Field-colored wave tutorial](../editor/examples/lessons/README.md#color-a-wave-with-a-geometry-field)
+
+**Geometry Proximity** measures distance and finds the closest X, Y, and Z on a target mesh's faces, edges, or vertices. It samples the position of the current vertex or point. **Distribute Points on Faces** uses seeded, area-weighted sampling. **Instance on Points** can align copies to the surface normal and lets fields drive their scale and rotation. Connect **Realize Instances** to **Mesh Output** to produce the final mesh. [Blender Geometry Proximity reference](https://docs.blender.org/manual/en/5.1/modeling/geometry_nodes/geometry/sample/geometry_proximity.html)
 
 ### Repeat and Simulation
 

@@ -1,4 +1,4 @@
-import { addNode, createGraph, dataflowOrder, indexGraph } from './NodeGraph.js';
+import { activeGraph, addNode, createGraph, dataflowOrder, indexGraph } from './NodeGraph.js';
 import { numberInput, VALUE_NODES } from './ValueNodes.js';
 
 const event = label => ( { label, type: 'event' } );
@@ -14,6 +14,12 @@ const comparands = { a: numberInput( 'A' ), b: numberInput( 'B' ) };
 const variableName = text( 'Name', 'count' );
 const eventName = text( 'Event', 'activate' );
 const duration = ( label, value = 1 ) => numberInput( label, value, 0, 3600 );
+const topic = ( value = '', mode = 'numeric' ) => ( { ...text( 'Topic', value ), browseTopic: mode } );
+const stringOutput = { value: { label: 'Text', type: 'string' } };
+const vec3 = { label: 'Vector', type: 'vec3' };
+const axes = Object.fromEntries( [ 'x', 'y', 'z' ].map( axis => [ axis, { label: axis.toUpperCase(), type: 'number' } ] ) );
+const midiChannel = numberInput( 'Channel', 1, 1, 16 );
+const midiNumber = ( label, value ) => numberInput( label, value, 0, 127 );
 const trigger = ( label, id, inputs, outputs = flow ) => ( { label, category: 'Events', trigger: id, inputs, outputs } );
 const action = ( label, category, inputs, outputs = flow ) => ( { label, category, inputs: { run: event( 'Run' ), ...inputs }, outputs } );
 
@@ -31,17 +37,35 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.receive', trigger( 'Receive Event', 'custom', { name: eventName } ) ],
 		[ 'logic.interval', trigger( 'Every Interval', 'interval', { seconds: numberInput( 'Seconds', 1, .001, 3600 ) } ) ],
 		[ 'logic.overlap', trigger( 'On Overlap', 'overlap', { target }, { enter: event( 'Enter' ), exit: event( 'Exit' ) } ) ],
+		[ 'logic.streamSample', { ...trigger( 'On Stream Sample', 'sample', { topic: topic( '', 'any' ) } ), category: 'Streams' } ],
+		[ 'logic.streamChange', { ...trigger( 'On Stream Change', 'sample', { topic: topic( '', 'any' ) } ), category: 'Streams' } ],
+		[ 'logic.streamThreshold', { ...trigger( 'Stream Threshold', 'sample', { topic: topic(), threshold: numberInput( 'Threshold', .5 ) },
+			{ above: event( 'Rises Above' ), below: event( 'Falls Below' ) } ), category: 'Streams' } ],
 		[ 'logic.clock', {
 			label: 'Scene Time', category: 'Values',
 			outputs: { elapsed: { label: 'Elapsed Seconds', type: 'number' }, delta: { label: 'Delta Seconds', type: 'number' } }
 		} ],
 		[ 'logic.object', { label: 'Object', category: 'Values', inputs: { object: target }, outputs: { object: { label: 'Object', type: 'object' } } } ],
 		[ 'logic.boolean', { label: 'Boolean', category: 'Values', inputs: { value: flag( 'Value' ) }, outputs: condition } ],
+		[ 'logic.string', { label: 'Text', category: 'Values', inputs: { value: text( 'Text' ) }, outputs: stringOutput } ],
 		[ 'logic.eventValue', { label: 'Event Value', category: 'Values', inputs: { fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],
+		[ 'logic.eventText', { label: 'Event Text', category: 'Values', inputs: { fallback: text( 'Fallback' ) }, outputs: stringOutput } ],
 		[ 'logic.topic', {
-			label: 'Stream Value', category: 'Values',
-			inputs: { topic: text( 'Topic' ), fallback: numberInput( 'Fallback' ) }, outputs: numeric
+			label: 'Stream Value', category: 'Streams',
+			inputs: { topic: topic(), fallback: numberInput( 'Fallback' ) }, outputs: numeric
 		} ],
+		[ 'logic.streamText', { label: 'Stream Text', category: 'Streams', inputs: { topic: topic( 'serial.line', 'any' ), fallback: text( 'Fallback' ) }, outputs: stringOutput } ],
+		[ 'logic.serialValue', { label: 'Serial Value', category: 'Streams', inputs: { key: text( 'Signal', 'A0' ), fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],
+		[ 'logic.midiCC', { label: 'MIDI Control', category: 'Streams', inputs: { channel: midiChannel, controller: midiNumber( 'Controller', 1 ) },
+			outputs: { ...numeric, normalized: { label: 'Normalized', type: 'number' } } } ],
+		[ 'logic.midiNote', { label: 'MIDI Note', category: 'Streams', inputs: { channel: midiChannel, note: midiNumber( 'Note', 60 ) },
+			outputs: { ...numeric, pressed: { label: 'Pressed', type: 'boolean' } } } ],
+		[ 'logic.midiBend', { label: 'MIDI Pitch Bend', category: 'Streams', inputs: { channel: midiChannel }, outputs: numeric } ],
+		[ 'logic.landmark', { label: 'MediaPipe Landmark', category: 'Streams', keywords: 'tracking pose face hand iris vision',
+			inputs: {
+				group: { ...text( 'Tracking', 'pose' ), options: [ 'pose', 'hand', 'leftHand', 'rightHand', 'face', 'iris.left', 'iris.right' ] },
+				index: numberInput( 'Index', 16, 0, 511 ), source: text( 'Input ID' )
+			}, outputs: { ...axes, vector: vec3, available: { label: 'Available', type: 'boolean' } } } ],
 		[ 'logic.variable', { label: 'Get Variable', category: 'Values', inputs: { name: variableName, fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],
 		[ 'logic.position', {
 			label: 'Object Position', category: 'Values', inputs: { target },
@@ -59,12 +83,20 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.delay', { ...action( 'Delay', 'Flow', { seconds: duration( 'Seconds' ) } ), deferred: true } ],
 		[ 'logic.send', action( 'Send Event', 'Actions', { name: eventName, value: numberInput( 'Value', 1 ) } ) ],
 		[ 'logic.setVariable', action( 'Set Variable', 'Actions', { name: variableName, value: numberInput( 'Value' ) } ) ],
+		[ 'logic.publishStream', action( 'Publish Stream Value', 'Streams', { topic: topic( 'map.value' ), value: numberInput( 'Value' ) } ) ],
+		[ 'logic.sendSerial', action( 'Send Serial Value', 'Streams', { key: text( 'Signal', 'LED' ), value: numberInput( 'Value' ) } ) ],
+		[ 'logic.sendCC', action( 'Send MIDI Control', 'Streams', { channel: midiChannel, controller: midiNumber( 'Controller', 1 ), value: midiNumber( 'Value', 0 ) } ) ],
+		[ 'logic.sendNote', action( 'Send MIDI Note', 'Streams', { channel: midiChannel, note: midiNumber( 'Note', 60 ), value: midiNumber( 'Velocity', 100 ) } ) ],
 		[ 'logic.move', action( 'Move', 'Actions', { target, ...xyz(), local: flag( 'Local Axes' ) } ) ],
+		[ 'logic.moveVector', action( 'Move by Vector', 'Actions', { target, vector: vec3, scale: numberInput( 'Scale', 1 ), local: flag( 'Local Axes' ) } ) ],
 		[ 'logic.rotate', action( 'Rotate', 'Actions', { target, ...xyz(), local: flag( 'Local Axes', true ) } ) ],
 		[ 'logic.setPosition', action( 'Set Position', 'Actions', { target, ...xyz() } ) ],
 		[ 'logic.setScale', action( 'Set Scale', 'Actions', { target, ...xyz( 1, 1, 1 ) } ) ],
 		[ 'logic.setVisibility', action( 'Set Visibility', 'Actions', { target, visible: flag( 'Visible', true ) } ) ],
 		[ 'logic.toggleVisibility', action( 'Toggle Visibility', 'Actions', { target } ) ],
+		[ 'logic.setColor', action( 'Set Material Color', 'Actions', { target, color: { label: 'Color', type: 'color', default: '#ffffff' }, slot: numberInput( 'Slot', 0, 0, 255 ) } ) ],
+		[ 'logic.lightIntensity', action( 'Set Light Intensity', 'Actions', { target, value: numberInput( 'Intensity', 1, 0, 1e6 ) } ) ],
+		[ 'logic.setParameter', action( 'Set Script Parameter', 'Actions', { target, index: numberInput( 'Script Index', 0, 0, 255 ), name: text( 'Parameter' ), value: numberInput( 'Value' ) } ) ],
 		...VALUE_NODES
 	] )
 };
@@ -110,6 +142,7 @@ export function createLogicGraph() {
 
 export function planLogicGraph( graph ) {
 
+	graph = activeGraph( graph, LOGIC_DOMAIN );
 	const index = indexGraph( graph, LOGIC_DOMAIN );
 	validateLogicLinks( index );
 	const outgoing = new Map();

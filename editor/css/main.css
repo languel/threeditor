@@ -4039,3 +4039,42 @@ body.translucent-panels:not(.workspace-split) #workspace-viewport #viewport .vie
 }
 .new-texture-dialog label:first-child { grid-column: 1 / -1; }
 .new-texture-dialog label input { width: 100%; box-sizing: border-box; }
+.node-catalog {
+	position: fixed;
+	inset: 0 auto auto 0;
+	margin: 0;
+	width: min(360px, calc(100vw - 8px));
+	max-height: calc(100vh - 8px);
+	padding: 7px;
+	border: 1px solid var(--theme-surface);
+	border-radius: 6px;
+	background: var(--theme-background);
+	color: var(--theme-text);
+	box-shadow: 0 6px 24px #0007;
+	font-size: 12px;
+}
+.node-catalog::backdrop { background: transparent; }
+.node-catalog > input { box-sizing: border-box; width: 100%; margin: 0 0 6px; padding: 5px 7px; }
+.node-catalog-body { display: grid; grid-template-columns: 102px minmax(0, 1fr); gap: 5px; }
+.node-catalog-body > div { height: min(285px, calc(100vh - 66px)); overflow: auto; }
+.node-catalog-categories { border-inline-end: 1px solid var(--theme-surface); padding-inline-end: 4px; }
+.node-catalog-body button {
+	display: block;
+	width: 100%;
+	min-height: 22px;
+	padding: 2px 5px;
+	border: 0;
+	border-radius: 3px;
+	color: inherit;
+	background: transparent;
+	text-align: start;
+	font: inherit;
+	cursor: pointer;
+}
+.node-catalog-body button:is(:hover, [aria-pressed="true"], [aria-selected="true"]) {
+	background: color-mix(in srgb, var(--theme-accent) 25%, var(--theme-surface));
+}
+.node-graph-card.is-muted { opacity: .58; }
+.node-graph-board[data-placing] { cursor: move; }
+.node-graph-row.wide-value { flex-wrap: wrap; padding-block: 3px; }
+.node-graph-row.wide-value input { width: 100%; }
