@@ -26,6 +26,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A bending signal flag | A mesh, pencil stripe, and curve share a skeleton, and a marker follows the tip bone. |
 | — | A Rapier pendulum | A dynamic bone swings from a kinematic parent, hits a scene collider, and receives a keyboard impulse. |
 | — | A reach-controlled arm | A two-bone IK chain follows a target and pole, with a weighted sleeve and a rigid hand marker. |
+| — | A tracking boom | A bone follows a rail, stops at its ends, and aims an attached lamp at a movable target. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -141,3 +142,10 @@ opened from the library.
 1. Open **A reach-controlled arm**. Select **Reach target** in the Outliner and move it. The sleeve bends and the hand follows the target within reach.
 2. Move **Elbow pole** to change the direction of the bend. Select **Forearm** and open **Armature** to inspect the target, pole, and chain length. Lower **IK Influence** to blend toward the authored pose.
 3. In Play Scene, press **Left** or **Right Arrow** to move the target, **Space** to show the authored pose, and **R** to restore IK. Open Logic Nodes on **Reach armature** to see how those keys drive the rig.
+
+### Constrain a tracking boom
+
+1. Open **A tracking boom**, select **Carriage**, and expand **Armature → Bone Constraints**. **Follow rail** copies the X coordinate from **Rail control**. **Rail stops** clamps the result. **Aim boom** points the bone's +Y axis at **Aim target**. The lamp and spotlight are attached to the bone.
+2. Select **Rail stops** and move it up one slot. The rail can now overshoot because **Follow rail** runs after the limit. Undo to restore the limit. Use **Add Constraint** to add Copy Location, Copy Rotation, Copy Scale, Copy Transforms, Limit Location, Limit Rotation, Limit Scale, Limit Distance, or Damped Track. The stack runs top to bottom, and IK runs afterward on its affected bones.
+3. In Play Scene, use **Left** and **Right Arrow** to slide the rail control, **Up** and **Down Arrow** to move the aim target, **Space** to mute tracking, and **R** to restore it. The Logic Nodes graph uses **Set Bone Constraint Influence**. Use **Set Bone Constraint Target** to retarget at runtime and enable **Evaluated Pose** on **Bone Pose** to read the result.
+4. WebMCP exposes `threeditor_bone_get_constraints` and `threeditor_bone_set_constraints`. The setter takes an ordered array and records one undo step. Preserve existing constraint IDs when editing or reordering them. World Space uses scene coordinates, Local Space uses a bone's rest frame, and Pose Space uses armature coordinates. Inspector angles use degrees and WebMCP angles use radians. Rapier kinematic bones follow the evaluated pose. Dynamic bones remain physics-driven.

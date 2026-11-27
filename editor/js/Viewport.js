@@ -4,7 +4,7 @@ import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
-import { withArmatureIK } from './rigging/ArmatureIK.js';
+import { withArmaturePose } from './rigging/ArmaturePose.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
@@ -1406,7 +1406,8 @@ function Viewport( editor ) {
 				scene.traverseVisible( object => {
 
 					if ( renderedFallback || ! isVisible( object ) || object.userData.annotation === true ) return;
-					if ( object.splats || object.isPoints || object.userData.armatureBinding || object.userData.armatureIK || isProjector( object ) ) renderedFallback = true;
+					if ( object.splats || object.isPoints || object.userData.armatureBinding || object.userData.armatureIK ||
+						object.userData.armatureConstraints?.length || isProjector( object ) ) renderedFallback = true;
 					else if ( object.isLine || object.isSprite ||
 						[ object.material ].flat().some( material => material?.isShaderMaterial ) ) renderedFallback = true;
 
@@ -1441,6 +1442,7 @@ function Viewport( editor ) {
 	let startTime = 0;
 	let endTime = 0;
 	let viewToolMode;
+	const authoredGizmo = { object: new THREE.Matrix4(), parent: new THREE.Matrix4() };
 
 	function drawScene( view, host, width, height, post, editorView = true ) {
 
@@ -1463,7 +1465,27 @@ function Viewport( editor ) {
 	function render() {
 
 		if ( renderer === null ) return;
-		armature.withRest( () => withArmatureIK( THREE, scene, renderPosed, armature.editing ? armature.rig : null ) );
+		const helper = transformControls.getHelper();
+		const candidate = transformControls.object;
+		if ( helper.visible && candidate?.parent ) {
+
+			// Transform interactions edit the authored pose. Draw the same pivot
+			// that hit testing uses, even while the rest of the view is evaluated.
+			candidate.updateWorldMatrix( true, false );
+			authoredGizmo.object.copy( candidate.matrixWorld );
+			authoredGizmo.parent.copy( candidate.parent.matrixWorld );
+			helper.renderTransform = authoredGizmo;
+
+		}
+		try {
+
+			armature.withRest( () => withArmaturePose( THREE, scene, renderPosed, armature.editing ? armature.rig : null ) );
+
+		} finally {
+
+			helper.renderTransform = null;
+
+		}
 
 	}
 

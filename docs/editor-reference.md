@@ -61,11 +61,21 @@ In **Build mesh** or **Polybuild**, choose **Surface / reference** as the placem
 
 ## Armatures
 
-Choose **Add → Armature** to create a rig with one root bone at the 3D cursor. Use the **Armature** properties tab to select a bone, add a root, or extrude a child from the selected bone’s tail. **Rest Head**, **Rest Tail**, and **Roll** describe the bone in its parent’s local space. Moving the bone with the regular transform tools changes its pose. **Reset Pose** restores the selected bone or the whole armature to its saved rest transforms. [Blender armature and rest pose reference](https://docs.blender.org/manual/en/2.81/animation/armatures/introduction.html)
+Choose **Add → Armature** to create a rig with one root bone at the 3D cursor. With the armature selected, press **Tab** to enter **Armature Edit Mode**. Move a head, tail, or whole bone to edit its rest shape. Connected joints move together. The inspector shows endpoints in armature space in Edit Mode and parent-local space in Object Mode. **Shift+A** adds a bone at the cursor, and **E** extrudes a child from the selected tip with the Blender keymap.
+
+Choose **Pose Mode** in the viewport mode menu or press **Ctrl+Tab** with the Blender keymap. Pose transforms are offsets from rest. Use **Alt+G**, **Alt+R**, and **Alt+S** to clear location, rotation, and scale. **Reset Pose** clears all channels on the selected bone or the whole armature. [Blender armature and rest pose reference](https://docs.blender.org/manual/en/2.81/animation/armatures/introduction.html)
 
 To keep an object rigid as the rig moves, select it and then add the desired bone to the selection so the bone is active. Press **Ctrl+P** and choose **Bone (Keep Transform)**. This also works for curves, pencil strokes, lights, cameras, and empties. For weighted deformation, select a mesh, stroke, curve, or point cloud, choose a rig in its **Armature** tab, and click **Bind Automatic Weights**. The binding blends one to four bones by distance to their rest segments. Edit Mode shows the original geometry, and Play uses the deformed geometry.
 
 In Logic Nodes, **Armature Bone** finds a bone by name or UUID and exposes its world-space head and tail. Connect its **Bone** socket to a transform action or **Reset Bone Pose**. The editor API and WebMCP expose the same authoring operations as `threeditor_armature_create`, `threeditor_armature_get`, `threeditor_bone_add`, `threeditor_bone_edit_rest`, `threeditor_armature_reset_pose`, `threeditor_bone_attach`, and `threeditor_armature_bind`. [Bending signal flag tutorial](../editor/examples/lessons/README.md#rig-a-bending-signal-flag)
+
+### Bone constraints
+
+Select a bone in Object or Pose Mode and open **Armature → Bone Constraints**. Add Copy Location, Copy Rotation, Copy Scale, Copy Transforms, Limit Location, Limit Rotation, Limit Scale, Limit Distance, or Damped Track. Choose an entry in the stack to set its target, influence, and available axes or bounds. Use the arrows to change the order. Evaluation runs from top to bottom, and IK runs after the stacks on its affected bones. [Blender constraint stack](https://docs.blender.org/manual/en/4.1/animation/constraints/interface/stack.html)
+
+Copy constraints can target a scene object or another bone. Use **Head / Tail** to select a point along a target bone when the constraint uses a position. **World Space** uses scene coordinates, **Local Space** uses rest-relative transforms for bones, and **Pose Space** uses each bone’s armature coordinates. Limit Distance uses world units, and Damped Track aims the selected local axis at the target. Limits affect the evaluated pose while the inspector and transform gizmo edit the authored values. A missing target leaves its constraint inactive. Tools reject dependencies that would make a bone follow its own evaluated result.
+
+In Logic Nodes, **Bone Constraint** reads influence and mute state by name or ID. **Set Bone Constraint Influence** blends or mutes it, **Set Bone Constraint Target** changes its target, and **Bone Pose** can read authored or evaluated offsets. WebMCP tools `threeditor_bone_get_constraints` and `threeditor_bone_set_constraints` inspect or replace the ordered stack in one undo step. Use radians for API rotation limits and degrees in the inspector. [Tracking boom tutorial](../editor/examples/lessons/README.md#constrain-a-tracking-boom)
 
 ### Inverse kinematics
 
@@ -85,7 +95,7 @@ Use **Bone Weight** and **Set Bone Weight** in Logic Nodes to read or change a v
 
 ### Bone physics
 
-On a bone’s **Armature** tab, set **Bone Physics** to **Kinematic capsule** to follow authored poses or **Dynamic capsule** to respond to gravity, contacts, and impulses in Play Scene. Dynamic child bones can use ball, hinge, or fixed parent joints. Hinges have a local axis and optional angle limits measured from the pose at the start of playback. A dynamic root can move freely or use **Anchor Root** to joint it to its armature. Set **Rig Collider** on a scene mesh to use its bounds as a fixed or moving box. [Rapier joint reference](https://rapier.rs/javascript3d/classes/JointData.html)
+On a bone’s **Armature** tab, set **Bone Physics** to **Kinematic capsule** to follow the evaluated pose or **Dynamic capsule** to respond to gravity, contacts, and impulses in Play Scene. Dynamic child bones can use ball, hinge, or fixed parent joints. Hinges have a local axis and optional angle limits measured from the pose at the start of playback. A dynamic root can move freely or use **Anchor Root** to joint it to its armature. Set **Rig Collider** on a scene mesh to use its bounds as a fixed or moving box. [Rapier joint reference](https://rapier.rs/javascript3d/classes/JointData.html)
 
 Use **Apply Bone Impulse** with a dynamic bone and a world-space impulse. **Bone Velocity** reads its speed and velocity vector. **On Bone Contact** fires when contact starts or ends and can filter by collider. **Reset Bone Pose** also resets a simulated bone’s velocity. The editor API and WebMCP expose configuration through `threeditor_bone_set_physics` and `threeditor_armature_set_collider`. Playable exports include the Rapier WebAssembly when a project has a physics rig. [Pendulum tutorial](../editor/examples/lessons/README.md#simulate-a-rapier-pendulum)
 

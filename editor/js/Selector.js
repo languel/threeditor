@@ -3,7 +3,7 @@ import { worldMeasurePoints } from './modeling/Measurements.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
-import { withArmatureIK } from './rigging/ArmatureIK.js';
+import { withArmaturePose } from './rigging/ArmaturePose.js';
 
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
@@ -168,7 +168,7 @@ class Selector {
 
 	getPointerIntersects( point, camera ) {
 
-		return withArmatureIK( THREE, this.editor.scene, () => this.getPosedPointerIntersects( point, camera ) );
+		return withArmaturePose( THREE, this.editor.scene, () => this.getPosedPointerIntersects( point, camera ) );
 
 	}
 

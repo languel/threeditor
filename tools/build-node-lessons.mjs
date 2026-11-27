@@ -656,3 +656,81 @@ for ( const [ key, influence, y ] of [ [ 'Space', 0, 425 ], [ 'KeyR', 1, 550 ] ]
 await save( '19-inverse-kinematics', 'A reach-controlled arm', reachingRig,
 	'Move Reach target and Elbow pole in the viewport to pose the arm. The hand marker follows the goal, and the sleeve bends with the two bones. In Play Scene, use Left and Right Arrow to move the target, Space to show the authored pose, and R to restore IK.',
 	[ 2.7, 1.3, 4.3 ] );
+
+const boomRig = createArmature( THREE, 'Tracking boom' );
+boomRig.position.y = -.65;
+const carriage = boomRig.children[ 0 ];
+carriage.name = 'Carriage';
+const railControl = new THREE.Object3D();
+railControl.name = 'Rail control';
+railControl.userData.emptyDisplay = { style: 'arrows', size: .25 };
+railControl.position.set( -.35, -.12, -.42 );
+const aimControl = new THREE.Object3D();
+aimControl.name = 'Aim target';
+aimControl.userData.emptyDisplay = { style: 'sphere', size: .14 };
+aimControl.position.set( .7, 1.6, -.2 );
+const aimDot = new THREE.Mesh( new THREE.IcosahedronGeometry( .11, 1 ),
+	new THREE.MeshStandardMaterial( { color: 0xf8cd72, emissive: 0x7d4e17 } ) );
+aimDot.name = 'Aim marker';
+aimControl.add( aimDot );
+boomRig.add( railControl, aimControl );
+
+carriage.userData.armatureConstraints = [
+	{ id: 'follow-rail', name: 'Follow rail', type: 'copyLocation', target: railControl.uuid, axes: 'X', ownerSpace: 'pose', targetSpace: 'local' },
+	{ id: 'rail-stops', name: 'Rail stops', type: 'limitLocation', ownerSpace: 'pose', min: [ -1.15, null, null ], max: [ 1.15, null, null ] },
+	{ id: 'aim-boom', name: 'Aim boom', type: 'dampedTrack', target: aimControl.uuid, trackAxis: 'Y' }
+];
+
+const rail = new THREE.Mesh( new THREE.BoxGeometry( 2.7, .17, .35 ),
+	new THREE.MeshStandardMaterial( { color: 0x3c536d, metalness: .45, roughness: .37 } ) );
+rail.name = 'Guide rail';
+rail.position.y = -.14;
+rail.castShadow = true;
+boomRig.add( rail );
+for ( const x of [ -1.15, 1.15 ] ) {
+
+	const stop = new THREE.Mesh( new THREE.BoxGeometry( .13, .16, .4 ), new THREE.MeshStandardMaterial( { color: 0xea9f47 } ) );
+	stop.name = 'Rail end stop';
+	stop.position.set( x, -.055, 0 );
+	boomRig.add( stop );
+
+}
+const boom = new THREE.Mesh( new THREE.CylinderGeometry( .055, .11, .83, 14 ),
+	new THREE.MeshStandardMaterial( { color: 0x56c7ca, metalness: .28, roughness: .42 } ) );
+boom.name = 'Boom shaft';
+boom.position.y = .42;
+boom.castShadow = true;
+const lamp = new THREE.Mesh( new THREE.ConeGeometry( .18, .28, 18 ),
+	new THREE.MeshStandardMaterial( { color: 0x85e6dc, emissive: 0x299c92 } ) );
+lamp.name = 'Boom lamp';
+lamp.position.y = .94;
+const beam = new THREE.SpotLight( 0x72e9e2, 5, 4, .24, .6, 1.4 );
+beam.name = 'Boom spotlight';
+beam.position.y = 1.07;
+beam.target.position.y = 2;
+carriage.add( boom, lamp, beam, beam.target );
+
+const boomLogic = boomRig.userData.logicGraph = createLogicGraph();
+removeNode( boomLogic, 'logic.start' );
+const carriageTarget = logicNode( boomLogic, 'logic.bone', 30, 560, { name: 'Carriage' } );
+for ( const [ key, axis, step, control, y ] of [
+	[ 'ArrowLeft', 'x', -.3, railControl, 28 ], [ 'ArrowRight', 'x', .3, railControl, 150 ],
+	[ 'ArrowUp', 'y', .18, aimControl, 278 ], [ 'ArrowDown', 'y', -.18, aimControl, 401 ]
+] ) {
+
+	const input = logicNode( boomLogic, 'logic.keyDown', 30, y, { key } );
+	const move = logicNode( boomLogic, 'logic.move', 320, y, { target: control.uuid, [ axis ]: step } );
+	wire( boomLogic, LOGIC_DOMAIN, input, 'then', move, 'run' );
+
+}
+for ( const [ key, muted, y ] of [ [ 'Space', true, 682 ], [ 'KeyR', false, 816 ] ] ) {
+
+	const input = logicNode( boomLogic, 'logic.keyDown', 30, y, { key } );
+	const set = logicNode( boomLogic, 'logic.setConstraintInfluence', 320, y, { name: 'Aim boom', influence: 1, muted } );
+	wire( boomLogic, LOGIC_DOMAIN, input, 'then', set, 'run' );
+	wire( boomLogic, LOGIC_DOMAIN, carriageTarget, 'object', set, 'target' );
+
+}
+await save( '20-bone-constraints', 'A tracking boom', boomRig,
+	'Select Carriage and open Bone Constraints in the Armature tab. Follow rail copies the X coordinate. Rail stops clamps it. Aim boom points the attached lamp and spotlight toward Aim target. In Play Scene, Left and Right Arrow slide the carriage, Up and Down Arrow move the aim target, Space mutes tracking, and R restores it.',
+	[ 2.75, 1.55, 4.6 ] );

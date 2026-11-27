@@ -1,5 +1,5 @@
 import { armatureBones, isArmature } from './Armature.js';
-import { withArmatureIK } from './ArmatureIK.js';
+import { withArmaturePose } from './ArmaturePose.js';
 import { normalizeBoneWeights, paintBoneWeight, weightPointKey } from './ArmatureWeights.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
@@ -250,7 +250,7 @@ function deform( THREE, object, rig, entry ) {
 // scene serialization can continue to use the original editable rest geometry.
 export function withArmatureDeformation( THREE, scene, draw, skip = null, skipRig = null ) {
 
-	return withArmatureIK( THREE, scene, () => withWeightedPose( THREE, scene, draw, skip, skipRig ), skipRig );
+	return withArmaturePose( THREE, scene, () => withWeightedPose( THREE, scene, draw, skip, skipRig ), skipRig );
 
 }
 

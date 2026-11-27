@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { UIButton, UINumber, UIPanel, UIRow, UIText } from './libs/ui.js';
 import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js';
 import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
+import { SidebarBoneConstraints } from './Sidebar.BoneConstraints.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
@@ -73,7 +74,8 @@ export function SidebarArmature( editor ) {
 	pose.add( offsetsPanel );
 	const physics = SidebarBonePhysics( editor, run );
 	const ik = SidebarArmatureIK( editor, run );
-	pose.add( ik, physics );
+	const constraints = SidebarBoneConstraints( editor, run );
+	pose.add( constraints, ik, physics );
 	const binding = new UIPanel();
 	const rigPicker = document.createElement( 'select' );
 	rigPicker.className = 'Select';
@@ -145,6 +147,7 @@ export function SidebarArmature( editor ) {
 		updateBinding( object, rigs );
 		physics.setObject( bone );
 		ik.setObject( bone );
+		constraints.setObject( editor.viewTools?.armature.editing ? null : bone );
 		collider.setObject( object, rigs.length > 0 );
 		if ( ! rig ) return;
 		const options = [ new Option( rig.name, rig.uuid ) ];
