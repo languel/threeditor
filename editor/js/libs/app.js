@@ -1,7 +1,7 @@
 import { TimelineRuntime } from '../animation/TimelineRuntime.js?v=timeline-keying';
 import { timelineData } from '../animation/TimelineData.js?v=timeline-keying';
 import { isProjector } from '../assets/Projector.js';
-import { lightViewCamera } from '../modeling/LightView.js';
+import { fitView, lightViewCamera } from '../modeling/LightView.js';
 import { drawProjectorOutput, renderFittedView } from '../modeling/ProjectorOutput.js';
 import { StreamRouter } from '../streams/StreamRouter.js';
 import { SplatHost } from '../assets/SplatHost.js';
@@ -13,6 +13,7 @@ import { scriptSourceForExecution } from '../ScriptParams.js';
 import { createP5Sketch } from '../P5Sketch.js';
 import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
 import { LogicRuntime } from '../nodes/LogicRuntime.js';
+import { readGamepads } from '../nodes/LogicInput.js';
 import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
 // Body for p5 sketch scripts: runs the student's global-mode source in a p5
@@ -83,6 +84,7 @@ const APP = {
 		const pressedKeys = new Set();
 		const pressedButtons = new Set();
 		let playing = false;
+		let pointer;
 
 		const dom = document.createElement( 'div' );
 
@@ -398,7 +400,10 @@ const APP = {
 				timeline.apply( timelineData( scene ), ( time - startTime ) / 1000 );
 				geometrySimulation.advanceTo( ( time - startTime ) / 1000, 8 );
 				dispatch( events.update, { time: time - startTime, delta: time - prevTime } );
-				logic.tick( ( time - startTime ) / 1000, ( time - prevTime ) / 1000 );
+				logic.tick( ( time - startTime ) / 1000, ( time - prevTime ) / 1000, {
+					pointer: pointerPosition( pointer ), camera: pointerCamera(),
+					gamepads: logic.usesGamepads && document.hasFocus() ? readGamepads() : undefined
+				} );
 
 			} catch ( e ) {
 
@@ -453,6 +458,8 @@ const APP = {
 			document.addEventListener( 'pointerdown', onPointerDown );
 			document.addEventListener( 'pointerup', onPointerUp );
 			document.addEventListener( 'pointermove', onPointerMove );
+			document.addEventListener( 'pointerout', onPointerOut );
+			document.addEventListener( 'pointercancel', onPointerCancel );
 			window.addEventListener( 'blur', onBlur );
 
 			dispatch( events.start, arguments );
@@ -472,9 +479,12 @@ const APP = {
 			document.removeEventListener( 'pointerdown', onPointerDown );
 			document.removeEventListener( 'pointerup', onPointerUp );
 			document.removeEventListener( 'pointermove', onPointerMove );
+			document.removeEventListener( 'pointerout', onPointerOut );
+			document.removeEventListener( 'pointercancel', onPointerCancel );
 			window.removeEventListener( 'blur', onBlur );
 			pressedKeys.clear();
 			pressedButtons.clear();
+			pointer = undefined;
 
 			renderer.setAnimationLoop( null );
 			controller?.dispose();
@@ -569,34 +579,70 @@ const APP = {
 
 			pressedKeys.clear();
 			pressedButtons.clear();
-			logic?.releaseKeys();
+			pointer = undefined;
+			logic?.releaseInput();
+
+		}
+
+		function pointerPosition( event ) {
+
+			if ( ! event || ! logic.usesPointer || event.target !== renderer.domElement || projectorContext ) return;
+			let { left: x, top: y, width, height } = renderer.domElement.getBoundingClientRect();
+			if ( ! width || ! height ) return;
+			if ( projector ) ( { x, y, width, height } = fitView( { x, y, width, height }, camera.aspect ) );
+			const u = ( event.clientX - x ) / width;
+			const v = ( event.clientY - y ) / height;
+			if ( u >= 0 && u <= 1 && v >= 0 && v <= 1 ) return { x: u, y: v };
+
+		}
+
+		function pointerCamera() {
+
+			if ( logic.usesPointer && ! projectorContext ) return projector ? lightViewCamera( THREE, projector, camera ) : camera;
 
 		}
 
 		function onPointerDown( event ) {
 
+			pointer = event;
 			if ( isPlayerControl( event ) ) return;
 			pressedButtons.add( event.button );
 			streams.publish( 'input.pointer', 1 );
-			streams.emit( 'pointerdown', { button: event.button } );
+			streams.emit( 'pointerdown', logic.pointerDetail( event.button, pointerPosition( event ), pointerCamera() ) );
 			dispatch( events.pointerdown, event );
 
 		}
 
 		function onPointerUp( event ) {
 
+			pointer = event.pointerType === 'touch' ? undefined : event;
 			const wasPressed = pressedButtons.delete( event.button );
 			if ( isPlayerControl( event ) && ! wasPressed ) return;
 			streams.publish( 'input.pointer', 0 );
-			streams.emit( 'pointerup', { button: event.button } );
+			streams.emit( 'pointerup', logic.pointerDetail( event.button, pointerPosition( event ), pointerCamera() ) );
 			dispatch( events.pointerup, event );
 
 		}
 
 		function onPointerMove( event ) {
 
+			pointer = event;
 			if ( isPlayerControl( event ) ) return;
 			dispatch( events.pointermove, event );
+
+		}
+
+		function onPointerOut( event ) {
+
+			if ( ! event.relatedTarget || event.target === renderer.domElement ) pointer = undefined;
+
+		}
+
+		function onPointerCancel() {
+
+			pointer = undefined;
+			pressedButtons.clear();
+			streams.publish( 'input.pointer', 0 );
 
 		}
 

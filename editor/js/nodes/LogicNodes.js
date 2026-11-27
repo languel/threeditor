@@ -22,6 +22,20 @@ const midiChannel = numberInput( 'Channel', 1, 1, 16 );
 const midiNumber = ( label, value ) => numberInput( label, value, 0, 127 );
 const trigger = ( label, id, inputs, outputs = flow ) => ( { label, category: 'Events', trigger: id, inputs, outputs } );
 const action = ( label, category, inputs, outputs = flow ) => ( { label, category, inputs: { run: event( 'Run' ), ...inputs }, outputs } );
+const gamepad = numberInput( 'Controller Index', 0, 0, 63 );
+const gamepadButton = numberInput( 'Button Index', 0, 0, 127 );
+const pointerButton = numberInput( 'Button', 0, 0, 4 );
+const options = ( label, values ) => ( { ...text( label, values[ 0 ] ), options: values } );
+const vector = ( label, value ) => ( { ...vec3, label, ...( value ? { default: value } : {} ) } );
+const unit = ( label, value ) => numberInput( label, value, 0, 1 );
+const numberOutput = label => ( { type: 'number', label } );
+const booleanOutput = label => ( { type: 'boolean', label } );
+const rayOutputs = {
+	hit: booleanOutput( 'Hit' ), object: { label: 'Object', type: 'object' }, point: vector( 'Point' ),
+	normal: vector( 'Normal' ), distance: numberOutput( 'Distance' )
+};
+const inputEvent = ( device, ...args ) => ( { ...trigger( ...args ), category: 'Input', device } );
+const inputValue = ( device, label, inputs, outputs, keywords ) => ( { device, label, category: 'Input', inputs, outputs, keywords } );
 
 export const LOGIC_DOMAIN = {
 	id: 'logic',
@@ -33,7 +47,43 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.keyDown', trigger( 'On Key Press', 'keydown', { key: text( 'Key Code', 'Space' ), repeat: flag( 'Allow Repeat' ) } ) ],
 		[ 'logic.keyUp', trigger( 'On Key Release', 'keyup', { key: text( 'Key Code', 'Space' ) } ) ],
 		[ 'logic.keyHeld', trigger( 'While Key Is Held', 'held', { key: text( 'Key Code', 'ArrowRight' ) } ) ],
-		[ 'logic.pointer', trigger( 'On Pointer Press', 'pointerdown', { button: numberInput( 'Button', 0, 0, 4 ) } ) ],
+		[ 'logic.pointer', trigger( 'On Pointer Press', 'pointerdown', { button: pointerButton } ) ],
+		[ 'logic.pointerUp', inputEvent( 'pointer', 'On Pointer Release', 'pointerup', { button: pointerButton } ) ],
+		[ 'logic.objectPress', inputEvent( 'pointer-ray', 'On Object Press', 'pointerdown', { target, button: pointerButton } ) ],
+		[ 'logic.pointerOver', { ...inputEvent( 'pointer-ray', 'Pointer Over Object', 'hover', { target }, {
+			enter: event( 'Enter' ), over: event( 'Over' ), exit: event( 'Exit' )
+		} ), keywords: 'mouse hover' } ],
+		[ 'logic.pointerPosition', inputValue( 'pointer', 'Pointer Position', {}, {
+			x: numberOutput( 'X' ), y: numberOutput( 'Y' ), inside: booleanOutput( 'Inside View' )
+		}, 'mouse cursor' ) ],
+		[ 'logic.pointerRay', inputValue( 'pointer-ray', 'Pointer Ray', {}, rayOutputs, 'mouse pick click raycast' ) ],
+		[ 'logic.raycast', {
+			label: 'Raycast', category: 'Queries', outputs: rayOutputs,
+			inputs: {
+				origin: vector( 'World Origin', [ 0, 0, 0 ] ), direction: vector( 'World Direction', [ 0, - 1, 0 ] ),
+				distance: numberInput( 'Max Distance', 100, 0, 1e6 ), scope: { ...object( 'Search In' ), emptyLabel: 'Whole scene' },
+				ignore: { ...object( 'Ignore' ), emptyLabel: 'None', allowSelf: true }
+			}
+		} ],
+		[ 'logic.keyboardState', inputValue( 'keyboard', 'Keyboard Key State', { key: text( 'Key Code', 'Space' ) }, { pressed: booleanOutput( 'Pressed' ) } ) ],
+		[ 'logic.gamepadConnection', inputEvent( 'gamepad', 'Gamepad Connection', 'gamepadconnection', { gamepad }, {
+			connected: event( 'Connected' ), disconnected: event( 'Disconnected' )
+		} ) ],
+		[ 'logic.gamepadButton', inputEvent( 'gamepad', 'Gamepad Button', 'gamepadbutton', {
+			gamepad, button: gamepadButton, mode: options( 'Mode', [ 'Press', 'Held', 'Release' ] )
+		} ) ],
+		[ 'logic.gamepadButtonValue', inputValue( 'gamepad', 'Gamepad Button Value', { gamepad, button: gamepadButton }, {
+			strength: numberOutput( 'Strength' ), pressed: booleanOutput( 'Pressed' )
+		}, 'controller trigger analog' ) ],
+		[ 'logic.gamepadActive', inputValue( 'gamepad', 'Gamepad Active', { gamepad }, { active: booleanOutput( 'Active' ) }, 'controller connected' ) ],
+		[ 'logic.gamepadAxis', inputValue( 'gamepad', 'Gamepad Axis', { gamepad, axis: numberInput( 'Axis Index', 0, 0, 127 ) }, numeric, 'controller joystick' ) ],
+		[ 'logic.gamepadStick', inputValue( 'gamepad', 'Gamepad Stick', {
+			gamepad, stick: options( 'Stick', [ 'Left', 'Right' ] ), deadZone: numberInput( 'Dead Zone', .15, 0, .99 ),
+			gain: numberInput( 'Gain', 1, 0, 20 ), invertX: flag( 'Invert X' ), invertY: flag( 'Invert Y' )
+		}, { x: numberOutput( 'X' ), y: numberOutput( 'Y' ), vector: vec3, strength: numberOutput( 'Strength' ) }, 'controller joystick') ],
+		[ 'logic.gamepadVibrate', { ...action( 'Gamepad Vibrate', 'Input', {
+			gamepad, seconds: numberInput( 'Seconds', .2, 0, 5 ), strong: unit( 'Strong Motor', .6 ), weak: unit( 'Weak Motor', .4 )
+		} ), device: 'gamepad', keywords: 'controller rumble haptics' } ],
 		[ 'logic.receive', trigger( 'Receive Event', 'custom', { name: eventName } ) ],
 		[ 'logic.interval', trigger( 'Every Interval', 'interval', { seconds: numberInput( 'Seconds', 1, .001, 3600 ) } ) ],
 		[ 'logic.overlap', trigger( 'On Overlap', 'overlap', { target }, { enter: event( 'Enter' ), exit: event( 'Exit' ) } ) ],
@@ -91,6 +141,7 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.moveVector', action( 'Move by Vector', 'Actions', { target, vector: vec3, scale: numberInput( 'Scale', 1 ), local: flag( 'Local Axes' ) } ) ],
 		[ 'logic.rotate', action( 'Rotate', 'Actions', { target, ...xyz(), local: flag( 'Local Axes', true ) } ) ],
 		[ 'logic.setPosition', action( 'Set Position', 'Actions', { target, ...xyz() } ) ],
+		[ 'logic.setPositionVector', action( 'Set Position by Vector', 'Actions', { target, vector: vector( 'Position', [ 0, 0, 0 ] ), world: flag( 'World Space', true ) } ) ],
 		[ 'logic.setScale', action( 'Set Scale', 'Actions', { target, ...xyz( 1, 1, 1 ) } ) ],
 		[ 'logic.setVisibility', action( 'Set Visibility', 'Actions', { target, visible: flag( 'Visible', true ) } ) ],
 		[ 'logic.toggleVisibility', action( 'Toggle Visibility', 'Actions', { target } ) ],

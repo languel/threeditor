@@ -1,4 +1,5 @@
 import { hasRestriction } from '../ObjectRestrictions.js';
+import { LogicInput } from './LogicInput.js';
 import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
 import { validateSocketValue } from './NodeGraph.js';
 import { VALUE_OPERATIONS } from './ValueNodes.js';
@@ -8,6 +9,7 @@ const empty = [];
 const degrees = Math.PI / 180;
 const MAX_EVENTS = 1024;
 const MAX_ACTIONS = 4096;
+const inputEvents = new Set( [ 'keydown', 'keyup', 'pointerdown', 'pointerup' ] );
 
 function numeric( value, fallback ) {
 
@@ -25,6 +27,8 @@ export class LogicRuntime {
 		this.streams = streams;
 		this.onError = onError;
 		this.instances = [];
+		this.input = new LogicInput( THREE, scene );
+		this.devices = new Set();
 		this.pending = [];
 		this.timers = [];
 		this.held = new Set();
@@ -40,6 +44,12 @@ export class LogicRuntime {
 
 				const plan = planLogicGraph( object.userData.logicGraph );
 				this.instances.push( { ...plan, owner: object, state: new Map(), variables: new Map() } );
+				for ( const node of plan.nodes.values() ) {
+
+					const device = LOGIC_DOMAIN.nodes.get( node.type ).device;
+					if ( device ) this.devices.add( device );
+
+				}
 
 			} catch ( error ) {
 
@@ -48,6 +58,18 @@ export class LogicRuntime {
 			}
 
 		} );
+
+	}
+
+	get usesPointer() { return this.devices.has( 'pointer' ) || this.devices.has( 'pointer-ray' ); }
+	get usesGamepads() { return this.devices.has( 'gamepad' ); }
+
+	pointerDetail( button, position, camera ) {
+
+		const detail = { button };
+		if ( position ) detail.position = position;
+		if ( this.devices.has( 'pointer-ray' ) ) detail.hit = this.input.pointerHit( position, camera );
+		return detail;
 
 	}
 
@@ -96,6 +118,21 @@ export class LogicRuntime {
 			case 'logic.string': return { value: inputs.value };
 			case 'logic.eventValue': return { value: numeric( context.detail?.value ?? context.detail, inputs.fallback ) };
 			case 'logic.eventText': return { value: toText( context.detail?.value ?? context.detail, inputs.fallback ) };
+			case 'logic.keyboardState': return { pressed: this.held.has( inputs.key ) };
+			case 'logic.pointerPosition': {
+
+				const position = context.pointerEvent ? context.detail?.position : this.input.pointer;
+				return { x: position?.x ?? 0, y: position?.y ?? 0, inside: !! position };
+
+			}
+			case 'logic.pointerRay': return context.pointerHit ?? this.input.hoverHit();
+			case 'logic.raycast': return this.input.raycast( inputs,
+				inputs.scope ? this.target( instance, inputs.scope ) : this.scene,
+				inputs.ignore ? this.target( instance, inputs.ignore ) : undefined );
+			case 'logic.gamepadButtonValue': return this.input.button( inputs.gamepad, inputs.button );
+			case 'logic.gamepadActive': return { active: !! this.input.pad( inputs.gamepad ) };
+			case 'logic.gamepadAxis': return { value: this.input.axis( inputs.gamepad, inputs.axis ) };
+			case 'logic.gamepadStick': return this.input.stick( inputs );
 			case 'logic.topic': return { value: numeric( this.streamValue( inputs.topic, context ), inputs.fallback ) };
 			case 'logic.streamText': return { value: toText( this.streamValue( inputs.topic, context ), inputs.fallback ) };
 			case 'logic.serialValue': return { value: numeric( this.streamValue( 'serial.' + inputs.key.trim(), context ), inputs.fallback ) };
@@ -185,6 +222,7 @@ export class LogicRuntime {
 			case 'logic.sendNote':
 				this.streams.sendOutput( 'midi.note', { channel: Math.round( inputs.channel ), note: Math.round( inputs.note ) }, inputs.value, context.preview );
 				break;
+			case 'logic.gamepadVibrate': if ( ! context.preview ) this.input.vibrate( inputs ); break;
 			case 'logic.merge': break;
 			default: this.objectAction( instance, node, inputs );
 
@@ -217,6 +255,10 @@ export class LogicRuntime {
 				else object.quaternion.premultiply( this.rotation );
 				break;
 			case 'logic.setPosition': object.position.set( x, y, z ); break;
+			case 'logic.setPositionVector':
+				object.position.fromArray( inputs.vector );
+				if ( inputs.world ) object.parent?.worldToLocal( object.position );
+				break;
 			case 'logic.setScale': object.scale.set( x, y, z ); break;
 			case 'logic.setVisibility': object.visible = inputs.visible; break;
 			case 'logic.toggleVisibility': object.visible = ! object.visible; break;
@@ -288,7 +330,8 @@ export class LogicRuntime {
 					const visit = { ...context };
 					const inputs = this.inputs( instance, node, visit );
 					const port = this.triggerPort( instance, node, kind, inputs, visit );
-					if ( port ) this.fire( instance, node, port, visit );
+					if ( Array.isArray( port ) ) for ( const output of port ) this.fire( instance, node, output, visit );
+					else if ( port ) this.fire( instance, node, port, visit );
 
 				} catch ( error ) {
 
@@ -310,7 +353,35 @@ export class LogicRuntime {
 			case 'keydown': return ( inputs.repeat || ! detail?.repeat ) && detail?.code === inputs.key ? 'then' : undefined;
 			case 'keyup': return detail?.code === inputs.key ? 'then' : undefined;
 			case 'held': return this.held.has( inputs.key ) ? 'then' : undefined;
-			case 'pointerdown': return detail?.button === Math.round( inputs.button ) ? 'then' : undefined;
+			case 'pointerup':
+			case 'pointerdown': {
+
+				if ( detail?.button !== Math.round( inputs.button ) ) return;
+				if ( node.type !== 'logic.objectPress' ) return 'then';
+				if ( context.pointerHit?.parents?.includes( this.target( instance, inputs.target )?.uuid ) ) return 'then';
+				return;
+
+			}
+			case 'hover': {
+
+				const hit = this.input.hoverHit();
+				const over = hit.parents?.includes( this.target( instance, inputs.target )?.uuid ) === true;
+				const previous = instance.state.get( node.id ) === true;
+				instance.state.set( node.id, over );
+				context.pointerHit = hit;
+				if ( over ) return previous ? 'over' : [ 'enter', 'over' ];
+				if ( previous ) return 'exit';
+				return;
+
+			}
+			case 'gamepadconnection': return this.input.connection( inputs.gamepad );
+			case 'gamepadbutton': {
+
+				if ( ! this.input.button( inputs.gamepad, inputs.button, inputs.mode ) ) return;
+				context.detail = { value: this.input.button( inputs.gamepad, inputs.button ).strength };
+				return 'then';
+
+			}
 			case 'custom': return context.name === inputs.name.trim().replace( /^event\./, '' ) ? 'then' : undefined;
 			case 'sample': {
 
@@ -390,7 +461,7 @@ export class LogicRuntime {
 
 	}
 
-	tick( time, delta ) {
+	tick( time, delta, input ) {
 
 		this.start();
 		if ( ! this.instances.length ) return;
@@ -398,6 +469,7 @@ export class LogicRuntime {
 		this.time = Math.max( this.time, numeric( time, this.time ) );
 		this.delta = Math.max( 0, numeric( delta, 0 ) );
 		this.remaining = MAX_ACTIONS;
+		this.input.update( input );
 		const ready = this.timers.filter( timer => timer.time <= this.time && timer.frame <= this.frame );
 		this.timers = this.timers.filter( timer => timer.time > this.time || timer.frame > this.frame );
 		for ( const { instance, node, context } of ready ) {
@@ -405,15 +477,28 @@ export class LogicRuntime {
 			if ( ! hasRestriction( instance.owner, 'disabled' ) ) this.fire( instance, node, 'then', context );
 
 		}
+		if ( this.usesGamepads ) {
+
+			this.trigger( 'gamepadconnection' );
+			this.trigger( 'gamepadbutton' );
+
+		}
 		this.trigger( 'update' );
 		this.trigger( 'held' );
 		this.trigger( 'interval' );
 		this.trigger( 'overlap' );
+		if ( this.devices.has( 'pointer-ray' ) ) this.trigger( 'hover' );
 		for ( let i = 0; i < this.pending.length && i < MAX_EVENTS && this.remaining > 0; i ++ ) {
 
-			const context = this.pending[ i ];
+			let context = this.pending[ i ];
 			if ( context.sample ) { this.trigger( 'sample', context ); continue; }
-			if ( [ 'keydown', 'keyup', 'pointerdown' ].includes( context.name ) ) this.trigger( context.name, context );
+			if ( context.name === 'pointerdown' || context.name === 'pointerup' ) {
+
+				context = { ...context, pointerEvent: true };
+				if ( this.devices.has( 'pointer-ray' ) ) context.pointerHit = context.detail?.hit ?? this.input.pointerHit( context.detail?.position );
+
+			}
+			if ( inputEvents.has( context.name ) ) this.trigger( context.name, context );
 			this.trigger( 'custom', context );
 
 		}
@@ -435,7 +520,7 @@ export class LogicRuntime {
 		for ( const unsubscribe of this.sampleSubscriptions || empty ) unsubscribe();
 		this.sampleSubscriptions = [];
 		this.pending.length = this.timers.length = 0;
-		this.releaseKeys();
+		this.releaseInput();
 		this.time = this.delta = this.frame = 0;
 		this.budgetWarning = false;
 		for ( const instance of this.instances ) {
@@ -447,9 +532,10 @@ export class LogicRuntime {
 
 	}
 
-	releaseKeys() {
+	releaseInput() {
 
 		this.held.clear();
+		this.input.reset();
 
 	}
 

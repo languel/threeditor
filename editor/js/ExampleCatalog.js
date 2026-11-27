@@ -37,6 +37,7 @@ const exampleCatalog = [
 		{ title: 'A proximity garden', file: 'examples/lessons/11-proximity-garden.app.json' },
 		{ title: 'A stream-reactive sculpture', file: 'examples/lessons/12-stream-pulse.app.json' },
 		{ title: 'A tapered curve sweep', file: 'examples/lessons/13-tapered-curve.app.json' },
+		{ title: 'A pointer and gamepad control deck', file: 'examples/lessons/14-interactive-control-deck.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

@@ -32,7 +32,8 @@ export function openLogicNodes( editor ) {
 	function inputOptions( spec, value ) {
 
 		if ( spec.type !== 'object' ) return;
-		const choices = [ [ '', 'Self' ], ...references ];
+		const choices = [ [ '', spec.emptyLabel || 'Self' ], ...references ];
+		if ( spec.allowSelf ) choices.splice( 1, 0, [ editor.selected.uuid, 'Self' ] );
 		if ( value && ! choices.some( ( [ id ] ) => id === value ) ) choices.push( [ value, 'Missing object' ] );
 		return choices;
 
