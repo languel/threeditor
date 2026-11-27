@@ -127,6 +127,7 @@ export function selectionRegionContains( { tool, polygon, start, end }, point, r
 }
 export function selectionRegionIntersectsSegment( region, a, b, radius ) {
 
+	if ( ! a || ! b ) return false;
 	if ( selectionRegionContains( region, a, radius ) || selectionRegionContains( region, b, radius ) ) return true;
 	const { tool, polygon, start, end } = region;
 	const cross = ( p, q, r ) => ( q[ 0 ] - p[ 0 ] ) * ( r[ 1 ] - p[ 1 ] ) - ( q[ 1 ] - p[ 1 ] ) * ( r[ 0 ] - p[ 0 ] );
@@ -141,6 +142,15 @@ export function selectionRegionIntersectsSegment( region, a, b, radius ) {
 	}
 	const boundary = tool === 'lasso' ? polygon : [ start, [ end[ 0 ], start[ 1 ] ], end, [ start[ 0 ], end[ 1 ] ] ];
 	return boundary.some( ( point, i ) => intersects( point, boundary[ ( i + 1 ) % boundary.length ] ) );
+
+}
+
+export function selectionRegionIntersectsPolygon( region, corners, radius ) {
+
+	if ( corners.some( ( corner, i ) => selectionRegionIntersectsSegment( region, corner, corners[ ( i + 1 ) % corners.length ], radius ) ||
+		selectionRegionContains( region, corner, radius ) ) ) return true;
+	// The selection region can be entirely inside a large face.
+	return corners.every( Boolean ) && pointInPolygon( region.start, corners );
 
 }
 

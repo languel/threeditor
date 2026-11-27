@@ -231,6 +231,8 @@ In the 3D viewport, open the command palette with **F3**. **Vertical Split** pla
 
 Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
 
+Hover the pane you want to control before starting **Fly Camera** or **Play Scene**. In the Blender keymap, **Shift+Backtick** flies the current Director, scene camera, light, or projector view. **Option/Alt+Shift+P** plays the scene from the hovered pane and leaves the other pane visible. Press it again to stop. Presentation mode fills the window.
+
 ## Outliner and Properties
 
 The Outliner stays above Properties, with a divider you can drag or resize with the arrow keys. Search filters the hierarchy and includes parents of matching objects. The vertical icon rail below the Outliner contains Scene and the property tabs that apply to the selection. Assets, Streams, Project, and Settings sit below the divider in the same rail. Open **Scene** for Background, Environment, Fog, Bloom, and Focus.
@@ -239,7 +241,7 @@ Use the editor-type glyph at the top left of the main view, Outliner, Properties
 
 ## Paths, shapes, and meshes
 
-Selection uses an orange silhouette outline by default. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view and its split companion. Projector outputs, Preview and Play stay clean. The WebGPU renderer falls back to bounds.
+Selection uses an orange silhouette outline by default in WebGL and WebGPU, including for Pencil strokes and sculpted meshes. Under **Settings → General → Selection highlight**, choose **Outline + bounds** or **Bounds** when you need a bounding box. Outlines appear in the Director editing view and its split companion. Preview and Play hide the 3D cursor and selection guides.
 
 Press **Tab** or click **Edit mode**. The single-column Edit shelf holds drawing tools, **Polybuild (6)**, and **Knife (K)**. Sculpt has a brush shelf with radius and strength in the viewport header. Each mode remembers its active tool where it applies. Press **T** to toggle the shelf. The active tool has an accent highlight and a tooltip. Mode controls stay at the top-left, transforms and grid settings are centered, and view controls stay at the top-right. Narrow viewports move transforms onto their own centered row. Open the **Mesh and point operations** menu (three dots) for fill, split, weld, extrusion, and deletion. The top toolbar holds transforms, snapping, placement, view, and the **Editor Type** picker. New profiles start on a plane facing the view. Choose **Ground plane** or **Mesh surface** under **Placement** before placing the first point to draw on those planes.
 
@@ -319,7 +321,9 @@ In Object Mode, **Shift+D** duplicates the selected hierarchies under their curr
 
 Middle-drag orbits, Shift+middle-drag pans, and Ctrl+middle-drag zooms. Under General, **Emulate 3-button mouse** allows Option/Alt+left-drag with Shift or Ctrl/Command modifiers for the same actions. Outliner eye controls change standard object visibility (including exports); the pointer disables viewport selection and the lock prevents editor transforms.
 
-Press **Shift+Backtick** to fly the camera selected in the viewport camera dropdown, including parented scene cameras. Move with **WASD**, go down/up with **Q/E**, hold **Shift** for speed, use the wheel to adjust speed, and look with the mouse. In orthographic Fly, **W/S** zooms in and out, **A/D** pans left and right, and **Q/E** pans down and up in the view. Enter or click accepts, and Escape restores the starting pose and zoom. Accepted scene-camera changes are undoable. When pointer lock is unavailable, a notice appears and mouse look uses the free cursor.
+Hover a viewport and press **Shift+Backtick** to fly its camera or optical source. Move with **WASD**, go down/up with **Q/E**, hold **Shift** for speed, use the wheel to adjust speed, and look with the mouse. In orthographic Fly, **W/S** zooms in and out, **A/D** pans left and right, and **Q/E** pans down and up in the view. Enter or click accepts, and Escape restores the starting pose and zoom. Accepted changes to scene cameras, lights, and projectors are undoable. Flying a spot or directional light adjusts its position and aim target. When pointer lock is unavailable, a notice appears and mouse look uses the free cursor.
+
+In Object Mode with the Blender keymap, press **G**, then **G** again to move the selection vertically until its lowest geometry point touches the ground plane at world Y=0. The drop confirms the grab in one undo step and keeps the spacing between selected objects.
 
 The viewport camera dropdown remembers the active scene camera. **Numpad 0** toggles between it and the editor view. **Ctrl+Numpad 0** makes the selected scene camera active. **Ctrl+Alt+Numpad 0** aligns the active scene camera to the current view and looks through it. Orbit, pan, and zoom move the camera you are looking through. In a scene camera's **Object** properties, choose **Orbit**, **Fly**, **First Person**, or **Third Person** under **Controller** for Play and published scenes. For Third Person, choose the object to follow.
 
@@ -365,4 +369,6 @@ Choose **Knife (K)** and drag a line across the mesh to split crossed edges and 
 
 **Escape** clears scene-object selection in Object mode and component selection in Edit mode, keeping the active mode and tool. An active transform, scrub, stroke, or unfinished construction draft cancels first. Use Tab to leave Edit mode or choose another tool explicitly.
 
-Edit mode reserves ordinary left-button clicks and drags for editing, including in Standard mouse navigation. Shape/path control edges support the same click and region-selection tools as mesh edges; a closed shape also exposes its profile as a selectable face. If no editable target is active, click an unlocked mesh, shape or path to choose it without orbiting. Explicit camera gestures and the wheel remain available.
+Ordinary left-drag uses the active selection tool. The regular Select tool uses a box for drags and a single pick for clicks. In **Settings → General → Empty-space drag**, choose **Orbit** to restore left-drag orbit in Object Mode when the regular Select tool is active. Middle-drag orbits, Shift-middle-drag pans, and Ctrl-middle-drag zooms while editing, sculpting, or drawing. With **Emulate 3-button mouse** enabled, Alt-left-drag uses the same bindings.
+
+Enable **Select partially covered edges and faces** in **Settings → General** to include elements that cross or overlap a Box, Circle, or Lasso region. With it off, edges require both endpoints and faces use their centers. Shape and path control edges use these tools too, and a closed shape exposes its profile as a selectable face. If no editable target is active, click an unlocked mesh, shape, or path to choose it.

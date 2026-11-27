@@ -28,3 +28,4 @@ export { JoinMeshesCommand } from './JoinMeshesCommand.js';
 export { SetMeshMaterialsCommand } from './SetMeshMaterialsCommand.js';
 export { DuplicateObjectsCommand } from './DuplicateObjectsCommand.js';
 export { AddMeshPrimitiveCommand } from './AddMeshPrimitiveCommand.js';
+export { SetLightViewCommand } from './SetLightViewCommand.js';

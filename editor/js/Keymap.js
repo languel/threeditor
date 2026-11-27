@@ -172,6 +172,7 @@ class Keymap {
   const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) && ! target.closest( '.viewport-edit-workspace' ) ) && ! this.editor.editWorkspace?.exclusive;
   const inOutliner = !! target?.closest( '#outliner' ) && ! this.editor.modeling?.editMode && ! this.editor.viewTools?.mode;
   const inSourcePane = this.editor.viewportSplit && this.viewFrame?.director === false;
+  if ( id === 'fly' ) return inViewport;
   if ( category === 'Navigation' ) return this.overEditableViewport;
   if ( category === 'Visibility' ) return inOutliner || this.overEditableViewport;
   if ( category === 'Hierarchy' || category === 'Rigging' ) return inOutliner || this.overEditableViewport;
@@ -389,7 +390,7 @@ class Keymap {
    }
    case 'panLeft':case 'panRight':case 'panUp':case 'panDown':e.controls.pan(new THREE.Vector3(id==='panLeft'?-35:id==='panRight'?35:0,id==='panUp'?35:id==='panDown'?-35:0,0));break;
    case 'zoomIn':case 'zoomOut':e.controls.zoom(new THREE.Vector3(0,0,id==='zoomIn'?-1:1));break;
-   case 'fly':e.flyControls?.start();break;
+   case 'fly':e.flyControls?.start(this.viewFrame);break;
    case 'toggleWireframe':
     if(e.viewportShading==='wireframe')e.setViewportShading(this.previousShading||'solid');
     else {this.previousShading=e.viewportShading;e.setViewportShading('wireframe');}
@@ -400,7 +401,7 @@ class Keymap {
     const index=modes.indexOf(e.viewportShading);
     e.setViewportShading(modes[(index+(id==='shading'?1:-1)+modes.length)%modes.length]);break;
    }
-   case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch();else s.stopPlayer.dispatch();break;
+   case 'play': if(document.getElementById('player').style.display==='none')s.startPlayer.dispatch(this.viewFrame?.key);else s.stopPlayer.dispatch();break;
    case 'presentation':e.player?.present();break;
    case 'code':e.codePanel.open();break;
    case 'sidebar':case 'timeline':case 'toolbar':case 'settings':{const names={sidebar:'Toggle right sidebar',timeline:'Toggle animation timeline',toolbar:'Toggle transform toolbar',settings:e.strings.getKey('sidebar/settings')};document.querySelector('.panel-toggles button[aria-label="'+names[id]+'"]')?.click();break;}

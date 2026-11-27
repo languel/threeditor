@@ -6,6 +6,7 @@ import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import { SetScaleCommand } from './commands/SetScaleCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
+import { groundOffset } from './modeling/GroundPlacement.js';
 
 function ModalTransform( editor ) {
  let mode=null,states=[],originals=[],objects=[],selection=[],axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0,commitPreview=null;
@@ -167,6 +168,17 @@ function ModalTransform( editor ) {
   updateMarker();
  }
 
+ function groundSelection(){
+  const offset=groundOffset(editor.scene,objects);
+  if(offset)for(const object of objects){
+   const point=object.getWorldPosition(new THREE.Vector3());
+   point.y+=offset;
+   object.position.copy(object.parent?object.parent.worldToLocal(point):point);
+   object.updateMatrixWorld(true);
+  }
+  finish(true);
+ }
+
  window.addEventListener('pointermove',e=>{lastX=e.clientX;lastY=e.clientY;pointer=e;if(mode)updatePointer(e);},true);
  window.addEventListener('keydown',e=>{
   if(!mode)return;
@@ -181,6 +193,7 @@ function ModalTransform( editor ) {
   }
   if(!e.repeat&&transformModes.has(key)){
    const next=transformModes.get(key);
+   if(next==='translate'&&mode==='translate'&&!editor.viewTools.armature.mode&&!pickingBase){groundSelection();return;}
    if(next===mode&&mode!=='rotate')return;
    trackball=next===mode&&mode==='rotate'&&!trackball;
    mode=next;axis=null;plane=false;local=false;auto=null;snapBase=null;pickingBase=false;

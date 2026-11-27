@@ -1,6 +1,7 @@
 import { isPencilStroke, regionHitsPencilStroke } from './PencilSelection.js';
 import { cutAcrossMesh, loopCut, dissolveEdge, autoQuad } from './PolyOperations.js';
-import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, selectionRegionContains, meshEdges, combineSelection } from './MeshSelection.js?v=shape-selection';
+import { elementKey, selectionCandidates, applySelection, connectedSelection, edgeLoop, selectionRegionContains, selectionRegionIntersectsPolygon,
+	selectionRegionIntersectsSegment, meshEdges, combineSelection } from './MeshSelection.js?v=shape-selection';
 import { evaluateModifiers, modifierSource, modifierStackCommands, setModifierStack } from './Modifiers.js?v=poly-context';
 import { separateMesh } from './MeshSeparation.js';
 import { meshBrushes, strokeBrushes, sculptNeighbors, sculptPoints } from './SculptBrush.js?v=stroke-edit';
@@ -813,6 +814,24 @@ export class ModelViewport {
 
 	}
 
+	altClick( event ) {
+
+		if ( ! this.canEdit() || this.editor.viewTools.mode || this.drag || this.gesture || this.adding || this.brush || this.knife ||
+			this.editor.viewportShading === 'preview' || this.editor.viewLayout.at( event.clientX, event.clientY ) !== this.frame ) return;
+		this.lastPointer = event;
+		if ( this.pen ) {
+
+			const rect = this.rect(), data = structuredClone( this.data );
+			if ( autoQuad( THREE, data, [ event.clientX - rect.left, event.clientY - rect.top ], point => this.project( point, rect.width, rect.height ), addFace ) ) {
+
+				this.commit( 'AutoQuad', data, data.faces.at( -1 ) );
+
+			}
+
+		} else if ( this.selectionMode === 'edge' ) this.selectElement( event );
+
+	}
+
 	beginSelection( event, objectSelection = false ) {
 
 		const rect = this.rect();
@@ -839,8 +858,20 @@ export class ModelViewport {
 		const frame = this.frame;
 		const pixels = this.data.points.map( point => this.project( point, width, height ) );
 		const inside = point => selectionRegionContains( drag, point, this.brushRadius );
+		const partial = this.editor.config.getKey( 'settings/partialElementSelection' );
 		const hits = selectionCandidates( this.data, this.selectionMode ).filter( ids => {
 
+			if ( partial && ids.length > 1 ) {
+
+				const points = ids.map( i => pixels[ i ] );
+				const intersects = this.selectionMode === 'face' ? selectionRegionIntersectsPolygon( drag, points, this.brushRadius ) :
+					selectionRegionIntersectsSegment( drag, points[ 0 ], points[ 1 ], this.brushRadius );
+				if ( ! intersects ) return false;
+				const center = elementCenter( this.data, ids );
+				return this.pointVisible( center, this.project( center, width, height ), frame ) ||
+					ids.some( i => this.pointVisible( this.data.points[ i ], pixels[ i ], frame ) );
+
+			}
 			if ( this.selectionMode === 'face' ) {
 
 				const center = elementCenter( this.data, ids );
@@ -863,11 +894,33 @@ export class ModelViewport {
 		if ( ! cancel ) {
 
 			const { scene, selector } = this.editor;
+			if ( drag.tool === 'select' && Math.hypot( drag.end[ 0 ] - drag.start[ 0 ], drag.end[ 1 ] - drag.start[ 1 ] ) < 4 ) {
+
+				this.selectAt?.( this.frame, drag.event.clientX, drag.event.clientY, drag.event.shiftKey );
+				this.draw();
+				return;
+
+			}
 			const { camera, rect: { width, height } } = this.frame;
+			const armature = this.editor.viewTools.armature;
+			const toPixel = vector => {
+
+				vector.project( camera );
+				return vector.z < - 1 || vector.z > 1 ? null : [ ( vector.x + 1 ) * width / 2, ( 1 - vector.y ) * height / 2 ];
+
+			};
+			if ( armature.mode ) {
+
+				armature.selectRegion( drag, toPixel, this.brushRadius );
+				this.draw();
+				return;
+
+			}
 			const hits = new Map(), point = new THREE.Vector3();
 			scene.traverseVisible( object => {
 
-				const isSelectable = object.geometry || object.isLight || object.isCamera || object.userData.assetObject?.type === 'projector' || object.userData.hasSplat;
+				const isSelectable = object.geometry || object.isLight || object.isCamera || object.userData.emptyDisplay ||
+					object.userData.armatureBone || object.userData.assetObject?.type === 'projector' || object.userData.hasSplat;
 				if ( ! isSelectable || object.userData.runtimeOnly || hasRestriction( object, 'unselectable' ) || ! isVisible( object ) ) return;
 				if ( isPencilStroke( object ) ) {
 
@@ -875,9 +928,7 @@ export class ModelViewport {
 					return;
 
 				}
-				point.setFromMatrixPosition( object.matrixWorld ).project( camera );
-				if ( point.z < -1 || point.z > 1 ) return;
-				const pixel = [ ( point.x + 1 ) * width / 2, ( 1 - point.y ) * height / 2 ];
+				const pixel = toPixel( point.setFromMatrixPosition( object.matrixWorld ) );
 				if ( selectionRegionContains( drag, pixel, this.brushRadius ) ) hits.set( object.uuid, object );
 
 			} );
@@ -2354,8 +2405,10 @@ export class ModelViewport {
 
 	pointerDown( event ) {
 
-		if ( this.editor.viewportShading === 'preview' ) return;
-		if ( ! this.editMode && this.selectionTool !== 'select' && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
+		const controls = this.editor.controls;
+		if ( this.editor.viewportShading === 'preview' || controls?.navigationGesture( event ) ) return;
+		const regionSelect = this.selectionTool !== 'select' || controls?.emptySpaceDrag() === 'select' && event.pointerType !== 'touch';
+		if ( ! this.editMode && regionSelect && ! this.editor.viewTools?.mode && ! this.editor.editWorkspace?.exclusive &&
 			! this.editor.modalTransform?.active && ! this.editor.flyControls?.active && ! this.drag && event.button === 0 && ! event.altKey &&
 			event.target === this.editor.renderer?.domElement && this.editor.viewLayout.navigation &&
 			this.editor.viewLayout.at( event.clientX, event.clientY ) === this.editor.viewLayout.navigation ) {
@@ -2398,8 +2451,7 @@ export class ModelViewport {
 		if ( this.pen && event.altKey ) {
 
 			event.preventDefault(); event.stopImmediatePropagation();
-			const rect = this.rect(), data = structuredClone( this.data );
-			if ( autoQuad( THREE, data, [ event.clientX - rect.left, event.clientY - rect.top ], point => this.project( point, rect.width, rect.height ), addFace ) ) this.commit( 'AutoQuad', data, data.faces.at( -1 ) );
+			this.altClick( event );
 			return;
 
 		}

@@ -14,9 +14,25 @@ class EditorControls extends THREE.EventDispatcher {
 		this.zoomSpeed = 0.1;
 		this.rotationSpeed = 0.005;
 		this.navigationMode = () => 'basic';
+		this.emptySpaceDrag = () => this.navigationMode() === 'basic' ? 'orbit' : 'select';
 		this.emulateThreeButton = () => false;
 		this.canNavigate = () => true;
 		this.canStartNavigation = () => true;
+		this.navigationGesture = event => {
+
+			if ( event.pointerType === 'touch' ) return null;
+			const basic = this.navigationMode() === 'basic';
+			const emulated = this.emulateThreeButton() && event.button === 0 && event.altKey;
+			if ( event.button === 1 || emulated ) {
+
+				if ( event.shiftKey ) return 'pan';
+				if ( event.ctrlKey || event.metaKey || basic && ! emulated && this.emptySpaceDrag() === 'orbit' ) return 'zoom';
+				return 'rotate';
+
+			}
+			return basic && event.button === 2 ? 'pan' : null;
+
+		};
 
 		// internals
 
@@ -39,6 +55,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 		var pointers = [];
 		var pointerPositions = {};
+		let emulatedPress;
 
 		var domElement = null;
 
@@ -187,8 +204,9 @@ class EditorControls extends THREE.EventDispatcher {
 		function onPointerDown( event ) {
 
 			if ( scope.enabled === false || ! scope.canNavigate() || ! scope.canStartNavigation( event ) ) return;
-			const emulatedMiddle = scope.navigationMode() === 'blender' && scope.emulateThreeButton() && event.button === 0 && event.altKey;
-			if ( event.pointerType !== 'touch' && scope.navigationMode() === 'blender' && event.button !== 1 && ! emulatedMiddle ) return;
+			const action = scope.navigationGesture( event ) ?? ( event.button === 0 && scope.emptySpaceDrag() === 'orbit' ?
+				( event.shiftKey ? 'pan' : 'rotate' ) : null );
+			if ( event.pointerType !== 'touch' && ( ! action || pointers.length ) ) return;
 			if ( event.pointerType !== 'touch' && event.button === 1 ) event.preventDefault();
 
 			if ( pointers.length === 0 ) {
@@ -197,6 +215,8 @@ class EditorControls extends THREE.EventDispatcher {
 
 				domElement.ownerDocument.addEventListener( 'pointermove', onPointerMove );
 				domElement.ownerDocument.addEventListener( 'pointerup', onPointerUp );
+				domElement.ownerDocument.addEventListener( 'pointercancel', onPointerUp );
+				domElement.addEventListener( 'lostpointercapture', onPointerUp );
 
 			}
 
@@ -214,7 +234,9 @@ class EditorControls extends THREE.EventDispatcher {
 
 			} else {
 
-				onMouseDown( event );
+				state = STATE[ action.toUpperCase() ];
+				pointerOld.set( event.clientX, event.clientY );
+				emulatedPress = event.button === 0 && event.altKey && scope.emulateThreeButton() ? event : null;
 
 			}
 
@@ -222,7 +244,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 		function onPointerMove( event ) {
 
-			if ( scope.enabled === false ) return;
+			if ( scope.enabled === false || ! isTrackingPointer( event ) ) return;
 
 			if ( event.pointerType === 'touch' ) {
 
@@ -230,6 +252,8 @@ class EditorControls extends THREE.EventDispatcher {
 
 			} else {
 
+				if ( emulatedPress && Math.hypot( event.clientX - emulatedPress.clientX, event.clientY - emulatedPress.clientY ) < 4 ) return;
+				emulatedPress = null;
 				onMouseMove( event );
 
 			}
@@ -238,16 +262,20 @@ class EditorControls extends THREE.EventDispatcher {
 
 		function onPointerUp( event ) {
 
+			if ( ! isTrackingPointer( event ) ) return;
 			removePointer( event );
 
 			switch ( pointers.length ) {
 
 				case 0:
 
-					domElement.releasePointerCapture( event.pointerId );
-
-					domElement.ownerDocument.removeEventListener( 'pointermove', onPointerMove );
-					domElement.ownerDocument.removeEventListener( 'pointerup', onPointerUp );
+					removeNavigationListeners();
+					if ( domElement.hasPointerCapture( event.pointerId ) ) domElement.releasePointerCapture( event.pointerId );
+					state = STATE.NONE;
+					const press = emulatedPress;
+					emulatedPress = null;
+					if ( press && event.type === 'pointerup' &&
+						Math.hypot( event.clientX - press.clientX, event.clientY - press.clientY ) < 4 ) scope.onEmulatedClick?.( press );
 
 					break;
 
@@ -265,31 +293,16 @@ class EditorControls extends THREE.EventDispatcher {
 
 		}
 
-		// mouse
+		function removeNavigationListeners() {
 
-		function onMouseDown( event ) {
-
-			if ( scope.navigationMode() === 'blender' && ( event.button === 1 || ( scope.emulateThreeButton() && event.button === 0 && event.altKey ) ) ) {
-
-				state = event.shiftKey ? STATE.PAN : ( event.ctrlKey || event.metaKey ) ? STATE.ZOOM : STATE.ROTATE;
-
-			} else if ( event.button === 0 ) {
-
-				state = event.shiftKey ? STATE.PAN : STATE.ROTATE;
-
-			} else if ( event.button === 1 ) {
-
-				state = STATE.ZOOM;
-
-			} else if ( event.button === 2 ) {
-
-				state = STATE.PAN;
-
-			}
-
-			pointerOld.set( event.clientX, event.clientY );
+			domElement.ownerDocument.removeEventListener( 'pointermove', onPointerMove );
+			domElement.ownerDocument.removeEventListener( 'pointerup', onPointerUp );
+			domElement.ownerDocument.removeEventListener( 'pointercancel', onPointerUp );
+			domElement.removeEventListener( 'lostpointercapture', onPointerUp );
 
 		}
+
+		// mouse
 
 		function onMouseMove( event ) {
 
@@ -304,7 +317,7 @@ class EditorControls extends THREE.EventDispatcher {
 
 			} else if ( state === STATE.ZOOM ) {
 
-				scope.zoom( delta.set( 0, 0, movementY ) );
+				scope.zoom( delta.set( 0, 0, movementY * .08 ) );
 
 			} else if ( state === STATE.PAN ) {
 
@@ -360,6 +373,12 @@ class EditorControls extends THREE.EventDispatcher {
 			domElement.removeEventListener( 'wheel', onMouseWheel );
 
 			domElement.removeEventListener( 'pointerdown', onPointerDown );
+			removeNavigationListeners();
+			for ( const id of pointers ) if ( domElement.hasPointerCapture( id ) ) domElement.releasePointerCapture( id );
+			pointers = [];
+			pointerPositions = {};
+			emulatedPress = null;
+			state = STATE.NONE;
 
 			domElement = null;
 

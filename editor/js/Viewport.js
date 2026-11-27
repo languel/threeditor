@@ -1,4 +1,4 @@
-import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface } from './Viewport.SelectionOutline.js?v=unified-sync';
+import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface, supportsSelectionOutline } from './Viewport.SelectionOutline.js?v=unified-sync';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=transform-gizmos';
 import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
@@ -40,6 +40,7 @@ import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
 import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { PostProcessingHost } from './PostProcessing.js';
 import { beginShaderGraphFrame, shaderGraphsAnimate, withShaderGraphs } from './nodes/ShaderGraphRuntime.js';
+import { groundOffset } from './modeling/GroundPlacement.js';
 
 function Viewport( editor ) {
 
@@ -334,14 +335,12 @@ function Viewport( editor ) {
 
 	} );
 
-	const groundBox = new THREE.Box3(), groundDelta = new THREE.Vector3();
+	const groundDelta = new THREE.Vector3();
 	function dropToGround() {
 
 		const object = transformControls.object;
 		if ( ! groundHeld || ! object || transformControls.mode !== 'translate' ) return;
-		if ( object === selector.group ) selector.getSelectionBox( groundBox ); else groundBox.setFromObject( object );
-		if ( groundBox.isEmpty() || ! Number.isFinite( groundBox.min.y ) ) return;
-		groundDelta.set( 0, - groundBox.min.y, 0 );
+		groundDelta.set( 0, groundOffset( scene, object === selector.group ? selector.selection : [ object ] ), 0 );
 		if ( object.parent ) {
 
 			object.parent.updateWorldMatrix( true, false );
@@ -553,6 +552,12 @@ function Viewport( editor ) {
 		if ( ! downView || view?.key !== downView.key ) return;
 		onUpPosition.fromArray( pointerPosition( view, x, y ) );
 		if ( onDownPosition.distanceTo( onUpPosition ) !== 0 ) return;
+		selectAt( view, x, y, shift );
+
+	}
+
+	function selectAt( view, x, y, shift ) {
+
 		if ( armature.editing ) {
 
 			armature.selectHit( armature.pickRest( layout.clientRect( view ), view.camera, x, y ), shift );
@@ -560,7 +565,8 @@ function Viewport( editor ) {
 			return;
 
 		}
-		const intersects = selector.getPointerIntersects( onUpPosition, view.camera );
+		const pointer = new THREE.Vector2().fromArray( pointerPosition( view, x, y ) );
+		const intersects = selector.getPointerIntersects( pointer, view.camera );
 		if ( armature.mode === 'pose' ) {
 
 			const bone = intersects.map( hit => hit.object.userData.object || hit.object ).find( object =>
@@ -574,10 +580,11 @@ function Viewport( editor ) {
 		render();
 
 	}
+	model.selectAt = selectAt;
 
 	function onMouseDown( event ) {
 
-		if ( event.button !== 0 || event.target !== renderer?.domElement || ( controls.navigationMode() === 'blender' && editor.config.getKey( 'settings/emulateThreeButtonMouse' ) && event.altKey ) ) return;
+		if ( event.button !== 0 || event.target !== renderer?.domElement || controls.navigationGesture( event ) ) return;
 		downView = layout.at( event.clientX, event.clientY );
 		if ( ! downView ) return;
 		onDownPosition.fromArray( pointerPosition( downView, event.clientX, event.clientY ) );
@@ -633,9 +640,12 @@ function Viewport( editor ) {
 
 	const controls = new EditorControls( camera );
 	controls.navigationMode = () => editor.config.getKey( 'settings/mouseNavigation' ) || 'blender';
+	controls.emptySpaceDrag = () => editor.config.getKey( 'settings/emptySpaceDrag' ) || 'select';
 	controls.canNavigate = () => !! layout.navigation && ! hasRestriction( layout.navigation.camera, 'locked' );
-	controls.canStartNavigation = event => event.pointerType === 'touch' || event.button !== 0 || event.altKey || ! ( model.editMode || editor.viewTools.mode );
+	controls.canStartNavigation = event => ! editor.editWorkspace.exclusive && ! model.drag && ! editor.viewTools.pointer &&
+		( event.pointerType === 'touch' || controls.navigationGesture( event ) || ! ( model.editMode || editor.viewTools.mode ) );
 	controls.emulateThreeButton = () => editor.config.getKey( 'settings/emulateThreeButtonMouse' );
+	controls.onEmulatedClick = event => model.altClick( event );
 	controls.addEventListener( 'change', function () {
 
 		const active = editor.viewportSplit ? editor.camera : editor.viewportCamera;
@@ -1370,13 +1380,14 @@ function Viewport( editor ) {
 
 	function drawSelection( view, show = view === camera, host = splatHost ) {
 
-		if ( ! show || armature.mode || model.editMode && model.object || cleanShading( editor.viewportShading ) || ! sceneHelpers.visible ||
+		if ( ! show || armature.mode || model.editMode && model.object && ! model.isSculpting || cleanShading( editor.viewportShading ) || ! sceneHelpers.visible ||
 			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
 		const active = editor.selected;
-		const mask = () => host.render( renderer, scene,
-			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () =>
-				withArmatureDeformation( THREE, scene, () => renderer.render( scene, view ), editor.viewTools.weightPaint.object ) ) ), queueSplatRender );
+		const mask = () => host.render( renderer, scene, () => withViewportShading( scene, editor.viewportXRay ? 'xray' : editor.viewportShading,
+			() => model.withPreview( () => withArmatureDeformation( THREE, scene,
+				() => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) ),
+				model.editMode ? model.object : editor.viewTools.weightPaint.object ) ) ), queueSplatRender );
 		withViewportObjects( scene, () => {
 
 			selectionOutline.draw( renderer, scene, view, roots.filter( object => object !== active ), mask );
@@ -1531,7 +1542,7 @@ function Viewport( editor ) {
 		const mode = editor.viewportShading;
 		const selectionStyle = editor.config.getKey( 'settings/selectionHighlight' ) || 'outline';
 		const selected = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) );
-		const outlineSupported = renderer.isWebGLRenderer && ! renderer.xr.isPresenting;
+		const outlineSupported = supportsSelectionOutline( renderer );
 		const surfaces = selected.filter( hasSelectionSurface );
 		const bounds = selectionStyle !== 'outline' || ! outlineSupported ? selected : selected.filter( object => ! surfaces.includes( object ) );
 		box.makeEmpty();
@@ -1542,7 +1553,7 @@ function Viewport( editor ) {
 			target.expandByObject( object, true );
 
 		}
-		const boundGuides = ! armature.mode && ! ( model.editMode && model.object );
+		const boundGuides = ! armature.mode && ! ( model.editMode && model.object && ! model.isSculpting );
 		selectionBox.visible = boundGuides && ! box.isEmpty();
 		activeSelectionBox.visible = boundGuides && ! activeSelectionBox.box.isEmpty();
 		const drawGuides = frame => {

@@ -4,13 +4,21 @@ import { SetRotationCommand } from './commands/SetRotationCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { hasRestriction } from './ObjectRestrictions.js';
+import { SetLightViewCommand } from './commands/SetLightViewCommand.js';
+import { applyFlyLightPose, captureLightView, restoreLightView } from './modeling/LightView.js';
 
 // Fly the actual viewport camera, including cameras under transformed parents.
 function FlyControls( editor, viewport ) {
  let camera=null,canvas=null,startPosition,startRotation,startZoom,orbitDistance,worldPosition,yaw=0,pitch=0,roll=0,locked=false,stopping=false,last=0,speed=4;
+ let source,startLight,targetDistance;
  const keys=new Set(), euler=new THREE.Euler(0,0,0,'YXZ'), q=new THREE.Quaternion(), parentQ=new THREE.Quaternion(), direction=new THREE.Vector3(), right=new THREE.Vector3(), up=new THREE.Vector3();
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;viewport.appendChild(notice);
- function refresh(){camera.updateMatrixWorld(true);editor.signals.cameraChanged.dispatch(camera);editor.signals.refreshSidebarObject3D.dispatch(camera);}
+ function refresh(){
+  camera.updateMatrixWorld(true);
+  if(source)editor.signals.objectChanged.dispatch(source);
+  else editor.signals.cameraChanged.dispatch(camera);
+  editor.signals.refreshSidebarObject3D.dispatch(source||camera);
+ }
  function showNotice( unlocked = false ) {
 
   const movement = camera.isOrthographicCamera ? 'W/S zoom · A/D and Q/E pan' : 'WASD move · Q/E up/down';
@@ -18,10 +26,20 @@ function FlyControls( editor, viewport ) {
    ' · mouse look · Shift faster · wheel speed · Enter/click accept · Esc cancel';
 
  }
- function start(){
-  if(camera||editor.modalTransform?.active||document.body.classList.contains('presenting'))return;
-  const active=editor.viewLayout?.navigation?.camera;if(!active?.isCamera||hasRestriction(active,'locked'))return;
-  camera=active;canvas=editor.renderer?.domElement;if(!canvas){camera=null;return;}
+ function start(frame=editor.viewLayout?.navigation||editor.viewLayout?.optical){
+  if(camera||editor.modalTransform?.active||editor.modeling.gesture||editor.modeling.drag||editor.viewTools.pointer||
+    editor.streams.playing||document.body.classList.contains('presenting'))return;
+  if(!frame?.camera?.isCamera||editor.viewLayout.isViewportPane?.(frame.key)===false)return;
+  const active=frame.source||(frame.director?editor.camera:frame.camera);
+  if(hasRestriction(active,'locked')||hasRestriction(active,'disabled')||!active.matrixAutoUpdate||
+    active.target&&(hasRestriction(active.target,'locked')||!active.target.matrixAutoUpdate))return;
+  canvas=editor.renderer?.domElement;if(!canvas)return;
+  source=frame.source;
+  camera=source?frame.camera.clone(false):active;
+  if(source){
+   startLight=captureLightView(source);
+   targetDistance=source.target?Math.max(.01,source.target.getWorldPosition(direction).distanceTo(camera.position)):4;
+  }
   camera.updateWorldMatrix(true,false);startPosition=camera.position.clone();startRotation=camera.rotation.clone();worldPosition=camera.getWorldPosition(new THREE.Vector3());
   startZoom = camera.zoom;
   const center = editor.controls.getCenter( camera );
@@ -42,7 +60,13 @@ function FlyControls( editor, viewport ) {
  }
  function finish(accept){
   if(!camera)return;const current=camera;stopping=true;if(document.pointerLockElement===canvas)document.exitPointerLock();
-  if ( ! accept ) {
+  if(source){
+   if(!accept)restoreLightView(source,startLight);
+   else {
+    const after=captureLightView(source);
+    if(JSON.stringify(after)!==JSON.stringify(startLight))editor.execute(new SetLightViewCommand(editor,source,startLight,after));
+   }
+  } else if ( ! accept ) {
 
    current.position.copy( startPosition );
    current.rotation.copy( startRotation );
@@ -69,13 +93,13 @@ function FlyControls( editor, viewport ) {
    if ( commands.length ) editor.execute( commands.length === 1 ? commands[ 0 ] : new MultiCmdsCommand( editor, commands ), 'Fly camera' );
 
   }
-  if ( accept ) {
+  if ( accept && ! source ) {
 
    current.getWorldDirection( direction );
    current.getWorldPosition( editor.controls.getCenter( current ) ).addScaledVector( direction, orbitDistance );
 
   }
-  refresh();camera=null;keys.clear();notice.hidden=true;editor.controls.enabled=!editor.modalTransform?.active;stopping=false;
+  refresh();camera=source=null;keys.clear();notice.hidden=true;editor.controls.enabled=!editor.modalTransform?.active;stopping=false;
  }
  function tick(now){
   if(!camera)return;const dt=Math.min((now-last)/1000,0.05);last=now;let moving=false;
@@ -120,6 +144,7 @@ function FlyControls( editor, viewport ) {
    if ( camera.parent ) camera.parent.worldToLocal( camera.position );
 
   }
+  if(source)applyFlyLightPose(THREE,source,camera,targetDistance);
   refresh();requestAnimationFrame(tick);
  }
  function key(e,down){if(!camera)return;const k=e.key.toLowerCase();e.preventDefault();e.stopImmediatePropagation();if(down&&k==='escape'){finish(false);return;}if(down&&k==='enter'){finish(true);return;}if(['w','a','s','d','q','e','shift'].includes(k)){if(down)keys.add(k);else keys.delete(k);}}

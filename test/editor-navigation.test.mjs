@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
+import { applyFlyLightPose, captureLightView, lightViewCamera, restoreLightView } from '../editor/js/modeling/LightView.js';
 
 // Resolve the browser's import-map alias without installing dependencies.
 const source = await readFile( new URL( '../editor/js/EditorControls.js', import.meta.url ), 'utf8' );
@@ -20,6 +21,7 @@ function setup( mode = 'basic', emulate = false ) {
 	const canvas = new EventTarget();
 	canvas.ownerDocument = document;
 	canvas.setPointerCapture = canvas.releasePointerCapture = () => {};
+	canvas.hasPointerCapture = () => true;
 	controls.connect( canvas );
 	function dispatch( target, type, properties ) {
 
@@ -93,5 +95,51 @@ test( 'Edit tools can reserve the left button without blocking explicit camera n
 	controls.navigationMode = () => 'blender';
 	drag( { button: 1 } );
 	assert.ok( camera.position.distanceTo( beforeMiddle ) > .01 );
+
+} );
+
+test( 'Selection-first mouse navigation reserves left drag and keeps orbit, pan, and zoom available', () => {
+
+	for ( const mode of [ 'basic', 'blender' ] ) {
+
+		const { camera, controls, drag } = setup( mode, true );
+		controls.emptySpaceDrag = () => 'select';
+		const start = camera.position.clone();
+		drag();
+		assert.ok( camera.position.equals( start ) );
+		drag( { button: 1 } );
+		assert.ok( camera.position.distanceTo( start ) > .1 );
+		const center = controls.center.clone();
+		drag( { altKey: true, shiftKey: true } );
+		assert.ok( controls.center.distanceTo( center ) > .1 );
+		const distance = camera.position.distanceTo( controls.center );
+		drag( { button: 1, ctrlKey: true } );
+		assert.notEqual( camera.position.distanceTo( controls.center ), distance );
+
+	}
+
+} );
+
+test( 'An accepted optical fly pose moves the light and target in world space and restores its lens state', () => {
+
+	const scene = new THREE.Scene(), parent = new THREE.Group();
+	parent.position.set( 1, 2, 3 );
+	parent.rotation.z = .4;
+	scene.add( parent );
+	const light = new THREE.DirectionalLight();
+	parent.add( light );
+	scene.add( light.target );
+	const before = captureLightView( light );
+	const camera = lightViewCamera( THREE, light );
+	camera.position.set( 3, 4, 5 );
+	camera.lookAt( 1, 1, 0 );
+	camera.zoom = 2.5;
+	applyFlyLightPose( THREE, light, camera, 4 );
+	const next = lightViewCamera( THREE, light );
+	assert.ok( next.position.distanceTo( camera.position ) < 1e-8 );
+	assert.ok( next.getWorldDirection( new THREE.Vector3() ).distanceTo( camera.getWorldDirection( new THREE.Vector3() ) ) < 1e-8 );
+	assert.equal( next.zoom, 2.5 );
+	restoreLightView( light, before );
+	assert.deepEqual( captureLightView( light ), before );
 
 } );

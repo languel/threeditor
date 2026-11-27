@@ -3,6 +3,7 @@ import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestFrames } from './Armature.js';
 import { withArmaturePose } from './ArmaturePose.js';
 import { stageBoneRest } from './ArmatureRestEditing.js';
+import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
 import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js';
 
 export class ArmatureWorkspace {
@@ -147,6 +148,33 @@ export class ArmatureWorkspace {
 			this.editor.selector.setSelection( selection.length ? selection : [ this.rig ] );
 
 		} else this.editor.select( hit.bone );
+		this.syncProxy();
+		this.editor.signals.transformSettingsChanged.dispatch( 'armatureSelection' );
+
+	}
+
+	selectRegion( region, project, radius ) {
+
+		const hits = new Map();
+		const include = () => {
+
+			for ( const bone of armatureBones( this.rig ) ) {
+
+				if ( ! bone.userData.armatureBone || ! this.selectable( bone ) ) continue;
+				const head = project( bone.getWorldPosition( new THREE.Vector3() ) );
+				const length = this.restFor( bone ).length;
+				const tail = project( bone.localToWorld( new THREE.Vector3( 0, length, 0 ) ) );
+				if ( selectionRegionIntersectsSegment( region, head, tail, radius ) ) hits.set( bone.uuid, bone );
+
+			}
+
+		};
+		if ( this.editing ) this.withRest( include );
+		else withArmaturePose( THREE, this.editor.scene, include );
+		const original = new Map( [ ...region.initial ].filter( ( [ , object ] ) => object.userData.armatureBone ) );
+		const selected = [ ...combineSelection( original, hits, region.operation ).values() ];
+		this.part = 'body';
+		this.editor.selector.setSelection( selected.length ? selected : [ this.rig ] );
 		this.syncProxy();
 		this.editor.signals.transformSettingsChanged.dispatch( 'armatureSelection' );
 

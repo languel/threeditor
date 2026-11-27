@@ -55,6 +55,7 @@ export function lightViewCamera( THREE, object, camera ) {
 			camera.right = optics.right;
 			camera.top = optics.top;
 			camera.bottom = optics.bottom;
+			camera.zoom = optics.zoom;
 
 		} else {
 
@@ -71,7 +72,11 @@ export function lightViewCamera( THREE, object, camera ) {
 		camera.near = .05;
 		camera.far = object.distance > .05 ? object.distance : 1000;
 		camera.up.setFromMatrixColumn( object.matrixWorld, 1 ).normalize();
-		if ( ! object.isHemisphereLight ) target.setFromMatrixColumn( object.matrixWorld, 2 ).normalize().negate().add( camera.position );
+		if ( ! object.isHemisphereLight || object.quaternion.x || object.quaternion.y || object.quaternion.z ) {
+
+			target.setFromMatrixColumn( object.matrixWorld, 2 ).normalize().negate().add( camera.position );
+
+		}
 
 	}
 	camera.far = Math.max( camera.near + .01, camera.far );
@@ -79,5 +84,66 @@ export function lightViewCamera( THREE, object, camera ) {
 	camera.updateProjectionMatrix();
 	camera.updateMatrixWorld( true );
 	return camera;
+
+}
+
+export function captureLightView( light ) {
+
+	const optics = light.shadow?.camera;
+	return {
+		position: light.position.toArray(),
+		rotation: light.rotation.toArray(),
+		target: light.target?.position.toArray(),
+		up: optics?.up.toArray(),
+		zoom: optics?.zoom
+	};
+
+}
+
+export function restoreLightView( light, state ) {
+
+	light.position.fromArray( state.position );
+	light.rotation.fromArray( state.rotation );
+	if ( state.target ) {
+
+		light.target.position.fromArray( state.target );
+		light.target.updateWorldMatrix( true, false );
+
+	}
+	if ( state.up ) {
+
+		light.shadow.camera.up.fromArray( state.up );
+		light.shadow.camera.zoom = state.zoom;
+		light.shadow.camera.updateProjectionMatrix();
+
+	}
+	light.updateWorldMatrix( true, false );
+
+}
+
+export function applyFlyLightPose( THREE, light, camera, targetDistance ) {
+
+	const world = camera.getWorldPosition( new THREE.Vector3() );
+	const rotation = camera.getWorldQuaternion( new THREE.Quaternion() );
+	light.position.copy( world );
+	if ( light.parent ) light.parent.worldToLocal( light.position );
+	light.updateWorldMatrix( true, false );
+	if ( light.target ) {
+
+		const target = camera.getWorldDirection( new THREE.Vector3() ).multiplyScalar( targetDistance ).add( world );
+		light.target.position.copy( target );
+		if ( light.target.parent ) light.target.parent.worldToLocal( light.target.position );
+		light.target.updateWorldMatrix( true, false );
+		light.shadow.camera.up.set( 0, 1, 0 ).applyQuaternion( rotation );
+		light.shadow.camera.zoom = camera.zoom;
+		light.shadow.camera.updateProjectionMatrix();
+
+	} else {
+
+		if ( light.parent ) rotation.premultiply( light.parent.getWorldQuaternion( new THREE.Quaternion() ).invert() );
+		light.quaternion.copy( rotation );
+		light.updateWorldMatrix( true, false );
+
+	}
 
 }

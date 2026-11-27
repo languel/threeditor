@@ -471,6 +471,16 @@ body.translucent-panels:not(.workspace-split) #workspace-viewport #info { left: 
 	z-index: 2;
 }
 
+#player[data-play-pane] {
+	top: var(--play-y);
+	left: var(--play-x);
+	right: auto;
+	bottom: auto;
+	width: var(--play-width);
+	height: var(--play-height);
+	overflow: hidden;
+}
+
 :root[data-theme="dark"] {
 
 	#player { background: #222; }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { selectionRegionContains, meshEdges, edgeLoop, applySelection, connectedSelection, elementKey } from '../editor/js/modeling/MeshSelection.js';
+import { selectionRegionContains, selectionRegionIntersectsPolygon, selectionRegionIntersectsSegment, meshEdges, edgeLoop, applySelection, connectedSelection, elementKey } from '../editor/js/modeling/MeshSelection.js';
 const grid = { points: Array.from( { length: 12 }, ( _, i ) => [ i % 4, Math.floor( i / 4 ), 0 ] ), faces: [] };
 for ( let y = 0; y < 2; y ++ ) for ( let x = 0; x < 3; x ++ ) { const a = y * 4 + x; grid.faces.push( [ a, a + 1, a + 5, a + 4 ] ); }
 
@@ -54,6 +54,23 @@ test( 'Circle selection covers the path between widely spaced pointer samples', 
 	const drag = { tool: 'circle', start, end, polygon: [ start, end ] };
 	assert.equal( selectionRegionContains( drag, [ 50, 12 ], 3 ), true );
 	assert.equal( selectionRegionContains( drag, [ 50, 14 ], 3 ), false );
+
+} );
+
+test( 'Partial selection catches crossing edges and faces that surround a selection region', () => {
+
+	const face = [ [ -8, -8 ], [ 14, -8 ], [ 14, 14 ], [ -8, 14 ] ];
+	const box = { tool: 'box', start: [ 0, 0 ], end: [ 2, 2 ], polygon: [] };
+	assert.equal( selectionRegionIntersectsPolygon( box, face, 0 ), true );
+	assert.equal( selectionRegionIntersectsSegment( box, [ -5, 1 ], [ 6, 1 ], 0 ), true );
+	assert.equal( selectionRegionIntersectsSegment( box, [ -5, 3 ], [ 6, 3 ], 0 ), false );
+
+	const lasso = { ...box, tool: 'lasso', polygon: [ [ 0, 0 ], [ 3, 3 ], [ 3, 0 ] ] };
+	assert.equal( selectionRegionIntersectsSegment( lasso, [ -5, 1 ], [ 6, 1 ], 0 ), true );
+	assert.equal( selectionRegionIntersectsPolygon( lasso, face, 0 ), true );
+	const circle = { ...box, tool: 'circle', end: [ 12, 0 ], polygon: [ [ 0, 0 ], [ 12, 0 ] ] };
+	assert.equal( selectionRegionIntersectsSegment( circle, [ 6, -.5 ], [ 6, 1 ], 1 ), true );
+	assert.equal( selectionRegionIntersectsSegment( circle, [ 6, 2 ], [ 6, 3 ], 1 ), false );
 
 } );
 

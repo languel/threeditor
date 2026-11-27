@@ -21,7 +21,8 @@ export function drawProjectorOutput( context, projector ) {
 // Match the editor's optical pane, including its fixed lens aspect.
 export function renderFittedView( THREE, renderer, scene, camera, width, height, draw ) {
 
-	const rect = fitView( { x: 0, y: 0, width, height }, camera.aspect );
+	const aspect = camera.isOrthographicCamera ? ( camera.right - camera.left ) / ( camera.top - camera.bottom ) : camera.aspect;
+	const rect = fitView( { x: 0, y: 0, width, height }, aspect );
 	if ( rect.width === width && rect.height === height ) return draw();
 
 	const background = scene.background;
