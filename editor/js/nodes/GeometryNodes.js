@@ -4,6 +4,7 @@ import { joinGeometry } from './GeometryOperations.js';
 import { attributeInput, FIELD_NODES, FIELD_OPERATIONS, fieldInput, forEachVertex, sampleField, validAttributeName } from './GeometryFields.js';
 import { createProximity } from './GeometryProximity.js';
 import { distributeOnFaces, realizeInstances, verticesToPoints } from './GeometryScatter.js';
+import { CURVE_NODES, curveOperations } from './GeometryCurves.js';
 
 export const GEOMETRY_MODIFIER = 'GEOMETRY_NODES';
 const sourceType = 'geometry.input';
@@ -110,7 +111,8 @@ const geometryNodes = [
 		bodyDomain: () => REPEAT_BODY_DOMAIN
 	} ],
 	...VALUE_NODES,
-	...FIELD_NODES
+	...FIELD_NODES,
+	...CURVE_NODES
 ];
 
 const REPEAT_BODY_DOMAIN = {
@@ -212,12 +214,16 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 		if ( vertices + count > 4e6 ) throw new Error( 'Geometry Nodes exceeds its evaluation budget of four million vertices.' );
 
 	}
+	function reserve( count ) {
+
+		checkVertices( count );
+		vertices += count;
+
+	}
 	function own( buffer ) {
 
 		buffers.add( buffer );
-		const count = buffer.attributes.position.count;
-		checkVertices( count );
-		vertices += count;
+		reserve( buffer.attributes.position.count );
 		return buffer;
 
 	}
@@ -249,6 +255,7 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 	const operations = new Map( [
 		...VALUE_OPERATIONS,
 		...FIELD_OPERATIONS,
+		...curveOperations( THREE, own, checkVertices, reserve ),
 		[ sourceType, () => ( { geometry: source } ) ],
 		[ 'geometry.box', ( { width, height, depth } ) => primitive( new THREE.BoxGeometry( width, height, depth ) ) ],
 		[ 'geometry.sphere', ( { radius, segments, rings } ) => primitive( new THREE.SphereGeometry( radius, Math.round( segments ), Math.round( rings ) ) ) ],

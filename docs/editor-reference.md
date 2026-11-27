@@ -83,6 +83,12 @@ Drag an existing input link away to disconnect it. Drag an unused socket into em
 
 All three catalogs include scalar math, remapping, and vector operations. **Math Expression** accepts X, Y, Z, constants such as `pi`, arithmetic, and functions such as `sin`, `clamp`, and `maprange`. For example, `0.5 + sin(x * 2) * 0.5` oscillates between zero and one. **Math Expression Field** evaluates the formula separately at each geometry sample.
 
+### Curves in Geometry Nodes
+
+**Curve Line**, **Curve Circle**, **Bézier Segment**, and **Spiral** generate curves. **Join Curves** combines splines into one socket. **Reverse Curve** flips each spline's direction, **Trim Curve** keeps an interval defined by factor or distance, and **Resample Curve** spaces the points by count or approximate distance. **Curve Length** measures the combined length of the splines. **Sample Curve** retrieves position, tangent, and normal at a factor or distance along that combined length.
+
+Use **Curve to Points** with **Instance on Points** to arrange objects along a curve. Point Orientation can align your instances with the tangent or the curve normal. **Curve to Mesh** sweeps a supplied profile along the path. Profile coordinates use X and Z, with Y as the editor's up axis. Connect a field to **Scale** to vary the cross-section along the path. **Fill Caps** closes open paths whose profile is a loop. [Blender curve nodes](https://docs.blender.org/manual/en/5.1/modeling/geometry_nodes/curve/index.html) · [Tapered curve tutorial](../editor/examples/lessons/README.md#sweep-a-tapered-curve)
+
 ## Shader Graph
 
 Select a mesh with a Standard or Physical material, choose the **Shader Graph** workspace, and click **New shader graph**. Select a material slot in the header when the mesh has more than one. Use **Use WebGPU** to enable the project's node-capable renderer. **Material Preview** and **Preview** show the graph alongside the editor, and **Play Scene** and playable exports use the same material.

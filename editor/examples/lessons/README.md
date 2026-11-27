@@ -19,6 +19,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A field-colored wave | One procedural field deforms a grid and colors the resulting ridges through a TSL graph. |
 | — | A proximity garden | A distance field and a math expression scale instances scattered over a mesh. |
 | — | A stream-reactive sculpture | A stream sample drives a sculpture's scale. The starter graph generates its own signal. |
+| — | A tapered curve sweep | A circle profile follows a spiral and shrinks along the path. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -88,3 +89,10 @@ opened from the library.
 3. Connect a device or a tracked input from **Streams**, then click **Browse stream topics** on **On Stream Sample**. Try a MIDI control such as `midi.cc.1.1`, serial like `serial.A0`, or a landmark coordinate such as `vision.pose.16.x`.
 4. Set the input range on **Map Range** to match the device. MIDI control changes use 0–127, and landmark X/Y coordinates are normalized. Start Play to test the graph.
 5. Export **Playable HTML** or **Playable ZIP** and serve it from localhost or HTTPS. Open **Live inputs** in the player and connect the same type of input. Move the MIDI control, send the serial signal, or move the tracked landmark to drive the sculpture in the export.
+
+### Sweep a tapered curve
+
+1. Open **A tapered curve sweep**, select **Tapered spring**, and open **Geometry Nodes**. Change **Rotations** on **Spiral** to adjust the path.
+2. Follow the path through **Resample Curve** and change **Count** to control how many rings **Curve to Mesh** creates.
+3. Change the radius or resolution on **Curve Circle** to edit the cross-section. Disconnect **Scale** to give the spring a constant thickness, or change the coefficient in **Math Expression Field** to adjust the taper.
+4. To place repeated meshes along the same path, connect **Resample Curve** to **Curve to Points**, then connect those points to **Instance on Points**.
