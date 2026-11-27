@@ -13,6 +13,7 @@ import { scriptSourceForExecution } from '../ScriptParams.js';
 import { createP5Sketch } from '../P5Sketch.js';
 import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
 import { LogicRuntime } from '../nodes/LogicRuntime.js';
+import { NodeComponentRuntime } from '../nodes/NodeComponents.js';
 import { readGamepads } from '../nodes/LogicInput.js';
 import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
@@ -75,6 +76,7 @@ const APP = {
 		let controller, controllerOptions, cameraTarget;
 
 		const loader = new THREE.ObjectLoader();
+		const nodeComponents = new NodeComponentRuntime( THREE );
 		let camera, scene, projector, projectorContext, timeline, geometrySimulation, logic;
 
 		let events = {};
@@ -302,7 +304,9 @@ const APP = {
 
 			geometrySimulation?.dispose();
 			logic?.stop();
+			nodeComponents.removeTree( scene );
 			scene = value;
+			nodeComponents.syncTree( scene );
 			geometrySimulation = new GeometrySimulation( THREE, scene );
 			logic = new LogicRuntime( THREE, scene, streams );
 
@@ -525,6 +529,7 @@ const APP = {
 			timeline = null;
 			geometrySimulation?.dispose();
 			geometrySimulation = null;
+			nodeComponents.removeTree( scene );
 			logic?.stop();
 			logic = null;
 			lastRender = 0;

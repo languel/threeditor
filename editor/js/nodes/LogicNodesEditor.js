@@ -3,6 +3,7 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { bindGraphHistory } from './GraphWorkspace.js';
 import { NodeGraphEditor } from './NodeGraphEditor.js';
 import { createLogicGraph, LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
+import { nodeComponentData, supportsNodeComponents } from './NodeComponents.js';
 
 export function openLogicNodes( editor ) {
 
@@ -68,9 +69,7 @@ export function openLogicNodes( editor ) {
 
 			if ( ! editable || object !== editor.selected || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) return;
 			if ( next && ! layoutOnly ) planLogicGraph( next );
-			const metadata = { ...object.userData };
-			if ( next ) metadata.logicGraph = next;
-			else delete metadata.logicGraph;
+			const metadata = nodeComponentData( object, 'logic', next );
 			const command = new SetValueCommand( editor, object, 'userData', metadata );
 			command.updatable = false;
 			editor.execute( command, layoutOnly ? 'Move node' : 'Edit logic graph' );
@@ -88,7 +87,7 @@ export function openLogicNodes( editor ) {
 	function sync() {
 
 		const selected = editor.selected;
-		const supported = !! selected && ! selected.userData.runtimeOnly && editor.scene.getObjectById( selected.id ) === selected;
+		const supported = supportsNodeComponents( editor.scene, selected );
 		const next = supported ? selected.userData.logicGraph : undefined;
 		const canEdit = supported && ! hasRestriction( selected, 'locked' ) && ! hasRestriction( selected, 'disabled' );
 		const reset = object !== selected;

@@ -114,6 +114,7 @@ export class LogicRuntime {
 
 			case 'logic.clock': return { elapsed: this.time, delta: this.delta };
 			case 'logic.object': return { object: inputs.object };
+			case 'logic.host': return { object: instance.owner.uuid };
 			case 'logic.boolean': return { value: inputs.value };
 			case 'logic.string': return { value: inputs.value };
 			case 'logic.eventValue': return { value: numeric( context.detail?.value ?? context.detail, inputs.fallback ) };

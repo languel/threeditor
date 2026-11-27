@@ -74,6 +74,14 @@ In WebGL, select a mesh and choose **New shader** to open a starter GLSL fragmen
 
 ## Editing node graphs
 
+### Node graph components
+
+Select a scene object or Empty and choose **Components → Add Component** to attach Geometry Nodes, Shader Graph, or Logic Nodes. **Geometry Nodes** starts with the host mesh connected when the object has an editable mesh. **Blank Geometry Nodes** starts with only Mesh Output. Connect a primitive or another geometry source to generate a mesh. Add **Host Geometry** whenever you want to use the host mesh as an input.
+
+Geometry on an Empty or other non-mesh host produces a mesh that follows the host's transform. A **Shader Graph** component shades Standard and Physical materials on the host and its children, including generated geometry. Mesh material graphs can still be edited per material slot. In Logic Nodes, **Self** targets the host and **Host Object** exposes it as a typed socket. [Generative Empty tutorial](../editor/examples/lessons/README.md#generate-a-mesh-from-an-empty)
+
+### Shortcuts
+
 These shortcuts apply in **Geometry Nodes**, **Shader Graph**, and **Logic Nodes**. Hover the graph canvas, or focus it with Tab. **Shift+A** and **F3** open the compact Add Node catalog. Search by node name or browse by category, then choose a result. Move the node into place and click or press Enter to confirm.
 
 | Shortcut or gesture | Action |

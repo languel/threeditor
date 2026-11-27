@@ -44,7 +44,8 @@ class Selector {
 
 					let object = intersects[ i ].object;
 
-					if ( object.userData.object !== undefined ) {
+					if ( object.userData.nodeComponentOutput && object.parent ) object = object.parent;
+					else if ( object.userData.object !== undefined ) {
 
 						object = object.userData.object;
 
@@ -149,7 +150,7 @@ class Selector {
 
 		return raycaster.intersectObjects( objects, false ).filter( hit => {
 
-			const object = hit.object.userData.object || hit.object;
+			const object = ( hit.object.userData.nodeComponentOutput ? hit.object.parent : hit.object.userData.object ) || hit.object;
 			return isVisible( object ) && ! hasRestriction( object, 'unselectable' );
 
 		} );

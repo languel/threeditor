@@ -217,7 +217,8 @@ export class LogicInput {
 			const normal = face?.normal ? this.normal.copy( face.normal ).applyNormalMatrix( this.normalMatrix.getNormalMatrix( this.world ) ).toArray() : zero;
 			const parents = [];
 			for ( let current = object; current; current = current.parent ) parents.push( current.uuid );
-			return { hit: true, object: object.uuid, point: point.toArray(), normal, distance, parents };
+			const target = object.userData.nodeComponentOutput ? object.parent || object : object;
+			return { hit: true, object: target.uuid, point: point.toArray(), normal, distance, parents };
 
 		} finally {
 

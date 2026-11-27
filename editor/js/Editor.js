@@ -14,6 +14,7 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 import { Config } from './Config.js?v=transform-gizmos';
 import { Loader } from './Loader.js?v=splat-filters';
 import { createEmptyHelper } from './modeling/ReferenceObjects.js';
+import { NodeComponentRuntime } from './nodes/NodeComponents.js';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
@@ -179,6 +180,8 @@ function Editor( portable = false ) {
 	this.cursor = new THREE.Vector3();
 
 	this.addCamera( this.camera );
+	this.nodeComponentRuntime = new NodeComponentRuntime( THREE );
+	this.signals.objectChanged.add( object => this.nodeComponentRuntime.sync( object ) );
 
 }
 
@@ -205,6 +208,7 @@ Editor.prototype = {
 		this.scene.backgroundIntensity = scene.backgroundIntensity;
 
 		this.scene.userData = JSON.parse( JSON.stringify( scene.userData ) );
+		this.nodeComponentRuntime.sync( this.scene );
 
 		// avoid render per object
 
@@ -251,6 +255,7 @@ Editor.prototype = {
 
 		}
 
+		this.nodeComponentRuntime.syncTree( object );
 		this.signals.objectAdded.dispatch( object );
 		this.signals.sceneGraphChanged.dispatch();
 
@@ -266,6 +271,7 @@ Editor.prototype = {
 	removeObject: function ( object ) {
 
 		if ( object.parent === null ) return; // avoid deleting the camera or scene
+		this.nodeComponentRuntime.removeTree( object );
 
 		var scope = this;
 
@@ -870,6 +876,7 @@ Editor.prototype = {
 
 		this.scene.name = 'Scene';
 		this.scene.userData = {};
+		this.nodeComponentRuntime.sync( this.scene );
 		this.scene.animations = [];
 		this.scene.background = null;
 		this.scene.environment = null;

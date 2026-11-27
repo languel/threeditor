@@ -1,9 +1,11 @@
 import { TSL } from 'three/webgpu';
 import { SetMaterialValueCommand } from '../commands/SetMaterialValueCommand.js';
+import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { bindGraphHistory } from './GraphWorkspace.js';
 import { NodeGraphEditor } from './NodeGraphEditor.js';
 import { compileShaderGraph, createShaderGraph, SHADER_DOMAIN } from './ShaderNodes.js';
+import { nodeComponentData, supportsNodeComponents } from './NodeComponents.js';
 
 export function openShaderGraph( editor ) {
 
@@ -25,7 +27,7 @@ export function openShaderGraph( editor ) {
 		return button;
 
 	}
-	const create = button( 'New shader graph', () => save( createShaderGraph( '#' + material.color.getHexString() ) ) );
+	const create = button( 'New shader graph', () => save( createShaderGraph( material?.color ? '#' + material.color.getHexString() : '#a8b4c2' ) ) );
 	const remove = button( 'Remove shader graph', () => save() );
 	const enable = button( 'Use WebGPU', async () => {
 
@@ -49,7 +51,7 @@ export function openShaderGraph( editor ) {
 	status.setAttribute( 'role', 'status' );
 	const canvas = NodeGraphEditor( SHADER_DOMAIN, { onChange: save, onError: report } );
 	panel.append( toolbar, canvas.dom, status );
-	let object, material, graph, editable, queued, disposed, validationError;
+	let object, material, graph, component, editable, queued, disposed, validationError;
 	let slot = 0;
 
 	function report( message ) {
@@ -63,12 +65,19 @@ export function openShaderGraph( editor ) {
 
 		try {
 
-			if ( ! editable || editor.selected !== object || editor.getObjectMaterial( object, slot ) !== material ) return;
-			if ( next && ! layoutOnly ) compileShaderGraph( TSL, next, material );
-			const metadata = { ...material.userData };
-			if ( next ) metadata.shaderGraph = next;
-			else delete metadata.shaderGraph;
-			const cmd = new SetMaterialValueCommand( editor, object, 'userData', metadata, slot );
+			if ( ! editable || editor.selected !== object || hasRestriction( object, 'locked' ) || hasRestriction( object, 'disabled' ) ) return;
+			if ( ! component && editor.getObjectMaterial( object, slot ) !== material ) return;
+			if ( next && ! layoutOnly ) compileShaderGraph( TSL, next, material || {} );
+			let cmd;
+			if ( component ) cmd = new SetValueCommand( editor, object, 'userData', nodeComponentData( object, 'shader', next ) );
+			else {
+
+				const metadata = { ...material.userData };
+				if ( next ) metadata.shaderGraph = next;
+				else delete metadata.shaderGraph;
+				cmd = new SetMaterialValueCommand( editor, object, 'userData', metadata, slot );
+
+			}
 			cmd.updatable = false;
 			editor.execute( cmd, layoutOnly ? 'Move node' : 'Edit shader graph' );
 			sync();
@@ -88,14 +97,18 @@ export function openShaderGraph( editor ) {
 		const list = selected?.isMesh ? [ selected.material ].flat() : [];
 		if ( object !== selected || slot >= list.length ) slot = 0;
 		const next = list[ slot ];
-		const supported = !! next?.isMeshStandardMaterial && ! next.isNodeMaterial;
-		const nextGraph = supported ? next.userData?.shaderGraph : undefined;
+		const supported = supportsNodeComponents( editor.scene, selected );
+		const canShadeMaterial = !! next?.isMeshStandardMaterial && ! next.isNodeMaterial;
+		const attached = selected?.userData.nodeComponents?.shader;
+		const useComponent = !! attached || ! canShadeMaterial;
+		const nextGraph = supported ? ( useComponent ? attached : next.userData?.shaderGraph ) : undefined;
 		const canEdit = supported && ! hasRestriction( selected, 'locked' ) && ! hasRestriction( selected, 'disabled' );
-		const resetView = selected !== object || next !== material;
+		const resetView = selected !== object || next !== material || useComponent !== component;
 		const changed = resetView || nextGraph !== graph || editable !== canEdit;
 		object = selected;
 		material = next;
 		graph = nextGraph;
+		component = useComponent;
 		editable = canEdit;
 		if ( resetView || slots.options.length !== list.length ) {
 
@@ -103,8 +116,8 @@ export function openShaderGraph( editor ) {
 
 		}
 		slots.value = String( slot );
-		slots.hidden = list.length < 2;
-		title.textContent = material?.name || object?.name || 'Material';
+		slots.hidden = component || list.length < 2;
+		title.textContent = ( component ? object?.name : material?.name || object?.name ) || 'Shader Graph';
 		create.hidden = ! supported || !! graph;
 		remove.hidden = ! graph;
 		create.disabled = remove.disabled = ! canEdit;
@@ -117,7 +130,7 @@ export function openShaderGraph( editor ) {
 			try {
 
 				canvas.setGraph( graph, editable, resetView );
-				if ( graph ) validationError = compileShaderGraph( TSL, graph, material ).missing || '';
+				if ( graph ) validationError = compileShaderGraph( TSL, graph, material || {} ).missing || '';
 
 			} catch ( error ) {
 
@@ -127,11 +140,11 @@ export function openShaderGraph( editor ) {
 
 		}
 		if ( validationError ) report( validationError );
-		else if ( ! supported ) status.textContent = 'Select a mesh with a Standard or Physical material.';
-		else if ( ! editable ) status.textContent = 'This mesh is locked or disabled.';
-		else if ( ! graph ) status.textContent = 'Create a graph for this material.';
+		else if ( ! supported ) status.textContent = 'Select a scene object to attach a shader graph.';
+		else if ( ! editable ) status.textContent = 'This object is locked or disabled.';
+		else if ( ! graph ) status.textContent = component ? 'Create a shader component for this object.' : 'Create a graph for this material.';
 		else if ( ! editor.renderer?.isWebGPURenderer ) status.textContent = 'Use WebGPU to preview shader nodes.';
-		else status.textContent = 'Connect a node to Material Output to shade the selected material.';
+		else status.textContent = component ? 'This component shades Standard and Physical materials on the host and its children.' : 'Connect a node to Material Output to shade the selected material.';
 
 	}
 

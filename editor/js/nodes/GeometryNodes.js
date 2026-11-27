@@ -28,6 +28,7 @@ const instances = { instances: { label: 'Instances', type: 'instances' } };
 const flag = ( label, value ) => ( { label, type: 'boolean', default: value } );
 
 const geometryNodes = [
+	[ 'geometry.host', { label: 'Host Geometry', category: 'Inputs', outputs: geometry } ],
 	[ 'geometry.box', {
 		label: 'Box', category: 'Primitives', outputs: geometry,
 		inputs: { width: size( 'Width' ), height: size( 'Height' ), depth: size( 'Depth' ) }
@@ -171,8 +172,15 @@ function createStarter( domain, inputType, outputType, sockets ) {
 
 }
 
-export function createGeometryGraph() {
+export function createGeometryGraph( blank = false ) {
 
+	if ( blank ) {
+
+		const graph = createGraph( GEOMETRY_DOMAIN );
+		addNode( graph, outputType, 300, 60 );
+		return graph;
+
+	}
 	return createStarter( GEOMETRY_DOMAIN, sourceType, outputType, [ 'geometry' ] );
 
 }
@@ -259,6 +267,7 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 		...FIELD_OPERATIONS,
 		...curveOperations( THREE, own, checkVertices, reserve ),
 		[ sourceType, () => ( { geometry: source } ) ],
+		[ 'geometry.host', () => ( { geometry: source } ) ],
 		[ 'geometry.box', ( { width, height, depth } ) => primitive( new THREE.BoxGeometry( width, height, depth ) ) ],
 		[ 'geometry.sphere', ( { radius, segments, rings } ) => primitive( new THREE.SphereGeometry( radius, Math.round( segments ), Math.round( rings ) ) ) ],
 		[ 'geometry.grid', ( { width, depth, xSegments, zSegments } ) =>
