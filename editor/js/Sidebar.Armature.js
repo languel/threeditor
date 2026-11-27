@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { UIButton, UINumber, UIPanel, UIRow, UIText } from './libs/ui.js';
+import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
@@ -15,7 +16,7 @@ function sceneArmatures( scene ) {
 
 export function hasArmatureTools( scene, object ) {
 
-	return !! armatureOf( object ) || !! object?.userData.armatureBinding ||
+	return !! armatureOf( object ) || !! object?.userData.armatureBinding || !! object?.userData.armatureCollider ||
 		canDeformWithArmature( object ) && sceneArmatures( scene ).length > 0;
 
 }
@@ -44,6 +45,8 @@ export function SidebarArmature( editor ) {
 	const roll = new UINumber( 0 ).setPrecision( 2 ).setUnit( '°' ).setWidth( '64px' ).onChange( saveRest );
 	roll.dom.setAttribute( 'aria-label', 'Bone roll degrees' );
 	restPanel.add( new UIRow().add( new UIText( 'Roll' ).setClass( 'Label' ), roll ) );
+	const physics = SidebarBonePhysics( editor, run );
+	pose.add( physics );
 	const binding = new UIPanel();
 	const rigPicker = document.createElement( 'select' );
 	rigPicker.className = 'Select';
@@ -60,6 +63,8 @@ export function SidebarArmature( editor ) {
 	influences.dom.setAttribute( 'aria-label', 'Max bone influences' );
 	binding.add( rigRow, new UIRow().add( new UIText( 'Influences' ).setClass( 'Label' ), influences ), new UIRow().add( bind, clear ) );
 	panel.add( binding );
+	const collider = SidebarRigCollider( editor, run );
+	panel.add( collider );
 	const status = document.createElement( 'div' );
 	status.setAttribute( 'role', 'status' );
 	panel.dom.appendChild( status );
@@ -107,7 +112,10 @@ export function SidebarArmature( editor ) {
 		rig = armatureOf( object );
 		bone = rig && object.isBone ? object : null;
 		pose.setDisplay( rig ? '' : 'none' );
-		updateBinding( object );
+		const rigs = ! rig && canDeformWithArmature( object ) ? sceneArmatures( editor.scene ) : [];
+		updateBinding( object, rigs );
+		physics.setObject( bone );
+		collider.setObject( object, rigs.length > 0 );
 		if ( ! rig ) return;
 		const options = [ new Option( rig.name, rig.uuid ) ];
 		for ( const child of armatureBones( rig ) ) {
@@ -140,11 +148,10 @@ export function SidebarArmature( editor ) {
 
 	}
 
-	function updateBinding( object ) {
+	function updateBinding( object, rigs ) {
 
 		const data = object?.userData.armatureBinding;
 		const supportsGeometry = ! rig && canDeformWithArmature( object );
-		const rigs = supportsGeometry ? sceneArmatures( editor.scene ) : [];
 		const visible = ! rig && ( rigs.length > 0 || !! data );
 		binding.setDisplay( visible ? '' : 'none' );
 		if ( ! visible ) return;
@@ -165,7 +172,7 @@ export function SidebarArmature( editor ) {
 	}
 
 	picker.onchange = () => { status.textContent = ''; editor.selectByUuid( picker.value ); };
-	rigPicker.onchange = () => updateBinding( editor.selected );
+	rigPicker.onchange = sync;
 	editor.signals.objectSelected.add( () => { status.textContent = ''; sync(); } );
 	editor.signals.sceneGraphChanged.add( sync );
 	editor.signals.objectChanged.add( object => { if ( object === editor.selected || armatureOf( object ) === rig && rig ) sync(); } );

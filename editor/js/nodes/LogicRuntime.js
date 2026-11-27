@@ -10,7 +10,7 @@ const empty = [];
 const degrees = Math.PI / 180;
 const MAX_EVENTS = 1024;
 const MAX_ACTIONS = 4096;
-const inputEvents = new Set( [ 'keydown', 'keyup', 'pointerdown', 'pointerup' ] );
+const inputEvents = new Set( [ 'keydown', 'keyup', 'pointerdown', 'pointerup', 'bonecontact' ] );
 
 function numeric( value, fallback ) {
 
@@ -116,6 +116,12 @@ export class LogicRuntime {
 			case 'logic.clock': return { elapsed: this.time, delta: this.delta };
 			case 'logic.object': return { object: inputs.object };
 			case 'logic.host': return { object: instance.owner.uuid };
+			case 'logic.boneVelocity': {
+
+				const velocity = this.physics?.velocity( this.target( instance, inputs.target ) ) ?? [ 0, 0, 0 ];
+				return { velocity, speed: Math.hypot( ...velocity ) };
+
+			}
 			case 'logic.bone': {
 
 				let rig;
@@ -252,7 +258,15 @@ export class LogicRuntime {
 		switch ( node.type ) {
 
 			case 'logic.resetBone':
-				if ( object.isBone ) resetBoneTransform( object );
+				if ( object.isBone ) {
+
+					if ( this.physics ) this.physics.resetBone( object );
+					else resetBoneTransform( object );
+
+				}
+				break;
+			case 'logic.boneImpulse':
+				this.physics?.impulse( object, inputs.impulse );
 				break;
 			case 'logic.move':
 				this.motion.set( x, y, z );
@@ -369,6 +383,15 @@ export class LogicRuntime {
 			case 'keydown': return ( inputs.repeat || ! detail?.repeat ) && detail?.code === inputs.key ? 'then' : undefined;
 			case 'keyup': return detail?.code === inputs.key ? 'then' : undefined;
 			case 'held': return this.held.has( inputs.key ) ? 'then' : undefined;
+			case 'bonecontact': {
+
+				const bone = this.target( instance, inputs.target );
+				if ( ! bone?.isBone ) return;
+				const other = detail?.first === bone.uuid ? detail.second : detail?.second === bone.uuid ? detail.first : undefined;
+				if ( other && ( ! inputs.other || other === inputs.other ) ) return detail.entered ? 'enter' : 'exit';
+				return;
+
+			}
 			case 'pointerup':
 			case 'pointerdown': {
 

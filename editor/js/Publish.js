@@ -1,5 +1,6 @@
 import { parse } from './libs/acorn/acorn.mjs';
 import { zipSync, strToU8 } from 'three/addons/libs/fflate.module.js';
+import { usesArmaturePhysics } from './rigging/ArmaturePhysicsConfig.js';
 
 const root = new URL( '../../', import.meta.url );
 const archive = new URL( 'https://publish.invalid/project/' );
@@ -380,6 +381,18 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ModifierEvaluation.js', 'editor/js/modeling/ModifierEvaluation.js' );
 	await project.copy( 'rigging/Armature.js', 'editor/js/rigging/Armature.js' );
 	await project.copy( 'rigging/ArmatureDeformation.js', 'editor/js/rigging/ArmatureDeformation.js' );
+	await project.copy( 'rigging/ArmaturePhysics.js', 'editor/js/rigging/ArmaturePhysics.js' );
+	await project.copy( 'rigging/ArmaturePhysicsConfig.js', 'editor/js/rigging/ArmaturePhysicsConfig.js' );
+	if ( usesArmaturePhysics( app.scene.object ) ) {
+
+		for ( const name of [ 'rapier.mjs', 'LICENSE' ] ) {
+
+			const path = 'rigging/vendor/rapier/' + name;
+			await project.copy( path, 'editor/js/' + path );
+
+		}
+
+	}
 	for ( const module of [
 		'GeometrySimulation', 'GeometryNodes', 'GeometryFields', 'GeometryOperations', 'GeometryProximity', 'GeometryScatter', 'GeometryCurves',
 		'NodeGraph', 'NodeGroups', 'NodeComponents', 'ValueNodes', 'MathExpression',

@@ -551,3 +551,53 @@ for ( const [ key, angle, y ] of [ [ 'ArrowLeft', 30, 36 ], [ 'ArrowRight', - 30
 await save( '17-armature-flag', 'A bending signal flag', flagRig,
 	'Press Left or Right Arrow in Play Scene to bend the flag and Space to reset it. The mesh, pencil stripe and curve use the same skeleton. The tip marker is parented directly to the Tip bone. Select Flag armature or its bones to inspect the rest endpoints, and select a bound object to inspect its Armature binding.',
 	[ 2.3, 1.1, 4.25 ] );
+
+const pendulumRig = createArmature( THREE, 'Pendulum armature' );
+const anchorBone = pendulumRig.children[ 0 ];
+anchorBone.name = 'Bracket';
+anchorBone.userData.armaturePhysics = { mode: 'kinematic', radius: .075 };
+const swing = createBone( THREE, 'Swing', boneRestFromPoints( THREE, [ 0, 1, 0 ], [ .91, .58, 0 ], 0, true ) );
+swing.userData.armaturePhysics = { mode: 'dynamic', joint: 'hinge', axis: 'Z', limits: true, min: - 125, max: 125,
+	radius: .10, mass: 1.4, damping: .48 };
+anchorBone.add( swing );
+const stand = new THREE.Mesh( new THREE.BoxGeometry( .15, 1.86, .14 ), new THREE.MeshStandardMaterial( { color: 0x8193a6 } ) );
+stand.name = 'Backplate';
+stand.position.set( 0, .03, - .22 );
+pendulumRig.add( stand );
+const pivotCap = new THREE.Mesh( new THREE.SphereGeometry( .115, 24, 16 ), new THREE.MeshStandardMaterial( { color: 0xf4d094 } ) );
+pivotCap.name = 'Hinge pin';
+pivotCap.position.y = 1;
+anchorBone.add( pivotCap );
+const pendulumRod = new THREE.Mesh( new THREE.CylinderGeometry( .06, .075, .92, 20 ), new THREE.MeshStandardMaterial( { color: 0x6fcfd6 } ) );
+pendulumRod.name = 'Swing rod';
+pendulumRod.position.y = .47;
+const pendulumTip = new THREE.Mesh( new THREE.IcosahedronGeometry( .16, 2 ), new THREE.MeshStandardMaterial( { color: 0xf2a356 } ) );
+pendulumTip.name = 'Pendulum weight';
+pendulumTip.position.y = .94;
+swing.add( pendulumRod, pendulumTip );
+const bumper = new THREE.Mesh( new THREE.BoxGeometry( .2, .35, .45 ), new THREE.MeshStandardMaterial( { color: 0xd47157 } ) );
+bumper.name = 'Collision stop';
+bumper.position.set( -.44, .24, 0 );
+bumper.userData.armatureCollider = { mode: 'fixed' };
+const pendulum = pendulumRig.userData.logicGraph = createLogicGraph();
+removeNode( pendulum, 'logic.start' );
+const swingTarget = logicNode( pendulum, 'logic.bone', 24, 215, { name: 'Swing' } );
+const kick = logicNode( pendulum, 'logic.keyDown', 24, 35, { key: 'Space' } );
+const nudge = logicNode( pendulum, 'logic.boneImpulse', 315, 35, { impulse: [ 2.6, .4, 0 ] } );
+const resetSwing = logicNode( pendulum, 'logic.keyDown', 24, 397, { key: 'KeyR' } );
+const resetBody = logicNode( pendulum, 'logic.resetBone', 315, 380, {} );
+for ( const [ source, target ] of [ [ kick, nudge ], [ resetSwing, resetBody ] ] ) {
+
+	wire( pendulum, LOGIC_DOMAIN, source, 'then', target, 'run' );
+	wire( pendulum, LOGIC_DOMAIN, swingTarget, 'object', target, 'target' );
+
+}
+const swingContact = logicNode( pendulum, 'logic.boneContact', 315, 230, { other: bumper.uuid } );
+const contactColor = logicNode( pendulum, 'logic.setColor', 604, 172, { target: bumper.uuid, color: '#f9c465' } );
+const restingColor = logicNode( pendulum, 'logic.setColor', 604, 343, { target: bumper.uuid, color: '#d47157' } );
+wire( pendulum, LOGIC_DOMAIN, swingTarget, 'object', swingContact, 'target' );
+wire( pendulum, LOGIC_DOMAIN, swingContact, 'enter', contactColor, 'run' );
+wire( pendulum, LOGIC_DOMAIN, swingContact, 'exit', restingColor, 'run' );
+await save( '18-rapier-pendulum', 'A Rapier pendulum', [ pendulumRig, bumper ],
+	'In Play Scene, gravity swings the bone and the block lights up on contact. Press Space to push the weight and R to reset its pose and velocity. Inspect the Swing bone’s dynamic capsule and hinge in Armature properties, and the block’s fixed Rig Collider.',
+	[ 2.15, 1.22, 4.12 ] );

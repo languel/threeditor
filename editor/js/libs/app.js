@@ -15,6 +15,7 @@ import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
 import { LogicRuntime } from '../nodes/LogicRuntime.js';
 import { NodeComponentRuntime } from '../nodes/NodeComponents.js';
 import { releaseArmatureGeometry, withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
+import { prepareArmaturePhysics } from '../rigging/ArmaturePhysics.js';
 import { readGamepads } from '../nodes/LogicInput.js';
 import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
@@ -78,7 +79,7 @@ const APP = {
 
 		const loader = new THREE.ObjectLoader();
 		const nodeComponents = new NodeComponentRuntime( THREE );
-		let camera, scene, projector, projectorContext, timeline, geometrySimulation, logic;
+		let camera, scene, projector, projectorContext, timeline, geometrySimulation, logic, rigPhysics;
 
 		let events = {};
 		let splatHost;
@@ -141,6 +142,17 @@ const APP = {
 			if ( project.toneMappingExposure !== undefined ) renderer.toneMappingExposure = project.toneMappingExposure;
 
 			this.setScene( loader.parse( json.scene ) );
+			const loadedScene = scene;
+			const preparedPhysics = await prepareArmaturePhysics( THREE, loadedScene );
+			if ( scene !== loadedScene ) {
+
+				preparedPhysics?.dispose();
+				return;
+
+			}
+			rigPhysics = logic.physics = preparedPhysics;
+			if ( rigPhysics ) rigPhysics.onContact = ( first, second, entered ) =>
+				streams.emit( 'bonecontact', { first: first.uuid, second: second.uuid, entered } );
 			const mainUuid = json.mainCamera || scene.userData.mainCamera;
 			const sceneCamera = scene.getObjectByProperty( 'uuid', mainUuid || json.viewportCamera || json.camera.object.uuid );
 			const mainSource = sceneCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : null;
@@ -305,6 +317,8 @@ const APP = {
 
 			geometrySimulation?.dispose();
 			logic?.stop();
+			rigPhysics?.dispose();
+			rigPhysics = undefined;
 			scene?.traverse( releaseArmatureGeometry );
 			nodeComponents.removeTree( scene );
 			scene = value;
@@ -400,13 +414,15 @@ const APP = {
 		const animate = () => {
 
 			time = performance.now();
+			const elapsed = ( time - startTime ) / 1000;
 
 			try {
 
-				timeline.apply( timelineData( scene ), ( time - startTime ) / 1000 );
-				geometrySimulation.advanceTo( ( time - startTime ) / 1000, 8 );
+				timeline.apply( timelineData( scene ), elapsed );
+				rigPhysics?.applyPose();
+				geometrySimulation.advanceTo( elapsed, 8 );
 				dispatch( events.update, { time: time - startTime, delta: time - prevTime } );
-				logic.tick( ( time - startTime ) / 1000, ( time - prevTime ) / 1000, {
+				logic.tick( elapsed, ( time - prevTime ) / 1000, {
 					pointer: pointerPosition( pointer ), camera: pointerCamera(),
 					gamepads: logic.usesGamepads && document.hasFocus() ? readGamepads() : undefined
 				} );
@@ -418,6 +434,7 @@ const APP = {
 			}
 
 			streams.tick( scene );
+			rigPhysics?.advanceTo( elapsed, 8 );
 			controller?.update( ( time - prevTime ) / 1000 );
 			renderFrame();
 
@@ -468,6 +485,7 @@ const APP = {
 			document.addEventListener( 'pointercancel', onPointerCancel );
 			window.addEventListener( 'blur', onBlur );
 
+			rigPhysics?.initialize();
 			dispatch( events.start, arguments );
 			logic.start();
 			if ( controllerOptions && ! controller ) controller = createCameraController( camera, renderer.domElement, controllerOptions );
@@ -503,6 +521,7 @@ const APP = {
 			} finally {
 
 				geometrySimulation?.reset();
+				rigPhysics?.dispose();
 				logic?.stop();
 				if ( focusBeforePlay?.isConnected ) focusBeforePlay.focus( { preventScroll: true } );
 				focusBeforePlay = null;
@@ -514,12 +533,16 @@ const APP = {
 		let lastRender = 0;
 		this.render = function ( time ) {
 
+			rigPhysics?.initialize();
+			rigPhysics?.rewindIfNeeded( time );
 			timeline.apply( timelineData( scene ), time );
+			rigPhysics?.applyPose();
 			geometrySimulation.advanceTo( time );
 			dispatch( events.update, { time: time * 1000, delta: 0 /* TODO */ } );
 			logic.tick( time, Math.max( 0, time - lastRender ) );
 			lastRender = time;
 			streams.tick( scene );
+			rigPhysics?.advanceTo( time );
 
 			renderFrame();
 
@@ -531,6 +554,8 @@ const APP = {
 			timeline = null;
 			geometrySimulation?.dispose();
 			geometrySimulation = null;
+			rigPhysics?.dispose();
+			rigPhysics = undefined;
 			scene?.traverse( releaseArmatureGeometry );
 			nodeComponents.removeTree( scene );
 			logic?.stop();

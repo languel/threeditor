@@ -57,6 +57,7 @@ __publishManager.setURLModifier((url) => {
 		bundle: true, minify: true, format: 'esm', write: false, legalComments: 'inline',
 		define: {
 			__THREEEDITOR_HAS_SPLATS__: JSON.stringify( Object.hasOwn( project.imports, 'gaussian-splat-lite' ) ),
+			__THREEEDITOR_HAS_ARMATURE_PHYSICS__: JSON.stringify( project.files.has( 'rigging/vendor/rapier/rapier.mjs' ) ),
 			...( app ? { __THREEEDITOR_RENDERER__: JSON.stringify( app.project.renderer ) } : {} )
 		},
 		plugins: [ {
