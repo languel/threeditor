@@ -9,7 +9,7 @@ import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 
 function ModalTransform( editor ) {
  let mode=null,states=[],originals=[],objects=[],selection=[],axis=null,plane=false,local=false,numeric='',precision=false,x=0,y=0,startX=0,startY=0,lastX=0,lastY=0,commitPreview=null;
- let pointer, trackball, auto, snapBase, pickingBase;
+ let pointer, trackball, auto, snapBase, pickingBase, restEdit;
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;
  let marker, transformPointer;
  function movingSnapBase(){
@@ -42,7 +42,7 @@ function ModalTransform( editor ) {
  }
  function rebase(){
 
-  const usePivot=mode!=='translate' && editor.config.getKey('settings/transformPivot')!=='auto' &&
+  const usePivot=!restEdit && mode!=='translate' && editor.config.getKey('settings/transformPivot')!=='auto' &&
    editor.selector.usesGroupPivot() && selection.length===editor.selector.selection.length;
   if(usePivot)editor.selector.updateGroup();
   states=(usePivot?[editor.selector.group]:objects).map(snapshot);
@@ -52,9 +52,13 @@ function ModalTransform( editor ) {
  function start(next,commit=null){
   if(mode||editor.flyControls?.active||editor.viewTools?.mode||!editor.renderer)return;
   if(editor.modeling?.editMode){editor.modeling.startModal(next);return;}
+  const armature=editor.viewTools.armature;
+  restEdit=armature.editing;
+  if(restEdit&&!armature.begin())return;
   selection=editor.selector.selection.filter(o=>o.parent&&o!==editor.camera&&o!==editor.scene&&isVisible(o)&&!hasRestriction(o,'locked'));
-  if(selection.some(object=>editor.viewportVisibility?.allows(object,editor.viewLayout.navigation)===false))return;
-  objects=selection.filter(o=>!selection.some(parent=>parent!==o&&isAncestor(parent,o)));
+  if(!restEdit&&selection.some(object=>editor.viewportVisibility?.allows(object,editor.viewLayout.navigation)===false))return;
+  objects=restEdit?[armature.proxy]:selection.filter(o=>(!armature.mode||armature.selectedBones.includes(o))&&
+   !selection.some(parent=>parent!==o&&isAncestor(parent,o)));
   if(!objects.length)return;
   originals=objects.map(snapshot);
   mode=next;axis=null;plane=false;local=false;precision=false;trackball=false;auto=null;snapBase=null;pickingBase=false;
@@ -72,7 +76,7 @@ function ModalTransform( editor ) {
   const axes={x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)};
   const snapMode=modalSnapMode(editor.config,pointer?.ctrlKey);
   const snap=snapMode==='grid'||snapMode==='increment'?editor.config.getKey('settings/gridStep'):Number.isFinite(snapMode)?snapMode:null;
-  const selected = object => objects.some( root => root === object || isAncestor( root, object ) );
+  const selected = object => ( restEdit ? selection : objects ).some( root => root === object || isAncestor( root, object ) );
   const quantize=(value,step)=>numeric===''&&step?Math.round(value/step)*step:value;
   for(const state of states){const o=state.o;
    if(mode==='translate'){
@@ -125,9 +129,10 @@ function ModalTransform( editor ) {
  }
  function finish(accept){
   if(!mode)return;
+  const editing=restEdit;
   const commands=[];
   const fields={position:SetPositionCommand,rotation:SetRotationCommand,scale:SetScaleCommand};
-  for(const state of originals){
+  if(!editing)for(const state of originals){
    for(const key of Object.keys(fields)){
     const current=state.o[key];
     if(current.equals(state[key]))continue;
@@ -136,9 +141,10 @@ function ModalTransform( editor ) {
    }
    if(!accept){state.o.updateMatrixWorld(true);editor.signals.objectChanged.dispatch(state.o);}
   }
-  mode=null;states=[];originals=[];objects=[];selection=[];notice.hidden=true;marker.hidden=true;transformPointer.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
+  mode=null;restEdit=false;states=[];originals=[];objects=[];selection=[];notice.hidden=true;marker.hidden=true;transformPointer.hidden=true;editor.controls.enabled=!editor.flyControls?.active;
   const commit=commitPreview;commitPreview=null;
-  if(commands.length){
+  if(editing)editor.viewTools.armature.finish(accept);
+  else if(commands.length){
    if(commit)commit();
    else editor.execute(commands.length===1?commands[0]:new MultiCmdsCommand(editor,commands));
   }
@@ -235,6 +241,6 @@ function ModalTransform( editor ) {
   if(accept)finish(true);else label();
  },true);
  window.addEventListener('contextmenu',e=>{if(mode)e.preventDefault();},true);
- return {start,get active(){return mode!==null;}};
+ return {start,cancel:()=>finish(false),get active(){return mode!==null;}};
 }
 export { ModalTransform };

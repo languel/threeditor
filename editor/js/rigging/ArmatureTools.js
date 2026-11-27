@@ -8,7 +8,8 @@ import { SetScaleCommand } from '../commands/SetScaleCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { armatureBones, armatureOf, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
+import { armatureBones, armatureOf, bonePoseTransform, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
+import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
 import { hasIKDependencyCycle, ikSettings, resolveIK, withArmatureIK } from './ArmatureIK.js';
@@ -74,7 +75,7 @@ export function editBoneRest( editor, bone, options ) {
 	const tail = options.tail ?? boneRestTail( THREE, previous );
 	const next = boneRestFromPoints( THREE, head, tail, options.roll ?? previous.roll );
 	next.connected = previous.connected && head.every( ( value, axis ) => value === previous.position[ axis ] );
-	const commands = restCommands( editor, bone, next );
+	const commands = restCommands( editor, bone, { ...previous, ...next } );
 	if ( Math.abs( next.length - previous.length ) > 1e-10 ) for ( const child of bone.children ) {
 
 		const rest = child.userData.armatureBone;
@@ -87,25 +88,127 @@ export function editBoneRest( editor, bone, options ) {
 
 }
 
-export function resetArmaturePose( editor, object ) {
+export function commitBoneRest( editor, changes ) {
+
+	const commands = [];
+	for ( const [ bone, rest ] of changes ) {
+
+		if ( ! editable( editor, bone ) ) throw new Error( 'Unlock ' + bone.name + ' before editing this joint.' );
+		commands.push( ...restCommands( editor, bone, rest ) );
+
+	}
+	if ( commands.length ) editor.history.execute( new MultiCmdsCommand( editor, commands ), 'Edit Bone Rest' );
+
+}
+
+export function editRigSpaceBoneRest( editor, bone, { head, tail, roll } ) {
+
+	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! armatureOf( bone ) ) throw new Error( 'Select an editable authored bone.' );
+	if ( roll !== undefined && ! Number.isFinite( roll ) ) throw new Error( 'Bone roll must be finite.' );
+	const edit = { roll };
+	for ( const [ key, point ] of Object.entries( { head, tail } ) ) {
+
+		if ( point === undefined ) continue;
+		if ( ! Array.isArray( point ) || point.length !== 3 || ! point.every( Number.isFinite ) ) throw new Error( 'Expected three finite coordinates.' );
+		edit[ key ] = new THREE.Vector3().fromArray( point );
+
+	}
+	commitBoneRest( editor, stageBoneRest( THREE, armatureOf( bone ), new Map( [ [ bone, edit ] ] ) ) );
+
+}
+
+export function reparentBone( editor, bone, parent, connected = false ) {
+
+	reparentBones( editor, [ bone ], parent, connected );
+
+}
+
+export function reparentBones( editor, bones, parent, connected = false ) {
+
+	const commands = bones.flatMap( bone => boneParentCommands( editor, bone, parent, connected ) );
+	if ( ! commands.length ) return;
+	editor.history.execute( new MultiCmdsCommand( editor, commands ), connected ? 'Connect Bone' : 'Set Bone Parent' );
+	editor.selector.syncPivot();
+
+}
+
+function boneParentCommands( editor, bone, parent, connected ) {
+
+	const rig = armatureOf( bone );
+	parent ??= rig;
+	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! rig || ! editable( editor, parent ) ||
+		armatureOf( parent ) !== rig || parent !== rig && ! parent.userData.armatureBone || bone.getObjectById( parent.id ) ) {
+
+		throw new Error( 'Choose a parent from the same armature, outside the bone’s subtree.' );
+
+	}
+	if ( connected && parent === rig ) throw new Error( 'Connected bones need a parent bone.' );
+	const previous = bone.userData.armatureBone;
+	if ( bone.parent === parent && previous.connected === connected ) return [];
+	const frames = boneRestFrames( THREE, rig );
+	const frame = frames.get( bone );
+	const parentFrame = frames.get( parent );
+	const offset = connected ? parentFrame.tail.clone().sub( frame.head ) : new THREE.Vector3();
+	frame.head.add( offset );
+	frame.tail.add( offset );
+	const rest = restInParentFrame( THREE, { ...previous, connected }, frame, parentFrame );
+	const metadata = new SetValueCommand( editor, bone, 'userData', { ...bone.userData, armatureBone: rest } );
+	const transform = keepWorldTransform( bone, parent );
+	if ( connected ) transform.position = rest.position.slice();
+	return [ new MoveObjectCommand( editor, bone, parent, null, transform ), metadata ];
+
+}
+
+export function setBonePose( editor, bone, offsets ) {
+
+	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! armatureOf( bone ) ) throw new Error( 'Select an editable authored bone.' );
+	for ( const value of Object.values( offsets ) ) {
+
+		if ( value !== undefined && ( ! Array.isArray( value ) || value.length !== 3 || ! value.every( Number.isFinite ) ) ) {
+
+			throw new Error( 'Pose offsets must contain three finite numbers.' );
+
+		}
+
+	}
+	const transform = bonePoseTransform( THREE, bone, offsets );
+	const commands = poseCommands( editor, bone, transform );
+	if ( commands.length ) editor.execute( new MultiCmdsCommand( editor, commands ), 'Set Bone Pose' );
+
+}
+
+function poseCommands( editor, bone, { position, quaternion, scale } ) {
+
+	const commands = [];
+	if ( ! bone.position.equals( position ) ) commands.push( new SetPositionCommand( editor, bone, position ) );
+	if ( 1 - Math.abs( bone.quaternion.dot( quaternion ) ) > 1e-12 ) {
+
+		commands.push( new SetRotationCommand( editor, bone, new THREE.Euler().setFromQuaternion( quaternion, bone.rotation.order ) ) );
+
+	}
+	if ( ! bone.scale.equals( scale ) ) commands.push( new SetScaleCommand( editor, bone, scale ) );
+	return commands;
+
+}
+
+export function resetArmaturePose( editor, object, channels = 'all' ) {
 
 	const rig = armatureOf( object );
 	if ( ! editable( editor, rig ) ) throw new Error( 'Select an editable armature or one of its bones.' );
-	const bones = object === rig ? armatureBones( rig ) : [ object ];
+	resetBonesPose( editor, object === rig ? armatureBones( rig ) : [ object ], channels );
+
+}
+
+export function resetBonesPose( editor, bones, channels = 'all' ) {
+
+	if ( ! [ 'all', 'location', 'rotation', 'scale' ].includes( channels ) ) throw new Error( 'Choose a pose channel to reset.' );
+	const offsets = { location: [ 0, 0, 0 ], rotation: [ 0, 0, 0 ], scale: [ 1, 1, 1 ] };
+	const reset = channels === 'all' ? offsets : { [ channels ]: offsets[ channels ] };
 	const commands = [];
 	for ( const bone of bones ) {
 
-		const rest = bone.userData.armatureBone;
-		if ( ! rest || ! editable( editor, bone ) ) continue;
-		const position = new THREE.Vector3().fromArray( rest.position );
-		const orientation = new THREE.Quaternion().fromArray( rest.quaternion );
-		if ( ! bone.position.equals( position ) ) commands.push( new SetPositionCommand( editor, bone, position ) );
-		if ( bone.quaternion.angleTo( orientation ) > 1e-7 ) {
-
-			commands.push( new SetRotationCommand( editor, bone, new THREE.Euler().setFromQuaternion( orientation, bone.rotation.order ) ) );
-
-		}
-		if ( bone.scale.x !== 1 || bone.scale.y !== 1 || bone.scale.z !== 1 ) commands.push( new SetScaleCommand( editor, bone, new THREE.Vector3( 1, 1, 1 ) ) );
+		if ( ! bone.userData.armatureBone || ! editable( editor, bone ) ) continue;
+		commands.push( ...poseCommands( editor, bone, bonePoseTransform( THREE, bone, reset ) ) );
 
 	}
 	if ( commands.length ) editor.execute( new MultiCmdsCommand( editor, commands ), 'Reset Pose' );

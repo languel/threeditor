@@ -13,8 +13,8 @@ import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
-import { armatureBones, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, resetArmaturePose, setBoneIK, setBonePhysics, setRigCollider } from './rigging/ArmatureTools.js';
+import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
 import { withArmatureIK } from './rigging/ArmatureIK.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
 
@@ -38,6 +38,7 @@ function AgentAPI( editor ) {
    uuid: bone.uuid, name: bone.name, parent: bone.parent?.uuid, attached: bone.children.filter( child => ! child.isBone && ! child.userData.runtimeOnly ).map( child => child.uuid ),
    position: bone.position.toArray(), rotation: bone.rotation.toArray().slice( 0, 3 ), scale: bone.scale.toArray(), physics: bone.userData.armaturePhysics || null,
    ik: bone.userData.armatureIK || null,
+   pose: bonePoseOffsets( THREE, bone ),
    rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, connected: rest.connected } : null
   };
 
@@ -59,11 +60,14 @@ function AgentAPI( editor ) {
   if ( ! isArmature( rig ) ) throw new Error( 'Expected an authored armature object.' );
   const bones = armatureBones( rig );
   const result = bones.map( describeBone );
+  const rest = boneRestFrames( THREE, rig );
   withArmatureIK( THREE, editor.scene, () => bones.forEach( ( bone, index ) => {
 
    result[ index ].worldHead = bone.getWorldPosition( new THREE.Vector3() ).toArray();
    const length = bone.userData.armatureBone?.length ?? 1;
    result[ index ].worldTail = bone.localToWorld( new THREE.Vector3( 0, length, 0 ) ).toArray();
+   const frame = rest.get( bone );
+   if ( frame ) result[ index ].rigRest = { head: frame.head.toArray(), tail: frame.tail.toArray() };
 
   } ) );
   return { uuid: rig.uuid, name: rig.name, bones: result };
@@ -91,11 +95,47 @@ function AgentAPI( editor ) {
   return describeBone( bone );
 
  } );
- add( 'armature_reset_pose', 'Restore the rest transforms on one bone or all bones in an armature. Supports undo.', {
-  uuid: { ...str, description: 'Armature or bone UUID.' }
+ add( 'bone_edit_joints', 'Move rest joints in armature-local space. Shared joints stay connected and untouched endpoints stay in place. Supports undo.', {
+  uuid: { ...str, description: 'Authored bone UUID.' },
+  head: restVector( 'Rest head in armature-local space.' ),
+  tail: restVector( 'Rest tail in armature-local space.' ),
+  roll: float( 'Roll in radians about the bone’s rest axis.' )
  }, [ 'uuid' ], a => {
 
-  resetArmaturePose( editor, object( a.uuid ) );
+  const bone = object( a.uuid );
+  editRigSpaceBoneRest( editor, bone, a );
+  return describeBone( bone );
+
+ } );
+ add( 'bone_set_parent', 'Reparent a bone within its armature. Supports Keep Offset, Connected, and Clear Parent with undo.', {
+  uuid: { ...str, description: 'Authored bone UUID.' },
+  parent: { ...str, description: 'Parent bone UUID. Omit to make this a root bone.' },
+  connected: { type: 'boolean', description: 'Snap the bone head to the parent bone tail. Defaults to false.' }
+ }, [ 'uuid' ], a => {
+
+  const bone = object( a.uuid );
+  reparentBone( editor, bone, a.parent === undefined ? null : object( a.parent ), a.connected );
+  return describeBone( bone );
+
+ } );
+ add( 'bone_set_pose', 'Set pose offsets relative to the bone’s own rest frame. Omitted channels keep their values. Supports undo.', {
+  uuid: { ...str, description: 'Authored bone UUID.' },
+  location: restVector( 'Translation along the bone’s rest axes.' ),
+  rotation: restVector( 'XYZ Euler rotation in radians relative to the bone’s rest orientation.' ),
+  scale: restVector( 'Scale relative to the rest pose.' )
+ }, [ 'uuid' ], a => {
+
+  const bone = object( a.uuid );
+  setBonePose( editor, bone, { location: a.location, rotation: a.rotation, scale: a.scale } );
+  return describeBone( bone );
+
+ } );
+ add( 'armature_reset_pose', 'Restore the rest transforms on one bone or all bones in an armature. Supports undo.', {
+  uuid: { ...str, description: 'Armature or bone UUID.' },
+  channels: { type: 'string', enum: [ 'all', 'location', 'rotation', 'scale' ], description: 'Channels to clear. Defaults to all.' }
+ }, [ 'uuid' ], a => {
+
+  resetArmaturePose( editor, object( a.uuid ), a.channels );
   return { uuid: a.uuid };
 
  } );

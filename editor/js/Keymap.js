@@ -50,6 +50,13 @@ const definitions = [
  ['parentObject','Set Parent','Hierarchy','',control+'+p'],
  ['clearParent','Clear Parent','Hierarchy','','alt+p'],
  ['addBoneIK','Add IK to Bone','Rigging','','shift+i'],
+ ['poseMode','Toggle Pose Mode','Rigging','',control+'+tab'],
+ ['extrudeBone','Extrude Bone','Rigging','','e'],
+ ['parentBones','Set Bone Parent','Rigging','',control+'+p'],
+ ['clearBoneParent','Clear Bone Parent','Rigging','','alt+p'],
+ ['clearPoseLocation','Clear Pose Location','Rigging','','alt+g'],
+ ['clearPoseRotation','Clear Pose Rotation','Rigging','','alt+r'],
+ ['clearPoseScale','Clear Pose Scale','Rigging','','alt+s'],
  ['code','Open Script Window','Workspace','',''], ['sidebar','Toggle right dock','Workspace','',''], ['timeline','Toggle timeline','Workspace','',''],
  ['viewportSidebar','Toggle Viewport Sidebar','View','','n'],
  ['viewportToolbar','Toggle Viewport Toolbar','View','','t'],
@@ -178,8 +185,19 @@ class Keymap {
  }
  actionAvailable(id){
   const e=this.editor,m=e.modeling;
+  const armature = e.viewTools?.armature;
   if ( id === 'adjustLastOperation' ) return !! e.primitiveAdjustment?.available();
   if ( this.actions.find( action => action.id === id )?.available?.() === false ) return false;
+  if ( id === 'poseMode' ) return !!armatureOf(e.selected) && !e.streams.playing && !e.modalTransform?.active;
+  if ( id === 'extrudeBone' ) return armature?.canTransform;
+  if ( id === 'parentBones' ) return armature?.canTransform && armature.selectedBones.length > 1;
+  if ( id === 'clearBoneParent' ) return armature?.canTransform && armature.selectedBones.some(bone=>bone.parent.isBone);
+  if ( id.startsWith('clearPose') ) return armature?.mode === 'pose' && armature.selectedBones.length > 0;
+  if ( id === 'grid' && armature?.mode === 'pose' ) return false;
+  if ( id === 'addMenu' && armature?.mode === 'pose' ) return false;
+  if ( armature?.mode && [ 'selectionCycle', 'selectionBox', 'selectionLasso', 'selectionCircle' ].includes( id ) ) return false;
+  if ( armature?.mode && ['delete','deleteBack','duplicate','parentObject','clearParent','joinMeshes'].includes(id) ) return false;
+  if ( armature?.editing && id === 'addBoneIK' ) return false;
   if ( id === 'duplicate' ) return canDuplicateObjects( e );
   if ( id === 'parentObject' || id === 'clearParent' ) return canParentSelection( e, id === 'clearParent' );
   if ( id === 'addBoneIK' ) {
@@ -269,6 +287,11 @@ class Keymap {
    case 'viewportToolbar':e.viewTools?.toggleToolbar();break;
    case 'viewportOverlays':e.toggleViewportOverlays();break;
    case 'addComponent':if(this.actionAvailable(id))e.openComponentPicker?.();break;
+   case 'poseMode':if(this.actionAvailable(id))e.viewTools.setWorkspaceMode(e.viewTools.armature.mode==='pose'?'object':'pose');break;
+   case 'extrudeBone':if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.extrude());break;
+   case 'parentBones':case 'clearBoneParent':if(this.actionAvailable(id))e.contextMenu?.openBoneParent(id==='clearBoneParent',this.pointer);break;
+   case 'clearPoseLocation':case 'clearPoseRotation':case 'clearPoseScale':
+    if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.clearPose(id.slice(9).toLowerCase()));break;
    case 'addBoneIK':{
     if(!this.actionAvailable(id)) break;
     const bone=e.selected, target=e.selector.selection.findLast(object=>object!==bone&&object!==e.scene&&object!==e.camera);
@@ -285,7 +308,7 @@ class Keymap {
    case 'pencilReference':e.viewTools.togglePencilReference(this.pointer);break;
    case 'selectionCycle':case 'selectionBox':case 'selectionCircle':case 'selectionLasso':
     e.viewTools.chooseSelectionTool(id.slice(9).toLowerCase());break;
-   case 'clearSelection':if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
+   case 'clearSelection':if(e.viewTools.armature.mode)e.viewTools.armature.selectAll(false);else if(e.modeling?.object)e.modeling.selectPoints(false);else e.select(null);break;
    case 'surfacePaintMode':e.viewTools.setMode(e.viewTools.mode==='paint'?'':'paint');break;
    case 'meshEditMode':e.viewTools.setWorkspaceMode('edit');break;
    case 'meshSculptMode':e.viewTools.setWorkspaceMode('sculpt');break;
@@ -296,10 +319,11 @@ class Keymap {
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
    case 'translate':case 'rotate':case 'scale': if(this.preset!=='blender'||e.transformGizmoMode!=='combined')s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;
-   case 'delete':case 'deleteBack':{if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
-   case 'selectAll':{if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(this.preset==='basic'&&objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}
-   case 'selectNone':if(e.modeling?.editMode)e.modeling.selectPoints(false);else e.deselect();break;
+   case 'delete':case 'deleteBack':{if(e.viewTools.armature.mode)break;if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
+   case 'selectAll':{if(e.viewTools.armature.mode){e.viewTools.armature.selectAll(true);break;}if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(this.preset==='basic'&&objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}
+   case 'selectNone':if(e.viewTools.armature.mode)e.viewTools.armature.selectAll(false);else if(e.modeling?.editMode)e.modeling.selectPoints(false);else e.deselect();break;
    case 'focus':{
+    if ( e.viewTools.armature.mode ) { e.viewTools.armature.focus(); break; }
     const model = e.modeling;
     if ( model.editMode && model.object && model.indices.length ) {
      model.object.updateWorldMatrix( true, false );

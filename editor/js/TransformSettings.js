@@ -29,7 +29,8 @@ export function addTransformSettings( editor, toolbar ) {
 			choices: () => {
 
 				const current = editor.viewTools.modeSelect.value;
-				return interactionModes.map( ( [ mode, label, glyph ] ) =>
+				const available = Array.from( editor.viewTools.modeSelect.options ).filter( option => ! option.hidden && ! option.disabled ).map( option => option.value );
+				return interactionModes.filter( ( [ mode ] ) => available.includes( mode ) ).map( ( [ mode, label, glyph ] ) =>
 					[ label, glyph, () => editor.viewTools.setWorkspaceMode( mode ), current === mode ] );
 
 			}

@@ -104,6 +104,16 @@ export const LOGIC_DOMAIN = {
 			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ) }
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
+		[ 'logic.bonePose', {
+			label: 'Bone Pose', category: 'Rigging',
+			inputs: { target },
+			outputs: { location: vector( 'Rest-Relative Location' ), rotation: vector( 'Rest-Relative Rotation (°)' ), scale: vector( 'Scale' ) }
+		} ],
+		[ 'logic.setBonePose', action( 'Set Bone Pose', 'Rigging', {
+			target, channels: options( 'Channels', [ 'All', 'Location', 'Rotation', 'Scale' ] ),
+			location: vector( 'Rest-Relative Location', [ 0, 0, 0 ] ), rotation: vector( 'Rest-Relative Rotation (°)', [ 0, 0, 0 ] ),
+			scale: vector( 'Scale', [ 1, 1, 1 ] )
+		} ) ],
 		[ 'logic.setIKInfluence', action( 'Set IK Influence', 'Rigging', { target, influence: unit( 'Influence', 1 ) } ) ],
 		[ 'logic.boneWeight', { label: 'Bone Weight', category: 'Rigging',
 			inputs: { target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ) }, outputs: numeric } ],

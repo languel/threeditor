@@ -33,15 +33,36 @@ export function createBoneHelper( editor, bone ) {
 	picker.name = 'picker';
 	picker.userData.object = bone;
 	helper.add( picker );
+	const jointGeometry = new OctahedronGeometry( .045 );
+	const joints = [ 'head', 'tail' ].map( ( part, index ) => {
+
+		const marker = new Mesh( jointGeometry, new MeshBasicMaterial( { depthTest: false, toneMapped: false } ) );
+		marker.position.y = index;
+		marker.renderOrder = 4;
+		marker.visible = false;
+		helper.add( marker );
+		return { marker, part };
+
+	} );
 
 	const update = helper.updateMatrixWorld;
 	const scale = new Vector3();
 	helper.updateMatrixWorld = function ( force ) {
 
 		bone.updateWorldMatrix( true, false );
-		this.matrix.copy( bone.matrixWorld ).scale( scale.setScalar( bone.userData.armatureBone.length ) );
+		const workspace = editor.viewTools?.armature;
+		const editing = workspace?.editing && workspace.rig.getObjectById( bone.id );
+		const rest = editing ? workspace.restFor( bone ) : bone.userData.armatureBone;
+		this.matrix.copy( bone.matrixWorld ).scale( scale.setScalar( rest.length ) );
 		this.matrixWorldNeedsUpdate = true;
 		this.material.color.setHex( editor.selected === bone ? 0x65b5ff : editor.selector.selection.includes( bone ) ? 0x4089c1 : 0xaeb8c8 );
+		for ( const { marker, part } of joints ) {
+
+			marker.visible = !! editing && ( part === 'tail' || ! rest.connected );
+			const active = editing && editor.selector.selection.includes( bone ) && ( workspace.part === 'body' || workspace.part === part );
+			marker.material.color.setHex( active ? 0x65b5ff : 0xaeb8c8 );
+
+		}
 		update.call( this, force );
 
 	};
@@ -51,6 +72,8 @@ export function createBoneHelper( editor, bone ) {
 		material.dispose();
 		hitGeometry.dispose();
 		picker.material.dispose();
+		jointGeometry.dispose();
+		for ( const { marker } of joints ) marker.material.dispose();
 
 	};
 	return helper;

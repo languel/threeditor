@@ -3,9 +3,9 @@ import { UIButton, UINumber, UIPanel, UIRow, UIText } from './libs/ui.js';
 import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js';
 import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
 import { hasRestriction } from './ObjectRestrictions.js';
-import { armatureBones, armatureOf, boneRestTail, isArmature } from './rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
-import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, resetArmaturePose } from './rigging/ArmatureTools.js';
+import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js';
 
 function sceneArmatures( scene ) {
 
@@ -37,15 +37,40 @@ export function SidebarArmature( editor ) {
 	const root = new UIButton( 'Add Root Bone' ).onClick( () => run( () => addRigBone( editor, rig ) ) );
 	const extrude = new UIButton( 'Extrude Bone' ).onClick( () => run( () => addRigBone( editor, rig, { parent: bone } ) ) );
 	const reset = new UIButton( 'Reset Pose' ).onClick( () => run( () => resetArmaturePose( editor, bone || rig ) ) );
-	pose.add( new UIRow().add( root, extrude ), new UIRow().add( reset ) );
+	const editMode = new UIButton( 'Edit Rest Skeleton' ).onClick( () => editor.viewTools.setWorkspaceMode( 'armature-edit' ) );
+	const poseMode = new UIButton( 'Pose Mode' ).onClick( () => editor.viewTools.setWorkspaceMode( 'pose' ) );
+	pose.add( new UIRow().add( editMode, poseMode ), new UIRow().add( root, extrude ), new UIRow().add( reset ) );
 
 	const restPanel = new UIPanel();
 	pose.add( restPanel );
-	const head = pointFields( 'Rest Head' );
-	const tail = pointFields( 'Rest Tail' );
-	const roll = new UINumber( 0 ).setPrecision( 2 ).setUnit( '°' ).setWidth( '64px' ).onChange( saveRest );
+	const head = pointFields( restPanel, 'Rest Head', saveRest );
+	const tail = pointFields( restPanel, 'Rest Tail', saveRest );
+	const roll = new UINumber( 0 ).setPrecision( 2 ).setUnit( '°' ).setWidth( '64px' ).onChange( () => run( () =>
+		( editor.viewTools.armature.editing ? editRigSpaceBoneRest : editBoneRest )( editor, bone, { roll: THREE.MathUtils.degToRad( roll.getValue() ) } ) ) );
 	roll.dom.setAttribute( 'aria-label', 'Bone roll degrees' );
 	restPanel.add( new UIRow().add( new UIText( 'Roll' ).setClass( 'Label' ), roll ) );
+	const parent = document.createElement( 'select' );
+	parent.className = 'Select';
+	parent.setAttribute( 'aria-label', 'Bone parent' );
+	const parentRow = new UIRow().add( new UIText( 'Parent' ).setClass( 'Label' ) );
+	parentRow.dom.append( parent );
+	parent.onchange = () => run( () => reparentBone( editor, bone, editor.objectByUuid( parent.value ) ) );
+	const connected = document.createElement( 'input' );
+	connected.type = 'checkbox';
+	connected.setAttribute( 'aria-label', 'Connected to parent' );
+	connected.onchange = () => run( () => reparentBone( editor, bone, bone.parent, connected.checked ) );
+	const connectionRow = new UIRow().add( new UIText( 'Connected' ).setClass( 'Label' ) );
+	connectionRow.dom.append( connected );
+	restPanel.add( parentRow, connectionRow );
+	const offsetsPanel = new UIPanel();
+	const offsets = Object.fromEntries( [ [ 'location', 'Pose Location' ], [ 'rotation', 'Pose Rotation' ], [ 'scale', 'Pose Scale' ] ].map( ( [ key, label ] ) =>
+		[ key, pointFields( offsetsPanel, label, () => run( () => {
+
+			const values = offsets[ key ].map( field => field.getValue() );
+			setBonePose( editor, bone, { [ key ]: key === 'rotation' ? values.map( THREE.MathUtils.degToRad ) : values } );
+
+		} ) ) ] ) );
+	pose.add( offsetsPanel );
 	const physics = SidebarBonePhysics( editor, run );
 	const ik = SidebarArmatureIK( editor, run );
 	pose.add( ik, physics );
@@ -75,18 +100,18 @@ export function SidebarArmature( editor ) {
 	let rig, bone;
 	let boundObject, boundData;
 
-	function pointFields( label ) {
+	function pointFields( host, label, change ) {
 
 		const row = new UIRow().add( new UIText( label ).setClass( 'Label' ) );
 		const fields = [ 'X', 'Y', 'Z' ].map( axis => {
 
-			const field = new UINumber( 0 ).setPrecision( 3 ).setWidth( '56px' ).onChange( saveRest );
+			const field = new UINumber( 0 ).setPrecision( 3 ).setWidth( '56px' ).onChange( change );
 			field.dom.setAttribute( 'aria-label', label + ' ' + axis );
 			row.add( field );
 			return field;
 
 		} );
-		restPanel.add( row );
+		host.add( row );
 		return fields;
 
 	}
@@ -102,11 +127,11 @@ export function SidebarArmature( editor ) {
 	function saveRest() {
 
 		if ( ! bone ) return;
-		run( () => editBoneRest( editor, bone, {
+		const points = {
 			head: head.map( input => input.getValue() ),
-			tail: tail.map( input => input.getValue() ),
-			roll: THREE.MathUtils.degToRad( roll.getValue() )
-		} ) );
+			tail: tail.map( input => input.getValue() )
+		};
+		run( () => ( editor.viewTools.armature.editing ? editRigSpaceBoneRest : editBoneRest )( editor, bone, points ) );
 
 	}
 
@@ -133,21 +158,42 @@ export function SidebarArmature( editor ) {
 		picker.replaceChildren( ...options );
 		picker.value = ( bone || rig ).uuid;
 		const locked = hasRestriction( bone || rig, 'locked' ) || hasRestriction( bone || rig, 'disabled' );
-		root.setDisabled( hasRestriction( rig, 'locked' ) || hasRestriction( rig, 'disabled' ) );
-		extrude.setDisplay( bone ? '' : 'none' ).setDisabled( locked );
+		const rigLocked = hasRestriction( rig, 'locked' ) || hasRestriction( rig, 'disabled' );
+		const workspace = editor.viewTools?.armature;
+		const posing = workspace?.mode === 'pose';
+		editMode.setDisabled( rigLocked || workspace?.editing );
+		poseMode.setDisabled( rigLocked || posing );
+		root.setDisabled( rigLocked || posing );
+		extrude.setDisplay( bone ? '' : 'none' ).setDisabled( locked || posing );
 		reset.setDisabled( locked );
 		const rest = bone?.userData.armatureBone;
-		restPanel.setDisplay( rest ? '' : 'none' );
-		if ( rest ) {
+		restPanel.setDisplay( rest && ! posing ? '' : 'none' );
+		offsetsPanel.setDisplay( rest && posing ? '' : 'none' );
+		if ( rest && posing ) {
 
-			const end = boneRestTail( THREE, rest );
+			const transform = bonePoseOffsets( THREE, bone );
+			for ( const [ key, fields ] of Object.entries( offsets ) ) fields.forEach( ( field, axis ) => field.setValue(
+				key === 'rotation' ? THREE.MathUtils.radToDeg( transform[ key ][ axis ] ) : transform[ key ][ axis ]
+			).setDisabled( locked ) );
+
+		} else if ( rest ) {
+
+			const frame = workspace?.editing ? boneRestFrames( THREE, rig ).get( bone ) : null;
+			const start = frame ? frame.head.toArray() : rest.position;
+			const end = frame ? frame.tail.toArray() : boneRestTail( THREE, rest );
 			for ( let axis = 0; axis < 3; axis ++ ) {
 
-				head[ axis ].setValue( rest.position[ axis ] ).setDisabled( locked );
+				head[ axis ].setValue( start[ axis ] ).setDisabled( locked );
 				tail[ axis ].setValue( end[ axis ] ).setDisabled( locked );
 
 			}
 			roll.setValue( THREE.MathUtils.radToDeg( rest.roll ) ).setDisabled( locked );
+			const candidates = armatureBones( rig ).filter( candidate => ! bone.getObjectById( candidate.id ) && candidate.userData.armatureBone );
+			parent.replaceChildren( new Option( 'None', rig.uuid ), ...candidates.map( item => new Option( item.name, item.uuid ) ) );
+			parent.value = bone.parent.uuid;
+			parent.disabled = locked;
+			connected.checked = rest.connected;
+			connected.disabled = locked || bone.parent === rig;
 
 		}
 
@@ -182,6 +228,7 @@ export function SidebarArmature( editor ) {
 	rigPicker.onchange = sync;
 	editor.signals.objectSelected.add( () => { status.textContent = ''; sync(); } );
 	editor.signals.sceneGraphChanged.add( sync );
+	editor.signals.transformSettingsChanged.add( key => { if ( key === 'armatureMode' ) sync(); } );
 	editor.signals.objectChanged.add( object => { if ( object === editor.selected || armatureOf( object ) === rig && rig ) sync(); } );
 	sync();
 	return panel;

@@ -97,6 +97,7 @@ const ICONS = {
 	orientParent: svg( '<rect x="4" y="4" width="5" height="5"/><rect x="15" y="15" width="5" height="5"/><path d="M6.5 9v8.5H15"/>' ),
 	objectMode: svg( '<path d="M3 8V3h5m8 0h5v5m0 8v5h-5m-8 0H3v-5" opacity=".65"/><rect x="7" y="7" width="10" height="10" rx=".8" fill="currentColor" stroke="none"/>' ),
 	editMode: svg( '<path d="M7 5h10m2 2v10m-2 2H7m-2-2V7" opacity=".7"/><path d="M3 3h4v4H3zM3 17h4v4H3zM17 17h4v4h-4z" opacity=".75"/><path d="M16 2h6v6h-6z" fill="currentColor" stroke="none"/>' ),
+	poseMode: svg( '<path d="m6 18 8-8m-8 8-2-2m2 2 2 2m6-10 5-5"/><circle cx="14" cy="10" r="2.5" fill="currentColor"/><circle cx="19" cy="5" r="2.5"/>' ),
 	sculptMode: svg( '<path d="m9 10-6 6v4h5l6-6-5-4Z"/><path d="m11 8 3-4a3.7 3.7 0 0 1 6 4l-4 5Z" fill="currentColor" stroke="none"/>' ),
 	surfacePaintMode: svg( '<path d="M3 3h4v4H3zm8 0h4v4h-4zm8 0h3v4h-3zM7 7h4v4H7zm8 0h4v4h-4zM3 12h18v4h-3v3a2 2 0 0 1-4 0v-3h-3v4a2 2 0 0 1-4 0v-2H3z" fill="currentColor" stroke="none"/>' ),
 	link: svg( '<path d="m9 15 6-6m-5-3 2-2a4 4 0 0 1 6 6l-2 2M8 12l-2 2a4 4 0 0 0 6 6l2-2"/>' ),

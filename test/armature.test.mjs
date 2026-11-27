@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { armatureBones, armatureOf, boneRestFromPoints, boneRestTail, createArmature, createBone, findBone } from '../editor/js/rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, findBone } from '../editor/js/rigging/Armature.js';
 import { withArmatureDeformation } from '../editor/js/rigging/ArmatureDeformation.js';
+import { stageBoneRest } from '../editor/js/rigging/ArmatureRestEditing.js';
 import { LogicRuntime } from '../editor/js/nodes/LogicRuntime.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { addNode, connectNodes } from '../editor/js/nodes/NodeGraph.js';
@@ -131,5 +132,68 @@ test( 'Armature Bone passes a typed target and does not turn the host when a bon
 	assert.equal( rig.rotation.z, 0 );
 	assert.equal( tip.rotation.z, 0 );
 	missing.stop();
+
+} );
+
+test( 'Editing a shared head moves the entire joint without shifting other rest endpoints', () => {
+
+	const { rig, root, tip } = chain();
+	const branch = createBone( THREE, 'Branch', boneRestFromPoints( THREE, [ 0, 1, 0 ], [ 1, 2, 0 ], .37, true ) );
+	const offset = createBone( THREE, 'Offset', boneRestFromPoints( THREE, [ 0, 2, 1 ], [ 0, 3, 1 ] ) );
+	root.add( branch, offset );
+	root.rotation.z = Math.PI / 2;
+	const before = boneRestFrames( THREE, rig );
+	const joint = new THREE.Vector3( .5, 1.2, 0 );
+	const changes = stageBoneRest( THREE, rig, new Map( [ [ tip, { head: joint } ], [ root, { roll: .3 } ] ] ) );
+	assert.ok( root.userData.armatureBone.length === 1 );
+	assert.throws( () => stageBoneRest( THREE, rig, new Map( [ [ tip, { head: before.get( tip ).tail } ] ] ) ), /different head and tail/ );
+	for ( const [ bone, rest ] of changes ) bone.userData.armatureBone = rest;
+	const after = boneRestFrames( THREE, rig );
+
+	assert.ok( after.get( root ).tail.distanceTo( joint ) < 1e-7 );
+	assert.equal( root.userData.armatureBone.roll, .3 );
+	for ( const bone of [ tip, branch ] ) {
+
+		assert.ok( bone.userData.armatureBone.connected );
+		assert.ok( after.get( bone ).head.distanceTo( joint ) < 1e-7 );
+		assert.ok( after.get( bone ).tail.distanceTo( before.get( bone ).tail ) < 1e-7 );
+
+	}
+	assert.ok( after.get( offset ).head.distanceTo( before.get( offset ).head ) < 1e-7 );
+	assert.ok( after.get( offset ).tail.distanceTo( before.get( offset ).tail ) < 1e-7 );
+	assert.equal( root.rotation.z, Math.PI / 2 );
+
+} );
+
+test( 'Set Bone Pose writes offsets in the bone rest frame and Bone Pose reads them in degrees', () => {
+
+	const { rig, root } = chain();
+	root.userData.armatureBone = boneRestFromPoints( THREE, [ 0, 0, 0 ], [ 1, 0, 0 ] );
+	const scene = new THREE.Scene();
+	scene.add( rig );
+	const graph = createLogicGraph();
+	const bone = addNode( graph, 'logic.bone', 0, 0 );
+	const set = addNode( graph, 'logic.setBonePose', 0, 0 );
+	const read = addNode( graph, 'logic.bonePose', 0, 0 );
+	const move = addNode( graph, 'logic.setPositionVector', 0, 0 );
+	set.values.location = [ 0, 2, 0 ];
+	set.values.rotation = [ 0, 0, 60 ];
+	function link( from, out, to, input ) {
+
+		connectNodes( graph, LOGIC_DOMAIN, { node: from, socket: out }, { node: to, socket: input } );
+
+	}
+	link( 'logic.start', 'then', set.id, 'run' );
+	link( bone.id, 'object', set.id, 'target' );
+	link( bone.id, 'object', read.id, 'target' );
+	link( set.id, 'then', move.id, 'run' );
+	link( read.id, 'rotation', move.id, 'vector' );
+	rig.userData.logicGraph = graph;
+	const runtime = new LogicRuntime( THREE, scene, { on: () => () => {} } );
+	runtime.start();
+	assert.ok( root.position.distanceTo( new THREE.Vector3( 2, 0, 0 ) ) < 1e-7 );
+	assert.ok( Math.abs( bonePoseOffsets( THREE, root ).location[ 1 ] - 2 ) < 1e-7 );
+	assert.ok( Math.abs( rig.position.z - 60 ) < 1e-7 );
+	runtime.stop();
 
 } );

@@ -67,6 +67,57 @@ export function boneRestTail( THREE, rest ) {
 
 }
 
+export function boneRestFrames( THREE, rig ) {
+
+	const frames = new Map();
+	for ( const bone of armatureBones( rig ) ) {
+
+		const rest = bone.userData.armatureBone;
+		if ( ! rest ) continue;
+		const parent = frames.get( bone.parent );
+		const quaternion = new THREE.Quaternion().fromArray( rest.quaternion );
+		const head = new THREE.Vector3().fromArray( rest.position );
+		if ( parent ) {
+
+			head.applyQuaternion( parent.quaternion ).add( parent.head );
+			quaternion.premultiply( parent.quaternion );
+
+		}
+		const tail = new THREE.Vector3( 0, rest.length, 0 ).applyQuaternion( quaternion ).add( head );
+		frames.set( bone, { head, tail, quaternion } );
+
+	}
+	return frames;
+
+}
+
+export function bonePoseTransform( THREE, bone, offsets ) {
+
+	const rest = bone.userData.armatureBone;
+	if ( ! rest ) return null;
+	const orientation = new THREE.Quaternion().fromArray( rest.quaternion );
+	const position = offsets.location ? new THREE.Vector3().fromArray( offsets.location ).applyQuaternion( orientation )
+		.add( new THREE.Vector3().fromArray( rest.position ) ) : bone.position.clone();
+	const quaternion = offsets.rotation ? orientation.multiply( new THREE.Quaternion().setFromEuler( new THREE.Euler( ...offsets.rotation ) ) ) :
+		bone.quaternion.clone();
+	const scale = offsets.scale ? new THREE.Vector3().fromArray( offsets.scale ) : bone.scale.clone();
+	return { position, quaternion, scale };
+
+}
+
+export function bonePoseOffsets( THREE, bone ) {
+
+	const rest = bone.userData.armatureBone;
+	if ( ! rest ) return null;
+	const inverse = new THREE.Quaternion().fromArray( rest.quaternion ).invert();
+	return {
+		location: bone.position.clone().sub( new THREE.Vector3().fromArray( rest.position ) ).applyQuaternion( inverse ).toArray(),
+		rotation: new THREE.Euler().setFromQuaternion( inverse.multiply( bone.quaternion ) ).toArray().slice( 0, 3 ),
+		scale: bone.scale.toArray()
+	};
+
+}
+
 export function resetBoneTransform( bone ) {
 
 	const rest = bone?.userData.armatureBone;

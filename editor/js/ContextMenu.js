@@ -289,6 +289,14 @@ function ContextMenu( editor, viewport ) {
 
 	function openAdd( position, trigger ) {
 
+		const armature = editor.viewTools.armature;
+		if ( armature.mode === 'pose' ) return;
+		if ( armature.editing ) {
+
+			show( 'Add', [ { label: 'Bone at Cursor', run: () => editor.viewTools.run( () => armature.addRoot() ) } ], position, { trigger } );
+			return;
+
+		}
 		const { label, items } = editor.sceneAddMenu;
 		const available = items.flatMap( item => {
 
@@ -324,6 +332,15 @@ function ContextMenu( editor, viewport ) {
 				[ bone ? 'Bone (Without Inverse)' : 'Object (Without Inverse)', 'withoutInverse' ] ];
 		show( clearing ? 'Clear Parent' : 'Set Parent', choices.map( ( [ label, mode ] ) => ( {
 			label, run: () => editor.viewTools.run( () => changeParent( editor, clearing, mode ) )
+		} ) ), position );
+
+	}
+
+	function openBoneParent( clearing, position ) {
+
+		const options = clearing ? [ [ 'Clear Parent', 'clear' ] ] : [ [ 'Keep Offset', 'offset' ], [ 'Connected', 'connected' ] ];
+		show( clearing ? 'Clear Bone Parent' : 'Set Bone Parent', options.map( ( [ label, mode ] ) => ( {
+			label, run: () => editor.viewTools.run( () => editor.viewTools.armature.parentSelection( mode ) )
 		} ) ), position );
 
 	}
@@ -372,6 +389,18 @@ function ContextMenu( editor, viewport ) {
 	function openObject( position ) {
 
 		const model = editor.modeling;
+		const armature = editor.viewTools.armature;
+		if ( armature.mode ) {
+
+			const rigActions = armature.editing ? [ 'extrudeBone', 'parentBones', 'clearBoneParent' ] :
+				[ 'clearPoseLocation', 'clearPoseRotation', 'clearPoseScale', 'addBoneIK' ];
+			const actions = [ ...rigActions, 'translate', 'rotate', 'scale', 'selectAll', 'selectNone' ].filter( id =>
+				editor.keymap.actionAvailable( id ) ).map( id => editor.keymap.actions.find( action => action.id === id ) );
+			if ( armature.editing ) actions.unshift( { label: 'Add Bone at Cursor', run: () => editor.viewTools.run( () => armature.addRoot() ) } );
+			show( armature.editing ? 'Armature' : 'Pose', actions, position );
+			return;
+
+		}
 		const edit = model.editMode && model.object && ! editor.viewTools.mode;
 		const ids = edit ? [ 'translate', 'rotate', 'scale' ] : editor.selected ? [ 'translate', 'rotate', 'scale', 'focus', 'duplicate', 'delete' ] : [];
 		const actions = ids.map( id => editor.keymap.actions.find( action => action.id === id ) ).filter( Boolean );
@@ -451,7 +480,7 @@ function ContextMenu( editor, viewport ) {
 
 	}, true );
 	window.addEventListener( 'resize', () => { if ( menu.classList.contains( 'context-menu-add' ) ) close(); } );
-	return { openAdd, openObject, openPalette, openSeparate, openParent, openRename, show, close };
+	return { openAdd, openObject, openPalette, openSeparate, openParent, openBoneParent, openRename, show, close };
 
 }
 

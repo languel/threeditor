@@ -201,6 +201,7 @@ function Viewport( editor ) {
 
 	const transformControls = new TransformControls( camera );
 	const model = editor.modeling;
+	const armature = editor.viewTools.armature;
 	sceneHelpers.add( model.proxy );
 	let gizmoDrag, cancelGizmoDrag = false;
 	const gizmoAllowed = () => editor.config.getKey( 'settings/showTransformGizmo' ) !== false &&
@@ -213,7 +214,9 @@ function Viewport( editor ) {
 		const selected = selector.selection;
 		const available = selected.length > 0 && selected.every( object => object !== scene && object !== camera &&
 			isVisible( object ) && ! hasRestriction( object, 'locked' ) );
-		const candidate = model.editMode ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.brush && ! model.drag ? model.proxy : null ) :
+		const candidate = armature.editing ? ( armature.canTransform ? armature.proxy : null ) :
+			armature.mode && ! armature.selectedBones.length ? null :
+			model.editMode ? ( model.canEdit() && model.indices.length && ! model.adding && ! model.brush && ! model.drag ? model.proxy : null ) :
 			available ? ( selector.usesGroupPivot() ? selector.group : selected[ 0 ] ) : null;
 		if ( candidate && transformControls.object !== candidate ) transformControls.attach( candidate );
 		else if ( ! candidate && transformControls.object ) transformControls.detach();
@@ -377,6 +380,12 @@ function Viewport( editor ) {
 	transformControls.addEventListener( 'objectChange', function () {
 
 		if ( transformControls.object === model.proxy ) model.updateTransform( transformControls.axis );
+		else if ( transformControls.object === armature.proxy ) {
+
+			armature.update();
+			render();
+
+		}
 		else {
 
 			dropToGround();
@@ -388,6 +397,12 @@ function Viewport( editor ) {
 	transformControls.addEventListener( 'mouseDown', function () {
 
 		const object = transformControls.object;
+		if ( object === armature.proxy ) {
+
+			if ( armature.begin() ) controls.enabled = false;
+			return;
+
+		}
 		if ( object === model.proxy ) {
 
 			if ( model.beginTransform( transformControls.mode ) ) controls.enabled = false;
@@ -409,6 +424,13 @@ function Viewport( editor ) {
 	transformControls.addEventListener( 'mouseUp', function () {
 
 		setControlSnap( false );
+		if ( transformControls.object === armature.proxy ) {
+
+			armature.finish( ! cancelGizmoDrag );
+			controls.enabled = true;
+			return;
+
+		}
 		if ( transformControls.object === model.proxy ) {
 
 			model.finishTransform( ! cancelGizmoDrag );
@@ -531,7 +553,23 @@ function Viewport( editor ) {
 		if ( ! downView || view?.key !== downView.key ) return;
 		onUpPosition.fromArray( pointerPosition( view, x, y ) );
 		if ( onDownPosition.distanceTo( onUpPosition ) !== 0 ) return;
+		if ( armature.editing ) {
+
+			armature.selectHit( armature.pickRest( layout.clientRect( view ), view.camera, x, y ), shift );
+			render();
+			return;
+
+		}
 		const intersects = selector.getPointerIntersects( onUpPosition, view.camera );
+		if ( armature.mode === 'pose' ) {
+
+			const bone = intersects.map( hit => hit.object.userData.object || hit.object ).find( object =>
+				object.userData.armatureBone && armature.rig.getObjectById( object.id ) );
+			armature.selectHit( bone ? { bone, part: 'body' } : null, shift );
+			render();
+			return;
+
+		}
 		signals.intersectionsDetected.dispatch( intersects, shift );
 		render();
 
@@ -1332,7 +1370,7 @@ function Viewport( editor ) {
 
 	function drawSelection( view, show = view === camera, host = splatHost ) {
 
-		if ( ! show || model.editMode && model.object || cleanShading( editor.viewportShading ) || ! sceneHelpers.visible ||
+		if ( ! show || armature.mode || model.editMode && model.object || cleanShading( editor.viewportShading ) || ! sceneHelpers.visible ||
 			editor.config.getKey( 'settings/selectionHighlight' ) === 'bounds' ) return;
 		const roots = selector.selection.filter( object => object !== scene && object !== camera && isVisible( object ) && hasSelectionSurface( object ) );
 		const active = editor.selected;
@@ -1351,7 +1389,7 @@ function Viewport( editor ) {
 	let renderedFallback, renderedStatus;
 	function updatePT( liveScene ) {
 
-		if ( editor.viewportShading !== 'realistic' || renderer.xr.isPresenting || ! container.dom.offsetWidth ) { renderedStatus = undefined; return; }
+		if ( editor.viewportShading !== 'realistic' || armature.editing || renderer.xr.isPresenting || ! container.dom.offsetWidth ) { renderedStatus = undefined; return; }
 		let status = 'Raster · split or source view';
 		if ( liveScene ) {
 
@@ -1413,7 +1451,8 @@ function Viewport( editor ) {
 			const painting = editorView ? editor.viewTools.weightPaint : null;
 			const draw = () => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) );
 			const raster = () => model.withPreview( () => withArmatureDeformation( THREE, scene,
-				() => painting ? painting.withPreview( draw ) : draw(), model.editMode ? model.object : painting?.object ) );
+				() => painting ? painting.withPreview( draw ) : draw(), model.editMode ? model.object : painting?.object,
+				armature.editing ? armature.rig : null ) );
 			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 			else raster();
 
@@ -1424,7 +1463,7 @@ function Viewport( editor ) {
 	function render() {
 
 		if ( renderer === null ) return;
-		withArmatureIK( THREE, scene, renderPosed );
+		armature.withRest( () => withArmatureIK( THREE, scene, renderPosed, armature.editing ? armature.rig : null ) );
 
 	}
 
@@ -1481,7 +1520,7 @@ function Viewport( editor ) {
 			target.expandByObject( object, true );
 
 		}
-		const boundGuides = ! ( model.editMode && model.object );
+		const boundGuides = ! armature.mode && ! ( model.editMode && model.object );
 		selectionBox.visible = boundGuides && ! box.isEmpty();
 		activeSelectionBox.visible = boundGuides && ! activeSelectionBox.box.isEmpty();
 		const drawGuides = frame => {
@@ -1490,7 +1529,7 @@ function Viewport( editor ) {
 			const view = frame.camera;
 			const gizmo = transformControls.getHelper();
 			const showGizmo = frame === nav && gizmo.visible && gizmoAllowed();
-			const showModelGizmo = showGizmo && transformControls.object === model.proxy;
+			const showModelGizmo = showGizmo && [ model.proxy, armature.proxy ].includes( transformControls.object );
 			if ( ! overlays && ! clean ) {
 
 				if ( showGizmo ) {
