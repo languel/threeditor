@@ -318,8 +318,10 @@ function ContextMenu( editor, viewport ) {
 
 	function openParent( clearing, position ) {
 
+		const bone = editor.selected?.isBone;
 		const choices = clearing ? [ [ 'Clear Parent', 'keepLocal' ], [ 'Clear and Keep Transform', 'keepWorld' ] ] :
-			[ [ 'Object (Keep Transform)', 'keepWorld' ], [ 'Object (Without Inverse)', 'withoutInverse' ] ];
+			[ [ bone ? 'Bone (Keep Transform)' : 'Object (Keep Transform)', 'keepWorld' ],
+				[ bone ? 'Bone (Without Inverse)' : 'Object (Without Inverse)', 'withoutInverse' ] ];
 		show( clearing ? 'Clear Parent' : 'Set Parent', choices.map( ( [ label, mode ] ) => ( {
 			label, run: () => editor.viewTools.run( () => changeParent( editor, clearing, mode ) )
 		} ) ), position );

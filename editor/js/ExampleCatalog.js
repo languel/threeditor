@@ -40,6 +40,7 @@ const exampleCatalog = [
 		{ title: 'A pointer and gamepad control deck', file: 'examples/lessons/14-interactive-control-deck.app.json' },
 		{ title: 'Reusable ripple groups', file: 'examples/lessons/15-reusable-ripples.app.json' },
 		{ title: 'A generative Empty', file: 'examples/lessons/16-generative-empty.app.json' },
+		{ title: 'A bending signal flag', file: 'examples/lessons/17-armature-flag.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

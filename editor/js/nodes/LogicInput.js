@@ -1,4 +1,5 @@
 import { isVisible } from '../ObjectRestrictions.js';
+import { withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
 
 const zero = Object.freeze( [ 0, 0, 0 ] );
 const miss = Object.freeze( { hit: false, object: '', point: zero, normal: zero, distance: 0 } );
@@ -31,6 +32,7 @@ export class LogicInput {
 
 	constructor( THREE, scene ) {
 
+		this.THREE = THREE;
 		this.scene = scene;
 		this.raycaster = new THREE.Raycaster();
 		this.ndc = new THREE.Vector2();
@@ -182,6 +184,12 @@ export class LogicInput {
 	}
 
 	closest( root, ignore ) {
+
+		return withArmatureDeformation( this.THREE, this.scene, () => this.closestPosed( root, ignore ) );
+
+	}
+
+	closestPosed( root, ignore ) {
 
 		const intersections = this.intersections;
 		root.updateWorldMatrix( true, true );

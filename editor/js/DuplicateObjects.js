@@ -140,6 +140,7 @@ export function duplicateObjects( editor, move ) {
 
 		}
 		if ( copy.userData.projectorTarget ) copy.userData.projectorTarget = uuid( copy.userData.projectorTarget );
+		if ( copy.userData.armatureBinding ) copy.userData.armatureBinding.rig = uuid( copy.userData.armatureBinding.rig );
 		if ( copy.userData.threeditor?.cameraFollow ) copy.userData.threeditor.cameraFollow = uuid( copy.userData.threeditor.cameraFollow );
 		for ( const point of copy.userData.measurement?.points || [] ) if ( point.target ) point.target = uuid( point.target );
 		remapLogicObjects( copy.userData.logicGraph, uuid );

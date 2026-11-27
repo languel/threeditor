@@ -14,6 +14,7 @@ import { createP5Sketch } from '../P5Sketch.js';
 import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
 import { LogicRuntime } from '../nodes/LogicRuntime.js';
 import { NodeComponentRuntime } from '../nodes/NodeComponents.js';
+import { releaseArmatureGeometry, withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
 import { readGamepads } from '../nodes/LogicInput.js';
 import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
@@ -304,6 +305,7 @@ const APP = {
 
 			geometrySimulation?.dispose();
 			logic?.stop();
+			scene?.traverse( releaseArmatureGeometry );
 			nodeComponents.removeTree( scene );
 			scene = value;
 			nodeComponents.syncTree( scene );
@@ -428,11 +430,11 @@ const APP = {
 			if ( ! this.width || ! this.height ) return;
 			if ( projectorContext ) {
 
-				drawProjectorOutput( projectorContext, projector );
+				withArmatureDeformation( THREE, scene, () => drawProjectorOutput( projectorContext, projector ) );
 				return;
 
 			}
-			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => withShaderGraphs( renderer, scene, () => {
+			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => withArmatureDeformation( THREE, scene, () => withShaderGraphs( renderer, scene, () => {
 
 				const draw = () => renderer.render( scene, camera );
 				if ( projector ) {
@@ -446,7 +448,7 @@ const APP = {
 
 				}
 
-			} ) ) );
+			} ) ) ) );
 		};
 
 		this.play = function () {
@@ -529,6 +531,7 @@ const APP = {
 			timeline = null;
 			geometrySimulation?.dispose();
 			geometrySimulation = null;
+			scene?.traverse( releaseArmatureGeometry );
 			nodeComponents.removeTree( scene );
 			logic?.stop();
 			logic = null;

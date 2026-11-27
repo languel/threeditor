@@ -11,12 +11,15 @@ import { editableMesh } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
+import { hasArmatureTools, SidebarArmature } from './Sidebar.Armature.js';
+import { armatureOf } from './rigging/Armature.js';
 function SidebarProperties( editor, sceneSettings, container ) {
 
 	const strings = editor.strings;
 
 	container.addTab( 'sceneTab', strings.getKey( 'sidebar/scene' ), sceneSettings, 'sidebar/scene' );
 	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ), 'sidebar/properties/object' );
+	container.addTab( 'armatureTab', 'Armature', new SidebarArmature( editor ) );
 	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ), 'sidebar/properties/geometry' );
 	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ), 'sidebar/properties/material' );
 	const scripts = new SidebarScript( editor );
@@ -48,6 +51,7 @@ function SidebarProperties( editor, sceneSettings, container ) {
 		const visible = {
 			sceneTab: true,
 			objectTab: ! scene,
+			armatureTab: hasArmatureTools( editor.scene, object ),
 			geometryTab: !! object?.geometry,
 			materialTab: !! object && ( !! object.material || object.isGroup && ! isProjector( object ) ),
 			scriptTab: !! object && object !== editor.camera,
@@ -58,6 +62,7 @@ function SidebarProperties( editor, sceneSettings, container ) {
 		};
 		for ( const tab of properties.tabs ) tab.setHidden( ! visible[ tab.dom.id ] );
 		if ( object === editor.scene && previousSelection !== object ) rememberTab( 'sceneTab', true );
+		else if ( armatureOf( object ) && armatureOf( previousSelection ) !== armatureOf( object ) ) rememberTab( 'armatureTab', true );
 		else if ( scene && previousSelection !== object && properties.selected !== 'toolTab' || ! visible[ properties.selected ] ) {
 
 			rememberTab( scene ? 'sceneTab' : 'objectTab' );

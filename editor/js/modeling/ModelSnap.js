@@ -60,7 +60,7 @@ export function snapMeshFeature( { mode, ray, scene, object, camera, rect, curso
 	else if ( hit?.face ) {
 
 		const { a, b, c } = hit.face;
-		const positions = hit.object.geometry.attributes.position;
+		const positions = hit.posedPosition || hit.object.geometry.attributes.position;
 		const corners = [ a, b, c ].map( index => new THREE.Vector3().fromBufferAttribute( positions, index ).applyMatrix4( hit.object.matrixWorld ) );
 		const triangle = new THREE.Triangle( ...corners );
 		if ( mode === 'faceCenter' ) return triangle.getMidpoint( new THREE.Vector3() );

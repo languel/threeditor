@@ -8,6 +8,8 @@ import { createShaderGraph, SHADER_DOMAIN } from '../editor/js/nodes/ShaderNodes
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { exposeGroupSocket, groupNodes, nodeGroupsDomain } from '../editor/js/nodes/NodeGroups.js';
 import { nodeComponentData } from '../editor/js/nodes/NodeComponents.js';
+import { modelObject } from '../editor/js/modeling/ModelGeometry.js';
+import { boneRestFromPoints, createArmature, createBone } from '../editor/js/rigging/Armature.js';
 
 function newGraph( type, settings = {} ) {
 
@@ -504,3 +506,48 @@ generator.userData = nodeComponentData( generator, 'logic', orbLogic );
 await save( '16-generative-empty', 'A generative Empty', generator,
 	'Select Orb generator and inspect Components. Geometry Nodes generates the orb and its ring without any input mesh. Shader Graph gives the generated mesh its color. Press Space in Play Scene to rotate the Empty and the geometry it generates.',
 	[ 3.5, 2.6, 4.5 ], 'WebGPURenderer' );
+
+const flagRig = createArmature( THREE, 'Flag armature' );
+flagRig.position.y = - .85;
+const flagBase = flagRig.children[ 0 ];
+flagBase.name = 'Base';
+const flagTip = createBone( THREE, 'Tip', boneRestFromPoints( THREE, [ 0, 1, 0 ], [ 0, 2, 0 ], 0, true ) );
+flagBase.add( flagTip );
+const fabric = new THREE.Mesh( new THREE.PlaneGeometry( .8, 2, 12, 36 ),
+	new THREE.MeshStandardMaterial( { color: 0x289fc8, side: THREE.DoubleSide, roughness: .65 } ) );
+fabric.name = 'Flag mesh';
+fabric.position.y = 1;
+fabric.castShadow = true;
+const stripe = modelObject( THREE, {
+	kind: 'path', points: [ [ -.19, .12, .016 ], [ .11, .63, .016 ], [ -.12, 1.11, .016 ], [ .17, 1.82, .016 ] ],
+	smooth: true, pencilBrush: { color: '#fdd389', size: .05, strength: 1, hardness: .85, grain: .08 }
+}, 'Pencil stripe' );
+const edge = modelObject( THREE, {
+	kind: 'path', points: [ [ .38, .05, .025 ], [ .38, .65, .025 ], [ .38, 1.35, .025 ], [ .38, 1.93, .025 ] ], smooth: true
+}, 'Curve piping' );
+const flagBeacon = new THREE.Mesh( new THREE.IcosahedronGeometry( .12, 1 ),
+	new THREE.MeshStandardMaterial( { color: 0xf5ab65, emissive: 0x81440d } ) );
+flagBeacon.name = 'Tip marker';
+flagBeacon.position.y = 1;
+flagTip.add( flagBeacon );
+for ( const object of [ fabric, stripe, edge ] ) {
+
+	object.updateMatrix();
+	object.userData.armatureBinding = { rig: flagRig.uuid, objectToRig: object.matrix.toArray(), influences: 2 };
+	flagRig.add( object );
+
+}
+const flagLogic = flagRig.userData.logicGraph = createLogicGraph();
+removeNode( flagLogic, 'logic.start' );
+const tipTarget = logicNode( flagLogic, 'logic.bone', 32, 270, { name: 'Tip' } );
+for ( const [ key, angle, y ] of [ [ 'ArrowLeft', 30, 36 ], [ 'ArrowRight', - 30, 158 ], [ 'Space', 0, 390 ] ] ) {
+
+	const source = logicNode( flagLogic, 'logic.keyDown', 32, y, { key } );
+	const action = logicNode( flagLogic, angle ? 'logic.rotate' : 'logic.resetBone', 348, y, angle ? { z: angle } : {} );
+	wire( flagLogic, LOGIC_DOMAIN, source, 'then', action, 'run' );
+	wire( flagLogic, LOGIC_DOMAIN, tipTarget, 'object', action, 'target' );
+
+}
+await save( '17-armature-flag', 'A bending signal flag', flagRig,
+	'Press Left or Right Arrow in Play Scene to bend the flag and Space to reset it. The mesh, pencil stripe and curve use the same skeleton. The tip marker is parented directly to the Tip bone. Select Flag armature or its bones to inspect the rest endpoints, and select a bound object to inspect its Armature binding.',
+	[ 2.3, 1.1, 4.25 ] );

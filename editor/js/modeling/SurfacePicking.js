@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { isVisible } from '../ObjectRestrictions.js';
+import { withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
 
 export function rayToView( ray, layout, frame, x, y ) {
 
@@ -13,16 +14,27 @@ export function rayToView( ray, layout, frame, x, y ) {
 export function meshHit( ray, scene, exclude, allows ) {
 
 	scene.updateMatrixWorld( true );
-	return ray.intersectObjects( scene.children ).find( hit => {
+	return withArmatureDeformation( THREE, scene, () => {
 
-		const object = hit.object;
-		return object.isMesh && ! object.isInstancedMesh && object !== exclude && hit.face &&
-			! object.userData.runtimeOnly && ! object.userData.surfaceMark && isVisible( object ) && allows?.( object ) !== false;
+		const hit = ray.intersectObjects( scene.children ).find( hit => {
 
-	} );
+			const object = hit.object;
+			return object.isMesh && ! object.isInstancedMesh && object !== exclude && hit.face &&
+				! object.userData.runtimeOnly && ! object.userData.surfaceMark && isVisible( object ) && allows?.( object ) !== false;
+
+		} );
+		return posedHit( hit );
+
+	}, exclude );
 
 }
 
+function posedHit( hit ) {
+
+	if ( hit?.face && hit.object.userData.armatureBinding ) hit.posedPosition = hit.object.geometry.attributes.position;
+	return hit;
+
+}
 
 export function paintSurfaces( scene, allows ) {
 
@@ -55,6 +67,12 @@ export function paintSurfaces( scene, allows ) {
 }
 
 export function modelSurfaceHit( ray, scene, exclude, camera, rect, allows ) {
+
+	return withArmatureDeformation( THREE, scene, () => sampleSurface( ray, scene, exclude, camera, rect, allows ), exclude );
+
+}
+
+function sampleSurface( ray, scene, exclude, camera, rect, allows ) {
 
 	scene.updateMatrixWorld( true );
 	const { triangles, scans, receivers } = paintSurfaces( scene, allows );
@@ -93,7 +111,14 @@ export function modelSurfaceHit( ray, scene, exclude, camera, rect, allows ) {
 				ray.ray.at( hit.distance, projected ).project( camera );
 				sample.copy( position ).project( camera );
 				const error = Math.hypot( ( projected.x - sample.x ) * rect.width / 2, ( projected.y - sample.y ) * rect.height / 2 );
-				if ( error <= bestPixel ) { bestPixel = error; best = { ...hit, point: position.clone() }; }
+				if ( error <= bestPixel ) {
+
+					bestPixel = error;
+					const normals = geometry.attributes.normal;
+					const sampleNormal = normals ? new THREE.Vector3().fromBufferAttribute( normals, hit.index ) : null;
+					best = { ...hit, point: position.clone(), sampleNormal };
+
+				}
 
 			}
 			if ( best ) closest = best;
@@ -101,15 +126,15 @@ export function modelSurfaceHit( ray, scene, exclude, camera, rect, allows ) {
 		}
 
 	} finally { ray.params.Points.threshold = threshold; }
-	return closest;
+	return posedHit( closest );
 
 }
 
 export function modelSurfaceNormal( hit, ray ) {
 
 	const normals = hit.object.geometry?.attributes.normal;
-	const normal = hit.face ? hit.face.normal.clone() : normals && Number.isInteger( hit.index ) ?
-		new THREE.Vector3().fromBufferAttribute( normals, hit.index ) : null;
+	const normal = hit.face ? hit.face.normal.clone() : hit.sampleNormal ??
+		( normals && Number.isInteger( hit.index ) ? new THREE.Vector3().fromBufferAttribute( normals, hit.index ) : null );
 	if ( ! normal?.lengthSq() ) return ray.ray.direction.clone().negate();
 	normal.applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
 	return normal.dot( ray.ray.direction ) > 0 ? normal.negate() : normal;

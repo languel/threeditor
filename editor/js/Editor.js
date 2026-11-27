@@ -14,6 +14,8 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 import { Config } from './Config.js?v=transform-gizmos';
 import { Loader } from './Loader.js?v=splat-filters';
 import { createEmptyHelper } from './modeling/ReferenceObjects.js';
+import { createBoneHelper } from './rigging/ArmatureHelper.js';
+import { releaseArmatureGeometry } from './rigging/ArmatureDeformation.js';
 import { NodeComponentRuntime } from './nodes/NodeComponents.js';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
@@ -278,6 +280,7 @@ Editor.prototype = {
 		object.traverse( function ( child ) {
 
 			if ( child.userData.runtimeOnly ) return;
+			releaseArmatureGeometry( child );
 			scope.removeCamera( child );
 			scope.removeHelper( child );
 
@@ -459,6 +462,10 @@ Editor.prototype = {
 
 					helper = createEmptyHelper( object );
 
+				} else if ( object.isBone && object.userData.armatureBone ) {
+
+					helper = createBoneHelper( this, object );
+
 				} else if ( object.isCamera ) {
 
 					helper = createCameraHelper( THREE, object );
@@ -509,7 +516,7 @@ Editor.prototype = {
 
 					helper = new THREE.HemisphereLightHelper( object, 1 );
 
-				} else if ( object.isSkinnedMesh ) {
+				} else if ( object.isSkinnedMesh && object.skeleton?.bones[ 0 ] && ! object.skeleton.bones[ 0 ].userData.armatureBone ) {
 
 					helper = new THREE.SkeletonHelper( object.skeleton.bones[ 0 ] );
 					helper.userData.object = object;

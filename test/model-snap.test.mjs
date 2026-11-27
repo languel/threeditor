@@ -6,10 +6,11 @@ import * as THREE from '../build/three.module.js';
 const models = new URL( '../editor/js/modeling/', import.meta.url );
 const three = new URL( '../build/three.module.js', import.meta.url ).href;
 const restrictions = new URL( '../ObjectRestrictions.js', models ).href;
+const deformation = new URL( '../rigging/ArmatureDeformation.js', models ).href;
 async function moduleUrl( name, imports = {} ) {
 
 	let source = await readFile( new URL( name, models ), 'utf8' );
-	const replacements = { 'three': three, '../ObjectRestrictions.js': restrictions, ...imports };
+	const replacements = { 'three': three, '../ObjectRestrictions.js': restrictions, '../rigging/ArmatureDeformation.js': deformation, ...imports };
 	source = source.replace( /from '([^'?]+)(?:\?[^']+)?'/g, ( match, from ) => replacements[ from ] ? `from '${ replacements[ from ] }'` : match );
 	return 'data:text/javascript;base64,' + Buffer.from( source ).toString( 'base64' );
 
