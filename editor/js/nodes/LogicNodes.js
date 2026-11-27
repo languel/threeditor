@@ -104,6 +104,15 @@ export const LOGIC_DOMAIN = {
 			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ) }
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
+		[ 'logic.boneContact', {
+			...trigger( 'On Bone Contact', 'bonecontact', { target, other: { ...object( 'Other Collider' ), emptyLabel: 'Any collider' } },
+				{ enter: event( 'Enter' ), exit: event( 'Exit' ) } ), category: 'Rigging'
+		} ],
+		[ 'logic.boneImpulse', action( 'Apply Bone Impulse', 'Rigging', { target, impulse: vector( 'World Impulse', [ 0, 1, 0 ] ) } ) ],
+		[ 'logic.boneVelocity', {
+			label: 'Bone Velocity', category: 'Rigging', inputs: { target },
+			outputs: { velocity: vector( 'World Velocity' ), speed: numberOutput( 'Speed' ) }
+		} ],
 		[ 'logic.boolean', { label: 'Boolean', category: 'Values', inputs: { value: flag( 'Value' ) }, outputs: condition } ],
 		[ 'logic.string', { label: 'Text', category: 'Values', inputs: { value: text( 'Text' ) }, outputs: stringOutput } ],
 		[ 'logic.eventValue', { label: 'Event Value', category: 'Values', inputs: { fallback: numberInput( 'Fallback' ) }, outputs: numeric } ],

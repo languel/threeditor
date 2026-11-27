@@ -67,6 +67,12 @@ To keep an object rigid as the rig moves, select it and then add the desired bon
 
 In Logic Nodes, **Armature Bone** finds a bone by name or UUID and exposes its world-space head and tail. Connect its **Bone** socket to a transform action or **Reset Bone Pose**. The editor API and WebMCP expose the same authoring operations as `threeditor_armature_create`, `threeditor_armature_get`, `threeditor_bone_add`, `threeditor_bone_edit_rest`, `threeditor_armature_reset_pose`, `threeditor_bone_attach`, and `threeditor_armature_bind`. [Bending signal flag tutorial](../editor/examples/lessons/README.md#rig-a-bending-signal-flag)
 
+### Bone physics
+
+On a bone’s **Armature** tab, set **Bone Physics** to **Kinematic capsule** to follow authored poses or **Dynamic capsule** to respond to gravity, contacts, and impulses in Play Scene. Dynamic child bones can use ball, hinge, or fixed parent joints. Hinges have a local axis and optional angle limits measured from the pose at the start of playback. A dynamic root can move freely or use **Anchor Root** to joint it to its armature. Set **Rig Collider** on a scene mesh to use its bounds as a fixed or moving box. [Rapier joint reference](https://rapier.rs/javascript3d/classes/JointData.html)
+
+Use **Apply Bone Impulse** with a dynamic bone and a world-space impulse. **Bone Velocity** reads its speed and velocity vector. **On Bone Contact** fires when contact starts or ends and can filter by collider. **Reset Bone Pose** also resets a simulated bone’s velocity. The editor API and WebMCP expose configuration through `threeditor_bone_set_physics` and `threeditor_armature_set_collider`. Playable exports include the Rapier WebAssembly when a project has a physics rig. [Pendulum tutorial](../editor/examples/lessons/README.md#simulate-a-rapier-pendulum)
+
 ## Stock material looks
 
 Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. Switch to **Preview** to see the shader. Look parameters appear below the selector and include fill color, ink color, and outline width. Click a diamond to keyframe a parameter. On a group with a common look, edits and keys apply to all its mesh material slots.

@@ -10,6 +10,7 @@ import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
+import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
 
 function editable( editor, object ) {
 
@@ -159,5 +160,42 @@ export function bindArmature( editor, object, rig, influences = 4 ) {
 	const command = new SetValueCommand( editor, object, 'userData', userData );
 	command.updatable = false;
 	editor.execute( command, rig ? 'Bind Armature' : 'Clear Armature Binding' );
+
+}
+
+export function setBonePhysics( editor, bone, settings ) {
+
+	if ( ! bone?.userData.armatureBone || ! armatureOf( bone ) || ! editable( editor, bone ) ) throw new Error( 'Select an editable authored bone.' );
+	const userData = { ...bone.userData };
+	if ( settings.mode === 'off' ) delete userData.armaturePhysics;
+	else {
+
+		const physics = bonePhysicsSettings( { ...userData.armaturePhysics, ...settings } );
+		if ( ! physics ) throw new Error( 'Choose a physics mode and valid capsule and joint settings.' );
+		userData.armaturePhysics = physics;
+
+	}
+	const command = new SetValueCommand( editor, bone, 'userData', userData );
+	command.updatable = false;
+	editor.execute( command, 'Set Bone Physics' );
+	return userData.armaturePhysics || null;
+
+}
+
+export function setRigCollider( editor, object, mode ) {
+
+	if ( ! editable( editor, object ) || ! object.isMesh || mode !== 'off' && ! object.geometry?.attributes.position?.count ) {
+
+		throw new Error( 'Select an editable mesh to use as a collider.' );
+
+	}
+	if ( ! [ 'off', 'fixed', 'kinematic' ].includes( mode ) ) throw new Error( 'Choose Off, Fixed, or Kinematic.' );
+	const userData = { ...object.userData };
+	if ( mode === 'off' ) delete userData.armatureCollider;
+	else userData.armatureCollider = { mode };
+	const command = new SetValueCommand( editor, object, 'userData', userData );
+	command.updatable = false;
+	editor.execute( command, 'Set Rig Collider' );
+	return userData.armatureCollider || null;
 
 }

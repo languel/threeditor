@@ -24,6 +24,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | Reusable ripple groups | Two geometry instances share a ripple formula, a shader group colors the heights, and a logic group turns the surface. |
 | — | A generative Empty | Geometry, shading, and keyboard logic are attached to one Empty. |
 | — | A bending signal flag | A mesh, pencil stripe, and curve share a skeleton, and a marker follows the tip bone. |
+| — | A Rapier pendulum | A dynamic bone swings from a kinematic parent, hits a scene collider, and receives a keyboard impulse. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -126,3 +127,9 @@ opened from the library.
 1. Open **A bending signal flag** and select **Flag armature**. In the **Armature** tab, choose **Tip**. Its Rest Head is at the base bone’s tail. Rotate the tip around Z to pose it, then choose **Reset Pose**.
 2. Select **Flag mesh**, **Pencil stripe**, or **Curve piping** to inspect the automatic weight binding. **Tip marker** is parented to the **Tip** bone and moves as a rigid piece.
 3. Select **Flag armature** and open **Logic Nodes**. Trace **Armature Bone** into the two Rotate actions and **Reset Bone Pose**. Press Left or Right Arrow in Play Scene to bend the flag. Press Space to reset it.
+
+### Simulate a Rapier pendulum
+
+1. Open **A Rapier pendulum** and choose **Play Scene**. The weight swings under gravity. Press **Space** to push it and **R** to restore the initial pose.
+2. Stop Play and select **Swing** in the Outliner. In **Armature**, inspect its dynamic capsule and Z-axis hinge. Change damping and run the scene again.
+3. Select **Collision stop** to see its fixed box collider. Select **Pendulum armature** and open **Logic Nodes** to trace the keyboard event through **Apply Bone Impulse** and see how **On Bone Contact** changes the block’s color.

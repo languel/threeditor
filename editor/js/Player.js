@@ -33,6 +33,7 @@ function Player( editor ) {
 
 	} );
 	let environmentTarget = null;
+	let playRequest = 0;
 	let disposeMediaURLs = () => {};
 	signals.stopPlayer.add( () => { disposeMediaURLs(); disposeMediaURLs = () => {}; } );
 	container.dom.appendChild( player.dom );
@@ -76,6 +77,7 @@ function Player( editor ) {
 
 	signals.startPlayer.add( async function () {
 
+		const request = ++ playRequest;
 		container.setDisplay( '' );
 		parameters.close();
 		container.add( parameters );
@@ -85,14 +87,14 @@ function Player( editor ) {
 			const json = editor.toJSON();
 			disposeMediaURLs(); disposeMediaURLs = resolvePlaybackAssets( json, editor.sourceFiles );
 			await player.load( json );
-			if ( container.dom.style.display === 'none' ) return;
+			if ( request !== playRequest ) return;
 
 			// Match the editor's look in the player's separate renderer.
 			const renderer = player.getRenderer();
 			const scene = player.getScene();
 			renderer.setClearColor( editor.viewportColor );
 			const target = await setupRenderEnvironment( scene, renderer, json.environmentType );
-			if ( container.dom.style.display === 'none' || renderer !== player.getRenderer() ) {
+			if ( request !== playRequest || renderer !== player.getRenderer() ) {
 
 				target?.dispose();
 				return;
@@ -107,6 +109,7 @@ function Player( editor ) {
 
 		} catch ( error ) {
 
+			if ( request !== playRequest ) return;
 			console.error( 'Could not start Play:', error );
 			signals.stopPlayer.dispatch();
 			alert( 'Could not start Play: ' + error.message );
@@ -213,6 +216,7 @@ function Player( editor ) {
 
 	signals.stopPlayer.add( function () {
 
+		playRequest ++;
 		container.setDisplay( 'none' );
 		editor.streams.playing = false;
 		parameters.close();
