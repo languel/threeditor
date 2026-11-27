@@ -203,7 +203,22 @@ class StreamRouter extends EventTarget {
 	}
 
 	get( topic ) { return this.#samples.get( topic )?.value; }
+	getSample( topic ) { return this.#samples.get( topic ); }
 	topics() { return [ ...this.#samples.keys() ].sort(); }
+
+	sendOutput( kind, target, value, preview = false ) {
+
+		const send = this.outputs.get( kind );
+		if ( ! send || preview || ! Number.isFinite( value ) ) return false;
+		try { return send( target, value ) !== false; }
+		catch ( error ) {
+
+			this.dispatchEvent( new CustomEvent( 'outputerror', { detail: error } ) );
+			return false;
+
+		}
+
+	}
 
 	subscribe( topic, handler ) {
 

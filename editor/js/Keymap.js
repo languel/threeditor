@@ -1,4 +1,5 @@
 import { shadingModes } from './ViewportShading.js?v=live-preview';
+import { handleGraphShortcut } from './nodes/GraphKeyboard.js';
 import { hoveredTimelineProperty } from './animation/TimelineKeyControl.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
@@ -116,7 +117,7 @@ class Keymap {
   };
   document.addEventListener( 'pointermove', trackPointer, true );
   document.addEventListener( 'pointerdown', trackPointer, true );
-  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save','maximizeArea'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
+  window.addEventListener('keydown',e=>{if(this.recording||e.repeat||e.isComposing||editor.modalTransform?.active||editor.flyControls?.active||document.body.classList.contains('presenting')||document.querySelector('dialog[open]'))return;if(handleGraphShortcut(e,this.pointerTarget))return;const combo=comboFromEvent(e);const action=this.actions.find(a=>['palette','paletteAlternate','save','maximizeArea'].includes(a.id)&&combo&&this.combo(a.id)===combo);if(action){e.preventDefault();e.stopPropagation();action.run();}},true);
   document.addEventListener('keydown',e=>this.onKey(e));
  }
  register(action){if(!this.actions.some(a=>a.id===action.id))this.actions.push(action);}

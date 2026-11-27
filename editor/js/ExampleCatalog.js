@@ -34,6 +34,8 @@ const exampleCatalog = [
 		{ title: 'An animated TSL glaze', file: 'examples/lessons/08-animated-glaze.app.json' },
 		{ title: 'A keyboard-controlled gate', file: 'examples/lessons/09-keyboard-gate.app.json' },
 		{ title: 'A field-colored wave', file: 'examples/lessons/10-field-colored-wave.app.json' },
+		{ title: 'A proximity garden', file: 'examples/lessons/11-proximity-garden.app.json' },
+		{ title: 'A stream-reactive sculpture', file: 'examples/lessons/12-stream-pulse.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

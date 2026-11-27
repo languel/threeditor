@@ -32,6 +32,54 @@ export function disconnectInput( graph, input ) {
 
 }
 
+// A bypass chooses a connected input of the same socket type. Prefer a
+// matching socket name when a node has multiple inputs of that type.
+export function bypassNodes( graph, domain, skipped ) {
+
+	const nodes = new Map( graph.nodes.map( node => [ node.id, node ] ) );
+	const inbound = new Map();
+	for ( const link of graph.links ) {
+
+		if ( link.muted ) continue;
+		if ( ! inbound.has( link.to.node ) ) inbound.set( link.to.node, [] );
+		inbound.get( link.to.node ).push( link );
+
+	}
+	const links = [];
+	for ( const link of graph.links ) {
+
+		if ( skipped.has( link.to.node ) ) continue;
+		let from = link.from;
+		const visited = new Set();
+		while ( from && skipped.has( from.node ) ) {
+
+			if ( visited.has( from.node ) ) { from = undefined; break; }
+			visited.add( from.node );
+			const def = domain.nodes.get( nodes.get( from.node ).type );
+			const type = def.outputs[ from.socket ].type;
+			const candidates = ( inbound.get( from.node ) || [] ).filter( edge => def.inputs[ edge.to.socket ].type === type );
+			from = ( candidates.find( edge => edge.to.socket === from.socket ) || candidates[ 0 ] )?.from;
+
+		}
+		if ( from ) links.push( { ...link, from } );
+
+	}
+	return { ...graph, nodes: graph.nodes.filter( node => ! skipped.has( node.id ) ), links };
+
+}
+
+export function activeGraph( graph, domain ) {
+
+	if ( ! Array.isArray( graph?.nodes ) || ! Array.isArray( graph.links ) ) return graph;
+	const muted = new Set( graph.nodes.filter( node => node?.muted === true ).map( node => node.id ) );
+	if ( ! muted.size && ! graph.links.some( link => link?.muted === true ) ) return graph;
+	// Validate the authored wiring, including links temporarily muted.
+	indexGraph( graph, domain );
+	const live = { ...graph, links: graph.links.filter( link => ! link.muted ) };
+	return muted.size ? bypassNodes( live, domain, muted ) : live;
+
+}
+
 export function connectNodes( graph, domain, from, to ) {
 
 	const draft = { ...graph };
@@ -51,6 +99,7 @@ function getSocket( sockets, name ) {
 
 export function validateSocketValue( value, socket ) {
 
+	if ( socket.options && ! socket.options.includes( value ) ) throw new Error( 'Choose a valid ' + socket.label + '.' );
 	if ( socket.type === 'color' && ( typeof value !== 'string' || ! /^#[\da-f]{6}$/i.test( value ) ) ) {
 
 		throw new Error( socket.label + ' must be a six-digit hex color.' );
@@ -73,6 +122,12 @@ export function validateSocketValue( value, socket ) {
 		}
 
 	}
+	if ( socket.type === 'vec3' && ( ! Array.isArray( value ) || value.length !== 3 || ! value.every( Number.isFinite ) ) ) {
+
+		throw new Error( socket.label + ' needs a finite three-dimensional vector.' );
+
+	}
+	socket.validate?.( value );
 
 }
 
@@ -150,7 +205,7 @@ export function dataflowOrder( { nodes, inputs, consumers } ) {
 
 export function planDataflow( graph, domain, target ) {
 
-	const index = indexGraph( graph, domain );
+	const index = indexGraph( activeGraph( graph, domain ), domain );
 	const { nodes, inputs } = index;
 	if ( ! nodes.has( target ) ) throw new Error( 'The graph output node is missing.' );
 

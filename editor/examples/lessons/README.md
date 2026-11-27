@@ -17,6 +17,8 @@ The Scene's user data records each lesson's source and purpose.
 | — | An animated TSL glaze | One moving UV pattern controls both the color and roughness of a ceramic material. |
 | — | A keyboard-controlled gate | Keyboard and overlap events move a runner and open a gate through two logic graphs. |
 | — | A field-colored wave | One procedural field deforms a grid and colors the resulting ridges through a TSL graph. |
+| — | A proximity garden | A distance field and a math expression scale instances scattered over a mesh. |
+| — | A stream-reactive sculpture | A stream sample drives a sculpture's scale. The starter graph generates its own signal. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -71,3 +73,17 @@ opened from the library.
 2. The next **Multiply Fields** node controls the height of the wave. Try changing B from 0.33 to 0.15 and watch the surface flatten.
 3. Follow the second branch from **Sine Field**. It maps the sine values from −1–1 to 0–1 and writes them into the **ridge** attribute.
 4. Open **Shader Graph** and trace **Named Attribute** into **Mix Color**. Change A or B to recolor the same surface.
+
+### Scatter a proximity garden
+
+1. Open **A proximity garden**, select **Proximity garden**, and choose **Geometry Nodes**. Hover the canvas and press **Shift+A** to open the searchable catalog.
+2. Change **Count** and **Seed** on **Distribute Points on Faces**. The points are sampled on the input plane.
+3. Follow **Geometry Proximity** into **Math Expression Field**. X is the closest distance to the sphere. Try `0.18 + 1.1 * exp(-5 * x)` to make the larger instances cluster more tightly.
+4. **Instance on Points** uses the result for scale and aligns each cone with the surface normal. **Realize Instances** turns the copies into the modifier's output mesh.
+
+### Drive a sculpture from a stream
+
+1. Open **A stream-reactive sculpture** and choose **Play Scene**. The graph generates a changing `map.pulse` value, so the sculpture moves with no connected device.
+2. Stop Play and open **Logic Nodes** on **Stream sculpture**. Follow **On Stream Sample** to **Set Scale**. **Event Value** and **Map Range** turn each sample into a Y scale.
+3. Connect a device or a tracked input from **Streams**, then click **Browse stream topics** on **On Stream Sample**. Try a MIDI control such as `midi.cc.1.1`, serial like `serial.A0`, or a landmark coordinate such as `vision.pose.16.x`.
+4. Set the input range on **Map Range** to match the device. MIDI control changes use 0–127, and landmark X/Y coordinates are normalized. Start Play to test the graph.

@@ -696,6 +696,7 @@ function SidebarStreams( editor ) {
 		...getEvents().flatMap( rule => [ rule.source, rule.fallback, rule.action?.topic,
 			rule.action?.name && 'event.' + rule.action.name ] )
 	], () => inputs.keys() );
+	editor.pickStreamTopic = pickTopic;
 
 	function topicInput( parent, label, numeric = false ) {
 

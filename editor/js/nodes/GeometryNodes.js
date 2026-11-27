@@ -2,6 +2,8 @@ import { addNode, connectNodes, createGraph, dataflowOrder, evaluateDataflow, pl
 import { numberInput, VALUE_NODES, VALUE_OPERATIONS } from './ValueNodes.js';
 import { joinGeometry } from './GeometryOperations.js';
 import { attributeInput, FIELD_NODES, FIELD_OPERATIONS, fieldInput, forEachVertex, sampleField, validAttributeName } from './GeometryFields.js';
+import { createProximity } from './GeometryProximity.js';
+import { distributeOnFaces, realizeInstances, verticesToPoints } from './GeometryScatter.js';
 
 export const GEOMETRY_MODIFIER = 'GEOMETRY_NODES';
 const sourceType = 'geometry.input';
@@ -18,6 +20,10 @@ const numberOutput = label => ( { label, type: 'number' } );
 const stateOutputs = { ...geometry, value: numberOutput( 'Value' ) };
 const stateInputs = { ...geometry, value: numberInput( 'Value' ) };
 const axes = [ 'x', 'y', 'z' ];
+const fieldVector = Object.fromEntries( axes.map( axis => [ axis, { label: axis.toUpperCase(), type: 'field' } ] ) );
+const points = { points: { label: 'Points', type: 'points' } };
+const instances = { instances: { label: 'Instances', type: 'instances' } };
+const flag = ( label, value ) => ( { label, type: 'boolean', default: value } );
 
 const geometryNodes = [
 	[ 'geometry.box', {
@@ -35,6 +41,45 @@ const geometryNodes = [
 	[ 'geometry.cylinder', {
 		label: 'Cylinder', category: 'Primitives', outputs: geometry,
 		inputs: { bottom: size( 'Bottom Radius' ), top: numberInput( 'Top Radius', 1, 0, 1e6 ), height: size( 'Height' ), segments: numberInput( 'Segments', 24, 3, 256 ) }
+	} ],
+	[ 'geometry.cone', {
+		label: 'Cone', category: 'Primitives', outputs: geometry,
+		inputs: { radius: size( 'Radius' ), height: size( 'Height' ), segments: numberInput( 'Segments', 24, 3, 256 ) }
+	} ],
+	[ 'geometry.torus', {
+		label: 'Torus', category: 'Primitives', outputs: geometry,
+		inputs: { radius: size( 'Radius' ), tube: numberInput( 'Tube', .25, .0001, 1e6 ), segments: numberInput( 'Segments', 48, 3, 256 ), sides: numberInput( 'Sides', 16, 3, 128 ) }
+	} ],
+	[ 'geometry.icoSphere', {
+		label: 'Icosphere', category: 'Primitives', outputs: geometry,
+		inputs: { radius: size( 'Radius' ), detail: numberInput( 'Detail', 1, 0, 16 ) }
+	} ],
+	[ 'geometry.disk', {
+		label: 'Disk', category: 'Primitives', outputs: geometry,
+		inputs: { radius: size( 'Radius' ), segments: numberInput( 'Segments', 32, 3, 256 ) }
+	} ],
+	[ 'geometry.proximity', {
+		label: 'Geometry Proximity', category: 'Sampling', keywords: 'closest nearest distance',
+		inputs: { target: { label: 'Target', type: 'geometry' }, mode: { label: 'Target Element', type: 'string', default: 'Faces', options: [ 'Faces', 'Edges', 'Points' ] } },
+		outputs: { distance: { label: 'Distance', type: 'field' }, ...fieldVector }
+	} ],
+	[ 'geometry.meshPoints', {
+		label: 'Mesh to Points', category: 'Instances', inputs: { ...geometry, merge: flag( 'Merge Coincident', true ), selection: fieldInput( 'Selection', 1 ) }, outputs: points
+	} ],
+	[ 'geometry.distribute', {
+		label: 'Distribute Points on Faces', category: 'Instances', keywords: 'scatter',
+		inputs: { ...geometry, count: numberInput( 'Count', 60, 0, 20000 ), seed: numberInput( 'Seed', 0, 0, 0xffffffff ) }, outputs: points
+	} ],
+	[ 'geometry.onPoints', {
+		label: 'Instance on Points', category: 'Instances', inputs: {
+			...points, mesh: { label: 'Instance', type: 'geometry' }, align: flag( 'Align to Normal', true ),
+			scale: fieldInput( 'Scale', 1 ), rotation: fieldInput( 'Rotation (°)' ), selection: fieldInput( 'Selection', 1 )
+		}, outputs: instances
+	} ],
+	[ 'geometry.realize', { label: 'Realize Instances', category: 'Instances', inputs: instances, outputs: geometry } ],
+	[ 'geometry.bounds', {
+		label: 'Mesh Bounds', category: 'Sampling', keywords: 'bounding box',
+		inputs: geometry, outputs: Object.fromEntries( [ 'Min', 'Max', 'Size' ].map( label => [ label.toLowerCase(), { label, type: 'vec3' } ] ) )
 	} ],
 	[ 'geometry.join', {
 		label: 'Join Geometry', category: 'Geometry', outputs: geometry,
@@ -191,7 +236,7 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 			// Store evaluated attributes so project JSON also retains the groups.
 			const output = copy( buffer );
 			output.clearGroups();
-			output.addGroup( 0, output.index.count, 0 );
+			output.addGroup( 0, output.index?.count ?? output.attributes.position.count, 0 );
 			return { geometry: output };
 
 		} finally {
@@ -211,6 +256,44 @@ export function evaluateGeometryGraph( THREE, graph, source, simulation, stage =
 			primitive( new THREE.PlaneGeometry( width, depth, Math.round( xSegments ), Math.round( zSegments ) ).rotateX( - Math.PI / 2 ) ) ],
 		[ 'geometry.cylinder', ( { bottom, top, height, segments } ) =>
 			primitive( new THREE.CylinderGeometry( top, bottom, height, Math.round( segments ) ) ) ],
+		[ 'geometry.cone', ( { radius, height, segments } ) => primitive( new THREE.ConeGeometry( radius, height, Math.round( segments ) ) ) ],
+		[ 'geometry.torus', ( { radius, tube, segments, sides } ) =>
+			primitive( new THREE.TorusGeometry( radius, tube, Math.round( sides ), Math.round( segments ) ).rotateX( - Math.PI / 2 ) ) ],
+		[ 'geometry.icoSphere', ( { radius, detail } ) => primitive( new THREE.IcosahedronGeometry( radius, Math.round( detail ) ) ) ],
+		[ 'geometry.disk', ( { radius, segments } ) => primitive( new THREE.CircleGeometry( radius, Math.round( segments ) ).rotateX( - Math.PI / 2 ) ) ],
+		[ 'geometry.proximity', ( { target, mode } ) => createProximity( THREE, target, mode ) ],
+		[ 'geometry.meshPoints', ( { geometry, merge, selection } ) => {
+
+			checkVertices( geometry.attributes.position.count );
+			return { points: own( verticesToPoints( THREE, geometry, merge, selection ) ) };
+
+		} ],
+		[ 'geometry.distribute', ( { geometry, count, seed } ) => {
+
+			checkVertices( Math.round( count ) );
+			return { points: own( distributeOnFaces( THREE, geometry, Math.round( count ), Math.round( seed ) ) ) };
+
+		} ],
+		[ 'geometry.onPoints', inputs => ( { instances: inputs } ) ],
+		[ 'geometry.realize', ( { instances } ) => {
+
+			const output = own( realizeInstances( THREE, instances, checkVertices ) );
+			output.computeBoundingBox();
+			if ( output.attributes.position.count && [ ...output.boundingBox.min, ...output.boundingBox.max ].some( value => ! Number.isFinite( value ) ) ) {
+
+				throw new Error( 'Realize Instances produced positions outside the supported range.' );
+
+			}
+			return { geometry: output };
+
+		} ],
+		[ 'geometry.bounds', ( { geometry } ) => {
+
+			const box = new THREE.Box3().setFromBufferAttribute( geometry.attributes.position );
+			if ( box.isEmpty() ) return { min: [ 0, 0, 0 ], max: [ 0, 0, 0 ], size: [ 0, 0, 0 ] };
+			return { min: box.min.toArray(), max: box.max.toArray(), size: box.getSize( new THREE.Vector3() ).toArray() };
+
+		} ],
 		[ 'geometry.join', ( { a, b } ) => {
 
 			checkVertices( a.attributes.position.count + b.attributes.position.count );

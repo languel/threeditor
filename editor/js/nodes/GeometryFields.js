@@ -1,4 +1,5 @@
-import { numberInput } from './ValueNodes.js';
+import { expressionMath, mathExpressionInput, numberInput } from './ValueNodes.js';
+import { compileExpression } from './MathExpression.js';
 
 export const fieldInput = ( label, value = 0 ) => ( { label, type: 'field', default: value } );
 const fieldSocket = label => ( { label, type: 'field' } );
@@ -20,6 +21,10 @@ export const FIELD_NODES = [
 	[ 'field.add', field( 'Add Fields', binary ) ],
 	[ 'field.multiply', field( 'Multiply Fields', { ...binary, b: fieldInput( 'B', 1 ) } ) ],
 	[ 'field.sine', field( 'Sine Field', { value: fieldInput( 'Radians' ) } ) ],
+	[ 'field.maprange', field( 'Map Range Field', {
+		value: fieldInput( 'Value' ), a: fieldInput( 'From Min' ), b: fieldInput( 'From Max', 1 ), c: fieldInput( 'To Min' ), d: fieldInput( 'To Max', 1 )
+	} ) ],
+	[ 'field.expression', field( 'Math Expression Field', { expression: mathExpressionInput, x: fieldInput( 'X' ), y: fieldInput( 'Y' ), z: fieldInput( 'Z' ) } ) ],
 	[ 'field.compare', field( 'Greater Than Field', binary ) ]
 ];
 
@@ -50,6 +55,7 @@ function components( key ) {
 }
 
 const pair = ( operation, a, b ) => element => operation( sampleField( a, element ), sampleField( b, element ) );
+const math = expressionMath();
 
 function memoField( evaluate ) {
 
@@ -92,6 +98,15 @@ export const FIELD_OPERATIONS = [
 	[ 'field.add', ( { a, b } ) => ( { value: pair( ( x, y ) => x + y, a, b ) } ) ],
 	[ 'field.multiply', ( { a, b } ) => ( { value: pair( ( x, y ) => x * y, a, b ) } ) ],
 	[ 'field.sine', ( { value } ) => ( { value: element => Math.sin( sampleField( value, element ) ) } ) ],
+	[ 'field.maprange', inputs => ( {
+		value: element => math.get( 'maprange' ).run( ...Object.values( inputs ).map( value => sampleField( value, element ) ) )
+	} ) ],
+	[ 'field.expression', ( { expression, x, y, z } ) => {
+
+		const run = compileExpression( expression, math );
+		return { value: element => run( { x: sampleField( x, element ), y: sampleField( y, element ), z: sampleField( z, element ) } ) };
+
+	} ],
 	[ 'field.compare', ( { a, b } ) => ( { value: pair( ( x, y ) => x > y ? 1 : 0, a, b ) } ) ]
 ].map( ( [ type, create ] ) => [ type, inputs => Object.fromEntries( Object.entries( create( inputs ) )
 	.map( ( [ socket, field ] ) => [ socket, memoField( field ) ] ) ) ] );

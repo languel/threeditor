@@ -117,7 +117,7 @@ export function openShaderGraph( editor ) {
 			try {
 
 				canvas.setGraph( graph, editable, resetView );
-				if ( graph ) compileShaderGraph( TSL, graph, material );
+				if ( graph ) validationError = compileShaderGraph( TSL, graph, material ).missing || '';
 
 			} catch ( error ) {
 

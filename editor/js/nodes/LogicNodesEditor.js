@@ -25,7 +25,7 @@ export function openLogicNodes( editor ) {
 	const status = document.createElement( 'div' );
 	status.className = 'node-graph-status';
 	status.setAttribute( 'role', 'status' );
-	const view = NodeGraphEditor( LOGIC_DOMAIN, { onChange: commit, onError: report, inputOptions } );
+	const view = NodeGraphEditor( LOGIC_DOMAIN, { onChange: commit, onError: report, inputOptions, decorateInput } );
 	panel.append( toolbar, view.dom, status );
 	let object, graph, editable, references = [], referenceKey, queued, disposed, invalid;
 
@@ -35,6 +35,22 @@ export function openLogicNodes( editor ) {
 		const choices = [ [ '', 'Self' ], ...references ];
 		if ( value && ! choices.some( ( [ id ] ) => id === value ) ) choices.push( [ value, 'Missing object' ] );
 		return choices;
+
+	}
+
+	function decorateInput( input, row, spec, def ) {
+
+		if ( ! spec.browseTopic ) return;
+		const browse = document.createElement( 'button' );
+		browse.type = 'button';
+		browse.className = 'node-graph-unlink';
+		browse.dataset.uiRaw = 'keep';
+		browse.textContent = '…';
+		browse.title = 'Browse stream topics';
+		browse.setAttribute( 'aria-label', def.label + ' / Browse stream topics' );
+		browse.disabled = input.disabled;
+		browse.onclick = () => editor.pickStreamTopic?.( input, browse, spec.browseTopic === 'numeric' );
+		row.append( browse );
 
 	}
 
