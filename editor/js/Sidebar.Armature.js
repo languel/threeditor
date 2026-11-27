@@ -5,7 +5,7 @@ import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
-import { addRigBone, bindArmature, editBoneRest, resetArmaturePose } from './rigging/ArmatureTools.js';
+import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, resetArmaturePose } from './rigging/ArmatureTools.js';
 
 function sceneArmatures( scene ) {
 
@@ -61,9 +61,11 @@ export function SidebarArmature( editor ) {
 
 	} ) );
 	const clear = new UIButton( 'Clear Binding' ).onClick( () => run( () => bindArmature( editor, editor.selected, null ) ) );
+	const paint = new UIButton( 'Paint Weights' ).onClick( () => editor.viewTools.setWorkspaceMode( 'weights' ) );
+	const resetWeights = new UIButton( 'Reset Painted Weights' ).onClick( () => run( () => commitArmatureWeights( editor, editor.selected, null ) ) );
 	const influences = new UINumber( 4 ).setPrecision( 0 ).setRange( 1, 4 ).setStep( 1 ).setWidth( '56px' );
 	influences.dom.setAttribute( 'aria-label', 'Max bone influences' );
-	binding.add( rigRow, new UIRow().add( new UIText( 'Influences' ).setClass( 'Label' ), influences ), new UIRow().add( bind, clear ) );
+	binding.add( rigRow, new UIRow().add( new UIText( 'Influences' ).setClass( 'Label' ), influences ), new UIRow().add( bind, clear ), new UIRow().add( paint, resetWeights ) );
 	panel.add( binding );
 	const collider = SidebarRigCollider( editor, run );
 	panel.add( collider );
@@ -171,6 +173,8 @@ export function SidebarArmature( editor ) {
 		influences.setDisabled( locked || ! supportsGeometry );
 		bind.setDisabled( locked || ! rigs.some( item => item.uuid === rigPicker.value ) );
 		clear.setDisplay( data ? '' : 'none' ).setDisabled( locked );
+		paint.setDisplay( data ? '' : 'none' ).setDisabled( locked || ! rigs.some( item => item.uuid === data?.rig ) );
+		resetWeights.setDisplay( data?.weightSamples ? '' : 'none' ).setDisabled( locked );
 
 	}
 

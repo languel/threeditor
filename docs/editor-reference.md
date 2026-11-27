@@ -75,6 +75,14 @@ Select the end bone and choose **Add IK Target** in the **Armature** tab to plac
 
 Logic Nodes can move the target with object actions, change the blend with **Set IK Influence**, or read the result with **Armature Bone**. WebMCP exposes `threeditor_bone_set_ik` and `threeditor_bone_create_ik_target`. The armature inspection tool returns evaluated world heads and tails alongside the saved local transforms. [Reach-controlled arm tutorial](../editor/examples/lessons/README.md#pose-a-reach-controlled-arm)
 
+### Weight Paint
+
+Select bound geometry and choose **Armature → Paint Weights** or **Weight Paint** from the viewport mode menu. Pick a **Weight Bone** to see its influence from blue at zero to red at full weight. Set the brush radius, strength, and weight, then drag over the rest geometry. **Shift+drag** reduces the active bone’s weight. **Smooth** blends weights across adjacent mesh or curve vertices. **Paint Through** includes back-facing mesh vertices. Each stroke can be undone, or cancelled with **Esc** before release. [Blender weight-paint reference](https://docs.blender.org/manual/en/5.0/sculpt_paint/weight_paint/introduction.html)
+
+Other bones share the remaining influence so the weights stay normalized. The binding’s influence count limits how many bones affect each vertex. Painted weights are saved by rest position, so vertices at the same point share their weights across seams. New or repositioned rest points use automatic weights. **Reset Painted Weights** restores automatic weighting on the entire object.
+
+Use **Bone Weight** and **Set Bone Weight** in Logic Nodes to read or change a vertex’s weight in Play. The editor API and WebMCP expose inspection, undoable assignments, and reset through `threeditor_armature_get_weights`, `threeditor_armature_set_weights`, and `threeditor_armature_clear_weights`.
+
 ### Bone physics
 
 On a bone’s **Armature** tab, set **Bone Physics** to **Kinematic capsule** to follow authored poses or **Dynamic capsule** to respond to gravity, contacts, and impulses in Play Scene. Dynamic child bones can use ball, hinge, or fixed parent joints. Hinges have a local axis and optional angle limits measured from the pose at the start of playback. A dynamic root can move freely or use **Anchor Root** to joint it to its armature. Set **Rig Collider** on a scene mesh to use its bounds as a fixed or moving box. [Rapier joint reference](https://rapier.rs/javascript3d/classes/JointData.html)

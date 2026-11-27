@@ -1,5 +1,6 @@
 import { armatureBones, isArmature } from './Armature.js';
 import { withArmatureIK } from './ArmatureIK.js';
+import { normalizeBoneWeights, paintBoneWeight, weightPointKey } from './ArmatureWeights.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 const records = new WeakMap();
@@ -117,13 +118,76 @@ function skinRecord( THREE, object, rig, binding ) {
 	const count = Math.min( segments.length, binding.influences );
 	const reference = new THREE.Matrix4().fromArray( binding.objectToRig );
 	const skin = automaticWeights( THREE, position, segments, reference, count );
+	const boneIds = segments.map( entry => entry.bone.uuid );
+	const samples = binding.weightSamples;
+	if ( samples ) for ( let vertex = 0; vertex < position.count; vertex ++ ) {
+
+		const override = samples[ weightPointKey( position, vertex ) ];
+		const normalized = override && normalizeBoneWeights( override, boneIds, count );
+		if ( ! normalized ) continue;
+		let slot = vertex * count;
+		skin.weights.fill( 0, slot, slot + count );
+		for ( const [ bone, weight ] of Object.entries( normalized ) ) {
+
+			skin.indices[ slot ] = boneIds.indexOf( bone );
+			skin.weights[ slot ++ ] = weight;
+
+		}
+
+	}
 	entry = {
 		binding, source, position, normal, attributes, versions, bones, rest, parents,
-		segments, count, ...skin, output: source.clone(), meshWorld: null, boneWorld: [],
+		segments, count, boneIds, ...skin, output: source.clone(), meshWorld: null, boneWorld: [],
 		matrices: segments.map( () => new THREE.Matrix4() ), normals: segments.map( () => new THREE.Matrix3() )
 	};
 	records.set( object, entry );
 	return entry;
+
+}
+
+export function armatureVertexWeights( THREE, scene, object ) {
+
+	const binding = object?.userData.armatureBinding;
+	if ( ! binding || ! canDeformWithArmature( object ) || ! Array.isArray( binding.objectToRig ) ||
+		binding.objectToRig.length !== 16 || ! binding.objectToRig.every( Number.isFinite ) ||
+		! Number.isInteger( binding.influences ) || binding.influences < 1 || binding.influences > 4 ) return;
+	const rig = scene.getObjectByProperty( 'uuid', binding.rig );
+	if ( ! isArmature( rig ) || hasRestriction( rig, 'disabled' ) ) return;
+	const entry = skinRecord( THREE, object, rig, binding );
+	if ( ! entry ) return;
+	const { boneIds, position, count, indices, weights } = entry;
+	return {
+		bones: entry.segments.map( segment => segment.bone ), boneIds, position, count,
+		at( vertex ) {
+
+			if ( ! Number.isInteger( vertex ) || vertex < 0 || vertex >= position.count ) return;
+			const result = {};
+			for ( let slot = vertex * count; slot < ( vertex + 1 ) * count; slot ++ ) {
+
+				if ( weights[ slot ] > 0 ) result[ boneIds[ indices[ slot ] ] ] = weights[ slot ];
+
+			}
+			return result;
+
+		}
+	};
+
+}
+
+export function weightsForVertexEdits( THREE, scene, object, bone, vertices, value ) {
+
+	const weights = armatureVertexWeights( THREE, scene, object );
+	if ( ! weights?.boneIds.includes( bone ) ) throw new Error( 'Choose a deforming bone from the object’s armature.' );
+	if ( ! Number.isFinite( value ) || value < 0 || value > 1 ) throw new Error( 'Weight must be between zero and one.' );
+	const samples = {};
+	for ( const vertex of vertices ) {
+
+		const current = weights.at( vertex );
+		if ( ! current ) throw new Error( 'Vertex index is outside the rest geometry.' );
+		samples[ weightPointKey( weights.position, vertex ) ] = paintBoneWeight( current, bone, value, weights.boneIds, weights.count );
+
+	}
+	return samples;
 
 }
 

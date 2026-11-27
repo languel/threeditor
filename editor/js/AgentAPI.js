@@ -14,8 +14,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
 import { armatureBones, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, createBoneIKTarget, createRig, editBoneRest, resetArmaturePose, setBoneIK, setBonePhysics, setRigCollider } from './rigging/ArmatureTools.js';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, resetArmaturePose, setBoneIK, setBonePhysics, setRigCollider } from './rigging/ArmatureTools.js';
 import { withArmatureIK } from './rigging/ArmatureIK.js';
+import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -120,6 +121,42 @@ function AgentAPI( editor ) {
   return { uuid: target.uuid, binding: target.userData.armatureBinding || null };
 
  } );
+ const weightVertices = {
+  type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 1, maxItems: 10000,
+  description: 'Vertex indices in the object’s current rest geometry.'
+ };
+ add( 'armature_get_weights', 'Inspect normalized bone influences for rest geometry vertices on a bound mesh, pencil stroke, curve, or point cloud.', {
+  uuid: { ...str, description: 'Bound object UUID.' }, vertices: weightVertices
+ }, [ 'uuid' ], ( { uuid, vertices } ) => {
+
+  const weights = armatureVertexWeights( THREE, editor.scene, object( uuid ) );
+  if ( ! weights ) throw new Error( 'Select geometry bound to an available armature.' );
+  const indices = vertices || Array.from( { length: Math.min( 64, weights.position.count ) }, ( _, index ) => index );
+  const result = indices.map( index => {
+
+   const sample = weights.at( index );
+   if ( ! sample ) throw new Error( 'Vertex index is outside the rest geometry.' );
+   const position = new THREE.Vector3().fromBufferAttribute( weights.position, index ).toArray();
+   return { index, position, weights: sample };
+
+  } );
+  return { uuid, vertexCount: weights.position.count, vertices: result };
+
+ }, true );
+ add( 'armature_set_weights', 'Assign a bone’s weight to the selected rest vertices and normalize remaining influences. Supports undo.', {
+  uuid: { ...str, description: 'Bound object UUID.' }, bone: { ...str, description: 'Deforming bone UUID.' }, vertices: weightVertices,
+  weight: { ...float( 'Desired share for this bone.' ), minimum: 0, maximum: 1 }
+ }, [ 'uuid', 'bone', 'vertices', 'weight' ], ( { uuid, bone, vertices, weight } ) => {
+
+  const target = object( uuid );
+  const samples = weightsForVertexEdits( THREE, editor.scene, target, bone, vertices, weight );
+  commitArmatureWeights( editor, target, samples );
+  return { uuid, points: Object.keys( samples ).length };
+
+ } );
+ add( 'armature_clear_weights', 'Clear painted weights on a bound object and restore its automatic weighting. Supports undo.', {
+  uuid: { ...str, description: 'Bound object UUID.' }
+ }, [ 'uuid' ], ( { uuid } ) => { commitArmatureWeights( editor, object( uuid ), null ); return { uuid }; } );
  add( 'bone_set_ik', 'Configure inverse kinematics on a bone. The chain follows a scene object or bone and can bend toward a pole. Supports undo.', {
   uuid: { ...str, description: 'Authored end bone UUID.' },
   target: { ...str, description: 'Target object or bone UUID. An empty string removes the constraint.' },

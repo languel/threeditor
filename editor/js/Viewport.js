@@ -1338,7 +1338,7 @@ function Viewport( editor ) {
 		const active = editor.selected;
 		const mask = () => host.render( renderer, scene,
 			() => withViewportShading( scene, editor.viewportShading, () => model.withPreview( () =>
-				withArmatureDeformation( THREE, scene, () => renderer.render( scene, view ) ) ) ), queueSplatRender );
+				withArmatureDeformation( THREE, scene, () => renderer.render( scene, view ), editor.viewTools.weightPaint.object ) ) ), queueSplatRender );
 		withViewportObjects( scene, () => {
 
 			selectionOutline.draw( renderer, scene, view, roots.filter( object => object !== active ), mask );
@@ -1410,8 +1410,10 @@ function Viewport( editor ) {
 		const shading = editorView && editor.viewportXRay ? 'xray' : editor.viewportShading;
 		visibility( scene, () => host.render( renderer, scene, () => withViewportShading( scene, shading, () => {
 
+			const painting = editorView ? editor.viewTools.weightPaint : null;
+			const draw = () => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) );
 			const raster = () => model.withPreview( () => withArmatureDeformation( THREE, scene,
-				() => withShaderGraphs( renderer, scene, () => renderer.render( scene, view ) ), model.editMode ? model.object : null ) );
+				() => painting ? painting.withPreview( draw ) : draw(), model.editMode ? model.object : painting?.object ) );
 			if ( post ) postHost.render( renderer, scene, view, width, height, raster, queueSplatRender );
 			else raster();
 

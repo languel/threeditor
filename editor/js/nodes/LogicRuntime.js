@@ -1,5 +1,6 @@
 import { armatureOf, findBone, resetBoneTransform } from '../rigging/Armature.js';
 import { withArmatureIK } from '../rigging/ArmatureIK.js';
+import { armatureVertexWeights, weightsForVertexEdits } from '../rigging/ArmatureDeformation.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
 import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
@@ -118,6 +119,12 @@ export class LogicRuntime {
 			case 'logic.clock': return { elapsed: this.time, delta: this.delta };
 			case 'logic.object': return { object: inputs.object };
 			case 'logic.host': return { object: instance.owner.uuid };
+			case 'logic.boneWeight': {
+
+				const weights = armatureVertexWeights( this.THREE, this.scene, this.target( instance, inputs.target ) );
+				return { value: weights?.at( Math.round( inputs.vertex ) )?.[ inputs.bone ] ?? 0 };
+
+			}
 			case 'logic.boneVelocity': {
 
 				const velocity = this.physics?.velocity( this.target( instance, inputs.target ) ) ?? [ 0, 0, 0 ];
@@ -277,6 +284,15 @@ export class LogicRuntime {
 			case 'logic.setIKInfluence':
 				if ( object.isBone && object.userData.armatureIK ) object.userData.armatureIK.influence = inputs.influence;
 				break;
+			case 'logic.setBoneWeight': {
+
+				const binding = object.userData.armatureBinding;
+				if ( ! binding || ! inputs.bone ) return;
+				const samples = weightsForVertexEdits( this.THREE, this.scene, object, inputs.bone, [ Math.round( inputs.vertex ) ], inputs.weight );
+				object.userData.armatureBinding = { ...binding, weightSamples: { ...binding.weightSamples, ...samples } };
+				break;
+
+			}
 			case 'logic.move':
 				this.motion.set( x, y, z );
 				if ( local ) this.motion.applyQuaternion( object.quaternion );

@@ -150,7 +150,9 @@ export function bindArmature( editor, object, rig, influences = 4 ) {
 		object.updateWorldMatrix( true, false );
 		if ( ! rig.matrixWorld.determinant() || ! object.matrixWorld.determinant() ) throw new Error( 'Rig and object must have nonzero scale.' );
 		const objectToRig = new THREE.Matrix4().copy( rig.matrixWorld ).invert().multiply( object.matrixWorld ).toArray();
+		const previous = object.userData.armatureBinding;
 		userData.armatureBinding = { rig: rig.uuid, objectToRig, influences };
+		if ( previous?.rig === rig.uuid && previous.weightSamples ) userData.armatureBinding.weightSamples = previous.weightSamples;
 
 	} else {
 
@@ -162,6 +164,23 @@ export function bindArmature( editor, object, rig, influences = 4 ) {
 	const command = new SetValueCommand( editor, object, 'userData', userData );
 	command.updatable = false;
 	editor.execute( command, rig ? 'Bind Armature' : 'Clear Armature Binding' );
+
+}
+
+export function commitArmatureWeights( editor, object, samples, expected = object?.userData.armatureBinding ) {
+
+	if ( ! editable( editor, object ) || ! expected || expected !== object.userData.armatureBinding ) {
+
+		throw new Error( 'The object or armature binding changed. Select it again before painting.' );
+
+	}
+	const binding = { ...expected };
+	if ( samples ) binding.weightSamples = { ...expected.weightSamples, ...samples };
+	else delete binding.weightSamples;
+	const userData = { ...object.userData, armatureBinding: binding };
+	const command = new SetValueCommand( editor, object, 'userData', userData );
+	command.updatable = false;
+	editor.execute( command, samples ? 'Paint Armature Weights' : 'Clear Painted Weights' );
 
 }
 
