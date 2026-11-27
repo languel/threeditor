@@ -44,6 +44,7 @@ const exampleCatalog = [
 		{ title: 'A Rapier pendulum', file: 'examples/lessons/18-rapier-pendulum.app.json' },
 		{ title: 'A reach-controlled arm', file: 'examples/lessons/19-inverse-kinematics.app.json' },
 		{ title: 'A tracking boom', file: 'examples/lessons/20-bone-constraints.app.json' },
+		{ title: 'A prop handoff', file: 'examples/lessons/21-child-of-handoff.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

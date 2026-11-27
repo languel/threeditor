@@ -13,6 +13,8 @@ import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
 import { hasArmatureTools, SidebarArmature } from './Sidebar.Armature.js';
 import { armatureOf } from './rigging/Armature.js';
+import { canOwnConstraints } from './rigging/ArmatureConstraints.js';
+import { SidebarConstraints } from './Sidebar.Constraints.js';
 function SidebarProperties( editor, sceneSettings, container ) {
 
 	const strings = editor.strings;
@@ -20,6 +22,7 @@ function SidebarProperties( editor, sceneSettings, container ) {
 	container.addTab( 'sceneTab', strings.getKey( 'sidebar/scene' ), sceneSettings, 'sidebar/scene' );
 	container.addTab( 'objectTab', strings.getKey( 'sidebar/properties/object' ), new SidebarObject( editor ), 'sidebar/properties/object' );
 	container.addTab( 'armatureTab', 'Armature', new SidebarArmature( editor ) );
+	container.addTab( 'constraintsTab', 'Constraints', new SidebarConstraints( editor ), 'sidebar/properties/constraints' );
 	container.addTab( 'geometryTab', strings.getKey( 'sidebar/properties/geometry' ), new SidebarGeometry( editor ), 'sidebar/properties/geometry' );
 	container.addTab( 'materialTab', strings.getKey( 'sidebar/properties/material' ), new SidebarMaterial( editor ), 'sidebar/properties/material' );
 	const scripts = new SidebarScript( editor );
@@ -52,6 +55,7 @@ function SidebarProperties( editor, sceneSettings, container ) {
 			sceneTab: true,
 			objectTab: ! scene,
 			armatureTab: hasArmatureTools( editor.scene, object ),
+			constraintsTab: canOwnConstraints( object ) && ! object.isBone,
 			geometryTab: !! object?.geometry,
 			materialTab: !! object && ( !! object.material || object.isGroup && ! isProjector( object ) ),
 			scriptTab: !! object && object !== editor.camera,

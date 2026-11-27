@@ -45,6 +45,18 @@ function collect( editor, command ) {
 	// Scene userData is also used by timeline commands and unrelated scene settings.
 	if ( type === 'SetValueCommand' && attributeName === 'userData' ) {
 
+		if ( ! object.isScene && oldValue?.armatureConstraints !== newValue?.armatureConstraints ) {
+
+			const targets = availableTargets( object, editor.scripts ).filter( target => target.kind === 'constraint' );
+			const influence = ( data, target ) => {
+
+				const entry = data?.armatureConstraints?.find?.( entry => entry?.id === target.constraintId );
+				return entry ? entry.influence ?? 1 : undefined;
+
+			};
+			return changed( targets, target => influence( oldValue, target ), target => influence( newValue, target ) );
+
+		}
 		if ( ! object.isScene || oldValue?.postprocessing === newValue?.postprocessing ) return [];
 		const targets = availableTargets( object, editor.scripts ).filter( target => target.kind === 'effect' );
 		const effect = ( data, target ) => data?.postprocessing?.[ target.property ] ?? DEFAULT_POSTPROCESSING[ target.property ];

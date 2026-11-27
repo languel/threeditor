@@ -237,6 +237,7 @@ const KEY_ICONS = new Map( [
 	[ 'sidebar/properties/script', 'code' ],
 	[ 'sidebar/properties/modeling', 'meshBuild' ],
 	[ 'sidebar/properties/modifiers', 'modifiers' ],
+	[ 'sidebar/properties/constraints', 'link' ],
 	[ 'sidebar/properties/animations', 'keyframe' ],
 	[ 'sidebar/properties/tool', 'controls' ],
 	[ 'sidebar/scene', 'scene' ],

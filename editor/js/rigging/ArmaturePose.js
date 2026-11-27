@@ -1,5 +1,5 @@
 import { armatureOf } from './Armature.js';
-import { constraintSettings, resolveBoneConstraint, solveBoneConstraint } from './ArmatureConstraints.js';
+import { canOwnConstraints, constraintSettings, resolveConstraint, solveConstraint } from './ArmatureConstraints.js';
 import { ikSettings, resolveIK, solveIK } from './ArmatureIK.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
@@ -17,10 +17,11 @@ function poseOperations( scene, { stackOwner, stack, ik, skipRig } = {} ) {
 	const operations = [];
 	scene.traverse( owner => {
 
-		if ( ! owner.isBone || ! owner.userData.armatureBone || hasRestriction( owner, 'disabled' ) ) return;
-		const rig = armatureOf( owner );
-		if ( ! rig || rig === skipRig ) return;
 		const raw = owner === stackOwner ? stack : owner.userData.armatureConstraints;
+		const authoredBone = owner.isBone && owner.userData.armatureBone;
+		if ( ! authoredBone && ! raw?.length ) return;
+		if ( ! canOwnConstraints( owner ) || hasRestriction( owner, 'disabled' ) ||
+			skipRig && armatureOf( owner ) === skipRig ) return;
 		if ( Array.isArray( raw ) ) {
 
 			const local = [];
@@ -28,7 +29,7 @@ function poseOperations( scene, { stackOwner, stack, ik, skipRig } = {} ) {
 
 				const settings = constraintSettings( item );
 				if ( ! settings || settings.muted || ! settings.influence ) continue;
-				const constraint = resolveBoneConstraint( scene, owner, settings );
+				const constraint = resolveConstraint( scene, owner, settings );
 				if ( ! constraint.error ) local.push( constraint );
 
 			}
@@ -37,6 +38,7 @@ function poseOperations( scene, { stackOwner, stack, ik, skipRig } = {} ) {
 			} );
 
 		}
+		if ( ! authoredBone ) return;
 		const settings = ikSettings( owner.userData.armatureIK );
 		if ( owner !== ik?.owner && ! settings?.influence ) return;
 		const chain = owner === ik?.owner ? ik : resolveIK( scene, owner, settings );
@@ -106,10 +108,10 @@ export function hasConstraintDependencyCycle( scene, owner, stack ) {
 
 }
 
-export function withArmaturePose( THREE, scene, evaluate, skipRig ) {
+export function withArmaturePose( THREE, scene, evaluate, skipRig, override ) {
 
 	if ( evaluating.has( scene ) ) return evaluate();
-	const { ordered } = posePlan( scene, { skipRig } );
+	const { ordered } = posePlan( scene, { skipRig, ...override } );
 	if ( ! ordered.length && ! skipRig ) return evaluate();
 	evaluating.add( scene );
 	const snapshots = new Map();
@@ -117,13 +119,23 @@ export function withArmaturePose( THREE, scene, evaluate, skipRig ) {
 
 		for ( const operation of ordered ) {
 
-			for ( const bone of operation.writes ) if ( ! snapshots.has( bone ) ) {
+			for ( const object of operation.writes ) if ( ! snapshots.has( object ) ) {
 
-				snapshots.set( bone, [ bone.position.clone(), bone.quaternion.clone(), bone.scale.clone() ] );
+				snapshots.set( object, [ object.position.clone(), object.quaternion.clone(), object.scale.clone(), object.matrix.clone(), object.matrixAutoUpdate ] );
 
 			}
-			if ( operation.ik ) solveIK( THREE, operation.ik );
-			else for ( const constraint of operation.local ) solveBoneConstraint( THREE, operation.owner, constraint );
+			if ( operation.ik ) {
+
+				for ( const bone of operation.writes ) if ( ! bone.matrixAutoUpdate ) {
+
+					bone.matrixAutoUpdate = true;
+					bone.updateMatrix();
+
+				}
+				solveIK( THREE, operation.ik );
+
+			}
+			else for ( const constraint of operation.local ) solveConstraint( THREE, operation.owner, constraint );
 
 		}
 		scene.updateMatrixWorld( true );
@@ -131,12 +143,14 @@ export function withArmaturePose( THREE, scene, evaluate, skipRig ) {
 
 	} finally {
 
-		for ( const [ bone, [ position, rotation, scale ] ] of snapshots ) {
+		for ( const [ object, [ position, rotation, scale, matrix, auto ] ] of snapshots ) {
 
-			bone.position.copy( position );
-			bone.quaternion.copy( rotation );
-			bone.scale.copy( scale );
-			bone.updateMatrix();
+			object.position.copy( position );
+			object.quaternion.copy( rotation );
+			object.scale.copy( scale );
+			object.matrixAutoUpdate = auto;
+			object.matrix.copy( matrix );
+			object.matrixWorldNeedsUpdate = true;
 
 		}
 		evaluating.delete( scene );

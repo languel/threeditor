@@ -1,6 +1,7 @@
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { DEFAULT_POSTPROCESSING } from '../PostProcessing.js';
 import { scriptParams, scriptParamValue } from '../ScriptParams.js';
+import { constraintSettings } from '../rigging/ArmatureConstraints.js';
 
 const properties = new Set( [
 	'position', 'rotation', 'scale', 'visible', 'renderOrder', 'color', 'groundColor', 'intensity', 'distance', 'decay',
@@ -131,6 +132,12 @@ export function availableTargets( object, scripts ) {
 
 	} );
 	if ( object.isScene ) for ( const property of Object.keys( DEFAULT_POSTPROCESSING ) ) items.push( { object: id, kind: 'effect', property, label: 'Effects · ' + property } );
+	if ( Array.isArray( object.userData.armatureConstraints ) ) for ( const entry of object.userData.armatureConstraints ) {
+
+		const settings = constraintSettings( entry );
+		if ( settings ) items.push( { object: id, kind: 'constraint', constraintId: settings.id, property: 'influence', label: settings.name + ' · Influence' } );
+
+	}
 	for ( let index = 0; index < ( object.morphTargetInfluences?.length || 0 ); index ++ ) {
 
 		const label = Object.keys( object.morphTargetDictionary || {} ).find( name => object.morphTargetDictionary[ name ] === index );
@@ -146,6 +153,23 @@ export function timelineBinding( context, target ) {
 	const object = context.object( target.object );
 	const { kind, property } = target;
 	if ( ! object || hasRestriction( object, 'disabled' ) || reserved.has( property ) ) return;
+	if ( kind === 'constraint' && property === 'influence' ) {
+
+		const current = () => constraintSettings( object.userData.armatureConstraints?.find?.( entry => entry?.id === target.constraintId ) );
+		if ( ! current() ) return;
+		return {
+			read: () => current()?.influence,
+			write: value => {
+
+				if ( ! current() || ! Number.isFinite( value ) ) return;
+				const stack = object.userData.armatureConstraints.map( entry =>
+					entry?.id === target.constraintId ? { ...entry, influence: Math.max( 0, Math.min( 1, value ) ) } : entry );
+				object.userData = { ...object.userData, armatureConstraints: stack };
+
+			}
+		};
+
+	}
 	if ( kind === 'script' ) {
 
 		const scripts = context.scripts[ object.uuid ] || [];

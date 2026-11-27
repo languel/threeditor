@@ -116,15 +116,22 @@ export const LOGIC_DOMAIN = {
 		} ) ],
 		[ 'logic.setIKInfluence', action( 'Set IK Influence', 'Rigging', { target, influence: unit( 'Influence', 1 ) } ) ],
 		[ 'logic.boneConstraint', {
-			label: 'Bone Constraint', category: 'Rigging', inputs: { target, name: text( 'Constraint Name or ID' ) },
+			label: 'Constraint State', category: 'Rigging', inputs: { target, name: text( 'Constraint Name or ID' ) },
 			outputs: { found: booleanOutput( 'Found' ), muted: booleanOutput( 'Muted' ), influence: numberOutput( 'Influence' ) }
 		} ],
-		[ 'logic.setConstraintInfluence', action( 'Set Bone Constraint Influence', 'Rigging', {
+		[ 'logic.setConstraintInfluence', action( 'Set Constraint Influence', 'Rigging', {
 			target, name: text( 'Constraint Name or ID' ), influence: unit( 'Influence', 1 ), muted: flag( 'Mute' )
 		} ) ],
-		[ 'logic.setConstraintTarget', action( 'Set Bone Constraint Target', 'Rigging', {
+		[ 'logic.setConstraintTarget', action( 'Set Constraint Target', 'Rigging', {
 			target, name: text( 'Constraint Name or ID' ), source: object( 'New Target' ), clear: flag( 'Clear Target' )
 		} ) ],
+		[ 'logic.switchConstraintParent', action( 'Switch Constraint Parent', 'Rigging', {
+			target, name: text( 'Child Of Name or ID' ), source: object( 'New Parent (Optional)' )
+		} ) ],
+		[ 'logic.evaluatedTransform', {
+			label: 'Evaluated Transform', category: 'Rigging', inputs: { target },
+			outputs: { position: vector( 'World Location' ), rotation: vector( 'World Rotation (°)' ), scale: vector( 'World Scale' ) }
+		} ],
 		[ 'logic.boneWeight', { label: 'Bone Weight', category: 'Rigging',
 			inputs: { target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ) }, outputs: numeric } ],
 		[ 'logic.setBoneWeight', action( 'Set Bone Weight', 'Rigging', {

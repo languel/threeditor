@@ -10,7 +10,8 @@ export const constraintTypes = {
 	limitRotation: { label: 'Limit Rotation', channel: 'rotation', limit: true },
 	limitScale: { label: 'Limit Scale', channel: 'scale', limit: true },
 	dampedTrack: { label: 'Damped Track', target: true },
-	limitDistance: { label: 'Limit Distance', target: true }
+	limitDistance: { label: 'Limit Distance', target: true },
+	childOf: { label: 'Child Of', target: true }
 };
 
 export const constraintSpaces = [ 'world', 'local', 'pose' ];
@@ -85,28 +86,61 @@ export function constraintSettings( value ) {
 		Object.assign( settings, { distance, mode } );
 
 	}
+	if ( type === 'childOf' ) {
+
+		const { inverse = null } = value;
+		if ( inverse !== null && ( ! Array.isArray( inverse ) || inverse.length !== 16 || ! inverse.every( Number.isFinite ) ||
+			Math.abs( inverse[ 3 ] ) > 1e-9 || Math.abs( inverse[ 7 ] ) > 1e-9 || Math.abs( inverse[ 11 ] ) > 1e-9 ||
+			Math.abs( inverse[ 15 ] - 1 ) > 1e-9 ) ) return null;
+		settings.inverse = inverse?.slice() ?? null;
+		if ( settings.inverse ) {
+
+			settings.inverse[ 3 ] = settings.inverse[ 7 ] = settings.inverse[ 11 ] = 0;
+			settings.inverse[ 15 ] = 1;
+
+		}
+
+	}
 	return settings;
 
 }
 
-export function boneConstraint( bone, idOrName ) {
+export function findConstraint( object, idOrName ) {
 
-	const stack = bone?.userData.armatureConstraints;
+	const stack = object?.userData.armatureConstraints;
 	return Array.isArray( stack ) && ( stack.find( item => item?.id === idOrName ) ?? stack.find( item => item?.name === idOrName ) ) || null;
 
 }
 
-export function resolveBoneConstraint( scene, owner, settings ) {
+export function canOwnConstraints( object ) {
 
-	if ( ! settings || ! armatureOf( owner ) || ! owner.userData.armatureBone ) return { error: 'Choose an authored bone and valid constraint settings.' };
+	return !! object?.parent && ! object.isScene && ! object.userData.runtimeOnly &&
+		( ! object.isBone || !! object.userData.armatureBone && !! armatureOf( object ) );
+
+}
+
+export function resolveConstraint( scene, owner, settings ) {
+
+	if ( ! settings || ! canOwnConstraints( owner ) ) return { error: 'Choose a scene object or authored bone and valid constraint settings.' };
 	if ( owner.userData.armaturePhysics?.mode === 'dynamic' ) return { error: 'Rapier drives dynamic bones. Choose a pose or kinematic bone.' };
-	if ( ! owner.matrixAutoUpdate || hasRestriction( owner, 'disabled' ) ) return { error: 'The owner bone is unavailable.' };
+	if ( ! owner.matrixAutoUpdate || hasRestriction( owner, 'disabled' ) ) return { error: 'The constraint owner is unavailable.' };
+	if ( settings.ownerSpace === 'pose' && ! armatureOf( owner ) ) return { error: 'Pose space needs an armature or a bone owner.' };
 	if ( ! constraintTypes[ settings.type ].target ) return { settings };
 	const target = settings.target && scene.getObjectByProperty( 'uuid', settings.target );
 	if ( ! target || target === scene || target.userData.runtimeOnly || hasRestriction( target, 'disabled' ) ) return { error: 'Choose an available target.' };
 	if ( owner.getObjectById( target.id ) ) return { error: 'A constraint target must stay outside the owner’s descendants and cannot be the owner.' };
 	if ( settings.targetSpace === 'pose' && ! armatureOf( target ) ) return { error: 'Pose space needs an armature or a bone target.' };
 	return { settings, target };
+
+}
+
+export function constraintTargetFrame( THREE, target, headTail ) {
+
+	target.updateWorldMatrix( true, false );
+	const frame = target.matrixWorld.clone();
+	const distance = ( target.userData.armatureBone?.length ?? 0 ) * headTail;
+	if ( distance ) frame.multiply( new THREE.Matrix4().makeTranslation( 0, distance, 0 ) );
+	return frame;
 
 }
 
@@ -334,8 +368,49 @@ function limitDistance( THREE, bone, target, settings ) {
 
 }
 
-export function solveBoneConstraint( THREE, bone, { settings, target } ) {
+function childOf( THREE, object, target, settings ) {
 
+	object.updateWorldMatrix( true, false );
+	const parent = object.parent.matrixWorld;
+	if ( ! parent.determinant() ) return;
+	const result = parent.clone().invert().multiply( constraintTargetFrame( THREE, target, settings.headTail ) );
+	if ( settings.inverse ) result.multiply( new THREE.Matrix4().fromArray( settings.inverse ) );
+	result.multiply( object.matrixWorld );
+	if ( ! Number.isFinite( result.determinant() ) || ! result.determinant() ) return;
+	const position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+	result.decompose( position, rotation, scale );
+	const { influence } = settings;
+	if ( influence === 1 ) {
+
+		// Full influence retains affine transforms from non-uniform parents.
+		object.matrixAutoUpdate = false;
+		object.position.copy( position );
+		object.quaternion.copy( rotation.normalize() );
+		object.scale.copy( scale );
+		object.matrix.copy( result );
+		object.matrixWorldNeedsUpdate = true;
+
+	} else {
+
+		object.position.lerp( position, influence );
+		object.quaternion.slerp( rotation.normalize(), influence );
+		object.scale.lerp( scale, influence );
+		object.matrixAutoUpdate = true;
+		object.updateMatrix();
+
+	}
+
+}
+
+export function solveConstraint( THREE, bone, { settings, target } ) {
+
+	if ( settings.type === 'childOf' ) return childOf( THREE, bone, target, settings );
+	if ( ! bone.matrixAutoUpdate ) {
+
+		bone.matrixAutoUpdate = true;
+		bone.updateMatrix();
+
+	}
 	if ( settings.type === 'dampedTrack' ) track( THREE, bone, target, settings );
 	else if ( settings.type === 'limitDistance' ) limitDistance( THREE, bone, target, settings );
 	else applyTransform( THREE, bone, settings, target );
