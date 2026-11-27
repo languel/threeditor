@@ -10,7 +10,6 @@ export class ViewLayout {
 		this.cameras = new WeakMap();
 		this.frames = [];
 		this.activeKey = 'director';
-		this.directorCopy = null;
 		this.divider = document.createElement( 'div' );
 		this.divider.className = 'viewport-split-divider';
 		this.divider.hidden = true;
@@ -97,13 +96,9 @@ export class ViewLayout {
 			const aspect = camera.isOrthographicCamera ? ( camera.right - camera.left ) / ( camera.top - camera.bottom ) : camera.aspect;
 			rect = fitView( area, aspect );
 
-		} else if ( split && director ) {
+		} else if ( editor.viewportSplit && ! soloDirector && director ) {
 
-			// Both Director areas share the editor camera pose. The second has
-			// its own projection, so dragging the divider cannot stretch it.
-			if ( this.directorCopy?.type !== camera.type ) this.directorCopy = camera.clone( false );
-			this.directorCopy.copy( camera, false );
-			camera = this.directorCopy;
+			camera = editor.getDirectorCamera( 'source' );
 			const aspect = area.width / Math.max( 1, area.height );
 			if ( camera.isPerspectiveCamera ) camera.aspect = aspect;
 			else {

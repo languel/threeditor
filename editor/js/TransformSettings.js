@@ -176,7 +176,7 @@ export function addTransformSettings( editor, toolbar ) {
 	} );
 	signals.startPlayer.add( () => { if ( dialog.open ) close(); } );
 
-	function open( kind, dropdown = false ) {
+	function open( kind, dropdown = false, pane ) {
 
 		if ( editor.modeling?.gesture || editor.modeling?.drag || editor.modalTransform?.active || editor.flyControls?.active || document.body.classList.contains( 'presenting' ) ) return;
 		if ( dialog.open ) return;
@@ -198,16 +198,17 @@ export function addTransformSettings( editor, toolbar ) {
 			center.onclick = () => { close(); toggleSnap(); };
 
 		}
-		if ( kind === 'navigation' ) {
+		const navigationCamera = kind === 'navigation' && editor.getDirectorCamera( pane );
+		if ( navigationCamera ) {
 
 			center.type = 'button';
-			center.onclick = () => { close(); editor.keymap.run( 'projection' ); };
+			center.onclick = () => { close(); editor.keymap.run( 'projection', pane ); };
 			center.title = 'Toggle perspective / orthographic (Numpad 5)';
 			center.setAttribute( 'aria-label', center.title );
 
 		}
 		center.className = 'transform-pie-center';
-		center.textContent = kind === 'navigation' ? ( editor.camera.isOrthographicCamera ? 'Orthographic' : 'Perspective' ) :
+		center.textContent = navigationCamera ? ( navigationCamera.isOrthographicCamera ? 'Orthographic' : 'Perspective' ) :
 			kind === 'snap' ? ( config.getKey( 'settings/transformSnap' ) == null ? 'Snap off' : 'Snap on' ) : definition.label;
 		if ( ! dropdown || kind === 'snap' ) wheel.appendChild( center );
 		const indicator = document.createElement( 'span' );
@@ -218,7 +219,6 @@ export function addTransformSettings( editor, toolbar ) {
 			wheel.appendChild( indicator );
 
 		}
-		const pane = editor.keymap.viewFrame?.key ?? editor.viewLayout?.navigation?.key;
 		const choices = definition.choices( pane );
 		entries = choices.map( ( [ label, glyph, apply, active, disabled ], index ) => {
 
@@ -294,8 +294,12 @@ export function addTransformSettings( editor, toolbar ) {
 
 		} else {
 
-			const rect = document.getElementById( 'viewport' ).getBoundingClientRect();
-			const [ x, y ] = pointer || [ rect.left + rect.width / 2, rect.top + rect.height / 2 ];
+			const layout = editor.viewLayout;
+			const frame = kind === 'navigation' && layout.frames.find( frame => frame.key === pane );
+			const rect = frame ? layout.clientRect( frame ) : layout.viewport.getBoundingClientRect();
+			const origin = frame && editor.keymap.viewFrame?.key === pane ? editor.keymap.pointer : null;
+			const [ x, y ] = ( frame ? origin && [ origin.x, origin.y ] : pointer ) ||
+				[ rect.left + rect.width / 2, rect.top + rect.height / 2 ];
 			const clamp = ( value, size, half ) => Math.max( Math.min( half, size / 2 ), Math.min( value, size - half ) );
 			dialog.style.left = clamp( x, window.innerWidth, bounds.width / 2 ) + 'px';
 			dialog.style.top = clamp( y, window.innerHeight, bounds.height / 2 ) + 'px';
@@ -337,6 +341,6 @@ export function addTransformSettings( editor, toolbar ) {
 	}
 	refresh();
 	signals.transformSettingsChanged.add( refresh );
-	editor.openTransformPie = kind => open( kind );
+	editor.openTransformPie = ( kind, pane ) => open( kind, false, pane );
 
 }

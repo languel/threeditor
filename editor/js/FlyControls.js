@@ -10,7 +10,7 @@ import { applyFlyLightPose, captureLightView, restoreLightView } from './modelin
 // Fly the actual viewport camera, including cameras under transformed parents.
 function FlyControls( editor, viewport ) {
  let camera=null,canvas=null,startPosition,startRotation,startZoom,orbitDistance,worldPosition,yaw=0,pitch=0,roll=0,locked=false,stopping=false,last=0,speed=4;
- let source,startLight,targetDistance;
+ let source,director,startLight,targetDistance;
  const keys=new Set(), euler=new THREE.Euler(0,0,0,'YXZ'), q=new THREE.Quaternion(), parentQ=new THREE.Quaternion(), direction=new THREE.Vector3(), right=new THREE.Vector3(), up=new THREE.Vector3();
  const notice=document.createElement('div');notice.className='navigation-notice';notice.hidden=true;viewport.appendChild(notice);
  function refresh(){
@@ -30,11 +30,12 @@ function FlyControls( editor, viewport ) {
   if(camera||editor.modalTransform?.active||editor.modeling.gesture||editor.modeling.drag||editor.viewTools.pointer||
     editor.streams.playing||document.body.classList.contains('presenting'))return;
   if(!frame?.camera?.isCamera||editor.viewLayout.isViewportPane?.(frame.key)===false)return;
-  const active=frame.source||(frame.director?editor.camera:frame.camera);
+  const active=frame.source||frame.camera;
   if(hasRestriction(active,'locked')||hasRestriction(active,'disabled')||!active.matrixAutoUpdate||
     active.target&&(hasRestriction(active.target,'locked')||!active.target.matrixAutoUpdate))return;
   canvas=editor.renderer?.domElement;if(!canvas)return;
   source=frame.source;
+  director=frame.director;
   camera=source?frame.camera.clone(false):active;
   if(source){
    startLight=captureLightView(source);
@@ -77,7 +78,7 @@ function FlyControls( editor, viewport ) {
 
    }
 
-  } else if ( current !== editor.camera ) {
+  } else if ( ! director ) {
 
    const commands = [];
    if ( ! current.position.equals( startPosition ) ) commands.push( new SetPositionCommand( editor, current, current.position, startPosition ) );

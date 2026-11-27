@@ -643,13 +643,24 @@ Editor.prototype = {
 
 	},
 
-	setCameraType: function ( type ) {
+	getDirectorCamera: function ( pane ) {
 
-		const oldCamera = this.camera;
+		if ( ! this.viewportSplit || pane !== 'source' ) return this.camera;
+		if ( ! this.secondaryDirectorCamera ) {
+
+			this.secondaryDirectorCamera = this.camera.clone( false );
+			this.controls.getCenter( this.secondaryDirectorCamera ).copy( this.controls.getCenter( this.camera ) );
+
+		}
+		return this.secondaryDirectorCamera;
+
+	},
+
+	setCameraType: function ( type, oldCamera = this.camera ) {
 
 		const isOrthographic = oldCamera.isOrthographicCamera === true;
 
-		if ( ( type === 'orthographic' && isOrthographic ) || ( type === 'perspective' && ! isOrthographic ) ) return;
+		if ( ( type === 'orthographic' && isOrthographic ) || ( type === 'perspective' && ! isOrthographic ) ) return oldCamera;
 
 		// the orbit point the framing should be preserved around
 
@@ -690,9 +701,19 @@ Editor.prototype = {
 
 		newCamera.name = oldCamera.name;
 		newCamera.uuid = oldCamera.uuid;
+		newCamera.up.copy( oldCamera.up );
 		newCamera.userData = structuredClone( oldCamera.userData );
 		newCamera.updateProjectionMatrix();
+		newCamera.updateMatrixWorld( true );
 
+		if ( oldCamera === this.secondaryDirectorCamera ) {
+
+			this.secondaryDirectorCamera = newCamera;
+			this.controls.getCenter( newCamera ).copy( center );
+			this.signals.viewportCameraChanged.dispatch();
+			return newCamera;
+
+		}
 		this.camera = newCamera;
 		this.cameras[ newCamera.uuid ] = newCamera;
 		this.controls?.getCenter( newCamera ).copy( center );
@@ -704,6 +725,8 @@ Editor.prototype = {
 		// keep the selection (and thus the sidebar) in sync with the new camera instance
 
 		if ( this.selected === oldCamera ) this.select( newCamera );
+
+		return newCamera;
 
 	},
 
@@ -737,7 +760,7 @@ Editor.prototype = {
 	get activeDirectorCamera() {
 
 		const camera = this.cameras[ this.activeDirectorCameraUuid ];
-		return camera && camera !== this.camera && ! hasRestriction( camera, 'disabled' ) ? camera : this.activeSceneCamera;
+		return camera && camera !== this.camera && ! hasRestriction( camera, 'disabled' ) ? camera : this.defaultSceneCamera;
 
 	},
 
@@ -752,7 +775,9 @@ Editor.prototype = {
 
 	setViewportSplit: function ( enabled, axis = this.viewportSplitAxis, ratio = this.viewportSplitRatio ) {
 
+		if ( enabled && ! this.viewportSplit && ! this.activeDirectorCameraUuid ) this.activeDirectorCameraUuid = this.activeSceneCamera?.uuid ?? null;
 		this.viewportSplit = Boolean( enabled );
+		if ( this.viewportSplit ) this.getDirectorCamera( 'source' );
 		this.viewportSplitAxis = axis === 'horizontal' ? 'horizontal' : 'vertical';
 		this.viewportSplitRatio = Number.isFinite( ratio ) ? THREE.MathUtils.clamp( ratio, .15, .85 ) : .5;
 		this.signals.viewportCameraChanged.dispatch();
@@ -788,6 +813,12 @@ Editor.prototype = {
 		const active = this.cameras[ this.activeSceneCameraUuid ];
 		if ( active && active !== this.camera && ! hasRestriction( active, 'disabled' ) ) return active;
 		if ( this.selected?.isCamera && this.selected !== this.camera && this.cameras[ this.selected.uuid ] === this.selected && ! hasRestriction( this.selected, 'disabled' ) ) return this.selected;
+		return this.defaultSceneCamera;
+
+	},
+
+	get defaultSceneCamera() {
+
 		return Object.values( this.cameras ).find( camera => camera !== this.camera && ! hasRestriction( camera, 'disabled' ) );
 
 	},
@@ -901,6 +932,7 @@ Editor.prototype = {
 		this.activeSceneCameraUuid = null;
 		this.viewportDirectorCamera = null;
 		this.activeDirectorCameraUuid = null;
+		this.secondaryDirectorCamera = null;
 		this.history.clear();
 		this.storage.clear();
 		this.sourceFiles = new Map();
@@ -955,6 +987,8 @@ Editor.prototype = {
 		const loader = new THREE.ObjectLoader();
 		const scene = await loader.parseAsync( json.scene );
 		const savedCamera = await loader.parseAsync( json.camera );
+		const secondaryView = json.viewportSecondaryView;
+		const secondaryCamera = secondaryView?.camera ? await loader.parseAsync( secondaryView.camera ) : null;
 		const sceneCamera = scene.getObjectByProperty( 'uuid', savedCamera.uuid );
 		// Older saves wrote the active scene camera into the main camera slot.
 		const camera = sceneCamera?.isCamera ? _DEFAULT_CAMERA.clone() : savedCamera;
@@ -1014,6 +1048,8 @@ Editor.prototype = {
 		}
 		this.viewportDirectorCamera = json.viewportDirectorCamera || null;
 		this.activeDirectorCameraUuid = json.activeDirectorCamera || this.viewportDirectorCamera;
+		this.secondaryDirectorCamera = secondaryCamera;
+		if ( secondaryCamera && secondaryView.target ) this.controls.getCenter( secondaryCamera ).fromArray( secondaryView.target );
 		this.setViewportSplit( json.viewportSplit, json.viewportSplitAxis || 'vertical', json.viewportSplitRatio ?? .5 );
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
 		const viewportSource = this.objectByUuid( json.viewportSource );
@@ -1062,6 +1098,7 @@ Editor.prototype = {
 		const director = local?.camera || this.camera;
 		const directorTarget = local?.center || this.controls.getCenter?.( this.camera ) || this.controls.center;
 		const viewTarget = viewportCamera.uuid === director.uuid ? directorTarget : this.controls.getCenter?.( viewportCamera ) || this.controls.center;
+		const secondary = this.secondaryDirectorCamera;
 		return {
 
 			metadata: {},
@@ -1080,6 +1117,7 @@ Editor.prototype = {
 			viewportHidden: [ ...this.viewportVisibility.hidden ],
 			viewportCamera: viewportCamera.uuid,
 			viewportDirectorCamera: this.directorPaneCamera !== this.camera ? this.directorPaneCamera.uuid : undefined,
+			viewportSecondaryView: this.viewportSplit && secondary ? { camera: secondary.toJSON(), target: this.controls.getCenter( secondary ).toArray() } : undefined,
 			viewportSource: ( local ? local.viewportSource : this.viewportSource )?.uuid,
 			viewportSplit: this.viewportSplit,
 			viewportSplitAxis: this.viewportSplitAxis,

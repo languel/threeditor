@@ -239,6 +239,17 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 		autoSplit = false;
 		if ( mode ) flat.placeDock( main.dom, flat.sessionAt( slot.dom ) );
 		if ( ! mode && id === 'viewport' && key === 'director' ) editor.setViewportCamera( editor.directorPaneCamera.uuid );
+		if ( ! mode && id === 'viewport' && key === 'source' && ! editor.viewportSource && editor.viewportCamera === editor.camera ) {
+
+			const secondary = editor.getDirectorCamera( 'source' );
+			const camera = editor.setCameraType( secondary.isOrthographicCamera ? 'orthographic' : 'perspective' );
+			const { name, userData } = camera;
+			camera.copy( secondary, false );
+			camera.name = name;
+			camera.userData = userData;
+			editor.controls.getCenter( camera ).copy( editor.controls.getCenter( secondary ) );
+
+		}
 		editor.setViewportSplit( false );
 		if ( ! mode && id !== 'viewport' ) choose( main, id );
 		editor.signals.windowResize.dispatch();
