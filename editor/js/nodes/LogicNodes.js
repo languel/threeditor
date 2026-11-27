@@ -105,6 +105,11 @@ export const LOGIC_DOMAIN = {
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
 		[ 'logic.setIKInfluence', action( 'Set IK Influence', 'Rigging', { target, influence: unit( 'Influence', 1 ) } ) ],
+		[ 'logic.boneWeight', { label: 'Bone Weight', category: 'Rigging',
+			inputs: { target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ) }, outputs: numeric } ],
+		[ 'logic.setBoneWeight', action( 'Set Bone Weight', 'Rigging', {
+			target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ), weight: unit( 'Weight', 1 )
+		} ) ],
 		[ 'logic.boneContact', {
 			...trigger( 'On Bone Contact', 'bonecontact', { target, other: { ...object( 'Other Collider' ), emptyLabel: 'Any collider' } },
 				{ enter: event( 'Enter' ), exit: event( 'Exit' ) } ), category: 'Rigging'

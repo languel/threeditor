@@ -128,6 +128,7 @@ opened from the library.
 1. Open **A bending signal flag** and select **Flag armature**. In the **Armature** tab, choose **Tip**. Its Rest Head is at the base bone’s tail. Rotate the tip around Z to pose it, then choose **Reset Pose**.
 2. Select **Flag mesh**, **Pencil stripe**, or **Curve piping** to inspect the automatic weight binding. **Tip marker** is parented to the **Tip** bone and moves as a rigid piece.
 3. Select **Flag armature** and open **Logic Nodes**. Trace **Armature Bone** into the two Rotate actions and **Reset Bone Pose**. Press Left or Right Arrow in Play Scene to bend the flag. Press Space to reset it.
+4. Stop Play, select **Flag mesh**, and choose **Armature → Paint Weights**. Paint some of the tip with the **Base** bone to make that area resist the bend. Finish painting and compare the result in Play. Try the same brush on **Pencil stripe** or **Curve piping**.
 
 ### Simulate a Rapier pendulum
 

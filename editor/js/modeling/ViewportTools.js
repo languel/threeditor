@@ -25,6 +25,7 @@ import { formatMeasurement, lengthUnits, makeMeasurePoint, measurementArea, meas
 import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?v=surface-tools';
 import { StrokeSampler } from './StrokeSampler.js';
 import { interactionModes } from './InteractionModes.js';
+import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js';
 
 const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
 
@@ -62,6 +63,7 @@ export class ViewportTools {
 	constructor( editor, viewport, layout, render ) {
 
 		Object.assign( this, { editor, viewport, layout, render } );
+		this.weightPaint = new ArmatureWeightPaint( this );
 		viewport.addEventListener( 'pointerleave', () => { if ( this.brushCursor ) { this.brushCursor = null; this.draw(); } } );
 		this.mode = '';
 		this.points = [];
@@ -271,6 +273,19 @@ export class ViewportTools {
 
 			if ( ! this.mode || this.editor.editWorkspace?.exclusive || document.querySelector( 'dialog[open], .pencil-dropdown-menu:popover-open' ) || event.target.closest?.( 'input, textarea, select, [contenteditable], .viewport-edit-workspace' ) ) return;
 			if ( ! [ 'Escape', 'Enter', 'Backspace', 'Delete' ].includes( event.key ) ) return;
+			if ( this.mode === 'weights' ) {
+
+				if ( event.key === 'Escape' ) {
+
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					if ( this.weightPaint.stroke ) this.weightPaint.endStroke( false );
+					else this.setMode( '' );
+
+				}
+				return;
+
+			}
 			if ( ! this.stroke && ! ( event.key === 'Escape' && this.pencilReference ) && this.editor.keymap?.overEditableViewport === false ) return;
 			if ( [ 'cursor', 'pencil' ].includes( this.mode ) && event.key !== 'Escape' ) return;
 			event.preventDefault();
@@ -307,7 +322,8 @@ export class ViewportTools {
 		} );
 		signals.objectSelected.add( object => {
 
-			if ( this.mode === 'measure' || this.editor.modeling.editMode && object?.userData.measurement ) this.setMode( object?.userData.measurement ? 'measure' : '' );
+			if ( this.mode === 'weights' && object !== this.weightPaint.object ) this.setMode( '' );
+			else if ( this.mode === 'measure' || this.editor.modeling.editMode && object?.userData.measurement ) this.setMode( object?.userData.measurement ? 'measure' : '' );
 			else { this.refreshWorkspace(); this.draw(); }
 
 		} );
@@ -371,6 +387,13 @@ export class ViewportTools {
 	setWorkspaceMode( mode ) {
 
 		const model = this.editor.modeling;
+		if ( mode === 'weights' ) {
+
+			if ( model.editMode ) model.setMode( 'object' );
+			this.setMode( 'weights' );
+			return;
+
+		}
 		if ( mode === 'paint' ) { this.setMode( 'paint' ); return; }
 		if ( this.mode ) this.setMode( '' );
 		const needsEdit = mode === 'edit' || mode === 'sculpt';
@@ -421,7 +444,8 @@ export class ViewportTools {
 			button.setAttribute( 'aria-pressed', String( mode === model.selectionMode && ! model.pen && ! model.knife && ! model.brush ) );
 
 		}
-		this.modeSelect.value = this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
+		this.modeSelect.querySelector( 'option[value="weights"]' ).disabled = ! this.editor.selected?.userData.armatureBinding;
+		this.modeSelect.value = this.mode === 'weights' ? 'weights' : this.mode === 'paint' || this.pencilFromPaint ? 'paint' : edit && model.brush && model.brush !== 'freehand' ? 'sculpt' : edit ? 'edit' : 'object';
 		this.modeSelect.title = this.modeSelect.selectedOptions[ 0 ].textContent;
 		this.toolButtons.get( 'path' ).hidden = ! edit;
 		this.creation.hidden = this.primary.hidden = ! edit || !! this.mode;
@@ -432,7 +456,7 @@ export class ViewportTools {
 		const pen = model.pen && ! model.adding;
 		this.knifeButton.disabled = ! model.canEdit() || ! model.data?.faces?.length || !! model.data?.profile;
 		this.knifeButton.setAttribute( 'aria-pressed', String( !! model.knife ) );
-		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', pencil: 'Pencil', path: 'Surface path', paint: 'Surface paint' }[ this.mode ] :
+		const name = this.mode ? { cursor: '3D Cursor', mask: 'Light mask', measure: 'Measure', pencil: 'Pencil', path: 'Surface path', paint: 'Surface paint', weights: 'Weight paint' }[ this.mode ] :
 			sculpt ? 'Sculpt · ' + ( model.sculptBrushes.find( ( [ id ] ) => id === model.brush )?.[ 1 ] || model.brush ) :
 			model.knife ? 'Knife' : pen ? 'Topology pen' : model.brush === 'freehand' ? 'Freehand' :
 				model.adding ? { path: 'Draw path', shape: 'Draw shape', mesh: 'Build mesh' }[ model.data?.kind ] : model.selectionTool === 'select' ? 'Select' : model.selectionTool + ' select';
@@ -523,6 +547,8 @@ export class ViewportTools {
 
 		if ( mode === 'mask' && ! canEditLightMask( this.editor.viewportSource ) ) mode = '';
 		this.release();
+		if ( this.mode === 'weights' ) this.weightPaint.stop();
+		if ( mode === 'weights' && ! this.weightPaint.start( this.editor.selected ) ) mode = '';
 		const wasPencil = this.mode === 'pencil';
 		const wasPaint = this.mode === 'paint' || this.pencilFromPaint;
 		this.pencilFromPaint = mode === 'pencil' && wasPaint;
@@ -631,6 +657,12 @@ export class ViewportTools {
 		this.maskLayers = this.maskSelect = this.maskButtons = this.finishButton = this.removeButton = null;
 		this.cursorFields = null;
 		if ( ! this.mode ) return;
+		if ( this.mode === 'weights' ) {
+
+			this.weightPaint.buildControls( parent );
+			return;
+
+		}
 		if ( this.mode === 'cursor' ) {
 
 			this.cursorFields = [ 'X', 'Y', 'Z' ].map( ( axis, index ) => {
@@ -1237,6 +1269,7 @@ export class ViewportTools {
 
 	pointerDown( event ) {
 
+		if ( this.mode === 'weights' ) return this.weightPaint.pointerDown( event );
 		if ( this.placeCursor( event ) ) return;
 		if ( this.mode === 'cursor' ) return;
 		if ( this.pointer || ! this.mode || event.button !== 0 || event.altKey || event.target !== this.editor.renderer?.domElement ) return;
@@ -1364,6 +1397,7 @@ export class ViewportTools {
 
 	pointerMove( event ) {
 
+		if ( this.mode === 'weights' ) return this.weightPaint.pointerMove( event );
 		const pointer = this.pointer;
 		if ( ! pointer && [ 'paint', 'pencil' ].includes( this.mode ) ) {
 
@@ -1936,6 +1970,7 @@ export class ViewportTools {
 
 	pointerEnd( event ) {
 
+		if ( this.mode === 'weights' ) return this.weightPaint.pointerEnd( event );
 		if ( this.pointer?.id !== event.pointerId ) return;
 		event.stopImmediatePropagation();
 		const stroke = this.stroke;

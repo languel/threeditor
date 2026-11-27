@@ -4115,3 +4115,13 @@ body.translucent-panels:not(.workspace-split) #workspace-viewport #viewport .vie
 .node-graph-board[data-placing] { cursor: move; }
 .node-graph-row.wide-value { flex-wrap: wrap; padding-block: 3px; }
 .node-graph-row.wide-value input { width: 100%; }
+.weight-paint-cursor {
+	position: fixed;
+	transform: translate(-50%, -50%);
+	box-sizing: border-box;
+	border: 1px solid #fff;
+	border-radius: 50%;
+	box-shadow: 0 0 0 1px #0008;
+	pointer-events: none;
+	z-index: 1;
+}

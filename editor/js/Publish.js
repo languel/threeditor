@@ -381,6 +381,7 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ModifierEvaluation.js', 'editor/js/modeling/ModifierEvaluation.js' );
 	await project.copy( 'rigging/Armature.js', 'editor/js/rigging/Armature.js' );
 	await project.copy( 'rigging/ArmatureDeformation.js', 'editor/js/rigging/ArmatureDeformation.js' );
+	await project.copy( 'rigging/ArmatureWeights.js', 'editor/js/rigging/ArmatureWeights.js' );
 	await project.copy( 'rigging/ArmatureIK.js', 'editor/js/rigging/ArmatureIK.js' );
 	await project.copy( 'rigging/ArmaturePhysics.js', 'editor/js/rigging/ArmaturePhysics.js' );
 	await project.copy( 'rigging/ArmaturePhysicsConfig.js', 'editor/js/rigging/ArmaturePhysicsConfig.js' );

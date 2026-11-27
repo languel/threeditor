@@ -140,7 +140,17 @@ export function duplicateObjects( editor, move ) {
 
 		}
 		if ( copy.userData.projectorTarget ) copy.userData.projectorTarget = uuid( copy.userData.projectorTarget );
-		if ( copy.userData.armatureBinding ) copy.userData.armatureBinding.rig = uuid( copy.userData.armatureBinding.rig );
+		if ( copy.userData.armatureBinding ) {
+
+			const binding = copy.userData.armatureBinding;
+			binding.rig = uuid( binding.rig );
+			if ( binding.weightSamples ) for ( const [ key, weights ] of Object.entries( binding.weightSamples ) ) {
+
+				binding.weightSamples[ key ] = Object.fromEntries( Object.entries( weights ).map( ( [ bone, weight ] ) => [ uuid( bone ), weight ] ) );
+
+			}
+
+		}
 		if ( copy.userData.armatureIK ) {
 
 			const ik = copy.userData.armatureIK;
