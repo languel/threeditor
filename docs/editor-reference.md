@@ -209,7 +209,9 @@ Use **Shift+A** to add mesh primitives at the 3D cursor. In Object Mode this cre
 2. Press **E** or choose **Extrude face** or **Extrude outline**. Move the pointer to pull the geometry. **N** toggles free movement and the face normal, **X/Y/Z** constrains it to a world axis, and typing a distance sets an exact amount. Click or press **Enter** to confirm, or **Esc** to cancel the whole operation.
 3. Click a mesh face to select it. Shift-click the two ends of a boundary edge and press **E** to pull a connected strip. The new cap or edge remains selected for another pull. Extruding a curve creates a separate mesh and keeps the source curve.
 
-**Add → Mesh** also offers editable objects with starter points. Shift-click point handles to extend the selection, or enter coordinates in **Modeling**. In split view use the Director pane. Press **Tab** to return to Object mode. Extrusion and placement commit together as one undo step.
+Use **Add → Mesh** for an editable mesh with starter points, or **Add → Curve** for an editable path or shape. **Shift+A** opens the same categories in the viewport. Hover a category or press **Right Arrow** to open it. Search finds items across all categories.
+
+Shift-click point handles to extend the selection, or enter coordinates in **Modeling**. In split view use the Director pane. Press **Tab** to return to Object mode. Extrusion and placement commit together as one undo step.
 
 In Edit Mode, double-click a path or shape edge to insert a point. The same gesture works in the Image & Vector and Mask editors with the point editing tool. In the 3D view, **F3 → Insert outline point** inserts after the selected point, and **F3 → Toggle outline smoothing** switches between straight segments and a smooth curve. These edits can be undone.
 

@@ -220,15 +220,24 @@ class Keymap {
  registerMenu(menu){
   for(const [mi,group] of [...menu.querySelectorAll(':scope > .menu, :scope > .app-menus > .menu')].entries()){
    const category=group.querySelector(':scope > .title')?.textContent.trim();if(!category)continue;
+   if ( group.hasAttribute( 'data-scene-add-menu' ) ) {
+
+    // Keep existing shortcut IDs in registration order, independent of the layout.
+    for ( const [ index, action ] of this.editor.sceneAddMenu.actions.entries() ) {
+
+     this.register( { ...action, id: `menu.${mi}.${index}`, category: 'Menu · ' + category, defaults: { basic: '', blender: '' } } );
+
+    }
+    continue;
+
+   }
    let i=0;
    for(const el of group.querySelectorAll('.options .option, .options .inactive')){
     if(el.classList.contains('submenu-title') || el.dataset.keymapAction)continue;
     const label=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent.trim()).join(' ').trim();if(!label)continue;
     const parent=el.parentElement?.closest('.submenu-title');const section=parent?[...parent.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent.trim()).join(' ').trim():category;
-    const available = group.dataset.sceneAddMenu ? () => !this.editor.modeling.editMode ||
-     Boolean(el.dataset.meshPrimitive && this.editor.modeling.canInsertPrimitive) : undefined;
-    const id=`menu.${mi}.${i++}`;this.register({id,label,section,category:'Menu · '+category,defaults:{basic:'',blender:''},available,run:()=>{
-     if ( available ? available() : !el.classList.contains('inactive') ) el.click();
+    const id=`menu.${mi}.${i++}`;this.register({id,label,section,category:'Menu · '+category,defaults:{basic:'',blender:''},run:()=>{
+     if ( !el.classList.contains('inactive') ) el.click();
     }});
    }
   }

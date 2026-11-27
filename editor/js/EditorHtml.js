@@ -56,6 +56,7 @@ async function exportEditorHtml( editor ) {
 	state.threeDefs = buildThreeDefs( core );
 	const resourcePaths = [
 		'js/libs/language-worker.js', 'js/libs/language-types.json',
+		'../examples/fonts/helvetiker_bold.typeface.json',
 		...decoderFiles.map( file => '../examples/jsm/libs/' + file ),
 		...exampleResources(),
 		...Array.from( [ 'translate', 'rotate', 'scale' ], name => 'images/' + name + '.svg' )
@@ -91,7 +92,7 @@ async function exportEditorHtml( editor ) {
 
 	const loaders = [ ...modulePaths ].map( path => `[${ JSON.stringify( path ) }, () => import(${ JSON.stringify( editorSpecifier( path ) ) })]` );
 	const entry = `
-import { startEditor } from './js/EditorApp.js?v=transform-gizmos';
+import { startEditor } from './js/EditorApp.js?v=nested-add';
 import { openPortableSession } from './js/PortableSession.js';
 await startEditor(await openPortableSession(new Map([${ loaders.join( ', ' ) }])));
 `;

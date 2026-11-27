@@ -3019,12 +3019,24 @@ async function checkActiveSelection( page ) {
 
 async function checkAddPrimitives( page ) {
 
+	const add = page.getByRole( 'dialog', { name: 'Add', exact: true } );
+	const text = add.getByRole( 'button', { name: 'Text', exact: true } );
+	await page.getByRole( 'button', { name: 'Add', exact: true } ).click();
+	await text.evaluate( () => new Promise( done => requestAnimationFrame( () => requestAnimationFrame( done ) ) ) );
+	assert.equal( await text.innerText(), 'Text' );
+	await text.click();
+	await page.waitForFunction( () => editor.selected?.geometry?.type === 'TextGeometry' );
+	assert.equal( await page.evaluate( () => editor.selected.geometry.parameters.options.text ), 'THREE.JS' );
+	await page.evaluate( () => editor.undo() );
+
 	await page.evaluate( () => editor.setCursor( new THREE.Vector3( 2, 1, 3 ) ) );
 	const viewport = await page.locator( '#viewport' ).boundingBox();
 	await page.mouse.move( viewport.x + viewport.width * .5, viewport.y + viewport.height * .55 );
-	const add = page.getByRole( 'dialog', { name: 'Add', exact: true } );
+	const mesh = add.getByRole( 'button', { name: 'Mesh', exact: true } );
+	const primitives = add.getByRole( 'group', { name: 'Mesh options', exact: true } );
 	await page.keyboard.press( 'Shift+a' );
-	await add.getByRole( 'button', { name: 'Cube', exact: true } ).click();
+	await mesh.hover();
+	await primitives.getByRole( 'button', { name: 'Cube', exact: true } ).click();
 	const before = await page.evaluate( async () => {
 
 		const cube = editor.selected;
@@ -3051,7 +3063,9 @@ async function checkAddPrimitives( page ) {
 	await page.keyboard.press( 'a' );
 	await page.keyboard.press( 'Shift+a' );
 	assert.equal( await add.getByRole( 'button', { name: 'Perspective', exact: true } ).count(), 0 );
-	await add.getByRole( 'button', { name: 'Plane', exact: true } ).click();
+	await page.keyboard.press( 'ArrowDown' );
+	await page.keyboard.press( 'ArrowRight' );
+	await primitives.getByRole( 'button', { name: 'Plane', exact: true } ).click();
 	const appended = await page.evaluate( () => {
 
 		const model = editor.modeling, cube = model.object;

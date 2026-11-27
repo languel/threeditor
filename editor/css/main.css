@@ -1546,6 +1546,41 @@ body.translucent-panels .primitive-adjust-trigger {
 .context-menu-item { display: block; width: 100%; padding: 6px; border: 0; text-align: left; background: transparent; color: var(--theme-text); cursor: pointer; }
 .context-menu-item:hover, .context-menu-item:focus-visible { background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%); outline: none; }
 .context-menu-key { float: right; opacity: .65; font-size: 11px; margin-left: 8px; }
+#menubar .scene-add-menu > button.title {
+	border: 0;
+	background: none;
+	font-family: inherit;
+	font-size: inherit;
+	cursor: pointer;
+}
+.context-menu-add, .context-menu-flyout {
+	box-sizing: border-box;
+	width: min(188px, calc(100vw - 8px));
+}
+.context-menu-add .context-menu-item { padding: 4px 7px; min-height: 24px; border-radius: 3px; }
+.context-menu-add .context-menu-item[aria-expanded="true"] {
+	background: color-mix(in srgb, var(--theme-accent), var(--theme-surface) 75%);
+}
+.context-menu-branch { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.context-menu-branch::after {
+	content: '';
+	width: 5px;
+	height: 5px;
+	border: solid currentColor;
+	border-width: 1px 1px 0 0;
+	transform: rotate(45deg);
+	opacity: .75;
+}
+.context-menu-flyout {
+	position: fixed;
+	z-index: 1;
+	padding: 5px;
+	border: inherit;
+	border-radius: inherit;
+	background: inherit;
+	box-shadow: inherit;
+}
+.context-menu-add .context-menu-back { margin-bottom: 3px; border-bottom: 1px solid var(--theme-surface); }
 
 /* Shared code editor preferences */
 #script-window .CodeMirror, #script-window textarea {

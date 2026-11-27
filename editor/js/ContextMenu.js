@@ -14,6 +14,7 @@ function ContextMenu( editor, viewport ) {
 	document.body.appendChild( menu );
 	let pointer = null;
 	let previousFocus = null;
+	let opener = null;
 	let rightDown = null;
 	// Optical panes stop the event at the viewport to keep Director controls idle.
 	window.addEventListener( 'pointerdown', event => {
@@ -55,15 +56,22 @@ function ContextMenu( editor, viewport ) {
 
 		if ( menu.hidden ) return;
 		menu.hidden = true;
+		menu.classList.remove( 'context-menu-add' );
+		opener?.setAttribute( 'aria-expanded', 'false' );
+		opener = null;
 		if ( restore && previousFocus?.isConnected ) previousFocus.focus();
 		previousFocus = null;
 
 	}
 
-	function show( title, actions, position = pointer ) {
+	function show( title, actions, position = pointer, { nested = false, trigger = null } = {} ) {
 
 		if ( editor.flyControls?.active || editor.modalTransform?.active || document.body.classList.contains( 'presenting' ) ) return;
-		previousFocus = document.activeElement;
+		close( false );
+		previousFocus = trigger || document.activeElement;
+		opener = trigger;
+		opener?.setAttribute( 'aria-expanded', 'true' );
+		menu.classList.toggle( 'context-menu-add', nested );
 		menu.replaceChildren();
 		menu.setAttribute( 'aria-label', title );
 		const heading = document.createElement( 'div' );
@@ -77,29 +85,83 @@ function ContextMenu( editor, viewport ) {
 		const list = document.createElement( 'div' );
 		list.className = 'context-menu-list';
 		menu.append( heading, search, list );
-		function draw() {
+		let submenu, owner, hoverTimer;
 
-			list.replaceChildren();
-			const terms = search.value.toLowerCase().match( /\S+/g ) || [];
-			let lastSection = '';
-			for ( const action of actions ) {
+		function closeSubmenu( restore = false ) {
 
-				const text = ( action.label + ' ' + ( action.section || '' ) ).toLowerCase();
-				if ( ! terms.every( term => text.includes( term ) ) ) continue;
-				if ( action.section && action.section !== lastSection ) {
+			clearTimeout( hoverTimer );
+			if ( ! submenu ) return;
+			submenu.remove();
+			submenu = undefined;
+			const inline = list.hidden;
+			list.hidden = false;
+			owner.setAttribute( 'aria-expanded', 'false' );
+			if ( inline ) openAt( position );
+			if ( restore ) owner.focus();
+			owner = undefined;
 
-					lastSection = action.section;
-					const section = document.createElement( 'div' );
-					section.className = 'context-menu-section';
-					section.textContent = action.section;
-					list.appendChild( section );
+		}
 
+		function openSubmenu( action, button, focus ) {
+
+			clearTimeout( hoverTimer );
+			if ( owner !== button ) {
+
+				closeSubmenu();
+				const root = menu.getBoundingClientRect();
+				const right = root.right - 1;
+				const left = root.left - root.width + 1;
+				const fitsRight = right + root.width <= window.innerWidth - 4;
+				const canFlyOut = fitsRight || left >= 4;
+				if ( ! canFlyOut && ! focus ) return;
+
+				submenu = document.createElement( 'div' );
+				submenu.className = 'context-menu-list context-menu-submenu context-menu-flyout';
+				submenu.setAttribute( 'role', 'group' );
+				submenu.setAttribute( 'aria-label', action.label + ' options' );
+				submenu.addEventListener( 'pointerenter', () => clearTimeout( hoverTimer ) );
+				for ( const child of action.children ) submenu.appendChild( item( child ) );
+				menu.appendChild( submenu );
+				owner = button;
+				owner.setAttribute( 'aria-expanded', 'true' );
+				if ( canFlyOut ) {
+
+					submenu.style.left = ( fitsRight ? right : left ) + 'px';
+					submenu.style.top = Math.max( 4, Math.min( button.getBoundingClientRect().top, window.innerHeight - submenu.offsetHeight - 4 ) ) + 'px';
+
+				} else {
+
+					submenu.classList.remove( 'context-menu-flyout' );
+					const back = item( { label: 'Back to ' + title, run: () => closeSubmenu( true ) }, false );
+					back.classList.add( 'context-menu-back' );
+					submenu.prepend( back );
+					list.hidden = true;
+					openAt( position );
 				}
-				const button = document.createElement( 'button' );
-				button.type = 'button';
-				button.className = 'context-menu-item';
-				button.textContent = action.label;
-				button.disabled = !! action.disabled;
+
+			}
+			if ( focus ) submenu.querySelector( '.context-menu-item:not(.context-menu-back):not(:disabled)' )?.focus();
+
+		}
+
+		function item( action, dismiss = true ) {
+
+			const button = document.createElement( 'button' );
+			button.type = 'button';
+			button.className = 'context-menu-item';
+			button.dataset.uiRaw = 'keep';
+			const label = document.createElement( 'span' );
+			label.textContent = action.label;
+			button.appendChild( label );
+			button.disabled = !! action.disabled;
+			if ( action.children ) {
+
+				button.classList.add( 'context-menu-branch' );
+				button.setAttribute( 'aria-expanded', 'false' );
+				button.addEventListener( 'click', () => openSubmenu( action, button, true ) );
+
+			} else {
+
 				if ( title === 'Command palette' && editor.keymap.combo( action.id ) ) {
 
 					const key = document.createElement( 'span' );
@@ -108,8 +170,52 @@ function ContextMenu( editor, viewport ) {
 					button.appendChild( key );
 
 				}
-				button.addEventListener( 'click', () => { close(); action.run(); } );
-				list.appendChild( button );
+				button.addEventListener( 'click', () => { if ( dismiss ) close(); action.run(); } );
+
+			}
+			return button;
+
+		}
+
+		function draw() {
+
+			closeSubmenu();
+			list.replaceChildren();
+			const terms = search.value.toLowerCase().match( /\S+/g ) || [];
+			const filtering = terms.length > 0;
+			const entries = filtering ? actions.flatMap( action => action.children || [ action ] ) : actions;
+			let lastSection = '';
+			for ( const action of entries ) {
+
+				const text = ( action.label + ' ' + ( action.section || '' ) ).toLowerCase();
+				if ( ! terms.every( term => text.includes( term ) ) ) continue;
+				if ( ( ! nested || filtering ) && action.section && action.section !== lastSection ) {
+
+					lastSection = action.section;
+					const section = document.createElement( 'div' );
+					section.className = 'context-menu-section';
+					section.textContent = action.section;
+					list.appendChild( section );
+
+				}
+				const row = item( action );
+				if ( nested && ! filtering ) row.addEventListener( 'pointerenter', event => {
+
+					if ( event.pointerType === 'touch' ) return;
+					clearTimeout( hoverTimer );
+					const preview = () => {
+
+						if ( menu.hidden || ! row.isConnected ) return;
+						if ( action.children ) openSubmenu( action, row, false );
+						else closeSubmenu();
+
+					};
+					// Give the pointer time to cross the parent rows on its way into a flyout.
+					if ( submenu && owner !== row ) hoverTimer = setTimeout( preview, 150 );
+					else preview();
+
+				} );
+				list.appendChild( row );
 
 			}
 			if ( ! list.childElementCount ) {
@@ -121,10 +227,35 @@ function ContextMenu( editor, viewport ) {
 				list.appendChild( empty );
 
 			}
+			if ( nested && ! menu.hidden ) openAt( position );
 
 		}
+
 		search.addEventListener( 'input', draw );
-		menu.addEventListener( 'keydown', navigate );
+		list.addEventListener( 'scroll', () => { if ( ! list.hidden ) closeSubmenu(); } );
+		menu.onkeydown = event => {
+
+			const fromSubmenu = submenu?.contains( event.target );
+			const branch = event.target.matches( '.context-menu-branch' );
+			if ( submenu && ( event.key === 'Escape' || event.key === 'ArrowLeft' && fromSubmenu ) ) {
+
+				event.preventDefault();
+				event.stopPropagation();
+				closeSubmenu( fromSubmenu );
+				return;
+
+			}
+			if ( branch && event.key === 'ArrowRight' ) {
+
+				event.preventDefault();
+				event.target.click();
+				return;
+
+			}
+			navigate( event, fromSubmenu || list.hidden ? submenu : list );
+			if ( submenu && ! fromSubmenu && ! list.hidden && event.defaultPrevented && event.key.startsWith( 'Arrow' ) ) closeSubmenu();
+
+		};
 		draw();
 		openAt( position );
 		search.focus();
@@ -141,11 +272,11 @@ function ContextMenu( editor, viewport ) {
 		menu.style.top = Math.max( 4, Math.min( y, window.innerHeight - menu.offsetHeight - 4 ) ) + 'px';
 	}
 
-	function navigate( event ) {
+	function navigate( event, list = menu ) {
 
 		if ( event.key === 'Escape' ) { event.preventDefault(); event.stopPropagation(); close(); return; }
 		if ( ! [ 'ArrowDown', 'ArrowUp', 'Enter' ].includes( event.key ) ) return;
-		const buttons = [ ...menu.querySelectorAll( '.context-menu-item:not(:disabled)' ) ];
+		const buttons = [ ...list.querySelectorAll( '.context-menu-item:not(:disabled)' ) ];
 		if ( ! buttons.length ) return;
 		if ( event.key === 'Enter' && event.target.matches( 'input' ) ) { event.preventDefault(); buttons[ 0 ].click(); return; }
 		if ( event.key === 'Enter' ) return;
@@ -156,10 +287,17 @@ function ContextMenu( editor, viewport ) {
 
 	}
 
-	function openAdd( position ) {
+	function openAdd( position, trigger ) {
 
-		const category = 'Menu · ' + editor.strings.getKey( 'menubar/add' );
-		show( 'Add', editor.keymap.actions.filter( action => action.category === category && editor.keymap.actionAvailable( action.id ) ), position );
+		const { label, items } = editor.sceneAddMenu;
+		const available = items.flatMap( item => {
+
+			if ( ! item.children ) return item.available() ? [ item ] : [];
+			const children = item.children.filter( child => child.available() );
+			return children.length ? [ { ...item, children } ] : [];
+
+		} );
+		show( label, available, position, { nested: true, trigger } );
 
 	}
 
@@ -191,6 +329,7 @@ function ContextMenu( editor, viewport ) {
 	function openRename( position ) {
 
 		const object = editor.selector.selection.at( -1 );
+		close( false );
 		previousFocus = document.activeElement;
 		menu.setAttribute( 'aria-label', 'Rename Object' );
 		const form = document.createElement( 'form' );
@@ -221,7 +360,7 @@ function ContextMenu( editor, viewport ) {
 
 		};
 		menu.replaceChildren( form );
-		menu.addEventListener( 'keydown', navigate );
+		menu.onkeydown = event => navigate( event );
 		openAt( position || pointer );
 		name.focus();
 		name.select();
@@ -304,7 +443,12 @@ function ContextMenu( editor, viewport ) {
 		if ( event.target === editor.renderer?.domElement ) event.preventDefault();
 
 	} );
-	document.addEventListener( 'pointerdown', event => { if ( ! menu.hidden && ! menu.contains( event.target ) ) close( false ); }, true );
+	document.addEventListener( 'pointerdown', event => {
+
+		if ( ! menu.hidden && ! menu.contains( event.target ) && ! opener?.contains( event.target ) ) close( false );
+
+	}, true );
+	window.addEventListener( 'resize', () => { if ( menu.classList.contains( 'context-menu-add' ) ) close(); } );
 	return { openAdd, openObject, openPalette, openSeparate, openParent, openRename, show, close };
 
 }
