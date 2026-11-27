@@ -28,6 +28,8 @@ Nodes that define a body domain store a nested graph in `node.body`. The canvas 
 
 `ShaderNodes.js` compiles the same graph format into TSL expressions. The graph lives in ordinary material user data. `ShaderGraphRuntime.js` builds the node material for WebGPU draws and restores the authored material afterward, keeping JSON, material slots, and animation bindings in the existing formats.
 
+`GeometryFields.js` composes scalar functions evaluated against each vertex. **Store Named Attribute** writes their results to a standard Three.js buffer attribute. The shader compiler reads the attribute as a TSL varying so an authored geometry value can drive a material.
+
 `LogicNodes.js` validates data and event links. Immediate feedback is rejected, and Delay breaks a feedback cycle across frames. `LogicRuntime.js` subscribes to the player’s StreamRouter and fires object-local graph instances against the playback scene. Variables, key state, overlap state, and timers belong to that instance. Object references are stored as UUIDs and remapped when their targets are duplicated together.
 
 GitHub Pages deploys the static site when `main` is pushed. The [handoff](../HANDOFF.md) covers the runtime, export paths, verification, and known gaps.

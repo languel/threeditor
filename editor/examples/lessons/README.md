@@ -16,6 +16,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A simulated pinwheel | A fixed-step simulation applies a small rotation to its previous mesh on every step. |
 | — | An animated TSL glaze | One moving UV pattern controls both the color and roughness of a ceramic material. |
 | — | A keyboard-controlled gate | Keyboard and overlap events move a runner and open a gate through two logic graphs. |
+| — | A field-colored wave | One procedural field deforms a grid and colors the resulting ridges through a TSL graph. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -63,3 +64,10 @@ opened from the library.
 2. Stop Play, select **Runner**, and open **Logic Nodes**. Find **While Key Is Held** and follow its **Then** link to **Move**. **Scene Time** supplies the time since the previous frame. **Multiply** converts that time into a movement distance.
 3. Find **On Overlap**. Its target is **Gate**. When the bounding boxes meet, the **Enter** socket triggers **Send Event** with the name `gate.open`.
 4. Select **Gate**. Its **Receive Event** node listens for `gate.open` and calls **Set Position**. Change the action's Y value and try the gate again.
+
+### Color a wave with a geometry field
+
+1. Open **A field-colored wave**, select **Wave surface**, and choose **Geometry Nodes**. Find **Position** and follow X through **Multiply Fields** and **Sine Field**.
+2. The next **Multiply Fields** node controls the height of the wave. Try changing B from 0.33 to 0.15 and watch the surface flatten.
+3. Follow the second branch from **Sine Field**. It maps the sine values from −1–1 to 0–1 and writes them into the **ridge** attribute.
+4. Open **Shader Graph** and trace **Named Attribute** into **Mix Color**. Change A or B to recolor the same surface.

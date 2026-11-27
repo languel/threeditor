@@ -379,7 +379,7 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'modeling/ProjectorOutput.js', 'editor/js/modeling/ProjectorOutput.js' );
 	await project.copy( 'modeling/ModifierEvaluation.js', 'editor/js/modeling/ModifierEvaluation.js' );
 	for ( const module of [
-		'GeometrySimulation', 'GeometryNodes', 'GeometryOperations', 'NodeGraph', 'ValueNodes',
+		'GeometrySimulation', 'GeometryNodes', 'GeometryFields', 'GeometryOperations', 'NodeGraph', 'ValueNodes',
 		'ShaderGraphRuntime', 'ShaderNodes', 'LogicRuntime', 'LogicNodes'
 	] ) {
 

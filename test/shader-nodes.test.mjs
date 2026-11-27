@@ -77,3 +77,15 @@ test( 'Shader rendering substitutes one compiled material for the draw and resto
 	assert.equal( a.material, material );
 
 } );
+
+test( 'Named geometry attributes can feed the TSL graph through a scalar socket', () => {
+
+	const graph = createShaderGraph();
+	const attribute = addNode( graph, 'shader.attribute', 0, 0 );
+	attribute.values.name = 'ridge';
+	wire( graph, attribute.id, 'value', 'shader.output', 'roughness' );
+	assert.equal( compileShaderGraph( TSL, graph, new MeshStandardMaterial() ).properties.roughnessNode.isNode, true );
+	attribute.values.name = 'ridge value';
+	assert.throws( () => compileShaderGraph( TSL, graph, new MeshStandardMaterial() ), /attribute name/ );
+
+} );

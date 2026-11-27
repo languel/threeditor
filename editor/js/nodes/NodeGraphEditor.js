@@ -1,7 +1,7 @@
 import { addNode, connectNodes, disconnectInput, indexGraph, removeNode } from './NodeGraph.js';
 
 const PORT_COLORS = {
-	geometry: '#59c6a1', number: '#91a8ff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
+	geometry: '#59c6a1', number: '#91a8ff', field: '#70baff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
 	boolean: '#f792a5', string: '#8cdbd1', object: '#efdb8b', event: '#ffad73'
 };
 const portColor = type => Object.hasOwn( PORT_COLORS, type ) ? PORT_COLORS[ type ] : '#b0a8c6';

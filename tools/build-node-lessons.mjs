@@ -211,3 +211,45 @@ wire( mechanism, LOGIC_DOMAIN, receiveClose, 'then', lower, 'run' );
 await save( '09-keyboard-gate', 'A keyboard-controlled gate', [ runner, gate ],
 	'Play Scene and hold the left or right arrow to move the Runner. Walk into the Gate to open it, and press Space to reset. Open Logic Nodes on each object to trace the keyboard triggers, overlap sensor, and gate.open and gate.close events.',
 	[ 3.7, 2.8, 6.1 ] );
+
+const wave = createGeometryGraph();
+const grid = addNode( wave, 'geometry.grid', 24, 32 );
+Object.assign( grid.values, { width: 4.8, depth: 3.1, xSegments: 46, zSegments: 12 } );
+const coordinates = addNode( wave, 'field.position', 24, 237 );
+const frequency = addNode( wave, 'field.multiply', 267, 237 );
+frequency.values.b = 3.6;
+const sine = addNode( wave, 'field.sine', 510, 237 );
+const amplitude = addNode( wave, 'field.multiply', 753, 32 );
+amplitude.values.b = .33;
+const normalize = addNode( wave, 'field.multiply', 753, 237 );
+normalize.values.b = .5;
+const shift = addNode( wave, 'field.add', 996, 237 );
+shift.values.b = .5;
+const moveWave = addNode( wave, 'geometry.setPosition', 996, 32 );
+const storeWave = addNode( wave, 'geometry.storeAttribute', 1239, 32 );
+storeWave.values.name = 'ridge';
+wave.nodes.find( node => node.type === 'geometry.output' ).x = 1482;
+removeNode( wave, 'geometry.input' );
+for ( const [ from, output, to, input ] of [
+	[ coordinates.id, 'x', frequency.id, 'a' ], [ frequency.id, 'value', sine.id, 'value' ],
+	[ sine.id, 'value', amplitude.id, 'a' ], [ sine.id, 'value', normalize.id, 'a' ],
+	[ normalize.id, 'value', shift.id, 'a' ], [ shift.id, 'value', storeWave.id, 'value' ],
+	[ grid.id, 'geometry', moveWave.id, 'geometry' ], [ amplitude.id, 'value', moveWave.id, 'y' ],
+	[ moveWave.id, 'geometry', storeWave.id, 'geometry' ], [ storeWave.id, 'geometry', 'geometry.output', 'geometry' ]
+] ) wire( wave, GEOMETRY_DOMAIN, from, output, to, input );
+const waveShader = createShaderGraph();
+removeNode( waveShader, 'shader.color' );
+const ridges = addNode( waveShader, 'shader.attribute', 24, 32 );
+ridges.values.name = 'ridge';
+const shade = addNode( waveShader, 'shader.mixColor', 267, 32 );
+Object.assign( shade.values, { a: '#1a4581', b: '#efb16b' } );
+waveShader.nodes.find( node => node.type === 'shader.output' ).x = 510;
+wire( waveShader, SHADER_DOMAIN, ridges.id, 'value', shade.id, 'factor' );
+wire( waveShader, SHADER_DOMAIN, shade.id, 'color', 'shader.output', 'color' );
+const waveMaterial = new THREE.MeshStandardMaterial( { color: 0x6190ba, roughness: .5, side: THREE.DoubleSide } );
+waveMaterial.name = 'Ridge colors';
+waveMaterial.userData.shaderGraph = waveShader;
+const waveMesh = geometryMesh( 'Wave surface', new THREE.PlaneGeometry( 4.8, 3.1 ).rotateX( - Math.PI / 2 ), wave, waveMaterial );
+await save( '10-field-colored-wave', 'A field-colored wave', waveMesh,
+	'Use Geometry Nodes to change the frequency and height of the wave. Store Named Attribute writes ridge onto the mesh. Open Shader Graph to see how Named Attribute reads ridge and uses it to mix two colors on the surface.',
+	[ 3.9, 3.5, 5.2 ], 'WebGPURenderer' );

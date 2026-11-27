@@ -98,6 +98,12 @@ Drag between sockets or click a socket at each end. A new link replaces the exis
 
 The graph runs at its position in the mesh’s **Modifiers** stack. A disconnected output shows the geometry going into the modifier. Undo restores graph edits and node positions. Project JSON and Editable HTML retain the editable graph, and Play uses the evaluated mesh. Use the modifier’s apply action to bake the graph into the mesh.
 
+### Fields and named attributes
+
+**Position**, **Normal**, **Index**, and **Random Field** vary per vertex. Connect them through field math to **Set Position** for a deformation, or use **Greater Than Field** to select which vertices move. Field sockets also accept constant numbers, and **Constant Field** converts a linked Number or math result into a field.
+
+**Store Named Attribute** writes a scalar field to the mesh. **Read Named Attribute** reads it in a later geometry step. The Shader Graph's **Named Attribute** can use the same value to drive color, roughness, or another numeric socket. [Field-colored wave tutorial](../editor/examples/lessons/README.md#color-a-wave-with-a-geometry-field)
+
 ### Repeat and Simulation
 
 **Repeat** runs its body for the number of **Iterations** you set. Open the body on the node card. **Repeat Input** provides the geometry and numeric value carried from the previous iteration, plus a zero-based **Iteration** count. Connect the updated state to **Repeat Output**. The node returns the final state to the parent graph. Zero iterations pass through the starting state, and a Repeat body can contain another Repeat.
