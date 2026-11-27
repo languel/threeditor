@@ -78,10 +78,18 @@ These shortcuts apply in **Geometry Nodes**, **Shader Graph**, and **Logic Nodes
 | **Ctrl+right-drag**, **Ctrl+Alt+right-drag** | Cut or mute the links crossed by the stroke |
 | **Alt+drag** a node title | Detach its links and move it |
 | **Home**, **Numpad Decimal** | Frame all nodes or frame the selection |
+| **Ctrl/Cmd+G**, **Ctrl/Cmd+Alt+G** | Group the selection or ungroup the selected instance |
+| **Tab**, **Ctrl+Tab** | Edit the selected group or return to the parent graph from the canvas |
 
 Drag an existing input link away to disconnect it. Drag an unused socket into empty space to open the catalog filtered by socket type. Move an unconnected compatible node onto a link to insert it. [Blender node editing reference](https://docs.blender.org/manual/en/5.0/interface/controls/nodes/editing.html)
 
 All three catalogs include scalar math, remapping, and vector operations. **Math Expression** accepts X, Y, Z, constants such as `pi`, arithmetic, and functions such as `sin`, `clamp`, and `maprange`. For example, `0.5 + sin(x * 2) * 0.5` oscillates between zero and one. **Math Expression Field** evaluates the formula separately at each geometry sample.
+
+### Reusable node groups
+
+Select nodes and press **Ctrl/Cmd+G**. The shared editor moves them into a group and turns wires that cross its boundary into **Group Input** and **Group Output** sockets. Rename the group in its header. Select an unlinked input or an output on a node inside the group and click **Expose socket** to add a control to the interface. Rename exposed sockets on the Group Input or Group Output card. Select an interface socket and click **Remove socket** to remove it and its wires from each instance.
+
+Find existing definitions under **Groups** in **Shift+A**. Instances share the internal graph and each instance can supply its own input values. Copy and paste an instance into a graph of the same kind to bring along its definition. Use **Ctrl/Cmd+Alt+G** to expand the selected instance into ordinary nodes and preserve its connections. The definition remains in the catalog. Logic groups can expose event sockets, and each instance tracks its own event state. [Blender node groups](https://docs.blender.org/manual/en/5.0/interface/controls/nodes/groups.html) · [Reusable ripples tutorial](../editor/examples/lessons/README.md#reuse-a-node-group)
 
 ### Curves in Geometry Nodes
 

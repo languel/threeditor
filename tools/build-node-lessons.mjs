@@ -6,6 +6,7 @@ import { joinGeometry } from '../editor/js/nodes/GeometryOperations.js';
 import { addNode, connectNodes, removeNode } from '../editor/js/nodes/NodeGraph.js';
 import { createShaderGraph, SHADER_DOMAIN } from '../editor/js/nodes/ShaderNodes.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
+import { exposeGroupSocket, groupNodes, nodeGroupsDomain } from '../editor/js/nodes/NodeGroups.js';
 
 function newGraph( type, settings = {} ) {
 
@@ -399,3 +400,75 @@ for ( const [ from, output, to, input ] of [
 await save( '14-interactive-control-deck', 'A pointer and gamepad control deck', [ pad, beacon, deck, marker ],
 	'Play Scene and hover the blue Beacon switch. Click it to toggle the beacon. Click the green Navigation deck to move the marker to the pointer hit. On a standard controller, use the bottom face button to toggle the beacon and the left stick to move the marker. Inspect Logic Nodes on each surface.',
 	[ 2.7, 4.3, 6.6 ] );
+
+const ripples = createGeometryGraph();
+removeNode( ripples, 'geometry.input' );
+const rippleGrid = addNode( ripples, 'geometry.grid', 24, 32 );
+Object.assign( rippleGrid.values, { width: 4.3, depth: 3.2, xSegments: 44, zSegments: 32 } );
+const rippleCoordinates = addNode( ripples, 'field.position', 24, 235 );
+const rippleEquation = addNode( ripples, 'field.expression', 270, 220 );
+Object.assign( rippleEquation.values, { expression: 'sin(5*x) * y', y: .24 } );
+const liftRipple = addNode( ripples, 'geometry.setPosition', 516, 32 );
+for ( const connection of [
+	[ rippleGrid.id, 'geometry', liftRipple.id, 'geometry' ],
+	[ rippleCoordinates.id, 'x', rippleEquation.id, 'x' ],
+	[ rippleEquation.id, 'value', liftRipple.id, 'y' ],
+	[ liftRipple.id, 'geometry', 'geometry.output', 'geometry' ]
+] ) wire( ripples, GEOMETRY_DOMAIN, ...connection );
+const firstWave = groupNodes( ripples, ripples, GEOMETRY_DOMAIN, new Set( [ rippleEquation.id, liftRipple.id ] ) );
+Object.assign( firstWave, { x: 275, y: 70 } );
+const rippleGroup = ripples.groups[ 0 ];
+rippleGroup.name = 'Ripple pass';
+rippleGroup.inputs.in2.label = 'Axis Field';
+exposeGroupSocket( rippleGroup, rippleGroup.body, nodeGroupsDomain( GEOMETRY_DOMAIN, ripples.groups, rippleGroup ), {
+	node: rippleEquation.id, socket: 'y', direction: 'input'
+} );
+rippleGroup.inputs.in3.label = 'Amplitude';
+const secondWave = addNode( ripples, rippleGroup.id, 531, 70 );
+secondWave.values.in3 = .13;
+ripples.nodes.find( node => node.id === 'geometry.output' ).x = 790;
+const rippleDomain = nodeGroupsDomain( GEOMETRY_DOMAIN, ripples.groups );
+wire( ripples, rippleDomain, firstWave.id, 'out1', secondWave.id, 'in1' );
+wire( ripples, rippleDomain, rippleCoordinates.id, 'z', secondWave.id, 'in2' );
+wire( ripples, rippleDomain, secondWave.id, 'out1', 'geometry.output', 'geometry' );
+
+const rippleShader = createShaderGraph();
+removeNode( rippleShader, 'shader.color' );
+const local = addNode( rippleShader, 'shader.position', 24, 34 );
+const component = addNode( rippleShader, 'shader.separate', 270, 34 );
+const gradient = addNode( rippleShader, 'math.maprange', 516, 34 );
+Object.assign( gradient.values, { b: -.34, c: .34, d: 0, e: 1 } );
+const pigment = addNode( rippleShader, 'shader.mixColor', 762, 34 );
+Object.assign( pigment.values, { a: '#17475c', b: '#ffcb7c' } );
+rippleShader.nodes.find( node => node.id === 'shader.output' ).x = 1008;
+for ( const connection of [
+	[ local.id, 'vector', component.id, 'vector' ], [ component.id, 'y', gradient.id, 'a' ],
+	[ gradient.id, 'value', pigment.id, 'factor' ], [ pigment.id, 'color', 'shader.output', 'color' ]
+] ) wire( rippleShader, SHADER_DOMAIN, ...connection );
+groupNodes( rippleShader, rippleShader, SHADER_DOMAIN, new Set( [ gradient.id, pigment.id ] ) );
+rippleShader.groups[ 0 ].name = 'Elevation colors';
+rippleShader.groups[ 0 ].inputs.in1.label = 'Height';
+const rippleMaterial = new THREE.MeshStandardMaterial( { color: 0x468b98, roughness: .49, side: THREE.DoubleSide } );
+rippleMaterial.userData.shaderGraph = rippleShader;
+const ripplePanel = geometryMesh( 'Ripple panel', new THREE.PlaneGeometry( 4.3, 3.2 ).rotateX( - Math.PI / 2 ), ripples, rippleMaterial );
+const rippleLogic = ripplePanel.userData.logicGraph = createLogicGraph();
+removeNode( rippleLogic, 'logic.start' );
+const turnRight = logicNode( rippleLogic, 'logic.keyDown', 24, 38, { key: 'ArrowRight' } );
+const turnLeft = logicNode( rippleLogic, 'logic.keyDown', 24, 248, { key: 'ArrowLeft' } );
+const waitForFrame = logicNode( rippleLogic, 'logic.delay', 275, 38, { seconds: 0 } );
+const rotatePanel = logicNode( rippleLogic, 'logic.rotate', 522, 38, { y: 22 } );
+wire( rippleLogic, LOGIC_DOMAIN, turnRight, 'then', waitForFrame, 'run' );
+wire( rippleLogic, LOGIC_DOMAIN, waitForFrame, 'then', rotatePanel, 'run' );
+const turn = groupNodes( rippleLogic, rippleLogic, LOGIC_DOMAIN, new Set( [ waitForFrame, rotatePanel ] ) );
+const turnGroup = rippleLogic.groups[ 0 ];
+turnGroup.name = 'Turn panel';
+exposeGroupSocket( turnGroup, turnGroup.body, nodeGroupsDomain( LOGIC_DOMAIN, rippleLogic.groups, turnGroup ), {
+	node: rotatePanel, direction: 'input', socket: 'y'
+} );
+turnGroup.inputs.in2.label = 'Yaw Degrees';
+const turnReverse = addNode( rippleLogic, turn.type, turn.x, 248 );
+turnReverse.values.in2 = - 22;
+wire( rippleLogic, nodeGroupsDomain( LOGIC_DOMAIN, rippleLogic.groups ), turnLeft, 'then', turnReverse.id, 'in1' );
+await save( '15-reusable-ripples', 'Reusable ripple groups', ripplePanel,
+	'Inspect Geometry Nodes on Ripple panel. Two Ripple pass instances share the same field expression and have separate amplitudes. Shader Graph uses a group to color the elevations. In Play Scene, the left and right arrow keys reuse the same event group with opposite rotation angles.',
+	[ 3.8, 3.5, 5 ], 'WebGPURenderer' );

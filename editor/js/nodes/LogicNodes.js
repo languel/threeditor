@@ -1,5 +1,6 @@
 import { activeGraph, addNode, createGraph, dataflowOrder, indexGraph } from './NodeGraph.js';
 import { numberInput, VALUE_NODES } from './ValueNodes.js';
+import { expandNodeGroups, nodeGroupsDomain } from './NodeGroups.js';
 
 const event = label => ( { label, type: 'event' } );
 const flag = ( label, value = false ) => ( { label, type: 'boolean', default: value } );
@@ -193,6 +194,7 @@ export function createLogicGraph() {
 
 export function planLogicGraph( graph ) {
 
+	graph = expandNodeGroups( graph, LOGIC_DOMAIN );
 	graph = activeGraph( graph, LOGIC_DOMAIN );
 	const index = indexGraph( graph, LOGIC_DOMAIN );
 	validateLogicLinks( index );
@@ -227,9 +229,15 @@ export function planLogicGraph( graph ) {
 export function remapLogicObjects( graph, remap ) {
 
 	if ( ! Array.isArray( graph?.nodes ) ) return;
-	for ( const node of graph.nodes ) {
+	const domain = nodeGroupsDomain( LOGIC_DOMAIN, graph.groups );
+	for ( const group of graph.groups || [] ) for ( const socket of Object.values( group.inputs ) ) {
 
-		const inputs = LOGIC_DOMAIN.nodes.get( node.type )?.inputs;
+		if ( socket.type === 'object' && socket.default ) socket.default = remap( socket.default );
+
+	}
+	for ( const scope of [ graph, ...( graph.groups || [] ).map( group => group.body ) ] ) for ( const node of scope.nodes ) {
+
+		const inputs = domain.nodes.get( node.type )?.inputs;
 		for ( const [ key, spec ] of Object.entries( inputs || {} ) ) {
 
 			if ( spec.type === 'object' && node.values?.[ key ] ) node.values[ key ] = remap( node.values[ key ] );

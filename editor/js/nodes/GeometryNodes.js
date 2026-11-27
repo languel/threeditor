@@ -5,6 +5,7 @@ import { attributeInput, FIELD_NODES, FIELD_OPERATIONS, fieldInput, forEachVerte
 import { createProximity } from './GeometryProximity.js';
 import { distributeOnFaces, realizeInstances, verticesToPoints } from './GeometryScatter.js';
 import { CURVE_NODES, curveOperations } from './GeometryCurves.js';
+import { expandNodeGroups } from './NodeGroups.js';
 
 export const GEOMETRY_MODIFIER = 'GEOMETRY_NODES';
 const sourceType = 'geometry.input';
@@ -178,6 +179,7 @@ export function createGeometryGraph() {
 
 export function planGeometryGraph( graph, domain = GEOMETRY_DOMAIN, depth = 0 ) {
 
+	if ( depth === 0 ) graph = expandNodeGroups( graph, domain );
 	if ( depth > 24 ) throw new Error( 'Geometry Nodes supports up to 24 nested zones.' );
 	const sinks = Array.isArray( graph?.nodes ) ? graph.nodes.filter( node => node?.type === domain.sink ) : [];
 	if ( sinks.length !== 1 ) throw new Error( domain.label + ' needs one ' + domain.nodes.get( domain.sink ).label + '.' );

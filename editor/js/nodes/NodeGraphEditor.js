@@ -2,6 +2,7 @@ import { addNode, bypassNodes, connectNodes, disconnectInput, indexGraph, remove
 import { copyNodes, cutsWire, makeLinks, pasteNodes, swapNode, wireBend } from './NodeGraphEdits.js';
 import { createNodeCatalog } from './NodeCatalog.js';
 import { registerGraphKeyboard } from './GraphKeyboard.js';
+import { exposeGroupSocket, groupNodes, nodeGroupsDomain, removeGroupSocket, ungroupNode } from './NodeGroups.js';
 
 let clipboard;
 
@@ -31,6 +32,10 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	back.hidden = true;
 	const scopeLabel = element( 'span', 'node-graph-scope', toolbar );
 	scopeLabel.hidden = true;
+	const groupName = element( 'input', 'Input node-graph-group-name', toolbar );
+	groupName.setAttribute( 'aria-label', 'Group name' );
+	groupName.maxLength = 64;
+	groupName.hidden = true;
 	const palette = element( 'button', 'Button', toolbar, 'Add node…' );
 	palette.type = 'button';
 	palette.setAttribute( 'aria-label', 'Add node' );
@@ -38,6 +43,13 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	palette.title = 'Add node (Shift+A)';
 	const remove = element( 'button', 'Button', toolbar, 'Delete node' );
 	const frame = element( 'button', 'Button', toolbar, 'Frame all' );
+	const makeGroup = element( 'button', 'Button', toolbar, 'Group selected' );
+	const ungroup = element( 'button', 'Button', toolbar, 'Ungroup' );
+	const expose = element( 'button', 'Button', toolbar, 'Expose socket' );
+	makeGroup.type = ungroup.type = expose.type = 'button';
+	makeGroup.hidden = ungroup.hidden = expose.hidden = true;
+	makeGroup.title = 'Group selected nodes (Ctrl+G)';
+	ungroup.title = 'Ungroup selected instance (Ctrl+Alt+G)';
 	remove.type = frame.type = 'button';
 	const board = element( 'div', 'node-graph-board', dom );
 	board.tabIndex = 0;
@@ -47,42 +59,66 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	const context = wires.getContext( '2d' );
 	const view = { x: 0, y: 0, scale: 1 };
 	let root, graph, domain, editable, armed, gesture, needsFrame, pointer, placement, boxSelect, addAt, addPort, swapId;
+	let currentGroup, ancestors = [];
 	let selected = new Set();
 	const scopePath = [];
 	const cards = new Map();
 	const socketButtons = new WeakMap();
 	const catalog = createNodeCatalog( insertNode, () => { if ( board.isConnected ) board.focus( { preventScroll: true } ); } );
 
+	function scopeInfo( document ) {
+
+		let scope = document, base = rootDomain, group, depth = 0;
+		const parents = [];
+		for ( const id of scopePath ) {
+
+			const node = scope?.nodes.find( item => item.id === id );
+			const nested = document?.groups?.find( entry => entry.id === node?.type );
+			if ( nested ) {
+
+				if ( parents.includes( nested.id ) ) break;
+				scope = nested.body;
+				group = nested;
+				parents.push( nested.id );
+
+			} else {
+
+				const body = base.nodes.get( node?.type )?.bodyDomain?.();
+				if ( ! body || ! node.body ) break;
+				scope = node.body;
+				base = body;
+				group = undefined;
+
+			}
+			depth ++;
+
+		}
+		return { scope, base, group, parents, depth };
+
+	}
+
 	function selectScope( resetView ) {
 
 		placement = undefined;
 		board.removeAttribute( 'data-placing' );
-		graph = root;
-		let nextDomain = rootDomain;
-		for ( let i = 0; i < scopePath.length; i ++ ) {
+		const { scope, base, group, parents, depth } = scopeInfo( root );
+		if ( depth !== scopePath.length ) {
 
-			const node = graph?.nodes.find( item => item.id === scopePath[ i ] );
-			const body = nextDomain.nodes.get( node?.type )?.bodyDomain?.();
-			if ( ! body || ! node.body ) {
-
-				// An undo step can remove a zone while its body is open.
-				scopePath.length = i;
-				resetView = true;
-				break;
-
-			}
-			graph = node.body;
-			nextDomain = body;
+			scopePath.length = depth;
+			resetView = true;
 
 		}
-		if ( domain !== nextDomain ) {
-
-			domain = nextDomain;
-			board.setAttribute( 'aria-label', domain.label + ' canvas' );
-
-		}
-		back.hidden = scopeLabel.hidden = scopePath.length === 0;
-		scopeLabel.textContent = scopePath.length ? domain.label : '';
+		graph = scope;
+		currentGroup = group;
+		ancestors = parents;
+		domain = nodeGroupsDomain( base, root?.groups, group );
+		board.setAttribute( 'aria-label', domain.label + ' canvas' );
+		back.hidden = ! depth;
+		scopeLabel.hidden = ! depth || !! group;
+		scopeLabel.textContent = depth ? domain.label : '';
+		groupName.hidden = ! group;
+		groupName.disabled = ! editable;
+		groupName.value = group?.name || '';
 		if ( resetView ) {
 
 			selected.clear();
@@ -92,6 +128,14 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 		gesture = null;
 		placement = undefined;
 		render();
+
+	}
+
+	function openScope( id ) {
+
+		scopePath.push( id );
+		selectScope( true );
+		board.focus( { preventScroll: true } );
 
 	}
 
@@ -222,7 +266,10 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	function drawSelection() {
 
 		for ( const [ key, card ] of cards ) card.dom.classList.toggle( 'is-selected', selected.has( key ) );
-		remove.disabled = ! editable || ! [ ...selected ].some( id => ! domain.nodes.get( cards.get( id )?.node.type )?.fixed );
+		const ids = removable();
+		remove.disabled = ! editable || ! ids.size;
+		makeGroup.hidden = remove.disabled;
+		ungroup.hidden = ! editable || ! selectedGroup();
 
 	}
 
@@ -238,6 +285,9 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	function arm( port ) {
 
 		armed = port;
+		const definition = domain.nodes.get( cards.get( port?.node )?.node.type );
+		expose.hidden = ! currentGroup || ! editable || ! port || definition.fixed && ! definition.groupInterface;
+		expose.textContent = definition?.groupInterface ? 'Remove socket' : 'Expose socket';
 		for ( const card of cards.values() ) for ( const direction of [ 'input', 'output' ] ) {
 
 			for ( const button of card[ direction ].values() ) {
@@ -258,8 +308,8 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 		try {
 
 			const draft = structuredClone( root );
-			const scope = scopePath.reduce( ( current, id ) => current.nodes.find( node => node.id === id ).body, draft );
-			mutate( scope );
+			const { scope, group } = scopeInfo( draft );
+			mutate( scope, draft, group );
 			onChange( draft, layoutOnly );
 
 		} catch ( error ) {
@@ -304,7 +354,17 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 			else arm( armed === port ? null : port );
 
 		};
-		element( 'span', 'node-graph-socket-label', row, spec.label );
+		if ( def.groupInterface && editable ) {
+
+			const nameInput = element( 'input', 'Input node-graph-interface-name', row );
+			nameInput.value = spec.label;
+			nameInput.maxLength = 100;
+			nameInput.dataset.focus = [ node.id, 'label', name ].join( '/' );
+			nameInput.setAttribute( 'aria-label', 'Rename ' + def.label + ' / ' + spec.label );
+			nameInput.onchange = () => edit( ( scope, draft, group ) => { group[ def.groupInterface ][ name ].label = nameInput.value.trim() || spec.label; } );
+			nameInput.onkeydown = event => { if ( event.key === 'Enter' ) nameInput.blur(); };
+
+		} else element( 'span', 'node-graph-socket-label', row, spec.label );
 		if ( direction !== 'input' ) return;
 		if ( connected ) {
 
@@ -400,18 +460,12 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 				for ( const [ name, spec ] of Object.entries( def.outputs || {} ) ) socketRow( card, node, def, name, spec, 'output', outputs.get( node.id )?.has( name ) ?? false );
 				for ( const [ name, spec ] of Object.entries( def.inputs || {} ) ) socketRow( card, node, def, name, spec, 'input',
 					inputs.get( node.id ).has( name ) && ! mutedInputs.has( node.id + '\0' + name ) );
-				if ( def.bodyDomain && node.body ) {
+				if ( def.group || def.bodyDomain && node.body ) {
 
-					const body = element( 'button', 'Button node-graph-open-body', dom, 'Open body' );
+					const body = element( 'button', 'Button node-graph-open-body', dom, def.group ? 'Edit group' : 'Open body' );
 					body.type = 'button';
-					body.setAttribute( 'aria-label', 'Open ' + def.label + ' body' );
-					body.onclick = () => {
-
-						scopePath.push( node.id );
-						selectScope( true );
-						back.focus( { preventScroll: true } );
-
-					};
+					body.setAttribute( 'aria-label', def.group ? 'Edit ' + def.label : 'Open ' + def.label + ' body' );
+					body.onclick = () => openScope( node.id );
 
 				}
 
@@ -440,7 +494,7 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 		addPort = port;
 		swapId = replace;
 		catalog.show( domain, anchor ? bounds.left + anchor.x : trigger.left, anchor ? bounds.top + anchor.y : trigger.bottom + 4,
-			def => ! port || Object.values( ( port.direction === 'output' ? def.inputs : def.outputs ) || {} ).some( socket => socket.type === port.type ),
+			def => ! ancestors.includes( def.group?.id ) && ( ! port || Object.values( ( port.direction === 'output' ? def.inputs : def.outputs ) || {} ).some( socket => socket.type === port.type ) ),
 			swapId ? 'Swap node' : 'Add node' );
 
 	}
@@ -482,6 +536,43 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 	}
 
 	const removable = () => new Set( [ ...selected ].filter( id => cards.has( id ) && ! domain.nodes.get( cards.get( id ).node.type ).fixed ) );
+	function selectedGroup() {
+
+		if ( selected.size !== 1 ) return;
+		const node = cards.get( selected.values().next().value )?.node;
+		if ( domain.nodes.get( node?.type )?.group ) return node;
+
+	}
+	makeGroup.onclick = () => {
+
+		const ids = removable();
+		if ( ! ids.size ) return;
+		let created;
+		edit( ( scope, draft ) => { created = groupNodes( draft, scope, domain, ids ); } );
+		if ( graph.nodes.some( node => node.id === created?.id ) ) openScope( created.id );
+
+	};
+	ungroup.onclick = () => {
+
+		const node = selectedGroup();
+		if ( node ) edit( draft => {
+
+			const inserted = ungroupNode( draft, domain, draft.nodes.find( item => item.id === node.id ) );
+			selected = new Set( inserted.map( item => item.id ) );
+
+		} );
+
+	};
+	expose.onclick = () => { if ( armed ) edit( ( scope, draft, group ) => {
+
+		const def = domain.nodes.get( cards.get( armed.node ).node.type );
+		if ( def.groupInterface ) removeGroupSocket( draft, group, def.groupInterface, armed.socket );
+		else exposeGroupSocket( group, scope, domain, armed );
+
+	} ); };
+	groupName.onchange = () => edit( ( scope, draft, group ) => { group.name = groupName.value.trim() || group.name; } );
+	groupName.onkeydown = event => { if ( event.key === 'Enter' ) groupName.blur(); };
+
 	function deleteSelected( reconnect = false ) {
 
 		const ids = removable();
@@ -505,27 +596,33 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 
 		const original = graph;
 		const originalSelection = selected;
+		const originalDomain = domain;
+		let library;
 		if ( copies ) {
 
 			graph = structuredClone( graph );
-			selected = pasteNodes( graph, domain, copies, 18, 18 );
+			const destination = { groups: root.groups?.slice() };
+			selected = pasteNodes( graph, domain, copies, 18, 18, destination );
+			library = destination.groups;
+			domain = nodeGroupsDomain( domain, library );
 
 		}
 		if ( ! selected.size ) {
 
 			graph = original;
+			domain = originalDomain;
 			selected = originalSelection;
 			return;
 
 		}
-		startPlacement( original, originalSelection, !! copies, pointer || { x: board.clientWidth / 2, y: board.clientHeight / 2 } );
+		startPlacement( original, originalSelection, !! copies, pointer || { x: board.clientWidth / 2, y: board.clientHeight / 2 }, { originalDomain, library } );
 
 	}
 
-	function startPlacement( original, originalSelection, copies, start ) {
+	function startPlacement( original, originalSelection, copies, start, imports = {} ) {
 
 		placement = {
-			original, originalSelection, copies, start,
+			original, originalSelection, copies, start, ...imports,
 			nodes: graph.nodes.filter( node => selected.has( node.id ) )
 		};
 		board.setAttribute( 'data-placing', '' );
@@ -584,22 +681,23 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 
 	}
 
-	function insertOnWire( draft, { id, input, output, link } ) {
+	function insertOnWire( draft, { id, input, output, link }, definitions = domain ) {
 
 		disconnectInput( draft, link.to );
-		connectNodes( draft, domain, link.from, { node: id, socket: input } );
-		connectNodes( draft, domain, { node: id, socket: output }, link.to );
+		connectNodes( draft, definitions, link.from, { node: id, socket: input } );
+		connectNodes( draft, definitions, { node: id, socket: output }, link.to );
 
 	}
 
 	function finishPlacement( confirm ) {
 
-		const { original, originalSelection, copies, positions, nodes } = placement;
+		const { original, originalSelection, copies, positions, nodes, originalDomain, library } = placement;
 		const preview = graph;
 		const insertion = confirm && insertionFor( positions ?? ( copies ? nodes : undefined ) );
 		placement = undefined;
 		board.removeAttribute( 'data-placing' );
 		graph = original;
+		domain = originalDomain || domain;
 		if ( ! confirm ) {
 
 			selected = originalSelection;
@@ -608,11 +706,14 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 
 		}
 		if ( ! copies && ! positions ) return;
-		edit( draft => {
+		edit( ( draft, document ) => {
 
-			if ( copies ) Object.assign( draft, preview );
+			for ( const group of library || [] ) {
+				if ( ! document.groups?.some( entry => entry.id === group.id ) ) ( document.groups ||= [] ).push( structuredClone( group ) );
+			}
+			if ( copies ) Object.assign( draft, { nodes: preview.nodes, links: preview.links } );
 			if ( positions ) assignPositions( draft, positions );
-			if ( insertion ) insertOnWire( draft, insertion );
+			if ( insertion ) insertOnWire( draft, insertion, nodeGroupsDomain( domain, document.groups ) );
 
 		}, ! copies && ! insertion );
 
@@ -647,6 +748,13 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 
 		}
 		if ( key === 'escape' && ( armed || boxSelect ) ) { arm( null ); boxSelect = false; return true; }
+		if ( key === 'tab' && ! event.shiftKey && ( event.target === board || mod ) ) {
+
+			const group = selectedGroup();
+			if ( group && ! mod ) { openScope( group.id ); return true; }
+			if ( scopePath.length ) { back.onclick(); return true; }
+
+		}
 		if ( key === 'home' ) { frameAll(); return true; }
 		if ( event.code === 'NumpadDecimal' ) { frameAll( true ); return true; }
 		if ( key === 'a' && ! event.shiftKey && ! mod ) {
@@ -657,12 +765,13 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 
 		}
 		if ( key === 'b' && ! mod ) { boxSelect = true; return true; }
-		if ( mod && key === 'c' && selected.size ) { clipboard = copyNodes( graph, selected ); return true; }
+		if ( mod && key === 'c' && selected.size ) { clipboard = copyNodes( graph, selected, root.groups ); return true; }
 		if ( ! editable ) return false;
 		if ( ! mod && ( key === 'a' && event.shiftKey || key === 'f3' ) ) openCatalog();
+		else if ( mod && key === 'g' ) ( event.altKey ? ungroup : makeGroup ).onclick();
 		else if ( key === 'x' || key === 'delete' || key === 'backspace' ) deleteSelected( key === 'x' && mod );
 		else if ( ! mod && key === 'g' && selected.size ) beginPlacement();
-		else if ( ! mod && key === 'd' && event.shiftKey && removable().size ) beginPlacement( copyNodes( graph, removable() ) );
+		else if ( ! mod && key === 'd' && event.shiftKey && removable().size ) beginPlacement( copyNodes( graph, removable(), root.groups ) );
 		else if ( ! mod && key === 's' && event.shiftKey && removable().size === 1 ) openCatalog( undefined, undefined, [ ...removable() ][ 0 ] );
 		else if ( mod && key === 'v' && clipboard ) beginPlacement( clipboard );
 		else if ( ! mod && ( key === 'j' || key === 'f' ) && selected.size > 1 ) edit( draft => {

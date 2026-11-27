@@ -1,19 +1,25 @@
 import { addNode, connectNodes, validateSocketValue } from './NodeGraph.js';
+import { copiedGroupDefinitions, importGroupDefinitions, nodeGroupsDomain } from './NodeGroups.js';
 
-export function copyNodes( graph, ids ) {
+export function copyNodes( graph, ids, catalog = graph.groups ) {
 
+	const nodes = graph.nodes.filter( node => ids.has( node.id ) );
 	return structuredClone( {
 		domain: graph.domain,
-		nodes: graph.nodes.filter( node => ids.has( node.id ) ),
+		nodes,
+		groups: copiedGroupDefinitions( nodes, catalog ),
 		links: graph.links.filter( link => ids.has( link.from.node ) && ids.has( link.to.node ) )
 	} );
 
 }
 
-export function pasteNodes( graph, domain, clipboard, dx, dy ) {
+export function pasteNodes( graph, domain, clipboard, dx, dy, root = graph ) {
 
+	const groups = ( clipboard.groups || [] ).filter( group => group.body.domain.split( '.' )[ 0 ] === domain.id.split( '.' )[ 0 ] );
+	const sources = importGroupDefinitions( root, groups, clipboard.nodes );
+	domain = nodeGroupsDomain( domain, root.groups );
 	const ids = new Map();
-	for ( const source of clipboard.nodes ) {
+	for ( const source of sources ) {
 
 		if ( ! domain.nodes.has( source.type ) || domain.nodes.get( source.type ).fixed ||
 			( source.body && source.body.domain !== domain.nodes.get( source.type ).bodyDomain?.().id ) ) continue;
