@@ -1,6 +1,7 @@
 import { armatureOf, bonePoseOffsets, bonePoseTransform, findBone, resetBoneTransform } from '../rigging/Armature.js';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
-import { boneConstraint, constraintSettings, constraintTypes, resolveBoneConstraint } from '../rigging/ArmatureConstraints.js';
+import { findConstraint, constraintSettings, constraintTypes, resolveConstraint } from '../rigging/ArmatureConstraints.js';
+import { switchedParentStack } from '../rigging/ConstraintParenting.js';
 import { armatureVertexWeights, weightsForVertexEdits } from '../rigging/ArmatureDeformation.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
@@ -158,8 +159,23 @@ export class LogicRuntime {
 			}
 			case 'logic.boneConstraint': {
 
-				const settings = constraintSettings( boneConstraint( this.target( instance, inputs.target ), inputs.name.trim() ) );
+				const settings = constraintSettings( findConstraint( this.target( instance, inputs.target ), inputs.name.trim() ) );
 				return { found: !! settings, muted: settings?.muted ?? false, influence: settings?.influence ?? 0 };
+
+			}
+			case 'logic.evaluatedTransform': {
+
+				const object = this.target( instance, inputs.target );
+				const position = new this.THREE.Vector3(), rotation = new this.THREE.Quaternion(), scale = new this.THREE.Vector3( 1, 1, 1 );
+				if ( object ) withArmaturePose( this.THREE, this.scene, () => {
+
+					object.updateWorldMatrix( true, false );
+					position.setFromMatrixPosition( object.matrixWorld );
+					if ( object.matrixWorld.determinant() ) object.matrixWorld.decompose( position, rotation, scale );
+
+				} );
+				const euler = new this.THREE.Euler().setFromQuaternion( rotation.normalize() );
+				return { position: position.toArray(), rotation: [ euler.x / degrees, euler.y / degrees, euler.z / degrees ], scale: scale.toArray() };
 
 			}
 			case 'logic.boolean': return { value: inputs.value };
@@ -317,19 +333,24 @@ export class LogicRuntime {
 				if ( object.isBone && object.userData.armatureIK ) object.userData.armatureIK.influence = inputs.influence;
 				break;
 			case 'logic.setConstraintInfluence':
-				this.changeBoneConstraint( object, inputs.name, { influence: inputs.influence, muted: inputs.muted } );
+				this.changeConstraint( object, inputs.name, { influence: inputs.influence, muted: inputs.muted } );
 				break;
 			case 'logic.setConstraintTarget': {
 
-				const constraint = constraintSettings( boneConstraint( object, inputs.name.trim() ) );
+				const constraint = constraintSettings( findConstraint( object, inputs.name.trim() ) );
 				if ( constraint && constraintTypes[ constraint.type ].target && ( inputs.clear || inputs.source ) ) {
 
-					this.changeBoneConstraint( object, inputs.name, { target: inputs.clear ? '' : inputs.source } );
+					const target = inputs.clear ? '' : inputs.source;
+					if ( target !== constraint.target ) this.changeConstraint( object, inputs.name,
+						constraint.type === 'childOf' ? { target, inverse: null } : { target } );
 
 				}
 				break;
 
 			}
+			case 'logic.switchConstraintParent':
+				object.userData.armatureConstraints = switchedParentStack( this.THREE, this.scene, object, inputs.name.trim(), inputs.source || undefined );
+				break;
 			case 'logic.setBoneWeight': {
 
 				const binding = object.userData.armatureBinding;
@@ -378,22 +399,22 @@ export class LogicRuntime {
 
 	}
 
-	changeBoneConstraint( bone, name, patch ) {
+	changeConstraint( object, name, patch ) {
 
-		const previous = boneConstraint( bone, name.trim() );
+		const previous = findConstraint( object, name.trim() );
 		if ( ! previous || Object.entries( patch ).every( ( [ key, value ] ) => previous[ key ] === value ) ) return;
 		const next = constraintSettings( { ...previous, ...patch } );
 		if ( ! next ) return;
 		if ( patch.target ) {
 
-			const result = resolveBoneConstraint( this.scene, bone, next );
+			const result = resolveConstraint( this.scene, object, next );
 			if ( result.error ) throw new Error( result.error );
 
 		}
-		const stack = bone.userData.armatureConstraints.map( entry => entry === previous ? next : entry );
+		const stack = object.userData.armatureConstraints.map( entry => entry === previous ? next : entry );
 		const connects = ! next.muted && next.influence && ( previous.muted || ! previous.influence || previous.target !== next.target );
-		if ( connects && hasConstraintDependencyCycle( this.scene, bone, stack ) ) throw new Error( 'Bone constraint targets create a dependency cycle.' );
-		bone.userData.armatureConstraints = stack;
+		if ( connects && hasConstraintDependencyCycle( this.scene, object, stack ) ) throw new Error( 'Constraint targets create a dependency cycle.' );
+		object.userData.armatureConstraints = stack;
 
 	}
 

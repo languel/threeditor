@@ -2865,6 +2865,7 @@ body[data-ui-style="compact"] .scene-timeline-bar input[type="number"] { width: 
 .bone-constraints .Row > button { flex: 0 0 22px; padding: 2px; }
 .bone-constraints .Row > button svg { width: 14px; height: 14px; vertical-align: middle; }
 .bone-constraints output { display: block; white-space: normal; }
+.constraint-parent-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 
 #toolbar .transform-magnet[aria-pressed="true"] {
 	color: var(--theme-accent);

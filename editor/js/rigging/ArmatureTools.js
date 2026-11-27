@@ -14,7 +14,8 @@ import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeform
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
 import { ikSettings, resolveIK } from './ArmatureIK.js';
 import { hasConstraintDependencyCycle, hasIKDependencyCycle, withArmaturePose } from './ArmaturePose.js';
-import { constraintSettings, constraintTypes, resolveBoneConstraint } from './ArmatureConstraints.js';
+import { canOwnConstraints, constraintSettings, constraintTypes, resolveConstraint } from './ArmatureConstraints.js';
+import { switchedParentStack, withChildInverse } from './ConstraintParenting.js';
 import { createEmpty } from '../modeling/ReferenceObjects.js';
 
 function editable( editor, object ) {
@@ -357,9 +358,16 @@ export function setBoneIK( editor, bone, value ) {
 
 export function setBoneConstraints( editor, bone, input ) {
 
-	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! armatureOf( bone ) ) throw new Error( 'Select an editable authored bone.' );
-	if ( ! Array.isArray( input ) ) throw new Error( 'Provide the bone’s constraints as an ordered array.' );
-	const existing = bone.userData.armatureConstraints ?? [];
+	if ( ! bone?.userData.armatureBone ) throw new Error( 'Select an authored bone.' );
+	return setConstraintStack( editor, bone, input );
+
+}
+
+export function setConstraintStack( editor, owner, input, { autoKey = false } = {} ) {
+
+	if ( ! editable( editor, owner ) || ! canOwnConstraints( owner ) || ! owner.matrixAutoUpdate ) throw new Error( 'Select an editable scene object or authored bone.' );
+	if ( ! Array.isArray( input ) ) throw new Error( 'Provide the object’s constraints as an ordered array.' );
+	const existing = owner.userData.armatureConstraints ?? [];
 	const ids = new Set(), names = new Set();
 	const stack = input.map( item => {
 
@@ -368,29 +376,43 @@ export function setBoneConstraints( editor, bone, input ) {
 		let name = item?.name ?? label;
 		if ( item?.name === undefined ) for ( let suffix = 2; names.has( name ); suffix ++ ) name = label + ' ' + suffix;
 		const settings = constraintSettings( { ...item, id, name } );
-		if ( ! settings ) throw new Error( 'Use valid settings for each bone constraint.' );
-		if ( ids.has( settings.id ) || names.has( settings.name ) ) throw new Error( 'Each constraint on a bone needs a unique ID and name.' );
+		if ( ! settings ) throw new Error( 'Use valid settings for each constraint.' );
+		if ( ids.has( settings.id ) || names.has( settings.name ) ) throw new Error( 'Each constraint on an object needs a unique ID and name.' );
 		ids.add( settings.id );
 		names.add( settings.name );
 		const previous = Array.isArray( existing ) && existing.find( entry => entry?.id === settings.id );
+		if ( settings.ownerSpace === 'pose' && ! armatureOf( owner ) ) throw new Error( 'Pose space needs an armature or a bone owner.' );
 		if ( settings.target && ( settings.target !== previous?.target || settings.targetSpace !== previous?.targetSpace ) ) {
 
-			const result = resolveBoneConstraint( editor.scene, bone, settings );
+			const result = resolveConstraint( editor.scene, owner, settings );
 			if ( result.error ) throw new Error( result.error );
 
 		}
 		return settings;
 
 	} );
-	if ( hasConstraintDependencyCycle( editor.scene, bone, stack ) ) throw new Error( 'This stack would create a cycle with another bone constraint or IK chain.' );
+	if ( hasConstraintDependencyCycle( editor.scene, owner, stack ) ) throw new Error( 'This stack would create a cycle with another constraint or IK chain.' );
 	if ( JSON.stringify( stack ) === JSON.stringify( existing ) ) return stack;
-	const userData = { ...bone.userData };
+	const userData = { ...owner.userData };
 	if ( stack.length ) userData.armatureConstraints = stack;
 	else delete userData.armatureConstraints;
-	const command = new SetValueCommand( editor, bone, 'userData', userData );
+	const command = new SetValueCommand( editor, owner, 'userData', userData );
 	command.updatable = false;
-	editor.history.execute( command, 'Edit Bone Constraints' );
+	if ( autoKey ) editor.execute( command, 'Edit Constraints' );
+	else editor.history.execute( command, 'Edit Constraints' );
 	return stack;
+
+}
+
+export function setChildInverse( editor, owner, id, clear ) {
+
+	return setConstraintStack( editor, owner, withChildInverse( THREE, editor.scene, owner, id, clear ) );
+
+}
+
+export function switchConstraintParent( editor, owner, id, target ) {
+
+	return setConstraintStack( editor, owner, switchedParentStack( THREE, editor.scene, owner, id, target ) );
 
 }
 

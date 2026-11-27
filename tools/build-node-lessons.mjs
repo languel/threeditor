@@ -734,3 +734,75 @@ for ( const [ key, muted, y ] of [ [ 'Space', true, 682 ], [ 'KeyR', false, 816 
 await save( '20-bone-constraints', 'A tracking boom', boomRig,
 	'Select Carriage and open Bone Constraints in the Armature tab. Follow rail copies the X coordinate. Rail stops clamps it. Aim boom points the attached lamp and spotlight toward Aim target. In Play Scene, Left and Right Arrow slide the carriage, Up and Down Arrow move the aim target, Space mutes tracking, and R restores it.',
 	[ 2.75, 1.55, 4.6 ] );
+
+const sender = createArmature( THREE, 'Sender rig' );
+const receiver = createArmature( THREE, 'Receiver rig' );
+const grips = [ sender.children[ 0 ], receiver.children[ 0 ] ];
+for ( const [ i, rig ] of [ sender, receiver ].entries() ) {
+
+	rig.position.set( i ? 1.18 : - 1.18, -.75, 0 );
+	const color = i ? 0xff9065 : 0x56c8bf;
+	const stand = new THREE.Mesh( new THREE.CylinderGeometry( .18, .28, .25, 16 ), new THREE.MeshStandardMaterial( { color: 0x445261 } ) );
+	stand.name = 'Pedestal';
+	rig.add( stand );
+	const grip = grips[ i ];
+	grip.name = i ? 'Receiver' : 'Sender';
+	const arm = new THREE.Mesh( new THREE.CylinderGeometry( .058, .095, .88, 16 ), new THREE.MeshStandardMaterial( { color } ) );
+	arm.name = 'Grip arm';
+	arm.position.y = .49;
+	const tip = new THREE.Mesh( new THREE.TorusGeometry( .13, .025, 10, 26 ), new THREE.MeshStandardMaterial( { color, roughness: .36 } ) );
+	tip.name = 'Grip marker';
+	tip.position.y = 1;
+	grip.add( arm, tip );
+
+}
+
+const parcel = new THREE.Group();
+parcel.name = 'Parcel';
+parcel.position.set( - .43, .46, .16 );
+const caseMesh = new THREE.Mesh( new THREE.BoxGeometry( .42, .29, .28 ),
+	new THREE.MeshStandardMaterial( { color: 0x456ee3, roughness: .37 } ) );
+caseMesh.name = 'Parcel shell';
+caseMesh.castShadow = true;
+const seal = new THREE.Mesh( new THREE.SphereGeometry( .045, 14, 8 ),
+	new THREE.MeshStandardMaterial( { color: 0xf9cf65, emissive: 0x9c561b } ) );
+seal.name = 'Parcel seal';
+seal.position.set( 0, 0, .146 );
+const paintedLabel = modelObject( THREE, {
+	kind: 'path', points: [ [ -.15, -.07, .145 ], [ -.06, .072, .145 ], [ .045, -.067, .145 ], [ .146, .063, .145 ] ],
+	smooth: false, pencilBrush: { color: '#fce9aa', size: .026, strength: 1, hardness: .9, grain: 0 }
+}, 'Pencil label' );
+const seam = modelObject( THREE, {
+	kind: 'path', points: [ [ -.176, .106, .148 ], [ 0, .116, .148 ], [ .176, .106, .148 ] ], smooth: true
+}, 'Curve seam' );
+const parcelLight = new THREE.PointLight( 0xffcf85, .7, 1.75 );
+parcelLight.name = 'Parcel lamp';
+parcelLight.position.set( 0, .06, .24 );
+const parcelCamera = new THREE.PerspectiveCamera( 47, 16 / 9, .05, 100 );
+parcelCamera.name = 'Parcel camera';
+parcelCamera.position.set( 0, .24, .42 );
+parcelCamera.rotation.x = -.38;
+parcel.add( caseMesh, seal, paintedLabel, seam, parcelLight, parcelCamera );
+for ( const rig of [ sender, receiver ] ) rig.updateMatrixWorld( true );
+parcel.userData.armatureConstraints = grips.map( ( bone, i ) => ( {
+	id: i ? 'receiver' : 'sender', name: i ? 'Receiver grip' : 'Sender grip', type: 'childOf', target: bone.uuid,
+	headTail: 1, influence: i ? 0 : 1, inverse: bone.matrixWorld.clone().multiply( new THREE.Matrix4().makeTranslation( 0, 1, 0 ) ).invert().toArray()
+} ) );
+const handoff = parcel.userData.logicGraph = createLogicGraph();
+removeNode( handoff, 'logic.start' );
+for ( const [ i, [ key, type, options ] ] of [
+	[ 'ArrowLeft', 'logic.rotate', { target: grips[ 0 ].uuid, z: - 15 } ],
+	[ 'ArrowRight', 'logic.rotate', { target: grips[ 1 ].uuid, z: 15 } ],
+	[ 'Space', 'logic.switchConstraintParent', { name: 'Receiver grip' } ],
+	[ 'KeyR', 'logic.switchConstraintParent', { name: 'Sender grip' } ]
+].entries() ) {
+
+	const y = 32 + 122 * i;
+	const input = logicNode( handoff, 'logic.keyDown', 28, y, { key } );
+	const action = logicNode( handoff, type, 315, y, options );
+	wire( handoff, LOGIC_DOMAIN, input, 'then', action, 'run' );
+
+}
+await save( '21-child-of-handoff', 'A prop handoff', [ sender, receiver, parcel ],
+	'Select Parcel and open Constraints. In Play Scene, Left Arrow moves the sender grip, Space hands the parcel to the receiver without a jump, Right Arrow tests the new grip, and R switches back. The parcel carries a mesh, Pencil label, curve, light, and camera.',
+	[ 1.9, 1.45, 4.45 ] );

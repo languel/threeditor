@@ -3,10 +3,11 @@ import { hasRestriction } from './ObjectRestrictions.js';
 import { UIPanel } from './libs/ui.js';
 import { icon } from './Glyphs.js';
 import { armatureOf } from './rigging/Armature.js';
+import { addTimelineKey } from './animation/TimelineKeyControl.js';
 import {
-	AXES, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveBoneConstraint, trackAxes
+	AXES, canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes
 } from './rigging/ArmatureConstraints.js';
-import { setBoneConstraints } from './rigging/ArmatureTools.js';
+import { setChildInverse, setConstraintStack, switchConstraintParent } from './rigging/ArmatureTools.js';
 
 const labels = {
 	world: 'World Space', local: 'Local Space', pose: 'Pose Space',
@@ -14,18 +15,31 @@ const labels = {
 	inside: 'Inside', outside: 'Outside', surface: 'On Surface'
 };
 
-export function SidebarBoneConstraints( editor, run ) {
+export function SidebarConstraints( editor, run ) {
+
+	const objectMode = ! run;
+	const report = document.createElement( 'output' );
+	report.setAttribute( 'aria-live', 'polite' );
+	run ??= action => {
+
+		report.textContent = '';
+		try { action(); }
+		catch ( error ) { report.textContent = error.message; }
+
+	};
+	const heading = objectMode ? 'Object Constraints' : 'Bone Constraints';
 
 	const panel = new UIPanel().setClass( 'bone-constraints' );
 	const section = document.createElement( 'details' );
 	const title = document.createElement( 'summary' );
-	title.textContent = 'Bone Constraints';
+	title.textContent = heading;
 	section.append( title );
 	panel.dom.append( section );
+	if ( objectMode ) panel.dom.append( report );
 	const body = document.createElement( 'div' );
 	section.append( body );
 
-	let bone, saved, active, context;
+	let owner, saved, active, context;
 
 	function append( type, label, host ) {
 
@@ -87,19 +101,20 @@ export function SidebarBoneConstraints( editor, run ) {
 
 	function stack() {
 
-		return Array.isArray( saved ) ? saved.filter( entry => constraintSettings( entry ) ) : [];
+		const current = owner?.userData.armatureConstraints;
+		return Array.isArray( current ) ? current.filter( entry => constraintSettings( entry ) ) : [];
 
 	}
 
-	function commit( value, index ) {
+	function commit( value, index, autoKey ) {
 
 		run( () => {
 
 			try {
 
-				const next = setBoneConstraints( editor, bone, value );
+				const next = setConstraintStack( editor, owner, value, { autoKey } );
 				active = next[ index ]?.id;
-				saved = bone.userData.armatureConstraints;
+				saved = owner.userData.armatureConstraints;
 
 			} finally {
 
@@ -114,27 +129,27 @@ export function SidebarBoneConstraints( editor, run ) {
 	function draw() {
 
 		body.replaceChildren();
-		if ( ! bone ) return;
+		if ( ! owner ) return;
 		const items = stack();
-		title.textContent = items.length ? 'Bone Constraints (' + items.length + ')' : 'Bone Constraints';
-		const locked = hasRestriction( bone, 'locked' ) || hasRestriction( bone, 'disabled' );
-		const dynamic = bone.userData.armaturePhysics?.mode === 'dynamic';
+		title.textContent = items.length ? heading + ' (' + items.length + ')' : heading;
+		const locked = hasRestriction( owner, 'locked' ) || hasRestriction( owner, 'disabled' );
+		const dynamic = owner.userData.armaturePhysics?.mode === 'dynamic';
 		const fieldset = append( 'fieldset', 'Constraint settings', body );
 		fieldset.disabled = locked;
 		const withRow = ( label, ...fields ) => row( fieldset, label, ...fields );
-		const add = select( 'Add Bone Constraint',
+		const add = select( objectMode ? 'Add Object Constraint' : 'Add Bone Constraint',
 			[ [ '', 'Add Constraint…' ], ...Object.entries( constraintTypes ).map( ( [ type, value ] ) => [ type, value.label ] ) ], '',
-			type => { if ( type ) commit( [ ...items, { type } ], items.length ); } );
+			type => { if ( type ) commit( [ ...stack(), { type } ], items.length ); } );
 		add.disabled = dynamic;
 		withRow( 'Add', add );
 		const index = Math.max( 0, items.findIndex( item => item.id === active ) );
 		const current = constraintSettings( items[ index ] );
 		if ( ! current ) return;
 		active = current.id;
-		const set = patch => commit( items.map( ( item, i ) => i === index ? { ...item, ...patch } : item ), index );
+		const set = patch => commit( stack().map( item => item.id === current.id ? { ...item, ...patch } : item ), index, Object.hasOwn( patch, 'influence' ) );
 		const shift = by => {
 
-			const reordered = items.slice();
+			const reordered = stack();
 			[ reordered[ index ], reordered[ index + by ] ] = [ reordered[ index + by ], reordered[ index ] ];
 			commit( reordered, index + by );
 
@@ -146,36 +161,38 @@ export function SidebarBoneConstraints( editor, run ) {
 
 		} ), button( 'Move Constraint Up', 'up', ! index, () => shift( - 1 ) ),
 		button( 'Move Constraint Down', 'down', index === items.length - 1, () => shift( 1 ) ),
-		button( 'Remove Constraint', 'remove', false, () => commit( items.filter( ( _, i ) => i !== index ), Math.min( index, items.length - 2 ) ) ) );
+		button( 'Remove Constraint', 'remove', false, () => commit( stack().filter( item => item.id !== current.id ), Math.min( index, items.length - 2 ) ) ) );
 		withRow( 'Name', field( 'Constraint Name', 'text', current.name, name => set( { name } ) ) );
-		withRow( 'Influence', field( 'Constraint Influence', 'number', current.influence, influence => set( { influence } ), { min: 0, max: 1, step: .05 } ),
-			field( 'Mute Constraint', 'checkbox', current.muted, muted => set( { muted } ), { title: 'Mute Constraint' } ) );
+		const influence = field( 'Constraint Influence', 'number', current.influence, value => set( { influence: value } ), { min: 0, max: 1, step: .05 } );
+		withRow( 'Influence', influence, field( 'Mute Constraint', 'checkbox', current.muted, muted => set( { muted } ), { title: 'Mute Constraint' } ) );
+		const keyTarget = { kind: 'constraint', object: owner.uuid, constraintId: current.id, property: 'influence' };
+		addTimelineKey( editor, influence, 'Constraint Influence', () => keyTarget, { display: value => { influence.value = value; } } );
 		const definition = constraintTypes[ current.type ];
 		const pick = ( label, key, values ) => select( label, values.map( value => [ value, labels[ value ] ?? value ] ), current[ key ], value => set( { [ key ]: value } ) );
-		const result = resolveBoneConstraint( editor.scene, bone, current );
+		const result = resolveConstraint( editor.scene, owner, current );
 		if ( definition.target ) {
 
 			const options = [ [ '', 'None' ] ];
 			editor.scene.traverse( object => {
 
-				if ( object === editor.scene || object.userData.runtimeOnly || bone.getObjectById( object.id ) ||
+				if ( object === editor.scene || object.userData.runtimeOnly || owner.getObjectById( object.id ) ||
 					hasRestriction( object, 'disabled' ) || current.targetSpace === 'pose' && ! armatureOf( object ) ) return;
 				const label = object.isBone ? ( armatureOf( object )?.name || 'Bone' ) + ' / ' + object.name : object.name || object.type;
 				options.push( [ object.uuid, label ] );
 
 			} );
 			if ( current.target && ! options.some( ( [ id ] ) => id === current.target ) ) options.push( [ current.target, 'Unavailable Target' ] );
-			withRow( 'Target', select( 'Constraint Target', options, current.target, target => set( { target } ) ) );
+			withRow( 'Target', select( 'Constraint Target', options, current.target, target => set( current.type === 'childOf' ? { target, inverse: null } : { target } ) ) );
 			if ( result.target?.isBone && definition.channel !== 'rotation' && definition.channel !== 'scale' ) {
 
-				withRow( 'Head / Tail', field( 'Target Head to Tail', 'number', current.headTail, headTail => set( { headTail } ), { min: 0, max: 1, step: .05 } ) );
+				withRow( 'Head / Tail', field( 'Target Head to Tail', 'number', current.headTail, headTail => set( current.type === 'childOf' ? { headTail, inverse: null } : { headTail } ), { min: 0, max: 1, step: .05 } ) );
 
 			}
 
 		}
 		if ( definition.channel ) {
 
-			withRow( 'Owner', pick( 'Owner Space', 'ownerSpace', constraintSpaces ) );
+			withRow( 'Owner', pick( 'Owner Space', 'ownerSpace', armatureOf( owner ) ? constraintSpaces : constraintSpaces.slice( 0, 2 ) ) );
 			if ( definition.target ) withRow( 'Target Space', pick( 'Target Space', 'targetSpace', constraintSpaces ) );
 
 		}
@@ -227,6 +244,28 @@ export function SidebarBoneConstraints( editor, run ) {
 			withRow( 'Distance', field( 'Distance', 'number', current.distance, distance => set( { distance } ), { min: 0, step: 'any' } ) );
 
 		}
+		if ( current.type === 'childOf' ) {
+
+			const actions = document.createElement( 'div' );
+			actions.className = 'constraint-parent-actions';
+			for ( const [ label, action, disabled ] of [
+				[ 'Set Inverse', () => setChildInverse( editor, owner, current.id ), ! result.target ],
+				[ 'Clear Inverse', () => setChildInverse( editor, owner, current.id, true ), ! current.inverse ],
+				[ 'Switch Parent', () => switchConstraintParent( editor, owner, current.id ), ! result.target ]
+			] ) {
+
+				const button = document.createElement( 'button' );
+				button.type = 'button';
+				button.className = 'Button';
+				button.textContent = label;
+				button.disabled = disabled;
+				button.onclick = () => run( action );
+				actions.append( button );
+
+			}
+			withRow( 'Parent', actions );
+
+		}
 		if ( result.error ) {
 
 			const output = append( 'output', 'Constraint Status', fieldset );
@@ -238,24 +277,31 @@ export function SidebarBoneConstraints( editor, run ) {
 
 	panel.setObject = object => {
 
-		const next = object?.userData.armatureBone ? object : null;
+		const next = canOwnConstraints( object ) && ( objectMode ? ! object.isBone : object.isBone ) ? object : null;
 		const nextStack = next?.userData.armatureConstraints;
 		const nextContext = next && [ hasRestriction( next, 'locked' ), hasRestriction( next, 'disabled' ), next.userData.armaturePhysics?.mode ].join( '/' );
-		if ( next === bone && nextStack === saved && context === nextContext ) return;
-		if ( next !== bone ) {
+		if ( next === owner && nextStack === saved && context === nextContext ) return;
+		if ( next !== owner ) {
 
 			active = null;
-			section.open = Array.isArray( nextStack ) && nextStack.length > 0;
+			section.open = objectMode || Array.isArray( nextStack ) && nextStack.length > 0;
 
 		}
-		bone = next;
+		owner = next;
 		saved = nextStack;
 		context = nextContext;
-		panel.setDisplay( bone ? '' : 'none' );
+		panel.setDisplay( owner ? '' : 'none' );
 		draw();
 
 	};
-	editor.signals.sceneGraphChanged.add( () => { if ( bone && section.open ) draw(); } );
+	editor.signals.sceneGraphChanged.add( () => { if ( owner && section.open ) draw(); } );
+	if ( objectMode ) {
+
+		editor.signals.objectSelected.add( panel.setObject );
+		editor.signals.objectChanged.add( object => { if ( object === owner ) panel.setObject( object ); } );
+		panel.setObject( editor.selected );
+
+	}
 	return panel;
 
 }

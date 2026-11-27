@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { bonePoseOffsets, boneRestFromPoints, createArmature, createBone } from '../editor/js/rigging/Armature.js';
-import { constraintSettings, resolveBoneConstraint } from '../editor/js/rigging/ArmatureConstraints.js';
+import { constraintSettings, resolveConstraint } from '../editor/js/rigging/ArmatureConstraints.js';
 import { withArmatureDeformation } from '../editor/js/rigging/ArmatureDeformation.js';
 import { prepareArmaturePhysics } from '../editor/js/rigging/ArmaturePhysics.js';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../editor/js/rigging/ArmaturePose.js';
@@ -175,7 +175,7 @@ test( 'IK reads evaluated targets, follows local stacks on its chain, and reject
 	assert.equal( hasConstraintDependencyCycle( scene, control, cycle ), true );
 	const downstream = new THREE.Object3D();
 	bone.add( downstream );
-	assert.match( resolveBoneConstraint( scene, bone, constraint( 'dampedTrack', { target: downstream.uuid } ) ).error, /descendants/ );
+	assert.match( resolveConstraint( scene, bone, constraint( 'dampedTrack', { target: downstream.uuid } ) ).error, /descendants/ );
 
 } );
 

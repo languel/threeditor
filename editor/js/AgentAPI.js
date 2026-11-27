@@ -14,8 +14,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
 import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
-import { constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveBoneConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
+import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
 
@@ -100,26 +100,27 @@ function AgentAPI( editor ) {
  } );
  const unitNumber = description => ( { type: 'number', minimum: 0, maximum: 1, description } );
  const limits = description => ( { type: 'array', items: { type: [ 'number', 'null' ] }, minItems: 3, maxItems: 3, description } );
- add( 'bone_get_constraints', 'Inspect a bone’s ordered constraint stack and its target availability.', {
-  uuid: { ...str, description: 'Authored bone UUID.' }
- }, [ 'uuid' ], a => {
+ const readConstraints = owner => {
 
-  const bone = object( a.uuid );
-  if ( ! bone.userData.armatureBone ) throw new Error( 'Expected an authored bone.' );
-  const stack = Array.isArray( bone.userData.armatureConstraints ) ? bone.userData.armatureConstraints : [];
-  return { uuid: bone.uuid, constraints: stack, status: stack.map( entry => ( {
-   id: entry?.id, error: resolveBoneConstraint( editor.scene, bone, constraintSettings( entry ) ).error ?? null
+  if ( ! canOwnConstraints( owner ) ) throw new Error( 'Expected a scene object or authored bone.' );
+  const stack = Array.isArray( owner.userData.armatureConstraints ) ? owner.userData.armatureConstraints : [];
+  const evaluatedWorld = withArmaturePose( THREE, editor.scene, () => {
+
+   owner.updateWorldMatrix( true, false );
+   return owner.matrixWorld.toArray();
+
+  } );
+  return { uuid: owner.uuid, evaluatedWorld, constraints: stack, status: stack.map( entry => ( {
+   id: entry?.id, error: resolveConstraint( editor.scene, owner, constraintSettings( entry ) ).error ?? null
   } ) ) };
 
- }, true );
- add( 'bone_set_constraints', 'Replace a bone’s ordered constraint stack with one undoable edit. An empty array clears the stack. IK solves after constraints on its chain.', {
-  uuid: { ...str, description: 'Authored bone UUID.' },
-  constraints: {
+ };
+ const constraintArray = {
    type: 'array', items: {
     type: 'object', required: [ 'type' ], additionalProperties: false, properties: {
      type: { ...str, enum: Object.keys( constraintTypes ) },
      id: { ...str, description: 'Stable constraint ID. Omit to assign a new ID.' },
-     name: { ...str, description: 'Unique name on this bone. Defaults to the constraint label.' },
+     name: { ...str, description: 'Unique name on this object or bone. Defaults to the constraint label.' },
      target: { ...str, description: 'Target scene object or bone UUID. An empty value leaves a target unassigned.' },
      headTail: unitNumber( 'Target point on a bone from head (0) to tail (1).' ),
      ownerSpace: { ...str, enum: constraintSpaces }, targetSpace: { ...str, enum: constraintSpaces },
@@ -131,16 +132,53 @@ function AgentAPI( editor ) {
      max: limits( 'Upper bounds for X, Y, Z. Null disables that axis bound. Rotations use radians.' ),
      trackAxis: { ...str, enum: trackAxes },
      distance: { type: 'number', minimum: 0 }, mode: { ...str, enum: distanceModes },
+     inverse: { anyOf: [ { type: 'null' }, { type: 'array', items: { type: 'number' }, minItems: 16, maxItems: 16 } ],
+      description: 'Child Of inverse matrix in column-major order. Null clears the inverse.' },
      influence: unitNumber( 'Blend strength from zero to one.' ), muted: { type: 'boolean' }
     }
    }
-  }
+  };
+
+ add( 'bone_get_constraints', 'Inspect a bone’s ordered constraint stack and its target availability.', {
+  uuid: { ...str, description: 'Authored bone UUID.' }
+ }, [ 'uuid' ], a => {
+
+  const bone = object( a.uuid );
+  if ( ! bone.userData.armatureBone ) throw new Error( 'Expected an authored bone.' );
+  return readConstraints( bone );
+
+ }, true );
+ add( 'bone_set_constraints', 'Replace a bone’s ordered constraint stack in one undo step. An empty array clears the stack.', {
+  uuid: { ...str, description: 'Authored bone UUID.' }, constraints: constraintArray
  }, [ 'uuid', 'constraints' ], a => {
 
   const bone = object( a.uuid );
   return { uuid: bone.uuid, constraints: setBoneConstraints( editor, bone, a.constraints ) };
 
  } );
+ const constraintOwner = { ...str, description: 'Owner UUID for a scene object or authored bone.' };
+ const constraintName = { ...str, description: 'Constraint name or stable ID on that owner.' };
+ add( 'constraint_get_stack', 'Inspect a scene object or bone’s ordered constraint stack, target availability, and evaluated world matrix.', {
+  uuid: constraintOwner
+ }, [ 'uuid' ], a => readConstraints( object( a.uuid ) ), true );
+ add( 'constraint_set_stack', 'Replace the ordered constraints of a scene object or bone in one undo step. An empty array clears the stack.', {
+  uuid: constraintOwner, constraints: constraintArray
+ }, [ 'uuid', 'constraints' ], a => {
+
+  const owner = object( a.uuid );
+  return { uuid: owner.uuid, constraints: setConstraintStack( editor, owner, a.constraints ) };
+
+ } );
+ add( 'constraint_set_inverse', 'Capture the current target pose as a Child Of inverse, or clear a saved inverse. Supports undo.', {
+  uuid: constraintOwner, constraint: constraintName, clear: { type: 'boolean', description: 'Clear the inverse instead of capturing it.' }
+ }, [ 'uuid', 'constraint' ], a => ( {
+  uuid: a.uuid, constraints: setChildInverse( editor, object( a.uuid ), a.constraint, a.clear )
+ } ) );
+ add( 'constraint_switch_parent', 'Activate a Child Of constraint and disable its siblings while preserving the owner’s evaluated world pose. Supports undo.', {
+  uuid: constraintOwner, constraint: constraintName, target: { ...str, description: 'New target UUID. Omit to use the constraint’s assigned target.' }
+ }, [ 'uuid', 'constraint' ], a => ( {
+  uuid: a.uuid, constraints: switchConstraintParent( editor, object( a.uuid ), a.constraint, a.target )
+ } ) );
  add( 'bone_edit_joints', 'Move rest joints in armature-local space. Shared joints stay connected and untouched endpoints stay in place. Supports undo.', {
   uuid: { ...str, description: 'Authored bone UUID.' },
   head: restVector( 'Rest head in armature-local space.' ),
