@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestFrames } from './Armature.js';
-import { withArmatureIK } from './ArmatureIK.js';
+import { withArmaturePose } from './ArmaturePose.js';
 import { stageBoneRest } from './ArmatureRestEditing.js';
 import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js';
 
@@ -192,7 +192,7 @@ export class ArmatureWorkspace {
 
 		};
 		if ( this.editing ) this.withRest( include );
-		else withArmatureIK( THREE, this.editor.scene, include );
+		else withArmaturePose( THREE, this.editor.scene, include );
 		this.editor.focus( bounds.isEmpty() ? this.rig : bounds );
 
 	}

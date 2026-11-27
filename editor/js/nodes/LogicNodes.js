@@ -106,7 +106,7 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
 		[ 'logic.bonePose', {
 			label: 'Bone Pose', category: 'Rigging',
-			inputs: { target },
+			inputs: { target, evaluated: flag( 'Evaluated Pose' ) },
 			outputs: { location: vector( 'Rest-Relative Location' ), rotation: vector( 'Rest-Relative Rotation (°)' ), scale: vector( 'Scale' ) }
 		} ],
 		[ 'logic.setBonePose', action( 'Set Bone Pose', 'Rigging', {
@@ -115,6 +115,16 @@ export const LOGIC_DOMAIN = {
 			scale: vector( 'Scale', [ 1, 1, 1 ] )
 		} ) ],
 		[ 'logic.setIKInfluence', action( 'Set IK Influence', 'Rigging', { target, influence: unit( 'Influence', 1 ) } ) ],
+		[ 'logic.boneConstraint', {
+			label: 'Bone Constraint', category: 'Rigging', inputs: { target, name: text( 'Constraint Name or ID' ) },
+			outputs: { found: booleanOutput( 'Found' ), muted: booleanOutput( 'Muted' ), influence: numberOutput( 'Influence' ) }
+		} ],
+		[ 'logic.setConstraintInfluence', action( 'Set Bone Constraint Influence', 'Rigging', {
+			target, name: text( 'Constraint Name or ID' ), influence: unit( 'Influence', 1 ), muted: flag( 'Mute' )
+		} ) ],
+		[ 'logic.setConstraintTarget', action( 'Set Bone Constraint Target', 'Rigging', {
+			target, name: text( 'Constraint Name or ID' ), source: object( 'New Target' ), clear: flag( 'Clear Target' )
+		} ) ],
 		[ 'logic.boneWeight', { label: 'Bone Weight', category: 'Rigging',
 			inputs: { target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ) }, outputs: numeric } ],
 		[ 'logic.setBoneWeight', action( 'Set Bone Weight', 'Rigging', {

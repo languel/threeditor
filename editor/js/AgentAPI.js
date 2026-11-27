@@ -14,8 +14,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
 import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
-import { withArmatureIK } from './rigging/ArmatureIK.js';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
+import { constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveBoneConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
+import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
@@ -38,6 +39,7 @@ function AgentAPI( editor ) {
    uuid: bone.uuid, name: bone.name, parent: bone.parent?.uuid, attached: bone.children.filter( child => ! child.isBone && ! child.userData.runtimeOnly ).map( child => child.uuid ),
    position: bone.position.toArray(), rotation: bone.rotation.toArray().slice( 0, 3 ), scale: bone.scale.toArray(), physics: bone.userData.armaturePhysics || null,
    ik: bone.userData.armatureIK || null,
+   constraints: bone.userData.armatureConstraints || [],
    pose: bonePoseOffsets( THREE, bone ),
    rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, connected: rest.connected } : null
   };
@@ -61,11 +63,12 @@ function AgentAPI( editor ) {
   const bones = armatureBones( rig );
   const result = bones.map( describeBone );
   const rest = boneRestFrames( THREE, rig );
-  withArmatureIK( THREE, editor.scene, () => bones.forEach( ( bone, index ) => {
+  withArmaturePose( THREE, editor.scene, () => bones.forEach( ( bone, index ) => {
 
    result[ index ].worldHead = bone.getWorldPosition( new THREE.Vector3() ).toArray();
    const length = bone.userData.armatureBone?.length ?? 1;
    result[ index ].worldTail = bone.localToWorld( new THREE.Vector3( 0, length, 0 ) ).toArray();
+   result[ index ].evaluatedPose = bonePoseOffsets( THREE, bone );
    const frame = rest.get( bone );
    if ( frame ) result[ index ].rigRest = { head: frame.head.toArray(), tail: frame.tail.toArray() };
 
@@ -93,6 +96,49 @@ function AgentAPI( editor ) {
   const bone = object( a.uuid );
   editBoneRest( editor, bone, a );
   return describeBone( bone );
+
+ } );
+ const unitNumber = description => ( { type: 'number', minimum: 0, maximum: 1, description } );
+ const limits = description => ( { type: 'array', items: { type: [ 'number', 'null' ] }, minItems: 3, maxItems: 3, description } );
+ add( 'bone_get_constraints', 'Inspect a bone’s ordered constraint stack and its target availability.', {
+  uuid: { ...str, description: 'Authored bone UUID.' }
+ }, [ 'uuid' ], a => {
+
+  const bone = object( a.uuid );
+  if ( ! bone.userData.armatureBone ) throw new Error( 'Expected an authored bone.' );
+  const stack = Array.isArray( bone.userData.armatureConstraints ) ? bone.userData.armatureConstraints : [];
+  return { uuid: bone.uuid, constraints: stack, status: stack.map( entry => ( {
+   id: entry?.id, error: resolveBoneConstraint( editor.scene, bone, constraintSettings( entry ) ).error ?? null
+  } ) ) };
+
+ }, true );
+ add( 'bone_set_constraints', 'Replace a bone’s ordered constraint stack with one undoable edit. An empty array clears the stack. IK solves after constraints on its chain.', {
+  uuid: { ...str, description: 'Authored bone UUID.' },
+  constraints: {
+   type: 'array', items: {
+    type: 'object', required: [ 'type' ], additionalProperties: false, properties: {
+     type: { ...str, enum: Object.keys( constraintTypes ) },
+     id: { ...str, description: 'Stable constraint ID. Omit to assign a new ID.' },
+     name: { ...str, description: 'Unique name on this bone. Defaults to the constraint label.' },
+     target: { ...str, description: 'Target scene object or bone UUID. An empty value leaves a target unassigned.' },
+     headTail: unitNumber( 'Target point on a bone from head (0) to tail (1).' ),
+     ownerSpace: { ...str, enum: constraintSpaces }, targetSpace: { ...str, enum: constraintSpaces },
+     axes: { ...str, description: 'Enabled copy axes as an XYZ subset in order, such as XZ.' },
+     invert: { ...str, description: 'Inverted copy axes as an XYZ subset in order.' },
+     mix: { ...str, enum: [ 'replace', 'add', 'before', 'after', 'multiply' ] },
+     order: { ...str, enum: eulerOrders },
+     min: limits( 'Lower bounds for X, Y, Z. Null disables that axis bound. Rotations use radians.' ),
+     max: limits( 'Upper bounds for X, Y, Z. Null disables that axis bound. Rotations use radians.' ),
+     trackAxis: { ...str, enum: trackAxes },
+     distance: { type: 'number', minimum: 0 }, mode: { ...str, enum: distanceModes },
+     influence: unitNumber( 'Blend strength from zero to one.' ), muted: { type: 'boolean' }
+    }
+   }
+  }
+ }, [ 'uuid', 'constraints' ], a => {
+
+  const bone = object( a.uuid );
+  return { uuid: bone.uuid, constraints: setBoneConstraints( editor, bone, a.constraints ) };
 
  } );
  add( 'bone_edit_joints', 'Move rest joints in armature-local space. Shared joints stay connected and untouched endpoints stay in place. Supports undo.', {

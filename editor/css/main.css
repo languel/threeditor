@@ -2839,6 +2839,23 @@ body[data-ui-style="compact"] .scene-timeline-bar input[type="number"] { width: 
 .material-look-parameter > input { justify-self: start; max-width: 100%; margin: 0; }
 .material-look-status { margin-bottom: 6px; white-space: normal; }
 
+.bone-constraints summary { cursor: pointer; color: var(--theme-text); }
+.bone-constraints fieldset { min-inline-size: 0; border: 0; margin: 6px 0 0; padding: 0; }
+:is(#sidebar, .sidebar-inspector) .bone-constraints .Row { gap: 4px; }
+:is(#sidebar, .sidebar-inspector) .bone-constraints .Row .Label { flex: 0 0 min(96px, 34%); }
+.bone-constraints .Row > :is(select, input:not([type="checkbox"])) {
+	box-sizing: border-box;
+	flex: 1 1 0;
+	min-width: 0;
+	max-width: 100%;
+	margin: 0;
+}
+.bone-constraints .Row > label { display: inline-flex; align-items: center; gap: 2px; }
+:is(#sidebar, .sidebar-inspector) .bone-constraints .Row:has( > button ) .Label { flex-basis: min(62px, 25%); }
+.bone-constraints .Row > button { flex: 0 0 22px; padding: 2px; }
+.bone-constraints .Row > button svg { width: 14px; height: 14px; vertical-align: middle; }
+.bone-constraints output { display: block; white-space: normal; }
+
 #toolbar .transform-magnet[aria-pressed="true"] {
 	color: var(--theme-accent);
 	background: color-mix(in srgb, var(--theme-accent), transparent 84%);

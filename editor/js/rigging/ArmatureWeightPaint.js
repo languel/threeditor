@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { modelButton, modelField } from '../modeling/ModelControls.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { armatureVertexWeights } from './ArmatureDeformation.js';
-import { withArmatureIK } from './ArmatureIK.js';
+import { withArmaturePose } from './ArmaturePose.js';
 import { commitArmatureWeights } from './ArmatureTools.js';
 import { paintBoneWeight, weightNeighbors, weightPointKey } from './ArmatureWeights.js';
 
@@ -150,7 +150,7 @@ export class ArmatureWeightPaint {
 		document.activeElement.blur?.();
 		this.stroke = {
 			pointer: event.pointerId, canvas: event.target, frame: frame.key, data,
-			cells: withArmatureIK( THREE, this.editor.scene, () => this.projectedVertices( frame, data ) ),
+			cells: withArmaturePose( THREE, this.editor.scene, () => this.projectedVertices( frame, data ) ),
 			object: this.object, geometry: this.object.geometry, binding: this.object.userData.armatureBinding,
 			draft: {}, coverage: new Map(), erase: event.shiftKey,
 			neighbors: this.blend === 'smooth' && ! event.shiftKey && ! this.object.isPoints ? weightNeighbors( this.object, data.position ) : null

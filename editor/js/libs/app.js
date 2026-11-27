@@ -16,7 +16,7 @@ import { LogicRuntime } from '../nodes/LogicRuntime.js';
 import { NodeComponentRuntime } from '../nodes/NodeComponents.js';
 import { releaseArmatureGeometry, withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
 import { prepareArmaturePhysics } from '../rigging/ArmaturePhysics.js';
-import { withArmatureIK } from '../rigging/ArmatureIK.js';
+import { withArmaturePose } from '../rigging/ArmaturePose.js';
 import { readGamepads } from '../nodes/LogicInput.js';
 import { installShaderGraphs, withShaderGraphs } from '../nodes/ShaderGraphRuntime.js';
 
@@ -349,7 +349,7 @@ const APP = {
 
 		this.withArmaturePose = function ( evaluate ) {
 
-			return scene ? withArmatureIK( THREE, scene, evaluate ) : evaluate();
+			return scene ? withArmaturePose( THREE, scene, evaluate ) : evaluate();
 
 		};
 

@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
 import { boneRestFromPoints, createArmature, createBone } from '../editor/js/rigging/Armature.js';
-import { hasIKDependencyCycle, ikSettings, resolveIK, withArmatureIK } from '../editor/js/rigging/ArmatureIK.js';
+import { ikSettings, resolveIK } from '../editor/js/rigging/ArmatureIK.js';
+import { hasIKDependencyCycle, withArmaturePose } from '../editor/js/rigging/ArmaturePose.js';
 import { prepareArmaturePhysics } from '../editor/js/rigging/ArmaturePhysics.js';
 import { LogicRuntime } from '../editor/js/nodes/LogicRuntime.js';
 import { LOGIC_DOMAIN, createLogicGraph } from '../editor/js/nodes/LogicNodes.js';
@@ -47,7 +48,7 @@ test( 'A two-bone IK constraint bends toward either pole under rotated and scale
 	for ( const sign of [ 1, - 1 ] ) {
 
 		pole.position.set( sign * 2, .3, sign * 2 );
-		withArmatureIK( THREE, scene, () => {
+		withArmaturePose( THREE, scene, () => {
 
 			assert.ok( distance( marker, target ) < 1e-6 );
 			const elbow = rig.worldToLocal( tip.getWorldPosition( vector() ) );
@@ -72,7 +73,7 @@ test( 'Long chains respect their reach, preserve the authored pose after excepti
 	const saved = new THREE.ObjectLoader().parse( JSON.parse( JSON.stringify( scene.toJSON() ) ) );
 	const loadedTarget = saved.getObjectByProperty( 'uuid', target.uuid );
 	const loadedMarker = saved.getObjectByProperty( 'uuid', marker.uuid );
-	assert.throws( () => withArmatureIK( THREE, saved, () => {
+	assert.throws( () => withArmaturePose( THREE, saved, () => {
 
 		assert.ok( distance( loadedMarker, loadedTarget ) < 1e-3 );
 		throw new Error( 'draw stopped' );
@@ -81,7 +82,7 @@ test( 'Long chains respect their reach, preserve the authored pose after excepti
 	assert.ok( distance( loadedMarker, loadedTarget ) > .1 );
 
 	target.position.set( 10, 4, 4 );
-	withArmatureIK( THREE, scene, () => {
+	withArmaturePose( THREE, scene, () => {
 
 		const result = rig.worldToLocal( marker.getWorldPosition( vector() ) );
 		assert.ok( result.distanceTo( target.position.clone().setLength( 4 ) ) < 1e-6 );
@@ -90,7 +91,7 @@ test( 'Long chains respect their reach, preserve the authored pose after excepti
 	const previous = tip.quaternion.clone();
 	tip.userData.armatureIK = { target: target.uuid, useTail: false, chainLength: 0 };
 	target.position.set( .3, 2.4, .25 );
-	withArmatureIK( THREE, scene, () => {
+	withArmaturePose( THREE, scene, () => {
 
 		assert.ok( distance( tip, target ) < 1e-3 );
 		assert.ok( tip.quaternion.equals( previous ) );
@@ -106,7 +107,7 @@ test( 'IK ignores illegal dependencies and lets dynamic physics own its bones', 
 	assert.match( resolveIK( scene, tip, ikSettings( { ...settings, target: marker.uuid } ) ).error, /descendants/ );
 	root.userData.armaturePhysics = { mode: 'dynamic' };
 	assert.match( resolveIK( scene, tip, ikSettings( settings ) ).error, /Rapier/ );
-	withArmatureIK( THREE, scene, () => assert.ok( distance( marker, target ) > .1 ) );
+	withArmaturePose( THREE, scene, () => assert.ok( distance( marker, target ) > .1 ) );
 	delete root.userData.armaturePhysics;
 	const other = createArmature( THREE, 'Other' );
 	scene.add( other );
@@ -117,7 +118,7 @@ test( 'IK ignores illegal dependencies and lets dynamic physics own its bones', 
 	tip.userData.armatureIK = settings;
 	root.userData.armatureIK = { target: target.uuid, influence: 0 };
 	tip.userData.armatureIK.influence = 0;
-	withArmatureIK( THREE, scene, () => assert.ok( distance( marker, target ) > .1 ) );
+	withArmaturePose( THREE, scene, () => assert.ok( distance( marker, target ) > .1 ) );
 
 } );
 
@@ -156,7 +157,7 @@ test( 'Rapier kinematic capsules initialize and step from the solved pose', asyn
 		const assertPose = () => {
 
 			const position = body.translation(), rotation = body.rotation();
-			withArmatureIK( THREE, scene, () => {
+			withArmaturePose( THREE, scene, () => {
 
 				assert.ok( tip.getWorldPosition( vector() ).distanceTo( vector().copy( position ) ) < 1e-6 );
 				assert.ok( tip.getWorldQuaternion( new THREE.Quaternion() ).angleTo( new THREE.Quaternion().copy( rotation ).normalize() ) < 1e-6 );

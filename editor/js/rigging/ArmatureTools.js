@@ -12,7 +12,9 @@ import { armatureBones, armatureOf, bonePoseTransform, boneRestFrames, boneRestF
 import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
-import { hasIKDependencyCycle, ikSettings, resolveIK, withArmatureIK } from './ArmatureIK.js';
+import { ikSettings, resolveIK } from './ArmatureIK.js';
+import { hasConstraintDependencyCycle, hasIKDependencyCycle, withArmaturePose } from './ArmaturePose.js';
+import { constraintSettings, constraintTypes, resolveBoneConstraint } from './ArmatureConstraints.js';
 import { createEmpty } from '../modeling/ReferenceObjects.js';
 
 function editable( editor, object ) {
@@ -335,7 +337,7 @@ function ikCommand( editor, bone, value, stagedTarget ) {
 		if ( ! settings ) throw new Error( 'Choose an IK target and valid chain settings.' );
 		const entry = resolveIK( editor.scene, bone, settings, stagedTarget );
 		if ( entry.error ) throw new Error( entry.error );
-		if ( hasIKDependencyCycle( editor.scene, entry ) ) throw new Error( 'The target or pole would create a cycle between IK chains.' );
+		if ( hasIKDependencyCycle( editor.scene, entry ) ) throw new Error( 'The target or pole would create a cycle between rig constraints.' );
 		userData.armatureIK = settings;
 
 	}
@@ -353,13 +355,52 @@ export function setBoneIK( editor, bone, value ) {
 
 }
 
+export function setBoneConstraints( editor, bone, input ) {
+
+	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! armatureOf( bone ) ) throw new Error( 'Select an editable authored bone.' );
+	if ( ! Array.isArray( input ) ) throw new Error( 'Provide the bone’s constraints as an ordered array.' );
+	const existing = bone.userData.armatureConstraints ?? [];
+	const ids = new Set(), names = new Set();
+	const stack = input.map( item => {
+
+		const id = item?.id ?? THREE.MathUtils.generateUUID();
+		const label = Object.hasOwn( constraintTypes, item?.type ) ? constraintTypes[ item.type ].label : '';
+		let name = item?.name ?? label;
+		if ( item?.name === undefined ) for ( let suffix = 2; names.has( name ); suffix ++ ) name = label + ' ' + suffix;
+		const settings = constraintSettings( { ...item, id, name } );
+		if ( ! settings ) throw new Error( 'Use valid settings for each bone constraint.' );
+		if ( ids.has( settings.id ) || names.has( settings.name ) ) throw new Error( 'Each constraint on a bone needs a unique ID and name.' );
+		ids.add( settings.id );
+		names.add( settings.name );
+		const previous = Array.isArray( existing ) && existing.find( entry => entry?.id === settings.id );
+		if ( settings.target && ( settings.target !== previous?.target || settings.targetSpace !== previous?.targetSpace ) ) {
+
+			const result = resolveBoneConstraint( editor.scene, bone, settings );
+			if ( result.error ) throw new Error( result.error );
+
+		}
+		return settings;
+
+	} );
+	if ( hasConstraintDependencyCycle( editor.scene, bone, stack ) ) throw new Error( 'This stack would create a cycle with another bone constraint or IK chain.' );
+	if ( JSON.stringify( stack ) === JSON.stringify( existing ) ) return stack;
+	const userData = { ...bone.userData };
+	if ( stack.length ) userData.armatureConstraints = stack;
+	else delete userData.armatureConstraints;
+	const command = new SetValueCommand( editor, bone, 'userData', userData );
+	command.updatable = false;
+	editor.history.execute( command, 'Edit Bone Constraints' );
+	return stack;
+
+}
+
 export function createBoneIKTarget( editor, bone ) {
 
 	if ( ! bone?.userData.armatureBone ) throw new Error( 'Select an authored bone.' );
 	const target = createEmpty( 'sphere' );
 	target.name = bone.name + ' IK Target';
 	target.userData.emptyDisplay.size = .13;
-	const tail = withArmatureIK( THREE, editor.scene,
+	const tail = withArmaturePose( THREE, editor.scene,
 		() => bone.localToWorld( new THREE.Vector3( 0, bone.userData.armatureBone.length, 0 ) ) );
 	target.position.copy( editor.scene.worldToLocal( tail ) );
 	const settings = ikCommand( editor, bone, { target: target.uuid, useTail: true }, target );

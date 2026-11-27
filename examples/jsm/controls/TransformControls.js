@@ -1149,11 +1149,13 @@ class TransformControlsRoot extends Object3D {
 
 			} else {
 
-				controls.object.parent.matrixWorld.decompose( controls._parentPosition, controls._parentQuaternion, controls._parentScale );
+				const matrix = this.renderTransform?.parent || controls.object.parent.matrixWorld;
+				matrix.decompose( controls._parentPosition, controls._parentQuaternion, controls._parentScale );
 
 			}
 
-			controls.object.matrixWorld.decompose( controls.worldPosition, controls.worldQuaternion, controls._worldScale );
+			const matrix = this.renderTransform?.object || controls.object.matrixWorld;
+			matrix.decompose( controls.worldPosition, controls.worldQuaternion, controls._worldScale );
 
 			controls._parentQuaternionInv.copy( controls._parentQuaternion ).invert();
 			controls._worldQuaternionInv.copy( controls.worldQuaternion ).invert();

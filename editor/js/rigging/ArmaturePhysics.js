@@ -1,6 +1,6 @@
 import { armatureOf, resetBoneTransform } from './Armature.js';
 import { bonePhysicsSettings, usesArmaturePhysics } from './ArmaturePhysicsConfig.js';
-import { withArmatureIK } from './ArmatureIK.js';
+import { withArmaturePose } from './ArmaturePose.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 export const RIG_STEP_RATE = 60;
@@ -63,7 +63,7 @@ export class ArmaturePhysics {
 	initialize() {
 
 		if ( this.world ) return;
-		withArmatureIK( this.THREE, this.scene, () => this.initializePosed() );
+		withArmaturePose( this.THREE, this.scene, () => this.initializePosed() );
 
 	}
 
@@ -249,7 +249,7 @@ export class ArmaturePhysics {
 		while ( this.frame < end ) {
 
 			this.applyPose();
-			withArmatureIK( this.THREE, this.scene, () => {
+			withArmaturePose( this.THREE, this.scene, () => {
 
 				for ( const [ object, body ] of this.kinematic ) {
 

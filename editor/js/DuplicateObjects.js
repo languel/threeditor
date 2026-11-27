@@ -158,6 +158,11 @@ export function duplicateObjects( editor, move ) {
 			if ( ik.pole ) ik.pole = uuid( ik.pole );
 
 		}
+		if ( Array.isArray( copy.userData.armatureConstraints ) ) for ( const constraint of copy.userData.armatureConstraints ) {
+
+			if ( constraint?.target ) constraint.target = uuid( constraint.target );
+
+		}
 		if ( copy.userData.threeditor?.cameraFollow ) copy.userData.threeditor.cameraFollow = uuid( copy.userData.threeditor.cameraFollow );
 		for ( const point of copy.userData.measurement?.points || [] ) if ( point.target ) point.target = uuid( point.target );
 		remapLogicObjects( copy.userData.logicGraph, uuid );

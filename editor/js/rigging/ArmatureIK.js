@@ -2,7 +2,6 @@ import { armatureOf } from './Armature.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 const EPSILON = 1e-8;
-const solving = new WeakSet();
 
 export function ikSettings( value ) {
 
@@ -52,48 +51,6 @@ export function resolveIK( scene, owner, settings, stagedTarget ) {
 
 	}
 	return { owner, rig, chain, target, pole, settings };
-
-}
-
-function orderedConstraints( scene, override ) {
-
-	const entries = [];
-	scene.traverse( object => {
-
-		if ( ! object.isBone || hasRestriction( object, 'disabled' ) ) return;
-		if ( object === override?.owner ) {
-
-			entries.push( override );
-			return;
-
-		}
-		const settings = ikSettings( object.userData.armatureIK );
-		if ( ! settings?.influence ) return;
-		const entry = resolveIK( scene, object, settings );
-		if ( ! entry.error ) entries.push( entry );
-
-	} );
-	const pending = entries.map( entry => ( {
-		entry, dependencies: new Set( entries.filter( upstream => upstream !== entry &&
-			[ entry.target, entry.pole, entry.chain[ 0 ].parent ].some( input => contains( upstream.chain, input ) ) ) )
-	} ) );
-	const ordered = [];
-	while ( pending.length ) {
-
-		const next = pending.findIndex( item => ! item.dependencies.size );
-		if ( next < 0 ) break; // Cyclic target dependencies have no stable pose.
-		const [ { entry } ] = pending.splice( next, 1 );
-		ordered.push( entry );
-		for ( const item of pending ) item.dependencies.delete( entry );
-
-	}
-	return ordered;
-
-}
-
-export function hasIKDependencyCycle( scene, entry ) {
-
-	return ! orderedConstraints( scene, entry ).includes( entry );
 
 }
 
@@ -194,7 +151,7 @@ function solvePoints( THREE, points, target, pole, iterations ) {
 
 }
 
-function solve( THREE, entry, snapshots ) {
+export function solveIK( THREE, entry ) {
 
 	const { owner, rig, chain, target, pole, settings } = entry;
 	rig.updateWorldMatrix( true, false );
@@ -223,7 +180,6 @@ function solve( THREE, entry, snapshots ) {
 		current.applyMatrix4( parentInverse ).sub( bone.position );
 		desired.copy( points[ i + 1 ] ).applyMatrix4( rigToWorld ).applyMatrix4( parentInverse ).sub( bone.position );
 		if ( current.lengthSq() < EPSILON || desired.lengthSq() < EPSILON ) continue;
-		if ( ! snapshots.has( bone ) ) snapshots.set( bone, start[ i ] );
 		bone.quaternion.premultiply( delta.setFromUnitVectors( current.normalize(), desired.normalize() ) );
 		bone.updateMatrix();
 
@@ -232,36 +188,6 @@ function solve( THREE, entry, snapshots ) {
 
 		bone.quaternion.slerp( start[ i ], 1 - settings.influence );
 		bone.updateMatrix();
-
-	}
-
-}
-
-// Keep authored rotations separate from the evaluated pose used by rendering,
-// picking, graph queries and kinematic physics.
-export function withArmatureIK( THREE, scene, evaluate, skipRig = null ) {
-
-	if ( solving.has( scene ) ) return evaluate();
-	const entries = orderedConstraints( scene );
-	if ( ! entries.length && ! skipRig ) return evaluate();
-	const snapshots = new Map();
-	solving.add( scene );
-	try {
-
-		for ( const entry of entries ) if ( ! skipRig || armatureOf( entry.owner ) !== skipRig ) solve( THREE, entry, snapshots );
-		scene.updateMatrixWorld( true );
-		return evaluate();
-
-	} finally {
-
-		for ( const [ bone, original ] of snapshots ) {
-
-			bone.quaternion.copy( original );
-			bone.updateMatrix();
-
-		}
-		solving.delete( scene );
-		scene.updateMatrixWorld( true );
 
 	}
 

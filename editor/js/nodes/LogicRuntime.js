@@ -1,5 +1,6 @@
 import { armatureOf, bonePoseOffsets, bonePoseTransform, findBone, resetBoneTransform } from '../rigging/Armature.js';
-import { withArmatureIK } from '../rigging/ArmatureIK.js';
+import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
+import { boneConstraint, constraintSettings, constraintTypes, resolveBoneConstraint } from '../rigging/ArmatureConstraints.js';
 import { armatureVertexWeights, weightsForVertexEdits } from '../rigging/ArmatureDeformation.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
@@ -137,7 +138,7 @@ export class LogicRuntime {
 				for ( let object = this.target( instance, inputs.armature ); object && ! rig; object = object.parent ) rig = armatureOf( object );
 				const bone = findBone( rig, inputs.name.trim() );
 				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return { object: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ] };
-				return withArmatureIK( this.THREE, this.scene, () => {
+				return withArmaturePose( this.THREE, this.scene, () => {
 
 					const head = bone.getWorldPosition( this.motion ).toArray();
 					const tail = bone.localToWorld( this.motion.set( 0, bone.userData.armatureBone?.length ?? 1, 0 ) ).toArray();
@@ -149,9 +150,16 @@ export class LogicRuntime {
 			case 'logic.bonePose': {
 
 				const bone = this.target( instance, inputs.target );
-				const pose = bone && bonePoseOffsets( this.THREE, bone );
+				const read = () => bone && bonePoseOffsets( this.THREE, bone );
+				const pose = inputs.evaluated ? withArmaturePose( this.THREE, this.scene, read ) : read();
 				return pose ? { ...pose, rotation: pose.rotation.map( value => value / degrees ) } :
 					{ location: [ 0, 0, 0 ], rotation: [ 0, 0, 0 ], scale: [ 1, 1, 1 ] };
+
+			}
+			case 'logic.boneConstraint': {
+
+				const settings = constraintSettings( boneConstraint( this.target( instance, inputs.target ), inputs.name.trim() ) );
+				return { found: !! settings, muted: settings?.muted ?? false, influence: settings?.influence ?? 0 };
 
 			}
 			case 'logic.boolean': return { value: inputs.value };
@@ -308,6 +316,20 @@ export class LogicRuntime {
 			case 'logic.setIKInfluence':
 				if ( object.isBone && object.userData.armatureIK ) object.userData.armatureIK.influence = inputs.influence;
 				break;
+			case 'logic.setConstraintInfluence':
+				this.changeBoneConstraint( object, inputs.name, { influence: inputs.influence, muted: inputs.muted } );
+				break;
+			case 'logic.setConstraintTarget': {
+
+				const constraint = constraintSettings( boneConstraint( object, inputs.name.trim() ) );
+				if ( constraint && constraintTypes[ constraint.type ].target && ( inputs.clear || inputs.source ) ) {
+
+					this.changeBoneConstraint( object, inputs.name, { target: inputs.clear ? '' : inputs.source } );
+
+				}
+				break;
+
+			}
 			case 'logic.setBoneWeight': {
 
 				const binding = object.userData.armatureBinding;
@@ -353,6 +375,25 @@ export class LogicRuntime {
 			default: throw new Error( 'Unsupported Logic Nodes action.' );
 
 		}
+
+	}
+
+	changeBoneConstraint( bone, name, patch ) {
+
+		const previous = boneConstraint( bone, name.trim() );
+		if ( ! previous || Object.entries( patch ).every( ( [ key, value ] ) => previous[ key ] === value ) ) return;
+		const next = constraintSettings( { ...previous, ...patch } );
+		if ( ! next ) return;
+		if ( patch.target ) {
+
+			const result = resolveBoneConstraint( this.scene, bone, next );
+			if ( result.error ) throw new Error( result.error );
+
+		}
+		const stack = bone.userData.armatureConstraints.map( entry => entry === previous ? next : entry );
+		const connects = ! next.muted && next.influence && ( previous.muted || ! previous.influence || previous.target !== next.target );
+		if ( connects && hasConstraintDependencyCycle( this.scene, bone, stack ) ) throw new Error( 'Bone constraint targets create a dependency cycle.' );
+		bone.userData.armatureConstraints = stack;
 
 	}
 

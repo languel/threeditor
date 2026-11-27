@@ -383,6 +383,8 @@ async function collectPlayableProject( editor ) {
 	await project.copy( 'rigging/ArmatureDeformation.js', 'editor/js/rigging/ArmatureDeformation.js' );
 	await project.copy( 'rigging/ArmatureWeights.js', 'editor/js/rigging/ArmatureWeights.js' );
 	await project.copy( 'rigging/ArmatureIK.js', 'editor/js/rigging/ArmatureIK.js' );
+	await project.copy( 'rigging/ArmatureConstraints.js', 'editor/js/rigging/ArmatureConstraints.js' );
+	await project.copy( 'rigging/ArmaturePose.js', 'editor/js/rigging/ArmaturePose.js' );
 	await project.copy( 'rigging/ArmaturePhysics.js', 'editor/js/rigging/ArmaturePhysics.js' );
 	await project.copy( 'rigging/ArmaturePhysicsConfig.js', 'editor/js/rigging/ArmaturePhysicsConfig.js' );
 	if ( usesArmaturePhysics( app.scene.object ) ) {
