@@ -10,25 +10,26 @@ const trackers = {
 
 class MediaStreams {
 
-	constructor( bus, id, primary = () => true ) {
+	constructor( bus, id, primary = () => true, globalVision = true ) {
 
 		this.bus = bus;
 		this.prefix = id ? 'input.' + id + '.' : '';
 		this.primary = primary;
+		this.globalVision = globalVision;
 
 	}
 
 	publish( topic, value ) {
 
 		if ( this.prefix ) this.bus.publish( this.prefix + topic, value );
-		if ( topic.startsWith( 'vision.' ) || this.primary() ) this.bus.publish( topic, value );
+		if ( this.primary() || ( this.globalVision && topic.startsWith( 'vision.' ) ) ) this.bus.publish( topic, value );
 
 	}
 
 	clear( topic ) {
 
 		if ( this.prefix ) this.bus.clear( this.prefix + topic );
-		if ( topic.startsWith( 'vision.' ) || this.primary() ) this.bus.clear( topic );
+		if ( this.primary() || ( this.globalVision && topic.startsWith( 'vision.' ) ) ) this.bus.clear( topic );
 
 	}
 

@@ -87,3 +87,4 @@ opened from the library.
 2. Stop Play and open **Logic Nodes** on **Stream sculpture**. Follow **On Stream Sample** to **Set Scale**. **Event Value** and **Map Range** turn each sample into a Y scale.
 3. Connect a device or a tracked input from **Streams**, then click **Browse stream topics** on **On Stream Sample**. Try a MIDI control such as `midi.cc.1.1`, serial like `serial.A0`, or a landmark coordinate such as `vision.pose.16.x`.
 4. Set the input range on **Map Range** to match the device. MIDI control changes use 0–127, and landmark X/Y coordinates are normalized. Start Play to test the graph.
+5. Export **Playable HTML** or **Playable ZIP** and serve it from localhost or HTTPS. Open **Live inputs** in the player and connect the same type of input. Move the MIDI control, send the serial signal, or move the tracked landmark to drive the sculpture in the export.

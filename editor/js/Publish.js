@@ -387,7 +387,11 @@ async function collectPlayableProject( editor ) {
 		await project.copy( 'nodes/' + module + '.js', 'editor/js/nodes/' + module + '.js' );
 
 	}
-	await project.copy( 'streams/StreamRouter.js', 'editor/js/streams/StreamRouter.js' );
+	for ( const module of [ 'StreamRouter', 'DeviceStreams', 'MediaStreams', 'PlayerStreams' ] ) {
+
+		await project.copy( 'streams/' + module + '.js', 'editor/js/streams/' + module + '.js' );
+
+	}
 	await project.copy( 'ObjectRestrictions.js', 'editor/js/ObjectRestrictions.js' );
 	for ( const module of [ 'TimelineData', 'TimelineBindings', 'TimelineRuntime' ] ) {
 

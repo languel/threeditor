@@ -3,6 +3,7 @@ import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { ColorEnvironment } from 'three/addons/environments/ColorEnvironment.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { APP } from './app.js';
+import { mountPlayerStreams } from '../streams/PlayerStreams.js';
 
 async function playApp( json, importScriptModule ) {
 
@@ -25,8 +26,9 @@ async function playApp( json, importScriptModule ) {
 	}
 
 	player.setSize( window.innerWidth, window.innerHeight );
-	player.play();
 	document.body.appendChild( player.dom );
+	mountPlayerStreams( document.body, scene, player.streams );
+	player.play();
 	window.addEventListener( 'resize', () => player.setSize( window.innerWidth, window.innerHeight ) );
 
 }
