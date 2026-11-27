@@ -42,6 +42,7 @@ const exampleCatalog = [
 		{ title: 'A generative Empty', file: 'examples/lessons/16-generative-empty.app.json' },
 		{ title: 'A bending signal flag', file: 'examples/lessons/17-armature-flag.app.json' },
 		{ title: 'A Rapier pendulum', file: 'examples/lessons/18-rapier-pendulum.app.json' },
+		{ title: 'A reach-controlled arm', file: 'examples/lessons/19-inverse-kinematics.app.json' },
 		{ title: 'Serpentine particles', file: 'examples/lessons/serpentine-particles.app.json' },
 		{ title: '05 · Fox woodland loop', file: '../demos/fox-follow/scene.json', assets: [ { path: 'fox.glb', file: '../demos/fox-follow/assets/fox.glb' } ] }
 	] }

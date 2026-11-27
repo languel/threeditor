@@ -1,5 +1,6 @@
 import { armatureOf, resetBoneTransform } from './Armature.js';
 import { bonePhysicsSettings, usesArmaturePhysics } from './ArmaturePhysicsConfig.js';
+import { withArmatureIK } from './ArmatureIK.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 export const RIG_STEP_RATE = 60;
@@ -62,6 +63,12 @@ export class ArmaturePhysics {
 	initialize() {
 
 		if ( this.world ) return;
+		withArmatureIK( this.THREE, this.scene, () => this.initializePosed() );
+
+	}
+
+	initializePosed() {
+
 		const { rapier, scene, position, rotation, scale } = this;
 		this.world = new rapier.World( { x: 0, y: - 9.81, z: 0 } );
 		this.eventQueue = new rapier.EventQueue( true );
@@ -242,14 +249,18 @@ export class ArmaturePhysics {
 		while ( this.frame < end ) {
 
 			this.applyPose();
-			for ( const [ object, body ] of this.kinematic ) {
+			withArmatureIK( this.THREE, this.scene, () => {
 
-				object.updateWorldMatrix( true, false );
-				object.matrixWorld.decompose( position, rotation, scale );
-				body.setNextKinematicTranslation( position );
-				body.setNextKinematicRotation( rotation );
+				for ( const [ object, body ] of this.kinematic ) {
 
-			}
+					object.updateWorldMatrix( true, false );
+					object.matrixWorld.decompose( position, rotation, scale );
+					body.setNextKinematicTranslation( position );
+					body.setNextKinematicRotation( rotation );
+
+				}
+
+			} );
 			this.world.step( this.eventQueue );
 			this.frame ++;
 			this.eventQueue.drainCollisionEvents( ( a, b, entered ) => {

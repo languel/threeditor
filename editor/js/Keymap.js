@@ -10,6 +10,8 @@ import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { canJoinMeshes, joinObjects } from './modeling/JoinObjects.js';
 import { canParentSelection } from './ObjectParenting.js?v=editor-panes';
 import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=editor-panes';
+import { armatureOf } from './rigging/Armature.js';
+import { createBoneIKTarget, setBoneIK } from './rigging/ArmatureTools.js';
 
 const control = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl' : 'mod';
 const alignCameraShortcut = control + '+alt+numpad0';
@@ -47,6 +49,7 @@ const definitions = [
  ['renameObject','Rename Object','Hierarchy','f2','f2'],
  ['parentObject','Set Parent','Hierarchy','',control+'+p'],
  ['clearParent','Clear Parent','Hierarchy','','alt+p'],
+ ['addBoneIK','Add IK to Bone','Rigging','','shift+i'],
  ['code','Open Script Window','Workspace','',''], ['sidebar','Toggle right dock','Workspace','',''], ['timeline','Toggle timeline','Workspace','',''],
  ['viewportSidebar','Toggle Viewport Sidebar','View','','n'],
  ['viewportToolbar','Toggle Viewport Toolbar','View','','t'],
@@ -164,7 +167,7 @@ class Keymap {
   const inSourcePane = this.editor.viewportSplit && this.viewFrame?.director === false;
   if ( category === 'Navigation' ) return this.overEditableViewport;
   if ( category === 'Visibility' ) return inOutliner || this.overEditableViewport;
-  if ( category === 'Hierarchy' ) return inOutliner || this.overEditableViewport;
+  if ( category === 'Hierarchy' || category === 'Rigging' ) return inOutliner || this.overEditableViewport;
   if ( category === 'View' ) {
    const movesView = [ 'focus', 'frameAll', 'fly', 'navigationPie', 'projection', 'perspective', 'orthographic', 'localView', 'localViewAlternate', 'toggleXRay', 'viewportSidebar', 'viewportToolbar' ].includes( id ) || /^view(Front|Back|Left|Right|Top|Bottom)$/.test( id );
    return inViewport && ( ! inSourcePane || ! movesView );
@@ -179,6 +182,14 @@ class Keymap {
   if ( this.actions.find( action => action.id === id )?.available?.() === false ) return false;
   if ( id === 'duplicate' ) return canDuplicateObjects( e );
   if ( id === 'parentObject' || id === 'clearParent' ) return canParentSelection( e, id === 'clearParent' );
+  if ( id === 'addBoneIK' ) {
+
+   const bone = e.selected;
+   return !! bone?.userData.armatureBone && !! armatureOf( bone ) && ! bone.userData.armatureIK && ! m.editMode &&
+    ! e.viewTools.mode && ! e.streams.playing && ! hasRestriction( bone, 'locked' ) && ! hasRestriction( bone, 'disabled' ) &&
+    ! [ bone, bone.parent ].some( item => item?.userData.armaturePhysics?.mode === 'dynamic' );
+
+  }
   if ( id === 'renameObject' ) {
    const object = e.selector.selection.at( -1 );
    return !! object?.parent && ! m.editMode && ! e.viewTools.mode && ! e.streams.playing && ! hasRestriction( object, 'locked' );
@@ -258,6 +269,13 @@ class Keymap {
    case 'viewportToolbar':e.viewTools?.toggleToolbar();break;
    case 'viewportOverlays':e.toggleViewportOverlays();break;
    case 'addComponent':if(this.actionAvailable(id))e.openComponentPicker?.();break;
+   case 'addBoneIK':{
+    if(!this.actionAvailable(id)) break;
+    const bone=e.selected, target=e.selector.selection.findLast(object=>object!==bone&&object!==e.scene&&object!==e.camera);
+    try { if(target)setBoneIK(e,bone,{target:target.uuid});else createBoneIKTarget(e,bone); }
+    catch(error){ console.warn(error.message); }
+    break;
+   }
    case 'maximizeArea':e.workspaceArea?.toggle();break;
    case 'joinMeshes':e.viewTools.run(()=>joinObjects(e));break;
    case 'separateMesh':if(this.actionAvailable(id))e.contextMenu?.openSeparate(this.pointer);break;

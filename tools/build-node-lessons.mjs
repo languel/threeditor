@@ -601,3 +601,58 @@ wire( pendulum, LOGIC_DOMAIN, swingContact, 'exit', restingColor, 'run' );
 await save( '18-rapier-pendulum', 'A Rapier pendulum', [ pendulumRig, bumper ],
 	'In Play Scene, gravity swings the bone and the block lights up on contact. Press Space to push the weight and R to reset its pose and velocity. Inspect the Swing bone’s dynamic capsule and hinge in Armature properties, and the block’s fixed Rig Collider.',
 	[ 2.15, 1.22, 4.12 ] );
+
+const reachingRig = createArmature( THREE, 'Reach armature' );
+reachingRig.position.set( -.65, -.75, 0 );
+const upperArm = reachingRig.children[ 0 ];
+upperArm.name = 'Upper arm';
+const forearm = createBone( THREE, 'Forearm', boneRestFromPoints( THREE, [ 0, 1, 0 ], [ 0, 2, 0 ], 0, true ) );
+upperArm.add( forearm );
+const reachTarget = new THREE.Object3D();
+reachTarget.name = 'Reach target';
+reachTarget.userData.emptyDisplay = { style: 'sphere', size: .14 };
+reachTarget.position.set( 1.3, 1.3, 0 );
+const elbowPole = new THREE.Object3D();
+elbowPole.name = 'Elbow pole';
+elbowPole.userData.emptyDisplay = { style: 'axes', size: .2 };
+elbowPole.position.set( .85, .3, .9 );
+reachingRig.add( reachTarget, elbowPole );
+forearm.userData.armatureIK = { target: reachTarget.uuid, pole: elbowPole.uuid, chainLength: 2, iterations: 32, influence: 1, useTail: true };
+
+const sleeve = new THREE.Mesh( new THREE.CylinderGeometry( .11, .19, 2, 20, 44 ),
+	new THREE.MeshStandardMaterial( { color: 0x49c9c1, roughness: .45 } ) );
+sleeve.name = 'Weighted sleeve';
+sleeve.position.y = 1;
+sleeve.updateMatrix();
+sleeve.userData.armatureBinding = { rig: reachingRig.uuid, objectToRig: sleeve.matrix.toArray(), influences: 2 };
+reachingRig.add( sleeve );
+const hand = new THREE.Mesh( new THREE.IcosahedronGeometry( .105, 2 ),
+	new THREE.MeshStandardMaterial( { color: 0xe5ffdf, emissive: 0x3d7c6b } ) );
+hand.name = 'Hand marker';
+hand.position.y = 1;
+forearm.add( hand );
+const targetRing = new THREE.Mesh( new THREE.TorusGeometry( .20, .021, 8, 40 ),
+	new THREE.MeshStandardMaterial( { color: 0xffbc64, emissive: 0x7c4e24 } ) );
+targetRing.name = 'Target ring';
+reachTarget.add( targetRing );
+const reach = reachingRig.userData.logicGraph = createLogicGraph();
+removeNode( reach, 'logic.start' );
+const endBone = logicNode( reach, 'logic.bone', 25, 270, { name: 'Forearm' } );
+for ( const [ key, dx, y ] of [ [ 'ArrowLeft', -.25, 26 ], [ 'ArrowRight', .25, 150 ] ] ) {
+
+	const source = logicNode( reach, 'logic.keyDown', 24, y, { key } );
+	const move = logicNode( reach, 'logic.move', 327, y, { x: dx, target: reachTarget.uuid } );
+	wire( reach, LOGIC_DOMAIN, source, 'then', move, 'run' );
+
+}
+for ( const [ key, influence, y ] of [ [ 'Space', 0, 425 ], [ 'KeyR', 1, 550 ] ] ) {
+
+	const source = logicNode( reach, 'logic.keyDown', 24, y, { key } );
+	const change = logicNode( reach, 'logic.setIKInfluence', 327, y, { influence } );
+	wire( reach, LOGIC_DOMAIN, source, 'then', change, 'run' );
+	wire( reach, LOGIC_DOMAIN, endBone, 'object', change, 'target' );
+
+}
+await save( '19-inverse-kinematics', 'A reach-controlled arm', reachingRig,
+	'Move Reach target and Elbow pole in the viewport to pose the arm. The hand marker follows the goal, and the sleeve bends with the two bones. In Play Scene, use Left and Right Arrow to move the target, Space to show the authored pose, and R to restore IK.',
+	[ 2.7, 1.3, 4.3 ] );

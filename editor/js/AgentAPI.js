@@ -14,7 +14,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
 import { armatureBones, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, createRig, editBoneRest, resetArmaturePose, setBonePhysics, setRigCollider } from './rigging/ArmatureTools.js';
+import { addRigBone, attachToBone, bindArmature, createBoneIKTarget, createRig, editBoneRest, resetArmaturePose, setBoneIK, setBonePhysics, setRigCollider } from './rigging/ArmatureTools.js';
+import { withArmatureIK } from './rigging/ArmatureIK.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -35,6 +36,7 @@ function AgentAPI( editor ) {
   return {
    uuid: bone.uuid, name: bone.name, parent: bone.parent?.uuid, attached: bone.children.filter( child => ! child.isBone && ! child.userData.runtimeOnly ).map( child => child.uuid ),
    position: bone.position.toArray(), rotation: bone.rotation.toArray().slice( 0, 3 ), scale: bone.scale.toArray(), physics: bone.userData.armaturePhysics || null,
+   ik: bone.userData.armatureIK || null,
    rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, connected: rest.connected } : null
   };
 
@@ -54,7 +56,16 @@ function AgentAPI( editor ) {
 
   const rig = object( a.uuid );
   if ( ! isArmature( rig ) ) throw new Error( 'Expected an authored armature object.' );
-  return { uuid: rig.uuid, name: rig.name, bones: armatureBones( rig ).map( describeBone ) };
+  const bones = armatureBones( rig );
+  const result = bones.map( describeBone );
+  withArmatureIK( THREE, editor.scene, () => bones.forEach( ( bone, index ) => {
+
+   result[ index ].worldHead = bone.getWorldPosition( new THREE.Vector3() ).toArray();
+   const length = bone.userData.armatureBone?.length ?? 1;
+   result[ index ].worldTail = bone.localToWorld( new THREE.Vector3( 0, length, 0 ) ).toArray();
+
+  } ) );
+  return { uuid: rig.uuid, name: rig.name, bones: result };
 
  }, true );
  add( 'bone_add', 'Insert a root bone or extrude a child from an existing bone’s tail. Selects the new bone and supports undo.', {
@@ -107,6 +118,23 @@ function AgentAPI( editor ) {
   const target = object( a.uuid );
   bindArmature( editor, target, a.armature === undefined ? null : object( a.armature ), a.influences );
   return { uuid: target.uuid, binding: target.userData.armatureBinding || null };
+
+ } );
+ add( 'bone_set_ik', 'Configure inverse kinematics on a bone. The chain follows a scene object or bone and can bend toward a pole. Supports undo.', {
+  uuid: { ...str, description: 'Authored end bone UUID.' },
+  target: { ...str, description: 'Target object or bone UUID. An empty string removes the constraint.' },
+  pole: { ...str, description: 'Optional pole object or bone UUID. An empty string clears the pole.' },
+  chainLength: { type: 'integer', minimum: 0, maximum: 64, description: 'Number of bones to solve. Zero includes all available ancestors.' },
+  iterations: { type: 'integer', minimum: 1, maximum: 128, description: 'Maximum iterations for longer chains.' },
+  influence: { ...float( 'Blend between the authored pose and the solved pose.' ), minimum: 0, maximum: 1 },
+  useTail: { type: 'boolean', description: 'Follow the target with the selected bone’s tail. False follows with the head.' }
+ }, [ 'uuid' ], ( { uuid, ...settings } ) => ( { uuid, ik: setBoneIK( editor, object( uuid ), settings ) } ) );
+ add( 'bone_create_ik_target', 'Create an Empty at a bone’s evaluated tail and bind it as the IK target in one undoable action.', {
+  uuid: { ...str, description: 'Authored end bone UUID.' }
+ }, [ 'uuid' ], ( { uuid } ) => {
+
+  const target = createBoneIKTarget( editor, object( uuid ) );
+  return { bone: uuid, target: target.uuid, position: target.position.toArray() };
 
  } );
  add( 'bone_set_physics', 'Configure a Rapier capsule on an authored bone. Dynamic bones can drive weighted geometry and attachments in Play Scene. Supports undo.', {

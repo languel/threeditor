@@ -11,6 +11,8 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
+import { hasIKDependencyCycle, ikSettings, resolveIK, withArmatureIK } from './ArmatureIK.js';
+import { createEmpty } from '../modeling/ReferenceObjects.js';
 
 function editable( editor, object ) {
 
@@ -197,5 +199,50 @@ export function setRigCollider( editor, object, mode ) {
 	command.updatable = false;
 	editor.execute( command, 'Set Rig Collider' );
 	return userData.armatureCollider || null;
+
+}
+
+function ikCommand( editor, bone, value, stagedTarget ) {
+
+	if ( ! bone?.userData.armatureBone || ! armatureOf( bone ) || ! editable( editor, bone ) ) throw new Error( 'Select an editable authored bone.' );
+	const userData = { ...bone.userData };
+	if ( value.target === '' ) delete userData.armatureIK;
+	else {
+
+		const settings = ikSettings( { ...userData.armatureIK, ...value } );
+		if ( ! settings ) throw new Error( 'Choose an IK target and valid chain settings.' );
+		const entry = resolveIK( editor.scene, bone, settings, stagedTarget );
+		if ( entry.error ) throw new Error( entry.error );
+		if ( hasIKDependencyCycle( editor.scene, entry ) ) throw new Error( 'The target or pole would create a cycle between IK chains.' );
+		userData.armatureIK = settings;
+
+	}
+	const command = new SetValueCommand( editor, bone, 'userData', userData );
+	command.updatable = false;
+	return command;
+
+}
+
+export function setBoneIK( editor, bone, value ) {
+
+	const command = ikCommand( editor, bone, value );
+	editor.execute( command, 'Set Inverse Kinematics' );
+	return bone.userData.armatureIK || null;
+
+}
+
+export function createBoneIKTarget( editor, bone ) {
+
+	if ( ! bone?.userData.armatureBone ) throw new Error( 'Select an authored bone.' );
+	const target = createEmpty( 'sphere' );
+	target.name = bone.name + ' IK Target';
+	target.userData.emptyDisplay.size = .13;
+	const tail = withArmatureIK( THREE, editor.scene,
+		() => bone.localToWorld( new THREE.Vector3( 0, bone.userData.armatureBone.length, 0 ) ) );
+	target.position.copy( editor.scene.worldToLocal( tail ) );
+	const settings = ikCommand( editor, bone, { target: target.uuid, useTail: true }, target );
+	const add = new AddObjectCommand( editor, target, null, false );
+	editor.execute( new MultiCmdsCommand( editor, [ add, settings ] ), 'Add IK Target' );
+	return target;
 
 }

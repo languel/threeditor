@@ -1,5 +1,6 @@
 import { isVisible } from '../ObjectRestrictions.js';
 import { withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
+import { withArmatureIK } from '../rigging/ArmatureIK.js';
 
 const zero = Object.freeze( [ 0, 0, 0 ] );
 const miss = Object.freeze( { hit: false, object: '', point: zero, normal: zero, distance: 0 } );
@@ -157,6 +158,12 @@ export class LogicInput {
 	pointerHit( pointer, camera = this.camera ) {
 
 		if ( ! pointer || ! ( camera?.isPerspectiveCamera || camera?.isOrthographicCamera ) ) return miss;
+		return withArmatureIK( this.THREE, this.scene, () => this.posedPointerHit( pointer, camera ) );
+
+	}
+
+	posedPointerHit( pointer, camera ) {
+
 		camera.updateWorldMatrix( true, false );
 		const raycaster = this.raycaster;
 		raycaster.setFromCamera( this.ndc.set( pointer.x * 2 - 1, 1 - pointer.y * 2 ), camera );

@@ -67,6 +67,14 @@ To keep an object rigid as the rig moves, select it and then add the desired bon
 
 In Logic Nodes, **Armature Bone** finds a bone by name or UUID and exposes its world-space head and tail. Connect its **Bone** socket to a transform action or **Reset Bone Pose**. The editor API and WebMCP expose the same authoring operations as `threeditor_armature_create`, `threeditor_armature_get`, `threeditor_bone_add`, `threeditor_bone_edit_rest`, `threeditor_armature_reset_pose`, `threeditor_bone_attach`, and `threeditor_armature_bind`. [Bending signal flag tutorial](../editor/examples/lessons/README.md#rig-a-bending-signal-flag)
 
+### Inverse kinematics
+
+Select the end bone and choose **Add IK Target** in the **Armature** tab to place an Empty at its tip. **Shift+I** also adds IK, using another selected object as the target when available. Move the target to pose the chain. Assign a **Pole Target** to control the bend direction, such as which way an elbow points. **Chain Length** starts at the endpoint and walks up the hierarchy. Zero includes every available ancestor. **Use Bone Tail** switches the endpoint between the selected bone’s tail and head. [Blender IK reference](https://docs.blender.org/manual/en/5.0/animation/constraints/tracking/ik_solver.html)
+
+**IK Influence** blends the solved and authored rotations. Chains preserve their lengths and reach toward distant targets as far as they can. Targets belong outside the solved chain and its descendants. Kinematic Rapier bodies can follow the solved pose, and dynamic bones get their pose from Rapier.
+
+Logic Nodes can move the target with object actions, change the blend with **Set IK Influence**, or read the result with **Armature Bone**. WebMCP exposes `threeditor_bone_set_ik` and `threeditor_bone_create_ik_target`. The armature inspection tool returns evaluated world heads and tails alongside the saved local transforms. [Reach-controlled arm tutorial](../editor/examples/lessons/README.md#pose-a-reach-controlled-arm)
+
 ### Bone physics
 
 On a bone’s **Armature** tab, set **Bone Physics** to **Kinematic capsule** to follow authored poses or **Dynamic capsule** to respond to gravity, contacts, and impulses in Play Scene. Dynamic child bones can use ball, hinge, or fixed parent joints. Hinges have a local axis and optional angle limits measured from the pose at the start of playback. A dynamic root can move freely or use **Anchor Root** to joint it to its armature. Set **Rig Collider** on a scene mesh to use its bounds as a fixed or moving box. [Rapier joint reference](https://rapier.rs/javascript3d/classes/JointData.html)
