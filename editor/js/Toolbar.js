@@ -1,5 +1,5 @@
 import { icon } from './Glyphs.js?v=transform-gizmos';
-import { addTransformSettings } from './TransformSettings.js?v=editor-glyphs';
+import { addTransformSettings } from './TransformSettings.js?v=pane-navigation';
 import { UIPanel, UIButton } from './libs/ui.js';
 
 function Toolbar( editor ) {

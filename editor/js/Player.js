@@ -122,7 +122,7 @@ function Player( editor ) {
 			const view = frame ? {
 				source: frame.source?.uuid || ( frame.director ? undefined : frame.camera.uuid ),
 				camera: frame.camera.toJSON(),
-				target: editor.controls.getCenter( frame.director ? editor.camera : frame.camera ).toArray()
+				target: editor.controls.getCenter( frame.camera ).toArray()
 			} : undefined;
 			await player.load( json, view );
 			if ( request !== playRequest ) return;

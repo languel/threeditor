@@ -122,7 +122,7 @@ class Keymap {
   }
   for(const [id,label,category,basic,blender] of definitions) this.register({id,label,category,defaults:{basic,blender},run:()=>this.run(id)});
   const trackPointer = event => {
-   if ( event.pointerType === 'touch' || event.target.closest?.( '.context-menu, .transform-pie' ) ) return;
+   if ( event.pointerType === 'touch' || event.target.closest?.( '.context-menu' ) ) return;
    this.pointer = { x: event.clientX, y: event.clientY };
   };
   document.addEventListener( 'pointermove', trackPointer, true );
@@ -159,7 +159,14 @@ class Keymap {
  }
  get viewFrame() {
   if ( ! this.pointer || ! this.pointerTarget?.closest( '#viewport' ) ) return;
-  return this.editor.viewLayout?.at( this.pointer.x, this.pointer.y, 'area' );
+  const layout = this.editor.viewLayout;
+  const frame = layout?.at( this.pointer.x, this.pointer.y, 'area' );
+  if ( frame && layout.isViewportPane?.( frame.key ) !== false ) return frame;
+ }
+ get viewPane() {
+  const layout = this.editor.viewLayout;
+  return this.viewFrame?.key ?? layout?.navigation?.key ??
+   layout?.frames.find( frame => layout.isViewportPane?.( frame.key ) !== false )?.key;
  }
  get overEditableViewport() {
   const target = this.pointerTarget;
@@ -172,12 +179,13 @@ class Keymap {
   const inViewport = ( ! target || target.closest( '#viewport, #toolbar' ) && ! target.closest( '.viewport-edit-workspace' ) ) && ! this.editor.editWorkspace?.exclusive;
   const inOutliner = !! target?.closest( '#outliner' ) && ! this.editor.modeling?.editMode && ! this.editor.viewTools?.mode;
   const inSourcePane = this.editor.viewportSplit && this.viewFrame?.director === false;
-  if ( id === 'fly' || id === 'navigationPie' ) return inViewport;
+  if ( id === 'navigationPie' ) return inViewport && ( ! target || !! this.viewFrame );
+  if ( id === 'fly' ) return inViewport;
   if ( category === 'Navigation' ) return this.overEditableViewport;
   if ( category === 'Visibility' ) return inOutliner || this.overEditableViewport;
   if ( category === 'Hierarchy' || category === 'Rigging' ) return inOutliner || this.overEditableViewport;
   if ( category === 'View' ) {
-   const movesView = [ 'focus', 'frameAll', 'fly', 'navigationPie', 'projection', 'perspective', 'orthographic', 'localView', 'localViewAlternate', 'toggleXRay', 'viewportSidebar', 'viewportToolbar' ].includes( id ) || /^view(Front|Back|Left|Right|Top|Bottom)$/.test( id );
+   const movesView = [ 'focus', 'frameAll', 'localView', 'localViewAlternate', 'toggleXRay', 'viewportSidebar', 'viewportToolbar' ].includes( id );
    return inViewport && ( ! inSourcePane || ! movesView );
   }
   if ( [ 'Transform', 'Modeling' ].includes( category ) || [ 'addMenu', 'contextMenu' ].includes( id ) ) return this.overEditableViewport;
@@ -273,7 +281,16 @@ class Keymap {
   }
   this.changed();
  }
- run(id,pane=this.viewFrame?.key){const e=this.editor,s=e.signals;
+ useDirectorView( pane ) {
+  const e = this.editor, layout = e.viewLayout;
+  if ( pane ) layout.activeKey = pane;
+  const primary = e.viewportSplit && pane === 'director';
+  if ( primary ? e.directorPaneCamera !== e.camera : e.viewportSource || e.viewportCamera !== e.camera ) {
+   e.setViewportCamera( e.camera.uuid, pane );
+  }
+  return e.getDirectorCamera( pane );
+ }
+ run(id,pane=this.viewPane){const e=this.editor,s=e.signals;
   if ( Object.hasOwn( topologySelectionActions, id ) ) {
 
    if ( this.actionAvailable( id ) ) e.modeling.selectTopology( topologySelectionActions[ id ], id.endsWith( 'UnderPointer' ) ? this.pointer : undefined );
@@ -324,6 +341,7 @@ class Keymap {
    case 'selectAll':{if(e.viewTools.armature.mode){e.viewTools.armature.selectAll(true);break;}if(e.modeling?.editMode){e.modeling.selectPoints(true);break;}const objects=e.scene.children.filter(o=>isVisible(o)&&!hasRestriction(o,'unselectable'));if(this.preset==='basic'&&objects.length&&objects.every(o=>e.selector.selection.includes(o)))e.deselect();else e.selector.setSelection(objects);break;}
    case 'selectNone':if(e.viewTools.armature.mode)e.viewTools.armature.selectAll(false);else if(e.modeling?.editMode)e.modeling.selectPoints(false);else e.deselect();break;
    case 'focus':{
+    if ( e.viewportSplit && pane && e.selected ) e.controls.setCamera( this.useDirectorView( pane ) );
     if ( e.viewTools.armature.mode ) { e.viewTools.armature.focus(); break; }
     const model = e.modeling;
     if ( model.editMode && model.object && model.indices.length ) {
@@ -339,17 +357,17 @@ class Keymap {
    case 'localView':case 'localViewAlternate':e.viewportVisibility.toggleLocal();break;
    case 'hideSelection':case 'hideUnselected':if(this.actionAvailable(id))e.viewportVisibility.hide(id==='hideUnselected');break;
    case 'revealHidden':if(this.actionAvailable(id))e.viewportVisibility.reveal();break;
-   case 'perspective':e.setCameraType('perspective');break;case 'orthographic':e.setCameraType('orthographic');break;
-   case 'projection':
-    if ( ! e.viewportSplit && ( e.viewportSource || e.viewportCamera !== e.camera ) ) e.setViewportCamera( e.camera.uuid );
-    e.setCameraType( e.camera.isPerspectiveCamera ? 'orthographic' : 'perspective' );
+   case 'perspective':case 'orthographic':case 'projection':{
+    const camera = this.useDirectorView( pane );
+    const type = id === 'projection' ? ( camera.isPerspectiveCamera ? 'orthographic' : 'perspective' ) : id;
+    e.setCameraType( type, camera );
     break;
+   }
    case 'viewFront':case 'viewBack':case 'viewRight':case 'viewLeft':case 'viewTop':case 'viewBottom':{
-    if(!e.viewportSplit)e.setViewportCamera(e.camera.uuid);
-    e.setCameraType('orthographic');
-    const cam=e.camera,center=e.controls.getCenter(cam);const distance=Math.max(0.1,cam.position.distanceTo(center));
+    const cam=e.setCameraType('orthographic',this.useDirectorView(pane));
+    const center=e.controls.getCenter(cam);const distance=Math.max(0.1,cam.position.distanceTo(center));
     const dirs={viewFront:[0,0,1],viewBack:[0,0,-1],viewRight:[1,0,0],viewLeft:[-1,0,0],viewTop:[0,1,0],viewBottom:[0,-1,0]};
-    cam.up.set(0,Math.abs(dirs[id][1])?0:1,Math.abs(dirs[id][1])?-1:0);cam.position.copy(center).add(new THREE.Vector3(...dirs[id]).multiplyScalar(distance));cam.lookAt(center);cam.updateMatrixWorld(true);s.cameraChanged.dispatch(cam);break;
+    cam.up.set(0,Math.abs(dirs[id][1])?0:1,Math.abs(dirs[id][1])?-1:0);cam.position.copy(center).add(new THREE.Vector3(...dirs[id]).multiplyScalar(distance));cam.lookAt(center);cam.updateMatrixWorld(true);s.viewportCameraChanged.dispatch();break;
    }
    case 'viewCamera':{
     const director=e.viewportSplit&&pane==='director';
@@ -357,7 +375,10 @@ class Keymap {
     const active=director?e.activeDirectorCamera:e.activeSceneCamera;
     const source=!director&&e.viewportSource;
     const camera=current!==e.camera||source&&!e.viewportSplit?e.camera:active||(source?e.camera:null);
-    if(camera)e.setViewportCamera(camera.uuid,pane);
+    if(camera){
+     if(pane)e.viewLayout.activeKey=pane;
+     e.setViewportCamera(camera.uuid,pane);
+    }
     break;
    }
    case 'setActiveCamera':if(this.actionAvailable(id))e.setViewportCamera(e.selected.uuid,pane);break;
@@ -410,7 +431,8 @@ class Keymap {
    case 'objectNames':e.setViewportObjectNames(!e.config.getKey('settings/showObjectNames'));break;
    case 'workspaceMode':e.viewTools?.toggleWorkspaceMode();break;
    case 'toggleSnap':e.toggleTransformSnap?.();break;
-   case 'modePie':case 'navigationPie':case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'cursorSnapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
+   case 'navigationPie':if(pane)e.openTransformPie?.('navigation',pane);break;
+   case 'modePie':case 'shadingPie':case 'placementPie':case 'orientationPie':case 'gridPie':case 'snapPie':case 'cursorSnapPie':case 'pivotPie':e.openTransformPie?.(id.slice(0,-3));break;
    case 'grid':e.toggleTransformGrid?.();break;
    case 'cameraHelpers':case 'lightHelpers':case 'skeletonHelpers':e.shortcutToggleHelper?.(id);break;
    case 'timelineInsertKey':e.timeline?.insertKey( hoveredTimelineProperty() );break;

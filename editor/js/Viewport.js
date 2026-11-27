@@ -1,6 +1,6 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface, supportsSelectionOutline } from './Viewport.SelectionOutline.js?v=unified-sync';
 import { createEditWorkspace } from './modeling/EditWorkspace.js?v=transform-gizmos';
-import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
+import { transformSnapStep } from './TransformSettings.js?v=pane-navigation';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
@@ -16,7 +16,7 @@ import { EditorControls } from './EditorControls.js?v=unified-sync';
 
 import { ViewportLabels } from './Viewport.Labels.js?v=unified-sync';
 import { ViewportControls } from './Viewport.Controls.js?v=split-areas';
-import { FlyControls } from './FlyControls.js?v=ortho-fly';
+import { FlyControls } from './FlyControls.js?v=pane-navigation';
 import { hasRestriction, isVisible, withEnabledObjects, withViewportObjects } from './ObjectRestrictions.js';
 import { ViewportInfo } from './Viewport.Info.js?v=unified-sync';
 import { ViewportSidebar } from './Viewport.Sidebar.js?v=texture-projection';
@@ -36,7 +36,7 @@ import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
 import { ViewportTools } from './modeling/ViewportTools.js?v=texture-projection';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
-import { ViewLayout } from './modeling/ViewLayout.js?v=split-areas';
+import { ViewLayout } from './modeling/ViewLayout.js?v=pane-navigation';
 import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { PostProcessingHost } from './PostProcessing.js';
 import { beginShaderGraphFrame, shaderGraphsAnimate, withShaderGraphs } from './nodes/ShaderGraphRuntime.js';
@@ -649,8 +649,9 @@ function Viewport( editor ) {
 	controls.onEmulatedClick = event => model.altClick( event );
 	controls.addEventListener( 'change', function () {
 
-		const active = editor.viewportSplit ? editor.camera : editor.viewportCamera;
-		if ( active !== editor.camera ) signals.objectChanged.dispatch( active );
+		const frame = layout.navigation;
+		const active = frame?.camera || editor.camera;
+		if ( frame && ! frame.director ) signals.objectChanged.dispatch( active );
 		signals.cameraChanged.dispatch( active );
 		signals.refreshSidebarObject3D.dispatch( active );
 
@@ -907,6 +908,7 @@ function Viewport( editor ) {
 
 	signals.objectFocused.add( function ( object ) {
 
+		if ( ! layout.navigation ) return;
 		controls.focus( object );
 
 	} );
@@ -1168,7 +1170,6 @@ function Viewport( editor ) {
 
 		}
 
-		controls.setCamera( editor.viewportSplit ? editor.camera : viewportCamera );
 		controls.enabled = ! editor.modalTransform?.active && ! editor.flyControls?.active;
 
 		initPT();
@@ -1270,7 +1271,6 @@ function Viewport( editor ) {
 
 			camera = editor.camera;
 
-			controls.setCamera( editor.viewportSplit ? editor.camera : editor.viewportCamera );
 			transformControls.camera = camera;
 			viewHelper.camera = camera;
 			viewHelper.center = controls.getCenter( camera );
@@ -1535,6 +1535,7 @@ function Viewport( editor ) {
 
 		}
 		const nav = layout.navigation;
+		controls.setCamera( nav?.camera || editor.camera );
 		const navRect = nav?.rect;
 		transformControls.camera = nav?.camera || editor.camera;
 		transformControls.viewport = tiled && navRect ?
