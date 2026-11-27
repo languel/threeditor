@@ -104,6 +104,7 @@ export const LOGIC_DOMAIN = {
 			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ) }
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
+		[ 'logic.setIKInfluence', action( 'Set IK Influence', 'Rigging', { target, influence: unit( 'Influence', 1 ) } ) ],
 		[ 'logic.boneContact', {
 			...trigger( 'On Bone Contact', 'bonecontact', { target, other: { ...object( 'Other Collider' ), emptyLabel: 'Any collider' } },
 				{ enter: event( 'Enter' ), exit: event( 'Exit' ) } ), category: 'Rigging'

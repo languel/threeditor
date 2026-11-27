@@ -25,6 +25,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A generative Empty | Geometry, shading, and keyboard logic are attached to one Empty. |
 | — | A bending signal flag | A mesh, pencil stripe, and curve share a skeleton, and a marker follows the tip bone. |
 | — | A Rapier pendulum | A dynamic bone swings from a kinematic parent, hits a scene collider, and receives a keyboard impulse. |
+| — | A reach-controlled arm | A two-bone IK chain follows a target and pole, with a weighted sleeve and a rigid hand marker. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -133,3 +134,9 @@ opened from the library.
 1. Open **A Rapier pendulum** and choose **Play Scene**. The weight swings under gravity. Press **Space** to push it and **R** to restore the initial pose.
 2. Stop Play and select **Swing** in the Outliner. In **Armature**, inspect its dynamic capsule and Z-axis hinge. Change damping and run the scene again.
 3. Select **Collision stop** to see its fixed box collider. Select **Pendulum armature** and open **Logic Nodes** to trace the keyboard event through **Apply Bone Impulse** and see how **On Bone Contact** changes the block’s color.
+
+### Pose a reach-controlled arm
+
+1. Open **A reach-controlled arm**. Select **Reach target** in the Outliner and move it. The sleeve bends and the hand follows the target within reach.
+2. Move **Elbow pole** to change the direction of the bend. Select **Forearm** and open **Armature** to inspect the target, pole, and chain length. Lower **IK Influence** to blend toward the authored pose.
+3. In Play Scene, press **Left** or **Right Arrow** to move the target, **Space** to show the authored pose, and **R** to restore IK. Open Logic Nodes on **Reach armature** to see how those keys drive the rig.

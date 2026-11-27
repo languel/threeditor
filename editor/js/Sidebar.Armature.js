@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { UIButton, UINumber, UIPanel, UIRow, UIText } from './libs/ui.js';
 import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js';
+import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
@@ -46,7 +47,8 @@ export function SidebarArmature( editor ) {
 	roll.dom.setAttribute( 'aria-label', 'Bone roll degrees' );
 	restPanel.add( new UIRow().add( new UIText( 'Roll' ).setClass( 'Label' ), roll ) );
 	const physics = SidebarBonePhysics( editor, run );
-	pose.add( physics );
+	const ik = SidebarArmatureIK( editor, run );
+	pose.add( ik, physics );
 	const binding = new UIPanel();
 	const rigPicker = document.createElement( 'select' );
 	rigPicker.className = 'Select';
@@ -115,6 +117,7 @@ export function SidebarArmature( editor ) {
 		const rigs = ! rig && canDeformWithArmature( object ) ? sceneArmatures( editor.scene ) : [];
 		updateBinding( object, rigs );
 		physics.setObject( bone );
+		ik.setObject( bone );
 		collider.setObject( object, rigs.length > 0 );
 		if ( ! rig ) return;
 		const options = [ new Option( rig.name, rig.uuid ) ];

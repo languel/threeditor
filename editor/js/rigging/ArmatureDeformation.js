@@ -1,4 +1,5 @@
 import { armatureBones, isArmature } from './Armature.js';
+import { withArmatureIK } from './ArmatureIK.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 const records = new WeakMap();
@@ -184,6 +185,12 @@ function deform( THREE, object, rig, entry ) {
 // Scope the posed geometry to presentation and ray queries. Modeling tools and
 // scene serialization can continue to use the original editable rest geometry.
 export function withArmatureDeformation( THREE, scene, draw, skip = null ) {
+
+	return withArmatureIK( THREE, scene, () => withWeightedPose( THREE, scene, draw, skip ) );
+
+}
+
+function withWeightedPose( THREE, scene, draw, skip ) {
 
 	if ( activeScenes.has( scene ) ) return draw();
 	activeScenes.add( scene );

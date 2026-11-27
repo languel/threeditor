@@ -1,4 +1,5 @@
 import { armatureOf, findBone, resetBoneTransform } from '../rigging/Armature.js';
+import { withArmatureIK } from '../rigging/ArmatureIK.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
 import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
@@ -24,6 +25,7 @@ export class LogicRuntime {
 
 	constructor( THREE, scene, streams, onError = ( error, object ) => console.warn( 'Logic Nodes on ' + ( object.name || object.uuid ), error ) ) {
 
+		this.THREE = THREE;
 		this.scene = scene;
 		this.streams = streams;
 		this.onError = onError;
@@ -128,9 +130,13 @@ export class LogicRuntime {
 				for ( let object = this.target( instance, inputs.armature ); object && ! rig; object = object.parent ) rig = armatureOf( object );
 				const bone = findBone( rig, inputs.name.trim() );
 				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return { object: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ] };
-				const head = bone.getWorldPosition( this.motion ).toArray();
-				const tail = bone.localToWorld( this.motion.set( 0, bone.userData.armatureBone?.length ?? 1, 0 ) ).toArray();
-				return { object: bone.uuid, found: true, head, tail };
+				return withArmatureIK( this.THREE, this.scene, () => {
+
+					const head = bone.getWorldPosition( this.motion ).toArray();
+					const tail = bone.localToWorld( this.motion.set( 0, bone.userData.armatureBone?.length ?? 1, 0 ) ).toArray();
+					return { object: bone.uuid, found: true, head, tail };
+
+				} );
 
 			}
 			case 'logic.boolean': return { value: inputs.value };
@@ -267,6 +273,9 @@ export class LogicRuntime {
 				break;
 			case 'logic.boneImpulse':
 				this.physics?.impulse( object, inputs.impulse );
+				break;
+			case 'logic.setIKInfluence':
+				if ( object.isBone && object.userData.armatureIK ) object.userData.armatureIK.influence = inputs.influence;
 				break;
 			case 'logic.move':
 				this.motion.set( x, y, z );

@@ -4,6 +4,7 @@ import { transformSnapStep } from './TransformSettings.js?v=editor-glyphs';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
 import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
+import { withArmatureIK } from './rigging/ArmatureIK.js';
 import * as THREE from 'three';
 import { PMREMGenerator } from 'three/webgpu';
 
@@ -1367,7 +1368,7 @@ function Viewport( editor ) {
 				scene.traverseVisible( object => {
 
 					if ( renderedFallback || ! isVisible( object ) || object.userData.annotation === true ) return;
-					if ( object.splats || object.isPoints || object.userData.armatureBinding || isProjector( object ) ) renderedFallback = true;
+					if ( object.splats || object.isPoints || object.userData.armatureBinding || object.userData.armatureIK || isProjector( object ) ) renderedFallback = true;
 					else if ( object.isLine || object.isSprite ||
 						[ object.material ].flat().some( material => material?.isShaderMaterial ) ) renderedFallback = true;
 
@@ -1421,6 +1422,12 @@ function Viewport( editor ) {
 	function render() {
 
 		if ( renderer === null ) return;
+		withArmatureIK( THREE, scene, renderPosed );
+
+	}
+
+	function renderPosed() {
+
 		beginShaderGraphFrame( renderer );
 		if ( viewToolMode !== editor.viewTools.mode ) {
 

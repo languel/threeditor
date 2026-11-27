@@ -3,6 +3,7 @@ import { worldMeasurePoints } from './modeling/Measurements.js';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { withArmatureDeformation } from './rigging/ArmatureDeformation.js';
+import { withArmatureIK } from './rigging/ArmatureIK.js';
 
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
@@ -150,7 +151,12 @@ class Selector {
 		} );
 
 		const model = this.editor.modeling;
-		const hits = withArmatureDeformation( THREE, this.editor.scene, () => raycaster.intersectObjects( objects, false ), model?.editMode ? model.object : null );
+		const hits = withArmatureDeformation( THREE, this.editor.scene, () => {
+
+			this.editor.sceneHelpers.updateMatrixWorld( true );
+			return raycaster.intersectObjects( objects, false );
+
+		}, model?.editMode ? model.object : null );
 		return hits.filter( hit => {
 
 			const object = ( hit.object.userData.nodeComponentOutput ? hit.object.parent : hit.object.userData.object ) || hit.object;
@@ -161,6 +167,12 @@ class Selector {
 	}
 
 	getPointerIntersects( point, camera ) {
+
+		return withArmatureIK( THREE, this.editor.scene, () => this.getPosedPointerIntersects( point, camera ) );
+
+	}
+
+	getPosedPointerIntersects( point, camera ) {
 
 		mouse.set( ( point.x * 2 ) - 1, - ( point.y * 2 ) + 1 );
 
