@@ -11,7 +11,7 @@ import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
 import { SetPositionCommand } from '../commands/SetPositionCommand.js';
 import { SetRotationCommand } from '../commands/SetRotationCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
-import { meshHit, paintSurfaces } from './SurfacePicking.js';
+import { modelSurfaceHit, modelSurfaceNormal, paintSurfaces } from './SurfacePicking.js';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { interpolatePoint, segmentCount } from './Contour.js';
 import { joinMeshGeometry } from './MeshJoin.js';
@@ -37,7 +37,7 @@ function elementCenter( data, ids ) {
 
 export function editableMesh( object ) {
 
-	return object?.isMesh && ! object.isSkinnedMesh && ! object.isInstancedMesh &&
+	return object?.isMesh && ! object.userData.modelReference && ! object.isSkinnedMesh && ! object.isInstancedMesh &&
 		object.geometry?.attributes.position && ! Object.keys( object.geometry.morphAttributes ).length;
 
 }
@@ -624,7 +624,7 @@ export class ModelViewport {
 		let point = this.pointerWorld( event.clientX, event.clientY, plane );
 		if ( this.placement === 'surface' && ! state.axis ) {
 
-			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			const hit = modelSurfaceHit( this.ray, this.editor.scene, this.object, this.frame.camera, this.rect() );
 			if ( hit ) point = hit.point;
 
 		}
@@ -1912,10 +1912,9 @@ export class ModelViewport {
 		if ( placement === 'surface' ) {
 
 			this.pointerWorld( event.clientX, event.clientY, plane.setFromNormalAndCoplanarPoint( normal, origin ) );
-			const hit = meshHit( this.ray, this.editor.scene, object );
+			const hit = modelSurfaceHit( this.ray, this.editor.scene, object, this.frame.camera, this.rect() );
 			if ( ! hit ) return null;
-			normal.copy( hit.face.normal ).applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
-			if ( normal.dot( this.ray.ray.direction ) > 0 ) normal.negate();
+			normal.copy( modelSurfaceNormal( hit, this.ray ) );
 			world = hit.point;
 			origin.copy( world );
 
@@ -2054,11 +2053,11 @@ export class ModelViewport {
 		if ( ! this.penChain && this.placement === 'surfacePerpendicular' ) {
 
 			this.pointerWorld( event.clientX, event.clientY, new THREE.Plane().setFromNormalAndCoplanarPoint( normal, origin ) );
-			const hit = meshHit( this.ray, this.editor.scene, this.object );
+			const hit = modelSurfaceHit( this.ray, this.editor.scene, this.object, this.frame.camera, this.rect() );
 			if ( hit ) {
 
 				origin.copy( hit.point );
-				const n = hit.face.normal.clone().applyNormalMatrix( new THREE.Matrix3().getNormalMatrix( hit.object.matrixWorld ) );
+				const n = modelSurfaceNormal( hit, this.ray );
 				const view = this.frame.camera.getWorldDirection( new THREE.Vector3() );
 				normal.copy( view ).addScaledVector( n, - view.dot( n ) );
 				if ( normal.lengthSq() < 1e-6 ) normal.copy( view );

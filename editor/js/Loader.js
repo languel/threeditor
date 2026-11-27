@@ -10,6 +10,7 @@ import { LoaderUtils } from './LoaderUtils.js';
 import { isTextureAsset, storeSourceFiles } from './ProjectAssets.js';
 
 import { scanFileKind, loadScanGeometry } from './assets/ScanFiles.js';
+import { markModelReference } from './modeling/ReferenceObjects.js';
 import { splatScript, splatFileType } from './assets/SplatObjects.js?v=splat-filters';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
@@ -234,15 +235,16 @@ function Loader( editor ) {
 		const filename = file.name;
 		const extension = filename.split( '.' ).pop().toLowerCase();
 
-		if ( /^(ply|pcd|xyz|spz|sog|rad|splat)$/.test( extension ) ) {
+		if ( /^(ply|pcd|xyz|spz|sog|rad|splat|vdb)$/.test( extension ) ) {
 
 			return ( async () => {
 
 				const workspace = editor.sourceFiles;
-				const kind = await scanFileKind( file );
+				const kind = extension === 'vdb' ? 'volume' : await scanFileKind( file );
 				const script = kind === 'splat' ? splatScript( 'assets/' + sourcePath, splatFileType( filename ) ) : null;
-				const scan = script ? new THREE.Group() : await loadScanGeometry( file, kind );
+				const scan = script ? new THREE.Group() : kind === 'volume' ? await ( await import( './assets/VolumeReference.js' ) ).loadVolumeReference( file ) : await loadScanGeometry( file, kind );
 				if ( script ) scan.userData.assetObject = { type: 'gaussian-splat', path: sourcePath };
+				if ( options.reference && kind !== 'volume' ) markModelReference( scan, script ? 'splat' : scan.isPoints ? 'points' : 'mesh' );
 				if ( editor.sourceFiles !== workspace || options.canCommit && ! options.canCommit() ) {
 
 					scan.geometry?.dispose();
@@ -252,7 +254,7 @@ function Loader( editor ) {
 				}
 				const entry = workspace.get( sourcePath );
 				if ( entry && kind ) entry.asset = { ...entry.asset, kind };
-				scan.name = options.metadata?.title || filename;
+				scan.name = options.metadata?.title || ( kind === 'volume' ? scan.name : filename );
 				const added = addObject( scan, script );
 				if ( entry && kind ) editor.signals.assetsChanged.dispatch();
 				return added;

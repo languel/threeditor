@@ -16,6 +16,9 @@ const outlinerGlyphs = {
 	Light: 'M6 13h4M7 15h2M5.5 10c0-2-2-2-2-4.5a4.5 4.5 0 019 0c0 2.5-2 2.5-2 4.5z',
 	Projector: 'M2 5h9v6H2zM11 6l3-2v8l-3-2M4 8h2',
 	Group: 'M1.5 2.5h13v4h-13zm1 4v7h11v-7M6 9h4',
+	Empty: 'M8 2v12M2 8h12M4 12l8-8',
+	ImageReference: 'M2 3h12v10H2zM2 11l4-4 3 3 2-2 3 3M11 5h.01',
+	VolumeReference: 'M2 5l6-3 6 3v6l-6 3-6-3zm0 0l6 3 6-3M8 8v6M5 5h.01M10 6h.01',
 	Object3D: 'M7 2v7h7M7 9l-5 5',
 	Mesh: 'M2 3h12L8 13z',
 	Model: 'M2 5l6-3 6 3-6 3zM2 5v6l6 3 6-3V5M8 8v6',
@@ -234,8 +237,12 @@ function SidebarScene( editor, revealScene ) {
 	function getObjectType( object ) {
 
 		const assetType = object.userData.assetObject?.type;
+		const reference = object.userData.modelReference?.kind;
 		const kind = object.geometry?.userData.modeling?.kind;
 		if ( isProjector( object ) ) return 'Projector';
+		if ( reference === 'image' ) return 'ImageReference';
+		if ( reference === 'volume' ) return 'VolumeReference';
+		if ( object.userData.emptyDisplay ) return 'Empty';
 		if ( assetType === 'gaussian-splat' ) return 'Scan';
 		if ( assetType === 'model' ) return 'Model';
 		if ( object.isScene ) return 'Scene';

@@ -8,6 +8,8 @@ import { UIPanel, UIRow, UIInput, UIButton, UIColor, UICheckbox, UIInteger, UISe
 import { UIBoolean } from './libs/ui.three.js';
 import { isProjector } from './assets/Projector.js';
 import { isPencilStroke } from './modeling/PencilSelection.js';
+import { emptyDisplays } from './modeling/ReferenceObjects.js';
+import { chooseImageReference } from './assets/ReferenceAssets.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { ObjectTransformControls } from './ObjectTransformControls.js';
 
@@ -18,6 +20,7 @@ import { SetShadowValueCommand } from './commands/SetShadowValueCommand.js';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { RemoveScriptCommand } from './commands/RemoveScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
+import { SetMaterialValueCommand } from './commands/SetMaterialValueCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { cameraControllerScript, cameraControllerSettings, createCameraControllerScript } from './CameraControllerScript.js';
 
@@ -497,6 +500,39 @@ function SidebarObject( editor ) {
 	const annotationRow = new UIRow().add( new UIText( 'Annotation' ).setClass( 'Label' ), annotation );
 	container.add( annotationRow );
 
+	const emptyStyle = new UISelect().setOptions( Object.fromEntries( emptyDisplays ) ).onChange( updateEmpty );
+	const emptySize = new UINumber( 1 ).setRange( .01, 10000 ).onChange( updateEmpty );
+	emptyStyle.dom.setAttribute( 'aria-label', 'Empty display' );
+	emptySize.dom.setAttribute( 'aria-label', 'Empty display size' );
+	const emptyRow = new UIRow().add( new UIText( 'Empty Display' ).setClass( 'Label' ), emptyStyle, emptySize );
+	container.add( emptyRow );
+
+	function updateEmpty() {
+
+		const object = editor.selected;
+		if ( ! object?.userData.emptyDisplay || hasRestriction( object, 'locked' ) ) return;
+		const command = new SetValueCommand( editor, object, 'userData', { ...object.userData, emptyDisplay: { style: emptyStyle.getValue(), size: emptySize.getValue() } } );
+		editor.execute( command, 'Set empty display' );
+
+	}
+
+	const referenceOpacity = new UINumber( 1 ).setRange( 0, 1 ).setPrecision( 2 ).onChange( () => {
+
+		const object = editor.selected;
+		if ( object?.userData.modelReference?.kind !== 'image' || hasRestriction( object, 'locked' ) ) return;
+		editor.execute( new SetMaterialValueCommand( editor, object, 'opacity', referenceOpacity.getValue() ), 'Set reference opacity' );
+
+	} );
+	referenceOpacity.dom.setAttribute( 'aria-label', 'Reference opacity' );
+	const referenceImage = new UIButton( 'Choose image…' ).onClick( () => {
+
+		const object = editor.selected;
+		if ( object?.userData.modelReference?.kind === 'image' ) chooseImageReference( editor, object.userData.modelReference.depth, object );
+
+	} );
+	const referenceRow = new UIRow().add( new UIText( 'Image Reference' ).setClass( 'Label' ), referenceImage, referenceOpacity );
+	container.add( referenceRow );
+
 	// frustumCulled
 
 	const objectFrustumCulledRow = new UIRow();
@@ -884,6 +920,24 @@ function SidebarObject( editor ) {
 	}
 
 	function updateUI( object ) {
+
+		const empty = object.userData.emptyDisplay;
+		const image = object.userData.modelReference?.kind === 'image';
+		const locked = hasRestriction( object, 'locked' );
+		emptyRow.setDisplay( empty && ! image ? '' : 'none' );
+		referenceRow.setDisplay( image ? '' : 'none' );
+		if ( empty && ! image ) {
+
+			emptyStyle.setValue( empty.style ).setDisabled( locked );
+			emptySize.setValue( empty.size ).setDisabled( locked );
+
+		}
+		if ( image ) {
+
+			referenceOpacity.setValue( object.material.opacity ).setDisabled( locked || ! object.material.map );
+			referenceImage.setDisabled( locked );
+
+		}
 
 		updateCameraController( object );
 		lightView.setDisplay( hasLightView( object ) ? '' : 'none' );

@@ -8,6 +8,8 @@ import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { SetGeometryCommand } from './commands/SetGeometryCommand.js';
 import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { meshPrimitives } from './modeling/MeshPrimitives.js?v=uv-sculpt';
+import { createEmpty, emptyDisplays } from './modeling/ReferenceObjects.js';
+import { addEmptyImage, chooseImageReference, chooseReferenceFile } from './assets/ReferenceAssets.js';
 
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
@@ -50,6 +52,36 @@ function MenubarAdd( editor ) {
 
 	} );
 	options.add( option );
+
+	function submenu( label, actions ) {
+
+		const title = new UIRow().setTextContent( label ).addClass( 'option' ).addClass( 'submenu-title' );
+		const menu = new UIPanel().setPosition( 'fixed' ).addClass( 'options' ).setDisplay( 'none' );
+		title.add( menu );
+		title.onMouseOver( () => {
+
+			const { top, right } = title.dom.getBoundingClientRect();
+			menu.setLeft( right + 'px' ).setTop( Math.min( top, window.innerHeight - actions.length * 28 - 8 ) + 'px' ).setDisplay( 'block' );
+
+		} );
+		title.onMouseOut( () => menu.setDisplay( 'none' ) );
+		for ( const [ text, run ] of actions ) menu.add( new UIRow().setClass( 'option' ).setTextContent( text ).onClick( run ) );
+		options.add( title );
+
+	}
+
+	submenu( 'Empty', emptyDisplays.map( ( [ style, name ] ) => [ name, () => editor.execute( atCursor( createEmpty( style ) ) ) ] ) );
+	submenu( 'Image', [
+		[ 'Reference…', () => chooseImageReference( editor ) ],
+		[ 'Background…', () => chooseImageReference( editor, 'back' ) ],
+		[ 'Mesh Plane…', () => chooseImageReference( editor, 'mesh' ) ],
+		[ 'Empty Image', () => addEmptyImage( editor ) ]
+	] );
+	submenu( 'Modeling Reference', [
+		[ 'Point Cloud…', () => chooseReferenceFile( editor, '.ply,.pcd,.xyz' ) ],
+		[ 'Gaussian Splat…', () => chooseReferenceFile( editor, '.ply,.splat,.spz,.sog,.rad' ) ],
+		[ 'OpenVDB…', () => chooseReferenceFile( editor, '.vdb' ) ]
+	] );
 
 	// Mesh
 
