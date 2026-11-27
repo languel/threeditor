@@ -88,7 +88,7 @@ export class ViewLayout {
 		const areas = this.areas( width, height );
 		const split = areas.length > 1;
 		const area = areas.at( - 1 );
-		let camera = soloDirector ? editor.camera : editor.viewportCamera, rect = area;
+		let camera = soloDirector ? editor.directorPaneCamera : editor.viewportCamera, rect = area;
 		const director = ! source && camera === editor.camera;
 		if ( source ) {
 
@@ -117,7 +117,15 @@ export class ViewLayout {
 		}
 
 		this.frames = [ { key: soloDirector ? 'director' : 'source', camera, source, rect, area, director } ];
-		if ( split ) this.frames.unshift( { key: 'director', camera: editor.camera, rect: areas[ 0 ], area: areas[ 0 ], director: true } );
+		if ( split ) {
+
+			const view = editor.directorPaneCamera;
+			const first = areas[ 0 ];
+			const editing = view === editor.camera;
+			const aspect = view.isOrthographicCamera ? ( view.right - view.left ) / ( view.top - view.bottom ) : view.aspect;
+			this.frames.unshift( { key: 'director', camera: view, rect: editing ? first : fitView( first, aspect ), area: first, director: editing } );
+
+		}
 		this.divider.hidden = this.directorName.hidden = this.sourceName.hidden = ! split;
 		if ( split ) {
 
@@ -128,7 +136,7 @@ export class ViewLayout {
 			this.divider.setAttribute( 'aria-valuemin', '15' );
 			this.divider.setAttribute( 'aria-valuemax', '85' );
 			this.divider.setAttribute( 'aria-valuenow', String( Math.round( editor.viewportSplitRatio * 100 ) ) );
-			this.label( this.directorName, this.frames[ 0 ], editor.camera.name || 'Director' );
+			this.label( this.directorName, this.frames[ 0 ], this.frames[ 0 ].camera.name || 'Director' );
 			this.label( this.sourceName, this.frames[ 1 ], source?.name || camera.name || 'Camera' );
 
 		}
@@ -171,7 +179,7 @@ export class ViewLayout {
 			return frame.source || ( this.maximizedPane && ! frame.director ) ? undefined : frame;
 
 		}
-		return visible.find( frame => frame.key === this.activeKey && frame.director ) || visible[ 0 ];
+		return visible.find( frame => frame.key === this.activeKey && frame.director ) || visible.find( frame => frame.director );
 
 	}
 

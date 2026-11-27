@@ -509,7 +509,8 @@ function Viewport( editor ) {
 
 			const camera = editor.cameras[ uuid ];
 
-			const area = camera === editor.camera ? areas[ 0 ] : areas.at( -1 );
+			const left = camera === editor.camera || editor.viewportSplit && camera === editor.directorPaneCamera && camera !== editor.viewportCamera;
+			const area = left ? areas[ 0 ] : areas.at( -1 );
 			const aspect = Math.max( 1, area.width ) / Math.max( 1, area.height );
 
 			if ( camera.isPerspectiveCamera ) {

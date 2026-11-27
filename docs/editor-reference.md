@@ -231,7 +231,7 @@ In the 3D viewport, open the command palette with **F3**. **Vertical Split** pla
 
 Both areas share object and mesh selection. Frame Selection and double-click framing update both Director views. A pane using a scene camera, light, or projector shows the shared selection from its own view. Select a source in the viewport camera menu to compare it with the Director. The split direction and divider position are saved with the project.
 
-Hover the pane you want to control before starting **Fly Camera** or **Play Scene**. In the Blender keymap, **Shift+Backtick** flies the current Director, scene camera, light, or projector view. **Option/Alt+Shift+P** plays the scene from the hovered pane and leaves the other pane visible. Press it again to stop. Presentation mode fills the window.
+Hover the pane you want to control before using **Backtick → Camera**, **Fly Camera**, or **Play Scene**. Camera toggles the scene camera for the pane that opened the menu. To assign a different one, select it in the Outliner, then hover the pane and press **Ctrl+Numpad 0**. Each pane remembers its camera. In the Blender keymap, **Shift+Backtick** flies the current Director, scene camera, light, or projector view. **Option/Alt+Shift+P** plays the scene from the hovered pane and leaves the other pane visible. Press it again to stop. Presentation mode fills the window.
 
 ## Outliner and Properties
 

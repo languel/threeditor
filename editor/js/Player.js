@@ -106,7 +106,8 @@ function Player( editor ) {
 
 		const request = ++ playRequest;
 		const layout = editor.viewLayout;
-		const frame = ! presenting && layout.frames.length > 1 && ( layout.frames.find( item => item.key === frameKey ) || layout.navigation );
+		const panes = layout.frames.filter( frame => layout.isViewportPane?.( frame.key ) !== false );
+		const frame = ! presenting && layout.frames.length > 1 && ( panes.find( item => item.key === frameKey ) || layout.navigation || panes[ 0 ] );
 		playPane = frame?.key || null;
 		layout.playbackPane = playPane;
 		updatePane();

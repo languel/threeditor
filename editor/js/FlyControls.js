@@ -26,7 +26,7 @@ function FlyControls( editor, viewport ) {
    ' · mouse look · Shift faster · wheel speed · Enter/click accept · Esc cancel';
 
  }
- function start(frame=editor.viewLayout?.navigation||editor.viewLayout?.optical){
+ function start(frame=editor.viewLayout?.navigation||editor.viewLayout?.optical||editor.viewLayout?.frames[0]){
   if(camera||editor.modalTransform?.active||editor.modeling.gesture||editor.modeling.drag||editor.viewTools.pointer||
     editor.streams.playing||document.body.classList.contains('presenting'))return;
   if(!frame?.camera?.isCamera||editor.viewLayout.isViewportPane?.(frame.key)===false)return;
