@@ -1,7 +1,7 @@
 import { TimelineRuntime } from '../animation/TimelineRuntime.js?v=timeline-keying';
 import { timelineData } from '../animation/TimelineData.js?v=timeline-keying';
 import { isProjector } from '../assets/Projector.js';
-import { fitView, lightViewCamera } from '../modeling/LightView.js';
+import { fitView, hasLightView, lightViewCamera } from '../modeling/LightView.js';
 import { drawProjectorOutput, renderFittedView } from '../modeling/ProjectorOutput.js';
 import { StreamRouter } from '../streams/StreamRouter.js';
 import { SplatHost } from '../assets/SplatHost.js';
@@ -80,7 +80,7 @@ const APP = {
 
 		const loader = new THREE.ObjectLoader();
 		const nodeComponents = new NodeComponentRuntime( THREE );
-		let camera, scene, projector, projectorContext, timeline, geometrySimulation, logic, rigPhysics;
+		let camera, scene, opticalSource, projectorContext, timeline, geometrySimulation, logic, rigPhysics;
 
 		let events = {};
 		let splatHost;
@@ -89,6 +89,7 @@ const APP = {
 		const pressedKeys = new Set();
 		const pressedButtons = new Set();
 		let playing = false;
+		let panePlayback = false;
 		let pointer;
 
 		const dom = document.createElement( 'div' );
@@ -100,9 +101,10 @@ const APP = {
 		this.width = 500;
 		this.height = 500;
 
-		this.load = async function ( json ) {
+		this.load = async function ( json, previewView ) {
 
 			const project = json.project;
+			panePlayback = !! previewView;
 			timeline?.clear();
 			splatHost?.dispose();
 			splatHost = new SplatHost();
@@ -154,18 +156,19 @@ const APP = {
 			rigPhysics = logic.physics = preparedPhysics;
 			if ( rigPhysics ) rigPhysics.onContact = ( first, second, entered ) =>
 				streams.emit( 'bonecontact', { first: first.uuid, second: second.uuid, entered } );
-			const mainUuid = json.mainCamera || scene.userData.mainCamera;
-			const sceneCamera = scene.getObjectByProperty( 'uuid', mainUuid || json.viewportCamera || json.camera.object.uuid );
+			const mainUuid = previewView ? previewView.source : json.mainCamera || scene.userData.mainCamera;
+			const sceneCamera = scene.getObjectByProperty( 'uuid', mainUuid || ( previewView ? null : json.viewportCamera || json.camera.object.uuid ) );
 			const mainSource = sceneCamera && ! hasRestriction( sceneCamera, 'disabled' ) ? sceneCamera : null;
-			projector = mainUuid && isProjector( mainSource ) ? mainSource : null;
-			const textureOutput = projector && ( json.mainCameraOutput || scene.userData.mainCameraOutput ) === 'texture';
+			opticalSource = mainUuid && ( previewView ? hasLightView( mainSource ) : isProjector( mainSource ) ) ? mainSource : null;
+			const textureOutput = ! previewView && opticalSource && ( json.mainCameraOutput || scene.userData.mainCameraOutput ) === 'texture';
 			this.canvas = textureOutput ? document.createElement( 'canvas' ) : renderer.domElement;
 			projectorContext = textureOutput ? this.canvas.getContext( '2d', { alpha: false } ) : null;
 			dom.appendChild( this.canvas );
-			this.setCamera( projector ? lightViewCamera( THREE, projector ) : mainSource?.isCamera ? mainSource : loader.parse( json.camera ) );
+			this.setCamera( opticalSource ? lightViewCamera( THREE, opticalSource ) :
+				mainSource?.isCamera ? mainSource : loader.parse( previewView?.camera || json.camera ) );
 			const hasControllerScript = json.scripts?.[ camera.uuid ]?.some( script => script.cameraController === true );
-			const mode = projector || hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
-			cameraTarget = json.mainCameraTarget || json.viewportTarget || json.controls?.center;
+			const mode = opticalSource || hasControllerScript ? 'none' : project.cameraController || camera.userData.threeditor?.cameraController;
+			cameraTarget = previewView?.target || json.mainCameraTarget || json.viewportTarget || json.controls?.center;
 			controllerOptions = mode && mode !== 'none' ? {
 				mode,
 				target: cameraTarget,
@@ -310,7 +313,7 @@ const APP = {
 		this.setCamera = function ( value ) {
 
 			camera = value;
-			if ( ! projector ) setCameraAspect( camera, this.width / this.height );
+			if ( ! opticalSource ) setCameraAspect( camera, this.width / this.height );
 
 		};
 
@@ -364,7 +367,7 @@ const APP = {
 			this.width = width;
 			this.height = height;
 
-			if ( camera && ! projector ) {
+			if ( camera && ! opticalSource ) {
 
 				setCameraAspect( camera, this.width / this.height );
 
@@ -454,16 +457,16 @@ const APP = {
 			if ( ! this.width || ! this.height ) return;
 			if ( projectorContext ) {
 
-				withArmatureDeformation( THREE, scene, () => drawProjectorOutput( projectorContext, projector ) );
+				withArmatureDeformation( THREE, scene, () => drawProjectorOutput( projectorContext, opticalSource ) );
 				return;
 
 			}
 			splatHost.render( renderer, scene, () => withEnabledObjects( scene, () => withArmatureDeformation( THREE, scene, () => withShaderGraphs( renderer, scene, () => {
 
 				const draw = () => renderer.render( scene, camera );
-				if ( projector ) {
+				if ( opticalSource ) {
 
-					lightViewCamera( THREE, projector, camera );
+					lightViewCamera( THREE, opticalSource, camera );
 					renderFittedView( THREE, renderer, scene, camera, this.width, this.height, draw );
 
 				} else {
@@ -583,7 +586,7 @@ const APP = {
 			streams.getParam = streams.setParam = null;
 			camera = undefined;
 			scene = undefined;
-			projector = projectorContext = null;
+			opticalSource = projectorContext = null;
 
 		};
 
@@ -629,7 +632,12 @@ const APP = {
 			if ( ! event || ! logic.usesPointer || event.target !== renderer.domElement || projectorContext ) return;
 			let { left: x, top: y, width, height } = renderer.domElement.getBoundingClientRect();
 			if ( ! width || ! height ) return;
-			if ( projector ) ( { x, y, width, height } = fitView( { x, y, width, height }, camera.aspect ) );
+			if ( opticalSource ) {
+
+				const aspect = camera.isOrthographicCamera ? ( camera.right - camera.left ) / ( camera.top - camera.bottom ) : camera.aspect;
+				( { x, y, width, height } = fitView( { x, y, width, height }, aspect ) );
+
+			}
 			const u = ( event.clientX - x ) / width;
 			const v = ( event.clientY - y ) / height;
 			if ( u >= 0 && u <= 1 && v >= 0 && v <= 1 ) return { x: u, y: v };
@@ -638,14 +646,14 @@ const APP = {
 
 		function pointerCamera() {
 
-			if ( logic.usesPointer && ! projectorContext ) return projector ? lightViewCamera( THREE, projector, camera ) : camera;
+			if ( logic.usesPointer && ! projectorContext ) return opticalSource ? lightViewCamera( THREE, opticalSource, camera ) : camera;
 
 		}
 
 		function onPointerDown( event ) {
 
 			pointer = event;
-			if ( isPlayerControl( event ) ) return;
+			if ( isPlayerControl( event ) || panePlayback && ! dom.contains( event.target ) ) return;
 			pressedButtons.add( event.button );
 			streams.publish( 'input.pointer', 1 );
 			streams.emit( 'pointerdown', logic.pointerDetail( event.button, pointerPosition( event ), pointerCamera() ) );
@@ -657,7 +665,7 @@ const APP = {
 
 			pointer = event.pointerType === 'touch' ? undefined : event;
 			const wasPressed = pressedButtons.delete( event.button );
-			if ( isPlayerControl( event ) && ! wasPressed ) return;
+			if ( ! wasPressed && ( isPlayerControl( event ) || panePlayback && ! dom.contains( event.target ) ) ) return;
 			streams.publish( 'input.pointer', 0 );
 			streams.emit( 'pointerup', logic.pointerDetail( event.button, pointerPosition( event ), pointerCamera() ) );
 			dispatch( events.pointerup, event );
@@ -667,7 +675,7 @@ const APP = {
 		function onPointerMove( event ) {
 
 			pointer = event;
-			if ( isPlayerControl( event ) ) return;
+			if ( isPlayerControl( event ) || panePlayback && ! dom.contains( event.target ) ) return;
 			dispatch( events.pointermove, event );
 
 		}

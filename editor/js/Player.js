@@ -34,6 +34,7 @@ function Player( editor ) {
 	} );
 	let environmentTarget = null;
 	let playRequest = 0;
+	let playPane = null;
 	let disposeMediaURLs = () => {};
 	signals.stopPlayer.add( () => { disposeMediaURLs(); disposeMediaURLs = () => {}; } );
 	container.dom.appendChild( player.dom );
@@ -65,19 +66,51 @@ function Player( editor ) {
 
 	window.addEventListener( 'resize', function () {
 
+		updatePane();
 		player.setSize( container.dom.clientWidth, container.dom.clientHeight );
 
 	} );
 
 	signals.windowResize.add( function () {
 
+		updatePane();
 		player.setSize( container.dom.clientWidth, container.dom.clientHeight );
 
 	} );
 
-	signals.startPlayer.add( async function () {
+	function updatePane() {
+
+		const layout = editor.viewLayout;
+		const frame = playPane && layout.frames.length > 1 && layout.frames.find( frame => frame.key === playPane );
+		if ( ! frame ) {
+
+			delete container.dom.dataset.playPane;
+			return;
+
+		}
+		const { left, top } = editor.renderer.domElement.getBoundingClientRect();
+		const { x, y, width, height } = frame.area;
+		const style = container.dom.style;
+		const sizeChanged = style.getPropertyValue( '--play-width' ) !== width + 'px' || style.getPropertyValue( '--play-height' ) !== height + 'px';
+		container.dom.dataset.playPane = frame.key;
+		style.setProperty( '--play-x', left + x + 'px' );
+		style.setProperty( '--play-y', top + y + 'px' );
+		style.setProperty( '--play-width', width + 'px' );
+		style.setProperty( '--play-height', height + 'px' );
+		if ( sizeChanged ) player.setSize( width, height );
+
+	}
+	signals.sceneRendered.add( () => { if ( playPane ) updatePane(); } );
+
+	signals.startPlayer.add( async function ( frameKey ) {
 
 		const request = ++ playRequest;
+		const layout = editor.viewLayout;
+		const panes = layout.frames.filter( frame => layout.isViewportPane?.( frame.key ) !== false );
+		const frame = ! presenting && layout.frames.length > 1 && ( panes.find( item => item.key === frameKey ) || layout.navigation || panes[ 0 ] );
+		playPane = frame?.key || null;
+		layout.playbackPane = playPane;
+		updatePane();
 		container.setDisplay( '' );
 		parameters.close();
 		container.add( parameters );
@@ -86,7 +119,12 @@ function Player( editor ) {
 
 			const json = editor.toJSON();
 			disposeMediaURLs(); disposeMediaURLs = resolvePlaybackAssets( json, editor.sourceFiles );
-			await player.load( json );
+			const view = frame ? {
+				source: frame.source?.uuid || ( frame.director ? undefined : frame.camera.uuid ),
+				camera: frame.camera.toJSON(),
+				target: editor.controls.getCenter( frame.director ? editor.camera : frame.camera ).toArray()
+			} : undefined;
+			await player.load( json, view );
 			if ( request !== playRequest ) return;
 
 			// Match the editor's look in the player's separate renderer.
@@ -162,6 +200,7 @@ function Player( editor ) {
 
 		}
 
+		if ( playPane ) signals.stopPlayer.dispatch();
 		presenting = true;
 		if ( document.activeElement ) document.activeElement.blur();
 		if ( exit ) {
@@ -217,6 +256,8 @@ function Player( editor ) {
 	signals.stopPlayer.add( function () {
 
 		playRequest ++;
+		playPane = editor.viewLayout.playbackPane = null;
+		updatePane();
 		container.setDisplay( 'none' );
 		editor.streams.playing = false;
 		parameters.close();

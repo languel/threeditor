@@ -30,6 +30,8 @@ function Config( persist = true ) {
 		'settings/keymapPreset': 'blender',
 		'settings/keymapOverrides': {},
 		'settings/mouseNavigation': 'blender',
+		'settings/emptySpaceDrag': 'select',
+		'settings/partialElementSelection': false,
 		'settings/showObjectNames': false,
 		'settings/selectionHighlight': 'outline',
 		'settings/transformGizmoSize': 0.75,

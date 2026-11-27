@@ -6,6 +6,8 @@ import { ViewportVisibility } from '../editor/js/modeling/ViewportVisibility.js'
 
 const source = ( await readFile( new URL( '../editor/js/Viewport.SelectionOutline.js', import.meta.url ), 'utf8' ) )
 	.replace( "from 'three'", `from '${ new URL( '../build/three.module.js', import.meta.url ).href }'` )
+	.replace( "from 'three/webgpu'", `from '${ new URL( '../build/three.webgpu.js', import.meta.url ).href }'` )
+	.replace( "from 'three/tsl'", `from '${ new URL( '../build/three.tsl.js', import.meta.url ).href }'` )
 	.replace( "from './ObjectRestrictions.js'", `from '${ new URL( '../editor/js/ObjectRestrictions.js', import.meta.url ).href }'` );
 const { hasSelectionSurface, withSelectionOnly } = await import( 'data:text/javascript;base64,' + Buffer.from( source ).toString( 'base64' ) );
 

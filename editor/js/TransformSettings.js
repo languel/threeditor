@@ -37,12 +37,12 @@ export function addTransformSettings( editor, toolbar ) {
 		},
 		navigation: {
 			label: 'View navigation',
-			choices: () => [
+			choices: pane => [
 				[ 'Top', 'up', 'viewTop' ], [ 'Frame Selected', 'frame', 'focus' ],
 				[ 'Right', 'objectMode', 'viewRight' ], [ 'Back', 'objectMode', 'viewBack' ],
 				[ 'Bottom', 'down', 'viewBottom' ], [ 'Front', 'objectMode', 'viewFront' ],
 				[ 'Left', 'objectMode', 'viewLeft' ], [ 'Camera', 'camera', 'viewCamera' ]
-			].map( ( [ label, glyph, action ] ) => [ label, glyph, () => editor.keymap.run( action ) ] )
+			].map( ( [ label, glyph, action ] ) => [ label, glyph, () => editor.keymap.run( action, pane ) ] )
 		},
 		shading: {
 			label: 'Viewport shading',
@@ -218,7 +218,8 @@ export function addTransformSettings( editor, toolbar ) {
 			wheel.appendChild( indicator );
 
 		}
-		const choices = definition.choices();
+		const pane = editor.keymap.viewFrame?.key ?? editor.viewLayout?.navigation?.key;
+		const choices = definition.choices( pane );
 		entries = choices.map( ( [ label, glyph, apply, active, disabled ], index ) => {
 
 			const button = document.createElement( 'button' );

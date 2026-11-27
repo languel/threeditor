@@ -1,8 +1,16 @@
 import * as THREE from 'three';
+import { NodeMaterial, QuadMesh } from 'three/webgpu';
+import { Fn, Loop, float, texture, uniform, uv, vec2, vec4 } from 'three/tsl';
 import { isVisible, withEnabledObjects } from './ObjectRestrictions.js';
 
 export const SELECTED_OUTLINE = 0xff8a24;
 export const ACTIVE_OUTLINE = 0xffbd66;
+
+export function supportsSelectionOutline( renderer ) {
+
+	return ( renderer.isWebGLRenderer || renderer.isWebGPURenderer ) && ! renderer.xr.isPresenting;
+
+}
 
 // Adapted from ThreeGrease's render/outline.ts: isolate the selection using
 // its own materials, then dilate its alpha silhouette by two screen pixels.
@@ -113,9 +121,48 @@ export class SelectionOutline {
 
 	}
 
+	drawWebGPU( renderer ) {
+
+		if ( ! this.gpuQuad ) {
+
+			const texel = uniform( this.material.uniforms.uTexel.value );
+			const width = uniform( this.material.uniforms.uWidth.value );
+			const color = uniform( this.material.uniforms.uColor.value );
+			const mask = texture( this.mask.texture );
+			const inside = coord => mask.sample( coord ).a.greaterThanEqual( .22 ).and(
+				coord.x.greaterThanEqual( 0 ).and( coord.y.greaterThanEqual( 0 ) ).and( coord.x.lessThanEqual( 1 ) ).and( coord.y.lessThanEqual( 1 ) )
+			);
+			const material = new NodeMaterial();
+			material.transparent = true;
+			material.toneMapped = material.depthTest = material.depthWrite = false;
+			material.fragmentNode = Fn( () => {
+
+				const coord = uv();
+				inside( coord ).discard();
+				const hit = float( 0 ).toVar();
+				Loop( 16, ( { i } ) => {
+
+					const angle = float( i ).mul( Math.PI / 8 );
+					const offset = vec2( angle.cos(), angle.sin() ).mul( texel ).mul( width );
+					hit.assign( hit.max( float( inside( coord.add( offset ) ) ) ).max( float( inside( coord.add( offset.mul( .5 ) ) ) ) ) );
+
+				} );
+				hit.lessThan( .5 ).discard();
+				return vec4( color, 1 );
+
+			} )();
+			this.gpuQuad = new QuadMesh( material );
+			this.gpuWidth = width;
+
+		}
+		this.gpuWidth.value = this.material.uniforms.uWidth.value;
+		this.gpuQuad.render( renderer );
+
+	}
+
 	draw( renderer, scene, camera, roots, renderMask, color = SELECTED_OUTLINE ) {
 
-		if ( ! roots.length || ! renderer.isWebGLRenderer || renderer.xr.isPresenting ) return;
+		if ( ! roots.length || ! supportsSelectionOutline( renderer ) ) return;
 		const viewport = renderer.getViewport( new THREE.Vector4() );
 		const scissor = renderer.getScissor( new THREE.Vector4() );
 		const scissorTest = renderer.getScissorTest();
@@ -140,8 +187,6 @@ export class SelectionOutline {
 			scene.overrideMaterial = null;
 			renderer.shadowMap.autoUpdate = renderer.shadowMap.needsUpdate = false;
 			renderer.setRenderTarget( this.mask );
-			renderer.setViewport( 0, 0, width, height );
-			renderer.setScissorTest( false );
 			renderer.setClearColor( 0x000000, 0 );
 			renderer.autoClear = false;
 			renderer.clear();
@@ -150,7 +195,8 @@ export class SelectionOutline {
 			renderer.setViewport( viewport );
 			renderer.setScissor( scissor );
 			renderer.setScissorTest( scissorTest );
-			renderer.render( this.scene, this.camera );
+			if ( renderer.isWebGPURenderer ) this.drawWebGPU( renderer );
+			else renderer.render( this.scene, this.camera );
 
 		} finally {
 
@@ -175,6 +221,7 @@ export class SelectionOutline {
 		this.mask.dispose();
 		this.material.dispose();
 		this.quad.geometry.dispose();
+		this.gpuQuad?.material.dispose();
 
 	}
 

@@ -1312,8 +1312,9 @@ export class ViewportTools {
 
 	pointerDown( event ) {
 
-		if ( this.mode === 'weights' ) return this.weightPaint.pointerDown( event );
 		if ( this.placeCursor( event ) ) return;
+		if ( this.editor.controls?.navigationGesture( event ) ) return;
+		if ( this.mode === 'weights' ) return this.weightPaint.pointerDown( event );
 		if ( this.mode === 'cursor' ) return;
 		if ( this.pointer || ! this.mode || event.button !== 0 || event.altKey || event.target !== this.editor.renderer?.domElement ) return;
 		const frame = this.layout.at( event.clientX, event.clientY );
@@ -2219,12 +2220,13 @@ export class ViewportTools {
 	draw() {
 
 		if ( ! this.editor.renderer ) return;
+		const clean = cleanShading( this.editor.viewportShading );
 		const brushFrame = this.brushCursor?.frame;
-		const pencilCursor = this.mode === 'pencil' && brushFrame?.director && this.layout.isViewportPane?.( brushFrame.key ) !== false;
+		const pencilCursor = ! clean && this.mode === 'pencil' && brushFrame?.director && this.layout.isViewportPane?.( brushFrame.key ) !== false;
 		this.editor.renderer.domElement.classList.toggle( 'pencil-brush-cursor', Boolean( pencilCursor ) );
 		const overlays = this.editor.viewportOverlays;
-		const showCursor = overlays && ! this.editor.editWorkspace?.exclusive && ! cleanShading( this.editor.viewportShading );
-		this.overlay.hidden = ! showCursor && ! this.mode && ! ( overlays && this.measurements.length );
+		const showCursor = overlays && ! this.editor.editWorkspace?.exclusive;
+		this.overlay.hidden = clean || ! showCursor && ! this.mode && ! ( overlays && this.measurements.length );
 		if ( this.overlay.hidden ) return;
 		const { width, height } = this.editor.renderer.domElement.getBoundingClientRect();
 		const ratio = Math.min( 2, window.devicePixelRatio || 1 );
@@ -2245,7 +2247,7 @@ export class ViewportTools {
 			ctx.beginPath();
 			ctx.rect( rect.x, rect.y, rect.width, rect.height );
 			ctx.clip();
-			if ( showCursor && frame.director ) {
+			if ( showCursor && frame.director && frame.key !== this.layout.playbackPane ) {
 
 				const pixel = this.project( this.editor.cursor, frame );
 				if ( pixel ) drawCursor( ctx, ...pixel );

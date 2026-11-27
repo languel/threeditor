@@ -172,11 +172,13 @@ function Editor( portable = false ) {
 	this.cameras = {};
 
 	this.viewportCamera = this.camera;
+	this.viewportDirectorCamera = null;
 	this.viewportSource = null;
 	this.viewportSplit = false;
 	this.viewportSplitAxis = 'vertical';
 	this.viewportSplitRatio = .5;
 	this.activeSceneCameraUuid = null;
+	this.activeDirectorCameraUuid = null;
 	this.viewportShading = 'solid';
 	this.viewportColor = new THREE.Color();
 	this.cursor = new THREE.Vector3();
@@ -705,13 +707,37 @@ Editor.prototype = {
 
 	},
 
-	setViewportCamera: function ( uuid ) {
+	setViewportCamera: function ( uuid, pane ) {
 
-		this.viewportSource = null;
 		const requested = this.cameras[ uuid ];
-		this.viewportCamera = requested && ! hasRestriction( requested, 'disabled' ) ? requested : this.camera;
-		if ( this.viewportCamera !== this.camera ) this.activeSceneCameraUuid = this.viewportCamera.uuid;
+		const camera = requested && ! hasRestriction( requested, 'disabled' ) ? requested : this.camera;
+		if ( this.viewportSplit && pane === 'director' ) {
+
+			this.viewportDirectorCamera = camera === this.camera ? null : camera.uuid;
+			if ( camera !== this.camera ) this.activeDirectorCameraUuid = camera.uuid;
+
+		} else {
+
+			this.viewportSource = null;
+			this.viewportCamera = camera;
+			if ( camera !== this.camera ) this.activeSceneCameraUuid = camera.uuid;
+
+		}
 		this.signals.viewportCameraChanged.dispatch();
+
+	},
+
+	get directorPaneCamera() {
+
+		const camera = this.cameras[ this.viewportDirectorCamera ];
+		return camera && ! hasRestriction( camera, 'disabled' ) ? camera : this.camera;
+
+	},
+
+	get activeDirectorCamera() {
+
+		const camera = this.cameras[ this.activeDirectorCameraUuid ];
+		return camera && camera !== this.camera && ! hasRestriction( camera, 'disabled' ) ? camera : this.activeSceneCamera;
 
 	},
 
@@ -873,6 +899,8 @@ Editor.prototype = {
 		this.viewportVisibility.hidden.clear();
 		this.viewportVisibility.local = null;
 		this.activeSceneCameraUuid = null;
+		this.viewportDirectorCamera = null;
+		this.activeDirectorCameraUuid = null;
 		this.history.clear();
 		this.storage.clear();
 		this.sourceFiles = new Map();
@@ -984,6 +1012,8 @@ Editor.prototype = {
 			const legacy = this.cameras[ uuid ] || ( json.mainCamera && this.scene.getObjectByProperty( 'uuid', uuid ) );
 			this.scene.userData.mainCamera = legacy && legacy !== this.camera && ( legacy.isCamera || isProjector( legacy ) ) ? legacy.uuid : null;
 		}
+		this.viewportDirectorCamera = json.viewportDirectorCamera || null;
+		this.activeDirectorCameraUuid = json.activeDirectorCamera || this.viewportDirectorCamera;
 		this.setViewportSplit( json.viewportSplit, json.viewportSplitAxis || 'vertical', json.viewportSplitRatio ?? .5 );
 		this.setViewportCamera( json.viewportCamera || savedCamera.uuid );
 		const viewportSource = this.objectByUuid( json.viewportSource );
@@ -1049,6 +1079,7 @@ Editor.prototype = {
 			cursor: ( local?.cursor || this.cursor ).toArray(),
 			viewportHidden: [ ...this.viewportVisibility.hidden ],
 			viewportCamera: viewportCamera.uuid,
+			viewportDirectorCamera: this.directorPaneCamera !== this.camera ? this.directorPaneCamera.uuid : undefined,
 			viewportSource: ( local ? local.viewportSource : this.viewportSource )?.uuid,
 			viewportSplit: this.viewportSplit,
 			viewportSplitAxis: this.viewportSplitAxis,
@@ -1058,6 +1089,7 @@ Editor.prototype = {
 			mainCameraTarget: mainCameraSource.isCamera ? ( mainCameraSource === this.camera ? directorTarget :
 				this.controls.getCenter?.( mainCameraSource ) || this.controls.center ).toArray() : undefined,
 			activeSceneCamera: this.activeSceneCameraUuid,
+			activeDirectorCamera: this.activeDirectorCameraUuid ?? undefined,
 			viewportTarget: viewTarget.toArray(),
 			controls: local ? { ...this.controls.toJSON( this.camera ), center: directorTarget.toArray() } : this.controls.toJSON( this.camera ),
 			scene: withoutRuntimeChildren( scene, () => scene.toJSON() ),

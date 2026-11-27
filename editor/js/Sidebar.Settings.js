@@ -93,7 +93,7 @@ function SidebarSettings( editor ) {
 	const mouseNavigationRow = new UIRow();
 	const mouseNavigation = new UISelect().setOptions( { basic: 'Standard', blender: 'Blender' } );
 	mouseNavigation.dom.setAttribute( 'aria-label', 'Mouse navigation' );
-	mouseNavigation.dom.title = 'Independent of keyboard shortcuts. Standard: drag to orbit, Shift-drag or right-drag to pan, scroll to zoom.';
+	mouseNavigation.dom.title = 'Independent of keyboard shortcuts. Both styles support middle drag to orbit when Empty-space drag is set to Select.';
 	mouseNavigation.setValue( config.getKey( 'settings/mouseNavigation' ) || 'blender' );
 	mouseNavigation.onChange( function () {
 
@@ -102,6 +102,22 @@ function SidebarSettings( editor ) {
 	} );
 	mouseNavigationRow.add( new UIText( 'Mouse navigation' ).setClass( 'Label' ).setGlyphKey( 'mouse' ), mouseNavigation );
 	general.add( mouseNavigationRow );
+
+	const emptySpaceDrag = new UISelect().setOptions( { select: 'Select', orbit: 'Orbit' } );
+	emptySpaceDrag.dom.setAttribute( 'aria-label', 'Empty-space drag' );
+	emptySpaceDrag.dom.title = 'Choose what left-drag does when the regular Select tool is active in Object Mode.';
+	emptySpaceDrag.setValue( config.getKey( 'settings/emptySpaceDrag' ) || 'select' );
+	emptySpaceDrag.onChange( () => config.setKey( 'settings/emptySpaceDrag', emptySpaceDrag.getValue() ) );
+	general.add( new UIRow().add( new UIText( 'Empty-space drag' ).setClass( 'Label' ), emptySpaceDrag ) );
+
+	const partialSelection = new UIBoolean( config.getKey( 'settings/partialElementSelection' ), 'Select partially covered edges and faces' );
+	const partialSelectionLabel = document.createElement( 'label' );
+	partialSelectionLabel.className = 'settings-checkbox';
+	partialSelectionLabel.style.display = 'block';
+	partialSelectionLabel.title = 'Box, Circle, and Lasso can select an edge or face when their regions overlap any part of it.';
+	partialSelectionLabel.append( partialSelection.dom );
+	general.dom.append( partialSelectionLabel );
+	partialSelection.onChange( () => config.setKey( 'settings/partialElementSelection', partialSelection.getValue() ) );
 
 	const showGizmo = new UIBoolean( config.getKey( 'settings/showTransformGizmo' ), 'Show transform gizmo' );
 	const gizmoLabel = document.createElement( 'label' );
@@ -161,7 +177,7 @@ function SidebarSettings( editor ) {
 	uiFontRow.add( new UIText( 'Interface font' ).setClass( 'Label' ).setGlyphKey( 'font' ), uiFont );
 	general.add( uiFontRow );
 
-	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse (Blender)', 'mouse' );
+	const emulateMouse = new UIBoolean( config.getKey( 'settings/emulateThreeButtonMouse' ), 'Emulate 3-button mouse', 'mouse' );
 	const emulateMouseLabel = document.createElement( 'label' );
 	emulateMouseLabel.className = 'settings-checkbox';
 	emulateMouseLabel.style.display = 'block';

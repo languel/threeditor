@@ -219,7 +219,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 
 	function closed( host ) {
 
-		const sharedCamera = ! editor.viewportSource && editor.viewportCamera === editor.camera;
+		const sharedCamera = ! editor.viewportSource && editor.viewportCamera === editor.camera && editor.directorPaneCamera === editor.camera;
 		if ( editor.viewportSplit && ( autoSplit || sharedCamera ) && Object.values( panes ).some( slot => slot.dom === host ) &&
 			Object.values( panes ).every( slot => slot.editor === 'viewport' && ! slot.dom.dataset.paneEditor ) ) {
 
@@ -238,7 +238,7 @@ export function WorkspaceEditors( editor, sidebar, viewport, timeline, ...dockDi
 		const id = slot.editor;
 		autoSplit = false;
 		if ( mode ) flat.placeDock( main.dom, flat.sessionAt( slot.dom ) );
-		if ( ! mode && id === 'viewport' && key === 'director' ) editor.setViewportCamera( editor.camera.uuid );
+		if ( ! mode && id === 'viewport' && key === 'director' ) editor.setViewportCamera( editor.directorPaneCamera.uuid );
 		editor.setViewportSplit( false );
 		if ( ! mode && id !== 'viewport' ) choose( main, id );
 		editor.signals.windowResize.dispatch();
