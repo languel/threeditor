@@ -20,6 +20,7 @@ The Scene's user data records each lesson's source and purpose.
 | — | A proximity garden | A distance field and a math expression scale instances scattered over a mesh. |
 | — | A stream-reactive sculpture | A stream sample drives a sculpture's scale. The starter graph generates its own signal. |
 | — | A tapered curve sweep | A circle profile follows a spiral and shrinks along the path. |
+| — | A pointer and gamepad control deck | A switch responds to hover, clicks, or controller input. A deck marker follows pointer hits and joystick movement. |
 | — | Serpentine particles | Built by `tools/build-stream-examples.mjs` (`examples/lessons/serpentine-particles.app.json` & `examples/streams/serpentine-particles.app.json`): circular *Danse serpentine* (1897) video (with live webcam option) inside a spinning 24-jewel bezel disk with pattern-fading lights, 3D curl-noise particles rising from the floor to frame the video, 4 orrery rings with orb lights, floor sweep lights, bloom/focus, and viewport `★` controls. |
 | 05 | Fox woodland loop | The mediatheque fox's Run clip, a woodland trail, and an editable Third Person follow-camera script. See `demos/fox-follow/README.md` for model attribution. |
 
@@ -96,3 +97,10 @@ opened from the library.
 2. Follow the path through **Resample Curve** and change **Count** to control how many rings **Curve to Mesh** creates.
 3. Change the radius or resolution on **Curve Circle** to edit the cross-section. Disconnect **Scale** to give the spring a constant thickness, or change the coefficient in **Math Expression Field** to adjust the taper.
 4. To place repeated meshes along the same path, connect **Resample Curve** to **Curve to Points**, then connect those points to **Instance on Points**.
+
+### Build a pointer and gamepad control deck
+
+1. Open **A pointer and gamepad control deck** and choose **Play Scene**. Hover the blue **Beacon switch** to highlight it, click it to toggle the orange beacon, and click a spot on the green **Navigation deck** to move the marker.
+2. Stop and select **Beacon switch** in **Logic Nodes**. **Pointer Over Object** sets the highlight and restores its color on exit. **On Object Press** and **Gamepad Button** feed **Merge Events**, so either input toggles the same beacon.
+3. Open the graph on **Navigation deck**. **On Object Press** gates **Set Position by Vector**, which takes the world-space point from **Pointer Ray**. The final **Move** raises the marker above the deck.
+4. Play again. With a standard gamepad connected, use its bottom face button to toggle the beacon and its left stick to move the marker. In the marker graph, **Scene Time → Delta Seconds** makes the movement independent of frame rate. Try changing **Dead Zone** or the speed coefficient in either math expression. A pointer is enough to complete the first three steps.

@@ -334,3 +334,68 @@ const springMesh = geometryMesh( 'Tapered spring', new THREE.CylinderGeometry( .
 await save( '13-tapered-curve', 'A tapered curve sweep', springMesh,
 	'Open Geometry Nodes on Tapered spring. Spiral describes the path, and Curve Circle supplies the cross section. Resample Curve spaces the rings by length. Try changing the rotations, profile radius, or the taper expression connected to Curve to Mesh.',
 	[ 3.9, 2.7, 5.2 ] );
+
+const pad = new THREE.Mesh( new THREE.BoxGeometry( 1.5, .32, 1.35 ), new THREE.MeshStandardMaterial( { color: 0x265ca3, roughness: .46 } ) );
+pad.name = 'Beacon switch';
+pad.position.set( - 1.6, - .35, .35 );
+pad.castShadow = true;
+const beacon = new THREE.Mesh( new THREE.IcosahedronGeometry( .33, 1 ),
+	new THREE.MeshStandardMaterial( { color: 0xffc66f, emissive: 0x682604, roughness: .24 } ) );
+beacon.name = 'Beacon';
+beacon.position.set( - 1.6, .1, - .92 );
+beacon.castShadow = true;
+const padGraph = pad.userData.logicGraph = createLogicGraph();
+removeNode( padGraph, 'logic.start' );
+const hover = logicNode( padGraph, 'logic.pointerOver', 24, 32 );
+const highlight = logicNode( padGraph, 'logic.setColor', 282, 32, { color: '#53bae9' } );
+const unhighlight = logicNode( padGraph, 'logic.setColor', 282, 190, { color: '#265ca3' } );
+const click = logicNode( padGraph, 'logic.objectPress', 24, 320 );
+const controllerButton = logicNode( padGraph, 'logic.gamepadButton', 24, 466 );
+const either = logicNode( padGraph, 'logic.merge', 282, 345 );
+const toggle = logicNode( padGraph, 'logic.toggleVisibility', 540, 345, { target: beacon.uuid } );
+for ( const [ from, output, to, input ] of [
+	[ hover, 'enter', highlight, 'run' ], [ hover, 'exit', unhighlight, 'run' ],
+	[ click, 'then', either, 'a' ], [ controllerButton, 'then', either, 'b' ],
+	[ either, 'then', toggle, 'run' ]
+] ) wire( padGraph, LOGIC_DOMAIN, from, output, to, input );
+
+const deck = new THREE.Mesh( new THREE.BoxGeometry( 2.5, .19, 2.2 ),
+	new THREE.MeshStandardMaterial( { color: 0x265b51, roughness: .65 } ) );
+deck.name = 'Navigation deck';
+deck.position.set( 1.15, - .55, 0 );
+deck.receiveShadow = true;
+const marker = new THREE.Mesh( new THREE.SphereGeometry( .17, 18, 12 ),
+	new THREE.MeshStandardMaterial( { color: 0xb3f7ca, roughness: .32 } ) );
+marker.name = 'Deck marker';
+marker.position.set( 1.15, - .27, 0 );
+marker.castShadow = true;
+const deckGraph = deck.userData.logicGraph = createLogicGraph();
+removeNode( deckGraph, 'logic.start' );
+const deckClick = logicNode( deckGraph, 'logic.objectPress', 24, 33 );
+const pick = logicNode( deckGraph, 'logic.pointerRay', 24, 193 );
+const placeMarker = logicNode( deckGraph, 'logic.setPositionVector', 282, 33, { target: marker.uuid } );
+const liftMarker = logicNode( deckGraph, 'logic.move', 540, 33, { target: marker.uuid, y: .185 } );
+for ( const [ from, output, to, input ] of [
+	[ deckClick, 'then', placeMarker, 'run' ], [ pick, 'point', placeMarker, 'vector' ],
+	[ placeMarker, 'then', liftMarker, 'run' ]
+] ) wire( deckGraph, LOGIC_DOMAIN, from, output, to, input );
+
+const markerGraph = marker.userData.logicGraph = createLogicGraph();
+removeNode( markerGraph, 'logic.start' );
+const moveFrame = logicNode( markerGraph, 'logic.update', 24, 32 );
+const frameTime = logicNode( markerGraph, 'logic.clock', 24, 182 );
+const markerPosition = logicNode( markerGraph, 'logic.position', 24, 317 );
+const controllerStick = logicNode( markerGraph, 'logic.gamepadStick', 24, 502 );
+const stepX = logicNode( markerGraph, 'math.expression', 282, 220, { expression: 'clamp(x + y*z*2.2, 0, 2.3)' } );
+const stepZ = logicNode( markerGraph, 'math.expression', 282, 468, { expression: 'clamp(x + y*z*2.2, -1, 1)' } );
+const moveMarker = logicNode( markerGraph, 'logic.setPosition', 540, 60, { y: - .27 } );
+for ( const [ from, output, to, input ] of [
+	[ moveFrame, 'then', moveMarker, 'run' ],
+	[ markerPosition, 'x', stepX, 'x' ], [ markerPosition, 'z', stepZ, 'x' ],
+	[ frameTime, 'delta', stepX, 'y' ], [ frameTime, 'delta', stepZ, 'y' ],
+	[ controllerStick, 'x', stepX, 'z' ], [ controllerStick, 'y', stepZ, 'z' ],
+	[ stepX, 'value', moveMarker, 'x' ], [ stepZ, 'value', moveMarker, 'z' ]
+] ) wire( markerGraph, LOGIC_DOMAIN, from, output, to, input );
+await save( '14-interactive-control-deck', 'A pointer and gamepad control deck', [ pad, beacon, deck, marker ],
+	'Play Scene and hover the blue Beacon switch. Click it to toggle the beacon. Click the green Navigation deck to move the marker to the pointer hit. On a standard controller, use the bottom face button to toggle the beacon and the left stick to move the marker. Inspect Logic Nodes on each surface.',
+	[ 2.7, 4.3, 6.6 ] );

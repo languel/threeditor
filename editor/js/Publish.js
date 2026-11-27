@@ -381,7 +381,7 @@ async function collectPlayableProject( editor ) {
 	for ( const module of [
 		'GeometrySimulation', 'GeometryNodes', 'GeometryFields', 'GeometryOperations', 'GeometryProximity', 'GeometryScatter', 'GeometryCurves',
 		'NodeGraph', 'ValueNodes', 'MathExpression',
-		'ShaderGraphRuntime', 'ShaderNodes', 'LogicRuntime', 'LogicNodes'
+		'ShaderGraphRuntime', 'ShaderNodes', 'LogicRuntime', 'LogicNodes', 'LogicInput'
 	] ) {
 
 		await project.copy( 'nodes/' + module + '.js', 'editor/js/nodes/' + module + '.js' );

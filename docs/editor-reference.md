@@ -109,6 +109,14 @@ Use **Branch** with a Boolean condition or **Sequence** to run two chains in ord
 
 Graph changes save with the project and support undo. In Play, the graphs act on the playback scene. Stop and play again to restart from the authored scene. [Keyboard-controlled gate tutorial](../editor/examples/lessons/README.md#control-a-gate-with-logic-nodes)
 
+### Pointer and controller input
+
+**Pointer Over Object** sends Enter, Over, and Exit events. Over runs each frame while the target or one of its children is the closest visible mesh under the pointer. **On Object Press** uses the same hit test for the selected pointer button. **Pointer Position** reports normalized view coordinates, with 0,0 at the top left. **Pointer Ray** gives the hit object, world-space point, surface normal, and distance. When used on a press or release path, its outputs describe that event's hit, including through a Delay. Connect the point to **Set Position by Vector** in World Space to place an object there. [UPBGE mouse input](https://upbge.org/docs/latest/manual/manual/logic_nodes/input/mouse/mouse_over.html)
+
+**Raycast** makes the same kind of query from a world-space origin and direction. Set **Max Distance**, narrow **Search In** to an object and its children, or use **Ignore** to exclude a hierarchy. Before acting on an optional hit, use **Branch** with the **Hit** output as its condition.
+
+With the Play view or published experience focused, move a stick or press a controller button so the browser can detect it. **Gamepad Button** can fire on Press, Held, or Release. **Gamepad Button Value** also reads analog strength. **Gamepad Stick** reads either stick on a standard controller and supports a radial dead zone and axis inversion. Use **Gamepad Axis** for a raw axis index. **Gamepad Connection** reports when a controller becomes available or disconnects, and **Gamepad Vibrate** runs a short effect on supported devices. Controller and button indices start at zero. [UPBGE gamepad inputs](https://upbge.org/docs/latest/manual/manual/logic_nodes/input/index.html) · [W3C Gamepad specification](https://www.w3.org/TR/gamepad/) · [Interactive control deck tutorial](../editor/examples/lessons/README.md#build-a-pointer-and-gamepad-control-deck)
+
 ### Streams and devices
 
 In **Streams**, connect Web MIDI or Web Serial, or enable MediaPipe tracking on an input. In the Logic Nodes **Streams** category, use **On Stream Sample**, **On Stream Change**, or **Stream Threshold** and click **Browse stream topics**. Read the current event with **Event Value** or **Event Text**. Use **MIDI Control**, **MIDI Note**, **Serial Value**, and **MediaPipe Landmark** to read device data directly. Landmark outputs include X, Y, Z, a vector, and whether coordinates are available.
