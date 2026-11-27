@@ -49,6 +49,16 @@ Use **Min. opacity** to cut low-opacity splats as a confidence proxy. **Min. spl
 
 The outliner uses distinct icons for cameras, projectors, lights, models, groups, meshes, curves, shapes, points, and scans. Click the `<>` icon next to a scripted object to open its code.
 
+## Empties and modeling references
+
+Use **Add → Empty** to place an axes, arrow, circle, cube, sphere, or cone handle at the 3D cursor. Empties can parent objects and drive ordinary transforms. Change their shape and size in **Object → Empty Display**. The display handles are editor guides.
+
+**Add → Image → Reference** places an image at its scene depth. **Background** puts the image behind scene geometry. **Empty Image** creates a placeholder with a **Choose image** button in Object properties. Image references have an opacity control. For an image that should render in Play or export, use **Mesh Plane**. [Blender empty display reference](https://docs.blender.org/manual/en/5.0/modeling/empties.html)
+
+**Add → Modeling Reference** imports point clouds, Gaussian splats, or OpenVDB files as editing guides. Imported scalar VDBs use an extracted surface. Level sets use the zero crossing and density grids use a fraction of their sampled density range. Large grids use a coarser sampling step. The guide preserves the grid's transform. [OpenVDB sample volumes](https://www.openvdb.org/download/)
+
+In **Build mesh** or **Polybuild**, choose **Surface / reference** as the placement. New points use the closest visible mesh, point-cloud sample, or splat hit under the cursor. **Face project** also uses those hits when snapping an existing selection. Keep the reference visible with viewport overlays and hide any object covering the surface you want to use. Reference guides are excluded from scene playback.
+
 ## Stock material looks
 
 Choose **Material → Stock look** on a mesh or group. On a mesh, select the material slot first if there is more than one. On a group, the look applies to every existing mesh slot in its enabled hierarchy. Switch to **Preview** to see the shader. Look parameters appear below the selector and include fill color, ink color, and outline width. Click a diamond to keyframe a parameter. On a group with a common look, edits and keys apply to all its mesh material slots.

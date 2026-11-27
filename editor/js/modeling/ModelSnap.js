@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { isVisible } from '../ObjectRestrictions.js';
-import { meshHit } from './SurfacePicking.js?v=local-view';
+import { meshHit, modelSurfaceHit } from './SurfacePicking.js?v=local-view';
 
 export const modelSnapTargets = [
 	[ 'increment', 'Increment', 'toolSnap' ], [ 'grid', 'Grid', 'toolGrid' ],
@@ -53,15 +53,16 @@ export function snapMeshFeature( { mode, ray, scene, object, camera, rect, curso
 
 	}
 
-	const hit = meshHit( ray, scene, object, allows );
+	const hit = mode === 'face' || mode === 'vertex' ? modelSurfaceHit( ray, scene, object, camera, rect, allows ) : meshHit( ray, scene, object, allows );
+	if ( mode === 'face' ) return hit?.point;
 	const candidates = [];
-	if ( hit ) {
+	if ( hit && ! hit.face && mode === 'vertex' ) candidates.push( { point: hit.point } );
+	else if ( hit?.face ) {
 
 		const { a, b, c } = hit.face;
 		const positions = hit.object.geometry.attributes.position;
 		const corners = [ a, b, c ].map( index => new THREE.Vector3().fromBufferAttribute( positions, index ).applyMatrix4( hit.object.matrixWorld ) );
 		const triangle = new THREE.Triangle( ...corners );
-		if ( mode === 'face' ) return hit.point;
 		if ( mode === 'faceCenter' ) return triangle.getMidpoint( new THREE.Vector3() );
 		if ( mode === 'faceNearest' ) return triangle.closestPointToPoint( reference ?? hit.point, new THREE.Vector3() );
 		if ( mode === 'vertex' ) {

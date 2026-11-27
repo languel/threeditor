@@ -13,6 +13,7 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 
 import { Config } from './Config.js?v=transform-gizmos';
 import { Loader } from './Loader.js?v=splat-filters';
+import { createEmptyHelper } from './modeling/ReferenceObjects.js';
 import { History as _History } from './History.js?v=unified-sync';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
@@ -448,7 +449,11 @@ Editor.prototype = {
 
 			if ( helper === undefined ) {
 
-				if ( object.isCamera ) {
+				if ( object.userData.emptyDisplay ) {
+
+					helper = createEmptyHelper( object );
+
+				} else if ( object.isCamera ) {
 
 					helper = createCameraHelper( THREE, object );
 
