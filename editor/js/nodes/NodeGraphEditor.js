@@ -6,7 +6,7 @@ import { registerGraphKeyboard } from './GraphKeyboard.js';
 let clipboard;
 
 const PORT_COLORS = {
-	geometry: '#59c6a1', points: '#83d5bf', instances: '#30dcc6', number: '#91a8ff', field: '#70baff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
+	geometry: '#59c6a1', curve: '#9bd97b', points: '#83d5bf', instances: '#30dcc6', number: '#91a8ff', field: '#70baff', color: '#f3bd72', vec2: '#d2a6ef', vec3: '#b799ed',
 	boolean: '#f792a5', string: '#8cdbd1', object: '#efdb8b', event: '#ffad73'
 };
 const portColor = type => Object.hasOwn( PORT_COLORS, type ) ? PORT_COLORS[ type ] : '#b0a8c6';
@@ -347,7 +347,8 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 				input.maxLength = spec.maxLength;
 
 			}
-			if ( input.type !== 'checkbox' ) input.value = value;
+			if ( spec.type === 'vec3' ) input.title = 'Enter X, Y, Z';
+			if ( input.type !== 'checkbox' ) input.value = spec.type === 'vec3' ? value.join( ', ' ) : value;
 			input.disabled = ! editable;
 			input.dataset.focus = [ node.id, 'value', name ].join( '/' );
 			input.setAttribute( 'aria-label', def.label + ' / ' + spec.label );
@@ -356,6 +357,7 @@ export function NodeGraphEditor( rootDomain, { onChange, onError, inputOptions, 
 				const target = draft.nodes.find( item => item.id === node.id );
 				if ( input.type === 'number' ) target.values[ name ] = input.valueAsNumber;
 				else if ( input.type === 'checkbox' ) target.values[ name ] = input.checked;
+				else if ( spec.type === 'vec3' ) target.values[ name ] = input.value.trim().split( /\s*,\s*|\s+/ ).filter( Boolean ).map( Number );
 				else target.values[ name ] = input.value;
 
 			} );

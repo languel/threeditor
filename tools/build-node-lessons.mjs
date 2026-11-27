@@ -307,3 +307,30 @@ for ( const [ from, output, to, input ] of [
 await save( '12-stream-pulse', 'A stream-reactive sculpture', sculpture,
 	'Play Scene to pulse the sculpture through a stream topic. Open Logic Nodes and follow On Stream Sample to Event Value, Map Range, and Set Scale. Use Browse stream topics to substitute a live MIDI control, serial signal, or tracked landmark coordinate.',
 	[ 3.1, 2.3, 4.1 ] );
+
+const spring = createGeometryGraph();
+removeNode( spring, 'geometry.input' );
+const spiral = addNode( spring, 'curve.spiral', 24, 32 );
+Object.assign( spiral.values, { startRadius: 1.3, endRadius: .35, height: 2.8, turns: 2.5, resolution: 96 } );
+const evenlySpaced = addNode( spring, 'curve.resample', 270, 32 );
+evenlySpaced.values.count = 94;
+const profile = addNode( spring, 'curve.circle', 270, 276 );
+Object.assign( profile.values, { radius: .16, resolution: 12 } );
+const pathIndex = addNode( spring, 'field.index', 24, 408 );
+const taper = addNode( spring, 'field.expression', 270, 454 );
+taper.values.expression = '1 - x * 0.78';
+const sweep = addNode( spring, 'curve.mesh', 516, 32 );
+const lowerSpring = addNode( spring, 'geometry.transform', 762, 32 );
+lowerSpring.values.y = - .7;
+spring.nodes.find( node => node.type === 'geometry.output' ).x = 1008;
+for ( const [ from, output, to, input ] of [
+	[ spiral.id, 'curve', evenlySpaced.id, 'curve' ], [ evenlySpaced.id, 'curve', sweep.id, 'curve' ],
+	[ profile.id, 'curve', sweep.id, 'profile' ], [ pathIndex.id, 'fraction', taper.id, 'x' ],
+	[ taper.id, 'value', sweep.id, 'scale' ], [ sweep.id, 'geometry', lowerSpring.id, 'geometry' ],
+	[ lowerSpring.id, 'geometry', 'geometry.output', 'geometry' ]
+] ) wire( spring, GEOMETRY_DOMAIN, from, output, to, input );
+const springMesh = geometryMesh( 'Tapered spring', new THREE.CylinderGeometry( .4, .4, 2 ), spring,
+	new THREE.MeshStandardMaterial( { color: 0xfab47e, roughness: .33, metalness: .18 } ) );
+await save( '13-tapered-curve', 'A tapered curve sweep', springMesh,
+	'Open Geometry Nodes on Tapered spring. Spiral describes the path, and Curve Circle supplies the cross section. Resample Curve spaces the rings by length. Try changing the rotations, profile radius, or the taper expression connected to Curve to Mesh.',
+	[ 3.9, 2.7, 5.2 ] );
