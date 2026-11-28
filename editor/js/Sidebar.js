@@ -2,7 +2,7 @@ import { UITabbedPanel } from './libs/ui.js';
 import { icon, KEY_ICONS } from './Glyphs.js?v=transform-gizmos';
 
 import { SidebarScene } from './Sidebar.Scene.js?v=editor-panes';
-import { SidebarProperties } from './Sidebar.Properties.js?v=armature-x-mirror';
+import { SidebarProperties } from './Sidebar.Properties.js?v=armature-apply';
 import { SidebarProject } from './Sidebar.Project.js';
 import { SidebarSettings } from './Sidebar.Settings.js?v=transform-gizmos';
 import { SidebarStreams } from './Sidebar.Streams.js';

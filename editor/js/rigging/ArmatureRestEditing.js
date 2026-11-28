@@ -1,4 +1,4 @@
-import { boneRestFrames, boneRestFromPoints, mirroredBoneName } from './Armature.js';
+import { boneRestFrames, boneRestFromPoints, boneRestScale, mirroredBoneName } from './Armature.js?v=armature-apply';
 
 function mirroredEdits( THREE, original, edits ) {
 
@@ -39,11 +39,13 @@ function mirroredEdits( THREE, original, edits ) {
 export function restInParentFrame( THREE, previous, frame, parent ) {
 
 	const head = frame.head.clone(), tail = frame.tail.clone(), quaternion = frame.quaternion.clone();
+	const parentScale = parent?.scale ?? 1;
+	const scale = ( frame.scale ?? boneRestScale( previous ) * parentScale ) / parentScale;
 	if ( parent ) {
 
 		const inverse = parent.quaternion.clone().invert();
-		head.sub( parent.head ).applyQuaternion( inverse );
-		tail.sub( parent.head ).applyQuaternion( inverse );
+		head.sub( parent.head ).applyQuaternion( inverse ).divideScalar( parentScale );
+		tail.sub( parent.head ).applyQuaternion( inverse ).divideScalar( parentScale );
 		quaternion.premultiply( inverse );
 
 	}
@@ -53,8 +55,9 @@ export function restInParentFrame( THREE, previous, frame, parent ) {
 	roll = THREE.MathUtils.euclideanModulo( roll + Math.PI, 2 * Math.PI ) - Math.PI;
 	return {
 		...previous,
-		position: previous.connected ? [ 0, parent.head.distanceTo( parent.tail ), 0 ] : rotation.position,
-		quaternion: quaternion.toArray(), length: rotation.length, roll
+		...( scale !== 1 || previous.scale !== undefined ? { scale } : {} ),
+		position: previous.connected ? [ 0, parent.head.distanceTo( parent.tail ) / parentScale, 0 ] : rotation.position,
+		quaternion: quaternion.toArray(), length: rotation.length / scale, roll
 	};
 
 }
@@ -96,7 +99,7 @@ export function stageBoneRest( THREE, rig, edits, mirror = false ) {
 		const oldDirection = axis.clone().applyQuaternion( orientation );
 		const quaternion = new THREE.Quaternion().setFromUnitVectors( oldDirection, direction ).multiply( orientation ).normalize();
 
-		const frame = { head: nextHead, tail, quaternion };
+		const frame = { head: nextHead, tail, quaternion, scale: base.scale };
 		nextFrames.set( bone, frame );
 		const next = restInParentFrame( THREE, { ...previous, connected }, frame, parent );
 		if ( edit?.roll !== undefined ) {

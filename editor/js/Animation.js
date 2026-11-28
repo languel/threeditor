@@ -856,6 +856,7 @@ function Animation( editor ) {
 		canEditSelection: () => ! recording && Boolean( clip() ), clearSelection, deleteSelection,
 		compact: () => stageHeight( compactHeight ),
 		refreshKeyControls: () => refreshTimelineKeyControls( editor.timeline ),
+		get recording() { return Boolean( recording ); },
 		withBase: callback => runtime.withBase( callback ),
 		addImported: ( object, clip ) => modify( 'Add imported animation clip', doc => newClip( doc,
 			{ object: object.uuid, name: clip.name || 'Imported animation', duration: clip.duration, uuid: clip.uuid } ) )

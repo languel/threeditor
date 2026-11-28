@@ -1,4 +1,4 @@
-import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, mirroredBoneName, resetBoneTransform } from '../rigging/Armature.js?v=armature-symmetrize';
+import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, mirroredBoneName, resetBoneTransform } from '../rigging/Armature.js?v=armature-apply';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
 import { findConstraint, constraintSettings, constraintTypes, resolveConstraint } from '../rigging/ArmatureConstraints.js';
 import { switchedParentStack } from '../rigging/ConstraintParenting.js';
@@ -414,7 +414,8 @@ export class LogicRuntime {
 
 		const previous = findConstraint( object, name.trim() );
 		if ( ! previous || Object.entries( patch ).every( ( [ key, value ] ) => previous[ key ] === value ) ) return;
-		const next = constraintSettings( { ...previous, ...patch } );
+		const next = constraintSettings( { ...previous, ...patch,
+			targetPoseBasis: patch.target !== undefined && patch.target !== previous.target ? undefined : previous.targetPoseBasis } );
 		if ( ! next ) return;
 		if ( patch.target ) {
 

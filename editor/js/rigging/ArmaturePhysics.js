@@ -1,4 +1,4 @@
-import { armatureOf, resetBoneTransform } from './Armature.js';
+import { armatureOf, resetBoneTransform } from './Armature.js?v=armature-apply';
 import { bonePhysicsSettings, usesArmaturePhysics } from './ArmaturePhysicsConfig.js';
 import { withArmaturePose } from './ArmaturePose.js';
 import { hasRestriction } from '../ObjectRestrictions.js';

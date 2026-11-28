@@ -1,4 +1,4 @@
-import { armatureBones, isArmature } from './Armature.js';
+import { armatureBones, boneRestScale, isArmature } from './Armature.js?v=armature-apply';
 import { withArmaturePose } from './ArmaturePose.js';
 import { createWeightMirror, normalizeBoneWeights, paintBoneWeight, paintMirrorCenter, weightPointKey } from './ArmatureWeights.js?v=armature-x-mirror';
 import { hasRestriction } from '../ObjectRestrictions.js';
@@ -17,14 +17,14 @@ export function canDeformWithArmature( object ) {
 function restEntries( THREE, rig ) {
 
 	const position = new THREE.Vector3(), rotation = new THREE.Quaternion();
-	const unitScale = new THREE.Vector3( 1, 1, 1 );
+	const scale = new THREE.Vector3();
 	const matrixByBone = new Map();
 	const entries = [];
 	for ( const bone of armatureBones( rig ) ) {
 
 		const rest = bone.userData.armatureBone;
 		if ( ! rest ) continue;
-		const matrix = new THREE.Matrix4().compose( position.fromArray( rest.position ), rotation.fromArray( rest.quaternion ), unitScale );
+		const matrix = new THREE.Matrix4().compose( position.fromArray( rest.position ), rotation.fromArray( rest.quaternion ), scale.setScalar( boneRestScale( rest ) ) );
 		const parent = matrixByBone.get( bone.parent );
 		if ( parent ) matrix.premultiply( parent );
 		else if ( bone.parent !== rig ) continue;
@@ -44,12 +44,13 @@ function restEntries( THREE, rig ) {
 
 // Pick the nearest bone segments and normalize their distance-based weights.
 // Measuring in armature rest space keeps weights fixed while the rig is posed.
-function automaticWeights( THREE, position, bones, objectToRig, count ) {
+function automaticWeights( THREE, position, bones, objectToRig, count, distanceScale ) {
 
 	const indices = new Uint32Array( count * position.count );
 	const weights = new Float32Array( indices.length );
 	const point = new THREE.Vector3(), nearest = new THREE.Vector3();
 	const scores = new Float64Array( count );
+	const distanceScaleSquared = distanceScale * distanceScale;
 	const groups = new Map();
 	for ( const [ id, { bone, rest } ] of bones.entries() ) {
 
@@ -80,7 +81,7 @@ function automaticWeights( THREE, position, bones, objectToRig, count ) {
 				}
 
 			}
-			const score = 1 / ( ( distance2 + .0025 ) ** 2 );
+			const score = 1 / ( ( distance2 / distanceScaleSquared + .0025 ) ** 2 );
 			for ( let rank = 0; rank < count; rank ++ ) {
 
 				if ( score <= scores[ rank ] ) continue;
@@ -137,7 +138,8 @@ function skinRecord( THREE, object, rig, binding ) {
 	if ( ! segments.length ) return;
 	const count = Math.min( segments.length, binding.influences );
 	const reference = new THREE.Matrix4().fromArray( binding.objectToRig );
-	const skin = automaticWeights( THREE, position, segments, reference, count );
+	const scale = binding.weightDistanceScale;
+	const skin = automaticWeights( THREE, position, segments, reference, count, Number.isFinite( scale ) && scale > 0 ? scale : 1 );
 	const boneIds = segments.map( entry => entry.bone.uuid );
 	const samples = binding.weightSamples;
 	if ( samples ) for ( let vertex = 0; vertex < position.count; vertex ++ ) {

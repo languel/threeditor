@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { ArmatureTopologyCommand, boneEditState } from '../commands/ArmatureTopologyCommand.js?v=armature-symmetrize';
 import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { armatureBones, boneRestFrames, createBone, isArmature, mirroredBoneName } from './Armature.js?v=armature-symmetrize';
+import { armatureBones, boneRestFrame, boneRestFrames, createBone, isArmature, mirroredBoneName } from './Armature.js?v=armature-apply';
 import { ikSettings, resolveIK } from './ArmatureIK.js';
-import { restInParentFrame } from './ArmatureRestEditing.js';
-import { reflectBoneFrame, mirroredBoneConstraint, mirroredBonePhysics } from './ArmatureMirror.js';
+import { restInParentFrame } from './ArmatureRestEditing.js?v=armature-apply';
+import { reflectBoneFrame, mirroredBoneConstraint, mirroredBonePhysics } from './ArmatureMirror.js?v=armature-apply';
 import { armaturePoseCycles } from './ArmaturePose.js?v=armature-symmetrize';
 import { constraintSettings, resolveConstraint } from './ArmatureConstraints.js';
 
@@ -432,16 +432,7 @@ export function symmetrizeRigBones( editor, rig, bones ) {
 		if ( staged.has( bone ) ) return staged.get( bone ).frame;
 		const rest = bone.userData.armatureBone;
 		if ( ! rest ) return;
-		const parent = restFrame( bone.parent );
-		const head = new THREE.Vector3().fromArray( rest.position );
-		const quaternion = new THREE.Quaternion().fromArray( rest.quaternion );
-		if ( parent ) {
-
-			head.applyQuaternion( parent.quaternion ).add( parent.head );
-			quaternion.premultiply( parent.quaternion );
-
-		}
-		return { head, quaternion, tail: new THREE.Vector3( 0, rest.length, 0 ).applyQuaternion( quaternion ).add( head ) };
+		return boneRestFrame( THREE, rest, restFrame( bone.parent ) );
 
 	}
 	function poseMatrix( object ) {

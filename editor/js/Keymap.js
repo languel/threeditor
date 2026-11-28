@@ -12,7 +12,7 @@ import { canParentSelection } from './ObjectParenting.js?v=editor-panes';
 import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=editor-panes';
 import { armatureOf } from './rigging/Armature.js';
 import { createBoneIKTarget, setBoneIK } from './rigging/ArmatureTools.js';
-import { canApplyObjectTransforms } from './modeling/ApplyTransforms.js';
+import { canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
 
 const control = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl' : 'mod';
 const alignCameraShortcut = control + '+alt+numpad0';

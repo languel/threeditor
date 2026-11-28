@@ -3,7 +3,7 @@ import { outlineActions } from './modeling/OutlineActions.js?v=pencil-layout';
 import { formatCombo } from './Keymap.js';
 import { changeParent } from './ObjectParenting.js?v=editor-panes';
 import { SetValueCommand } from './commands/SetValueCommand.js';
-import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js';
+import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
 
 function ContextMenu( editor, viewport ) {
 

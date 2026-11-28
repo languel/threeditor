@@ -13,12 +13,13 @@ import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
-import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js?v=armature-x-mirror';
+import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestScale, boneRestTail, isArmature } from './rigging/Armature.js?v=armature-apply';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js?v=armature-apply';
 import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
-import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './rigging/ArmatureTopology.js?v=armature-symmetrize';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './rigging/ArmatureTopology.js?v=armature-apply';
+import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -42,7 +43,7 @@ function AgentAPI( editor ) {
    ik: bone.userData.armatureIK || null,
    constraints: bone.userData.armatureConstraints || [],
    pose: bonePoseOffsets( THREE, bone ),
-   rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, connected: rest.connected } : null
+   rest: rest ? { head: rest.position, tail: boneRestTail( THREE, rest ), roll: rest.roll, length: rest.length, scale: boneRestScale( rest ), connected: rest.connected } : null
   };
 
  }
@@ -159,6 +160,8 @@ function AgentAPI( editor ) {
      distance: { type: 'number', minimum: 0 }, mode: { ...str, enum: distanceModes },
      inverse: { anyOf: [ { type: 'null' }, { type: 'array', items: { type: 'number' }, minItems: 16, maxItems: 16 } ],
       description: 'Child Of inverse matrix in column-major order. Null clears the inverse.' },
+     ownerPoseBasis: { type: 'array', items: { type: 'number' }, minItems: 16, maxItems: 16, description: 'Saved owner pose-space calibration matrix.' },
+     targetPoseBasis: { type: 'array', items: { type: 'number' }, minItems: 16, maxItems: 16, description: 'Saved target pose-space calibration matrix.' },
      influence: unitNumber( 'Blend strength from zero to one.' ), muted: { type: 'boolean' }
     }
    }
@@ -347,6 +350,16 @@ function AgentAPI( editor ) {
  add('object_get','Inspect a scene object by UUID.',{uuid:str},['uuid'],a=>describe(object(a.uuid)),true);
  add('object_create','Create an ordinary three.js primitive, group, camera or light as an undoable editor action.',{type:{type:'string',enum:['box','sphere','plane','cylinder','cone','group','perspectiveCamera','orthographicCamera','ambientLight','directionalLight','pointLight']},name:str,position:vec},['type'],a=>{const constructors={box:()=>new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()),sphere:()=>new THREE.Mesh(new THREE.SphereGeometry(.5,32,16),new THREE.MeshStandardMaterial()),plane:()=>new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshStandardMaterial()),cylinder:()=>new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,32),new THREE.MeshStandardMaterial()),cone:()=>new THREE.Mesh(new THREE.ConeGeometry(.5,1,32),new THREE.MeshStandardMaterial()),group:()=>new THREE.Group(),perspectiveCamera:()=>new THREE.PerspectiveCamera(50,1,.1,2000),orthographicCamera:()=>new THREE.OrthographicCamera(-5,5,5,-5,.1,2000),ambientLight:()=>new THREE.AmbientLight(0xffffff,1),directionalLight:()=>new THREE.DirectionalLight(0xffffff,1),pointLight:()=>new THREE.PointLight(0xffffff,1)};if(!constructors[a.type])throw new Error('Unknown object type');const o=constructors[a.type]();o.name=a.name||a.type;if(a.position)o.position.fromArray(vector(a.position));editor.execute(new AddObjectCommand(editor,o));return describe(o);});
  add('object_update','Set an object name, visibility, position, rotation in radians, or scale with undo.',{uuid:str,name:str,visible:{type:'boolean'},position:vec,rotation:vec,scale:vec},['uuid'],a=>{const o=object(a.uuid),commands=[];if(a.position)commands.push(new SetPositionCommand(editor,o,new THREE.Vector3().fromArray(vector(a.position))));if(a.rotation)commands.push(new SetRotationCommand(editor,o,new THREE.Euler(...vector(a.rotation))));if(a.scale)commands.push(new SetScaleCommand(editor,o,new THREE.Vector3().fromArray(vector(a.scale))));for(const k of ['name','visible'])if(a[k]!==undefined){if(typeof a[k]!== (k==='visible'?'boolean':'string'))throw new Error('Invalid '+k);commands.push(new SetValueCommand(editor,o,k,a[k]));}if(commands.length)editor.execute(commands.length===1?commands[0]:new MultiCmdsCommand(editor,commands));return describe(o);});
+ add( 'object_apply_transforms', 'Apply local transforms to objects or armatures in Object Mode. Keeps supported rigged geometry and attachments in place. Supports undo.', {
+  objects: { type: 'array', minItems: 1, uniqueItems: true, items: str, description: 'Scene object UUIDs.' },
+  mode: { type: 'string', enum: applyTransformOptions.map( ( [ mode ] ) => mode ) }
+ }, [ 'objects', 'mode' ], a => {
+
+  const selection = a.objects.map( object );
+  if ( ! canApplyObjectTransforms( editor, selection ) ) throw new Error( 'Choose editable objects or armatures in Object Mode.' );
+  return { applied: applyObjectTransforms( editor, a.mode, selection ), objects: a.objects };
+
+ } );
  add('object_remove','Remove a scene object with undo.',{uuid:str},['uuid'],a=>{const o=object(a.uuid);if(!o.parent||o===editor.scene||o===editor.camera)throw new Error('Cannot remove the scene or editor camera');editor.execute(new RemoveObjectCommand(editor,o));return {removed:a.uuid};});
  add('select','Select an object by UUID, or clear selection.',{uuid:str},[],a=>{if(a.uuid)editor.select(object(a.uuid));else editor.deselect();return {selected:editor.selected?.uuid||null};});
  add('material_update','Update a mesh material color (hex), opacity, and transparency with undo.',{uuid:str,color:str,opacity:{type:'number',minimum:0,maximum:1},transparent:{type:'boolean'}},['uuid'],a=>{const o=object(a.uuid),m=o.material;if(!m||Array.isArray(m))throw new Error('Expected an object with one material');const cmds=[];if(a.color!==undefined){if(!/^#[0-9a-f]{6}$/i.test(a.color)||!m.color)throw new Error('Expected a material color in #rrggbb format');cmds.push(new SetMaterialColorCommand(editor,o,'color',parseInt(a.color.slice(1),16),0));}if(a.opacity!==undefined){if(!Number.isFinite(a.opacity)||a.opacity<0||a.opacity>1)throw new Error('Opacity must be 0–1');cmds.push(new SetMaterialValueCommand(editor,o,'opacity',a.opacity,0));}if(a.transparent!==undefined){if(typeof a.transparent!=='boolean')throw new Error('transparent must be boolean');cmds.push(new SetMaterialValueCommand(editor,o,'transparent',a.transparent,0));}if(cmds.length)editor.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(editor,cmds));return describe(o);});

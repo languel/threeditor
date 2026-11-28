@@ -8,8 +8,8 @@ import { SetScaleCommand } from '../commands/SetScaleCommand.js';
 import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { armatureBones, armatureOf, bonePoseTransform, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
-import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js?v=armature-x-mirror';
+import { armatureBones, armatureOf, bonePoseTransform, boneRestFrames, boneRestFromPoints, boneRestScale, boneRestTail, createArmature, createBone, isArmature } from './Armature.js?v=armature-apply';
+import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js?v=armature-apply';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
 import { ikSettings, resolveIK } from './ArmatureIK.js';
@@ -77,6 +77,7 @@ export function editBoneRest( editor, bone, options ) {
 	const head = options.head ?? previous.position;
 	const tail = options.tail ?? boneRestTail( THREE, previous );
 	const next = boneRestFromPoints( THREE, head, tail, options.roll ?? previous.roll );
+	next.length /= boneRestScale( previous );
 	next.connected = previous.connected && head.every( ( value, axis ) => value === previous.position[ axis ] );
 	const commands = restCommands( editor, bone, { ...previous, ...next } );
 	if ( Math.abs( next.length - previous.length ) > 1e-10 ) for ( const child of bone.children ) {
@@ -381,6 +382,7 @@ export function setConstraintStack( editor, owner, input, { autoKey = false } = 
 		ids.add( settings.id );
 		names.add( settings.name );
 		const previous = Array.isArray( existing ) && existing.find( entry => entry?.id === settings.id );
+		if ( previous && settings.target !== previous.target && item?.targetPoseBasis === previous.targetPoseBasis ) delete settings.targetPoseBasis;
 		if ( settings.ownerSpace === 'pose' && ! armatureOf( owner ) ) throw new Error( 'Pose space needs an armature or a bone owner.' );
 		if ( settings.target && ( settings.target !== previous?.target || settings.targetSpace !== previous?.targetSpace ) ) {
 

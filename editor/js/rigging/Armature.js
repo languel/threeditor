@@ -80,8 +80,30 @@ export function boneRestFromPoints( THREE, head, tail, roll = 0, connected = fal
 
 export function boneRestTail( THREE, rest ) {
 
-	return new THREE.Vector3( 0, rest.length, 0 ).applyQuaternion( new THREE.Quaternion().fromArray( rest.quaternion ) )
+	return new THREE.Vector3( 0, rest.length * boneRestScale( rest ), 0 ).applyQuaternion( new THREE.Quaternion().fromArray( rest.quaternion ) )
 		.add( new THREE.Vector3().fromArray( rest.position ) ).toArray();
+
+}
+
+export function boneRestScale( rest ) {
+
+	return Number.isFinite( rest?.scale ) && rest.scale > 0 ? rest.scale : 1;
+
+}
+
+export function boneRestFrame( THREE, rest, parent ) {
+
+	const quaternion = new THREE.Quaternion().fromArray( rest.quaternion );
+	const head = new THREE.Vector3().fromArray( rest.position );
+	const scale = boneRestScale( rest ) * ( parent?.scale ?? 1 );
+	if ( parent ) {
+
+		head.multiplyScalar( parent.scale ?? 1 ).applyQuaternion( parent.quaternion ).add( parent.head );
+		quaternion.premultiply( parent.quaternion );
+
+	}
+	const tail = new THREE.Vector3( 0, rest.length * scale, 0 ).applyQuaternion( quaternion ).add( head );
+	return { head, tail, quaternion, scale };
 
 }
 
@@ -92,17 +114,7 @@ export function boneRestFrames( THREE, rig ) {
 
 		const rest = bone.userData.armatureBone;
 		if ( ! rest ) continue;
-		const parent = frames.get( bone.parent );
-		const quaternion = new THREE.Quaternion().fromArray( rest.quaternion );
-		const head = new THREE.Vector3().fromArray( rest.position );
-		if ( parent ) {
-
-			head.applyQuaternion( parent.quaternion ).add( parent.head );
-			quaternion.premultiply( parent.quaternion );
-
-		}
-		const tail = new THREE.Vector3( 0, rest.length, 0 ).applyQuaternion( quaternion ).add( head );
-		frames.set( bone, { head, tail, quaternion } );
+		frames.set( bone, boneRestFrame( THREE, rest, frames.get( bone.parent ) ) );
 
 	}
 	return frames;
@@ -114,11 +126,12 @@ export function bonePoseTransform( THREE, bone, offsets ) {
 	const rest = bone.userData.armatureBone;
 	if ( ! rest ) return null;
 	const orientation = new THREE.Quaternion().fromArray( rest.quaternion );
-	const position = offsets.location ? new THREE.Vector3().fromArray( offsets.location ).applyQuaternion( orientation )
+	const restScale = boneRestScale( rest );
+	const position = offsets.location ? new THREE.Vector3().fromArray( offsets.location ).multiplyScalar( restScale ).applyQuaternion( orientation )
 		.add( new THREE.Vector3().fromArray( rest.position ) ) : bone.position.clone();
 	const quaternion = offsets.rotation ? orientation.multiply( new THREE.Quaternion().setFromEuler( new THREE.Euler( ...offsets.rotation ) ) ) :
 		bone.quaternion.clone();
-	const scale = offsets.scale ? new THREE.Vector3().fromArray( offsets.scale ) : bone.scale.clone();
+	const scale = offsets.scale ? new THREE.Vector3().fromArray( offsets.scale ).multiplyScalar( restScale ) : bone.scale.clone();
 	return { position, quaternion, scale };
 
 }
@@ -128,10 +141,11 @@ export function bonePoseOffsets( THREE, bone ) {
 	const rest = bone.userData.armatureBone;
 	if ( ! rest ) return null;
 	const inverse = new THREE.Quaternion().fromArray( rest.quaternion ).invert();
+	const restScale = boneRestScale( rest );
 	return {
-		location: bone.position.clone().sub( new THREE.Vector3().fromArray( rest.position ) ).applyQuaternion( inverse ).toArray(),
+		location: bone.position.clone().sub( new THREE.Vector3().fromArray( rest.position ) ).applyQuaternion( inverse ).divideScalar( restScale ).toArray(),
 		rotation: new THREE.Euler().setFromQuaternion( inverse.multiply( bone.quaternion ) ).toArray().slice( 0, 3 ),
-		scale: bone.scale.toArray()
+		scale: bone.scale.clone().divideScalar( restScale ).toArray()
 	};
 
 }
@@ -142,7 +156,7 @@ export function resetBoneTransform( bone ) {
 	if ( ! rest ) return false;
 	bone.position.fromArray( rest.position );
 	bone.quaternion.fromArray( rest.quaternion );
-	bone.scale.set( 1, 1, 1 );
+	bone.scale.setScalar( boneRestScale( rest ) );
 	bone.updateMatrixWorld( true );
 	return true;
 
