@@ -331,6 +331,7 @@ function SidebarGeometry( editor ) {
 
 					const { GeometryParametersPanel } = await geometryPanels[ geometry.type ]?.() || {};
 
+					if ( editor.selected !== object || object.geometry !== geometry ) return;
 					if ( GeometryParametersPanel ) parameters.add( new GeometryParametersPanel( editor, object ) );
 
 				}

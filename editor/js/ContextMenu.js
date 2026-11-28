@@ -3,6 +3,7 @@ import { outlineActions } from './modeling/OutlineActions.js?v=pencil-layout';
 import { formatCombo } from './Keymap.js';
 import { changeParent } from './ObjectParenting.js?v=editor-panes';
 import { SetValueCommand } from './commands/SetValueCommand.js';
+import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js';
 
 function ContextMenu( editor, viewport ) {
 
@@ -336,6 +337,20 @@ function ContextMenu( editor, viewport ) {
 
 	}
 
+	function applyActions() {
+
+		return applyTransformOptions.map( ( [ mode, label ] ) => ( {
+			label, run: () => editor.viewTools.run( () => applyObjectTransforms( editor, mode ) )
+		} ) );
+
+	}
+
+	function openApply( position ) {
+
+		if ( canApplyObjectTransforms( editor ) ) show( 'Apply', applyActions(), position );
+
+	}
+
 	function openBoneParent( clearing, position ) {
 
 		const options = clearing ? [ [ 'Clear Parent', 'clear' ] ] : [ [ 'Keep Offset', 'offset' ], [ 'Connected', 'connected' ] ];
@@ -429,6 +444,7 @@ function ContextMenu( editor, viewport ) {
 			actions.unshift( { label: 'Edit measurement', run: () => editor.viewTools.setWorkspaceMode( 'edit' ) } );
 
 		} else actions.unshift( { label: 'Add…', run: () => openAdd( position ) }, ...outlineActions( editor, editor.selected ) );
+		if ( canApplyObjectTransforms( editor ) ) actions.push( { label: 'Apply', children: applyActions() } );
 		actions.push( ...originActions( editor ) );
 		if ( editor.selected ) for ( const [ value, label ] of [ [ 'bounds', 'Bounds center' ], [ 'bottom', 'Bounds bottom center' ], [ 'median', 'Median' ], [ 'active', 'Active element' ], [ 'origin', 'World origin' ], [ 'cursor', '3D Cursor' ] ] ) actions.push( {
 
@@ -480,7 +496,7 @@ function ContextMenu( editor, viewport ) {
 
 	}, true );
 	window.addEventListener( 'resize', () => { if ( menu.classList.contains( 'context-menu-add' ) ) close(); } );
-	return { openAdd, openObject, openPalette, openSeparate, openParent, openBoneParent, openRename, show, close };
+	return { openAdd, openObject, openPalette, openSeparate, openParent, openApply, openBoneParent, openRename, show, close };
 
 }
 
