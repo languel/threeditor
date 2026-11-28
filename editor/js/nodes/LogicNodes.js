@@ -108,6 +108,13 @@ export const LOGIC_DOMAIN = {
 				mirrored: { label: 'Mirrored Bone', type: 'object' } }
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
+		[ 'logic.boneCollection', {
+			label: 'Bone Collection', category: 'Rigging',
+			inputs: { armature: object( 'Armature' ), name: text( 'Collection Name or ID', 'Bones' ),
+				index: numberInput( 'Index', 0, 0, 1e6 ), includeChildren: flag( 'Include Subcollections', true ) },
+			outputs: { object: { label: 'Bone', type: 'object' }, count: numberOutput( 'Bone Count' ),
+				found: booleanOutput( 'Bone Found' ), collectionFound: booleanOutput( 'Collection Found' ) }
+		} ],
 		[ 'logic.bonePose', {
 			label: 'Bone Pose', category: 'Rigging',
 			inputs: { target, evaluated: flag( 'Evaluated Pose' ) },

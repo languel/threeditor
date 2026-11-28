@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { hasRestriction, isVisible } from './ObjectRestrictions.js';
 import { canJoinMeshes, joinObjects } from './modeling/JoinObjects.js';
 import { canParentSelection } from './ObjectParenting.js?v=editor-panes';
-import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=editor-panes';
+import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=bone-collections';
 import { armatureOf } from './rigging/Armature.js';
 import { createBoneIKTarget, setBoneIK } from './rigging/ArmatureTools.js';
 import { canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
@@ -58,6 +58,8 @@ const definitions = [
  ['deleteBonesAlternate','Delete Bones (alternate)','Rigging','','delete'],
  ['subdivideBones','Subdivide Bones','Rigging','',''],
  ['symmetrizeBones','Symmetrize Bones','Rigging','',''],
+ ['moveBonesToCollection','Move to Bone Collection','Rigging','','m'],
+ ['editBoneCollectionMembership','Bone Collection Membership','Rigging','','shift+m'],
  ['parentBones','Set Bone Parent','Rigging','',control+'+p'],
  ['clearBoneParent','Clear Bone Parent','Rigging','','alt+p'],
  ['clearPoseLocation','Clear Pose Location','Rigging','','alt+g'],
@@ -207,6 +209,7 @@ class Keymap {
   if ( id === 'poseMode' ) return !!armatureOf(e.selected) && !e.streams.playing && !e.modalTransform?.active;
   if ( id === 'extrudeBone' ) return armature?.canTransform;
   if ( ['deleteBones','deleteBonesAlternate','subdivideBones','symmetrizeBones'].includes(id) ) return armature?.canEditTopology;
+  if ( id === 'moveBonesToCollection' || id === 'editBoneCollectionMembership' ) return armature?.mode && armature.selectedBones.length > 0 && !e.streams.playing && !e.modalTransform?.active;
   if ( id === 'parentBones' ) return armature?.canTransform && armature.selectedBones.length > 1;
   if ( id === 'clearBoneParent' ) return armature?.canTransform && armature.selectedBones.some(bone=>bone.parent.isBone);
   if ( id.startsWith('clearPose') ) return armature?.mode === 'pose' && armature.selectedBones.length > 0;
@@ -318,6 +321,7 @@ class Keymap {
    case 'deleteBones':case 'deleteBonesAlternate':if(this.actionAvailable(id))e.contextMenu?.openDeleteBones(this.pointer);break;
    case 'subdivideBones':if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.changeTopology('subdivide'));break;
    case 'symmetrizeBones':if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.changeTopology('symmetrize'));break;
+   case 'moveBonesToCollection':case 'editBoneCollectionMembership':if(this.actionAvailable(id))e.contextMenu?.openBoneCollections(id==='moveBonesToCollection',this.pointer);break;
    case 'parentBones':case 'clearBoneParent':if(this.actionAvailable(id))e.contextMenu?.openBoneParent(id==='clearBoneParent',this.pointer);break;
    case 'clearPoseLocation':case 'clearPoseRotation':case 'clearPoseScale':
     if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.clearPose(id.slice(9).toLowerCase()));break;

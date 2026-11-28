@@ -12,7 +12,7 @@ import { hasRestriction, withEnabledObjects } from '../ObjectRestrictions.js';
 import { scriptSourceForExecution } from '../ScriptParams.js';
 import { createP5Sketch } from '../P5Sketch.js';
 import { GeometrySimulation } from '../nodes/GeometrySimulation.js';
-import { LogicRuntime } from '../nodes/LogicRuntime.js';
+import { LogicRuntime } from '../nodes/LogicRuntime.js?v=bone-collections';
 import { NodeComponentRuntime } from '../nodes/NodeComponents.js';
 import { releaseArmatureGeometry, withArmatureDeformation } from '../rigging/ArmatureDeformation.js';
 import { prepareArmaturePhysics } from '../rigging/ArmaturePhysics.js';

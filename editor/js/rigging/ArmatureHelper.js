@@ -1,6 +1,7 @@
 import {
 	BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, OctahedronGeometry, Vector3
 } from 'three';
+import { boneVisibleInCollections } from './BoneCollections.js';
 
 const head = [ 0, 0, 0 ];
 const tail = [ 0, 1, 0 ];
@@ -58,7 +59,7 @@ export function createBoneHelper( editor, bone ) {
 		this.material.color.setHex( editor.selected === bone ? 0x65b5ff : editor.selector.selection.includes( bone ) ? 0x4089c1 : 0xaeb8c8 );
 		for ( const { marker, part } of joints ) {
 
-			marker.visible = !! editing && ( part === 'tail' || ! rest.connected );
+			marker.visible = !! editing && ( part === 'tail' || ! rest.connected || ! boneVisibleInCollections( bone.parent ) );
 			const active = editing && editor.selector.selection.includes( bone ) && ( workspace.part === 'body' || workspace.part === part );
 			marker.material.color.setHex( active ? 0x65b5ff : 0xaeb8c8 );
 

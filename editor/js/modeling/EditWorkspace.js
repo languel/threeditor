@@ -8,7 +8,7 @@ import { openMaskEditor } from './MaskEditor.js?v=expressive-pencil';
 import { openUVEditor } from './UVEditor.js?v=texture-projection';
 import { openGeometryNodes } from '../nodes/GeometryNodesEditor.js';
 import { openShaderGraph } from '../nodes/ShaderGraphEditor.js';
-import { openLogicNodes } from '../nodes/LogicNodesEditor.js';
+import { openLogicNodes } from '../nodes/LogicNodesEditor.js?v=bone-collections';
 
 export function createEditWorkspace( editor ) {
 

@@ -6,7 +6,7 @@ import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { DuplicateObjectsCommand } from './commands/DuplicateObjectsCommand.js';
 import { timelineData } from './animation/TimelineData.js';
-import { remapLogicObjects } from './nodes/LogicNodes.js';
+import { remapLogicObjects } from './nodes/LogicNodes.js?v=bone-collections';
 
 function duplicateTargets( editor ) {
 
@@ -140,6 +140,11 @@ export function duplicateObjects( editor, move ) {
 
 		}
 		if ( copy.userData.projectorTarget ) copy.userData.projectorTarget = uuid( copy.userData.projectorTarget );
+		for ( const collection of copy.userData.armature?.collections ?? [] ) {
+
+			collection.bones = collection.bones.map( uuid );
+
+		}
 		if ( copy.userData.armatureBinding ) {
 
 			const binding = copy.userData.armatureBinding;

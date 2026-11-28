@@ -14,7 +14,7 @@ import { cameraControllerSettings } from './CameraControllerScript.js';
 import { Config } from './Config.js?v=armature-x-mirror';
 import { Loader } from './Loader.js?v=splat-filters';
 import { createEmptyHelper } from './modeling/ReferenceObjects.js';
-import { createBoneHelper } from './rigging/ArmatureHelper.js';
+import { createBoneHelper } from './rigging/ArmatureHelper.js?v=bone-collections';
 import { releaseArmatureGeometry } from './rigging/ArmatureDeformation.js';
 import { NodeComponentRuntime } from './nodes/NodeComponents.js';
 import { History as _History } from './History.js?v=armature-symmetrize';

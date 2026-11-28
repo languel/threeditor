@@ -8,6 +8,8 @@ import { LogicRuntime } from '../editor/js/nodes/LogicRuntime.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { addNode, connectNodes } from '../editor/js/nodes/NodeGraph.js';
 import { mirroredBoneConstraint, mirroredBonePhysics, reflectBoneFrame } from '../editor/js/rigging/ArmatureMirror.js';
+import { assignBonesToCollection, removeBoneCollection, setBoneCollection } from '../editor/js/rigging/BoneCollectionTools.js';
+import { boneCollectionMembers, boneCollectionTree, boneVisibleInCollections, findBoneCollection } from '../editor/js/rigging/BoneCollections.js';
 
 function chain() {
 
@@ -18,6 +20,85 @@ function chain() {
 	return { rig, root, tip };
 
 }
+
+test( 'Bone collections inherit eye visibility and preserve overlapping memberships through solo, undo, and serialization', () => {
+
+	const { rig, root, tip } = chain();
+	const scene = new THREE.Scene();
+	const prop = new THREE.Object3D();
+	const unassigned = root.clone( false );
+	scene.add( rig );
+	rig.add( unassigned );
+	tip.add( prop );
+	const history = [];
+	const editor = {
+		strings: { getKey: key => key },
+		signals: { objectChanged: { dispatch() {} } },
+		streams: { playing: false },
+		objectByUuid: id => scene.getObjectByProperty( 'uuid', id ),
+		execute( command ) { history.push( command ); command.execute(); }
+	};
+	const body = setBoneCollection( editor, rig, null, { name: 'Body' } );
+	const fingers = setBoneCollection( editor, rig, null, { name: 'Fingers', parent: body.id } );
+	const controls = setBoneCollection( editor, rig, null, { name: 'Controls' } );
+	assignBonesToCollection( editor, rig, body.id, [ root, tip ] );
+	assignBonesToCollection( editor, rig, fingers.id, [ tip ] );
+	assignBonesToCollection( editor, rig, controls.id, [ tip ] );
+	assert.deepEqual( boneCollectionMembers( rig, findBoneCollection( rig, 'Body' ), true ), [ root, tip ] );
+	assert.throws( () => setBoneCollection( editor, rig, body.id, { parent: fingers.id } ), /children/ );
+	assert.throws( () => setBoneCollection( editor, rig, body.id, { name: 'Controls' } ), /unique/ );
+	setBoneCollection( editor, rig, body.id, { visible: false } );
+	assert.deepEqual( [ root, tip, unassigned, prop ].map( boneVisibleInCollections ), [ false, true, true, true ] );
+	setBoneCollection( editor, rig, fingers.id, { solo: true } );
+	assert.deepEqual( [ root, tip, unassigned, prop ].map( boneVisibleInCollections ), [ false, true, false, true ] );
+	history.pop().undo();
+	assert.equal( boneVisibleInCollections( unassigned ), true );
+	assignBonesToCollection( editor, rig, fingers.id, [ tip ], 'move' );
+	assert.equal( boneVisibleInCollections( tip ), false );
+	history.pop().undo();
+	assert.equal( boneVisibleInCollections( tip ), true );
+	removeBoneCollection( editor, rig, body.id );
+	assert.deepEqual( boneCollectionTree( rig ).map( ( { collection, depth } ) => [ collection.name, depth ] ), [ [ 'Fingers', 0 ], [ 'Controls', 0 ] ] );
+	history.pop().undo();
+	setBoneCollection( editor, rig, controls.id, { direction: 'up' } );
+	const copy = new THREE.ObjectLoader().parse( JSON.parse( JSON.stringify( scene.toJSON() ) ) );
+	const saved = copy.getObjectByProperty( 'uuid', rig.uuid );
+	assert.deepEqual( boneCollectionTree( saved ).map( ( { collection, depth } ) => [ collection.name, depth ] ),
+		[ [ 'Controls', 0 ], [ 'Body', 0 ], [ 'Fingers', 1 ] ] );
+	assert.equal( findBoneCollection( saved, 'Fingers' ).id, fingers.id );
+	assert.equal( boneVisibleInCollections( findBone( saved, tip.uuid ) ), true );
+
+} );
+
+test( 'A Logic graph can drive a hidden bone by its collection index', () => {
+
+	const { rig, root, tip } = chain();
+	const scene = new THREE.Scene();
+	scene.add( rig );
+	rig.userData.armature.collections = [
+		{ id: 'rig', name: 'Rig Controls', parent: null, visible: false, bones: [ root.uuid ] },
+		{ id: 'fingers', name: 'Fingers', parent: 'rig', bones: [ root.uuid, tip.uuid ] }
+	];
+	const graph = createLogicGraph();
+	const collection = addNode( graph, 'logic.boneCollection', 0, 0 );
+	Object.assign( collection.values, { name: 'rig', index: 1 } );
+	const pose = addNode( graph, 'logic.setBonePose', 200, 0 );
+	pose.values.rotation = [ 0, 0, 35 ];
+	connectNodes( graph, LOGIC_DOMAIN, { node: 'logic.start', socket: 'then' }, { node: pose.id, socket: 'run' } );
+	connectNodes( graph, LOGIC_DOMAIN, { node: collection.id, socket: 'object' }, { node: pose.id, socket: 'target' } );
+	rig.userData.logicGraph = graph;
+	const runtime = new LogicRuntime( THREE, scene, { on: () => () => {} } );
+	runtime.start();
+	assert.equal( boneVisibleInCollections( tip ), false );
+	assert.ok( Math.abs( tip.rotation.z - THREE.MathUtils.degToRad( 35 ) ) < 1e-7 );
+	const inputs = { armature: rig.uuid, name: 'Rig Controls', index: 1 };
+	assert.deepEqual( runtime.value( { owner: rig }, 'logic.boneCollection', { ...inputs, includeChildren: true }, {} ),
+		{ object: tip.uuid, count: 2, found: true, collectionFound: true } );
+	assert.deepEqual( runtime.value( { owner: rig }, 'logic.boneCollection', { ...inputs, includeChildren: false }, {} ),
+		{ object: '#missing-bone', count: 1, found: false, collectionFound: true } );
+	runtime.stop();
+
+} );
 
 test( 'Side names retain the subdivision suffix and preserve the naming convention', () => {
 

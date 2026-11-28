@@ -1,11 +1,12 @@
 import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, mirroredBoneName, resetBoneTransform } from '../rigging/Armature.js?v=armature-apply';
+import { boneCollectionMembers, findBoneCollection } from '../rigging/BoneCollections.js';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
 import { findConstraint, constraintSettings, constraintTypes, resolveConstraint } from '../rigging/ArmatureConstraints.js';
 import { switchedParentStack } from '../rigging/ConstraintParenting.js';
 import { armatureVertexWeights, weightsForVertexEdits } from '../rigging/ArmatureDeformation.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { LogicInput } from './LogicInput.js';
-import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
+import { LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js?v=bone-collections';
 import { validateSocketValue } from './NodeGraph.js';
 import { VALUE_OPERATIONS } from './ValueNodes.js';
 
@@ -133,12 +134,22 @@ export class LogicRuntime {
 				return { velocity, speed: Math.hypot( ...velocity ) };
 
 			}
-			case 'logic.bone': {
+			case 'logic.bone':
+			case 'logic.boneCollection': {
 
 				let rig;
 				for ( let object = this.target( instance, inputs.armature ); object && ! rig; object = object.parent ) rig = armatureOf( object );
-				const bones = armatureBones( rig );
 				const name = inputs.name.trim();
+				if ( type === 'logic.boneCollection' ) {
+
+					const collection = findBoneCollection( rig, name );
+					const members = boneCollectionMembers( rig, collection, inputs.includeChildren );
+					const bone = members[ Math.floor( inputs.index ) ];
+					const found = !! bone && ! hasRestriction( bone, 'disabled' );
+					return { object: found ? bone.uuid : '#missing-bone', count: members.length, found, collectionFound: !! collection };
+
+				}
+				const bones = armatureBones( rig );
 				const bone = inputs.index >= 0 ? bones[ Math.floor( inputs.index ) ] :
 					bones.find( candidate => candidate.uuid === name ) ?? bones.find( candidate => candidate.name === name );
 				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return {
