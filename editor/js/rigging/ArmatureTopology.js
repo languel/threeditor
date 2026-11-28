@@ -1,10 +1,13 @@
 import * as THREE from 'three';
-import { ArmatureTopologyCommand, boneEditState } from '../commands/ArmatureTopologyCommand.js';
+import { ArmatureTopologyCommand, boneEditState } from '../commands/ArmatureTopologyCommand.js?v=armature-symmetrize';
 import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
-import { armatureBones, boneRestFrames, createBone, isArmature } from './Armature.js';
-import { ikSettings } from './ArmatureIK.js';
+import { armatureBones, boneRestFrames, createBone, isArmature, mirroredBoneName } from './Armature.js?v=armature-symmetrize';
+import { ikSettings, resolveIK } from './ArmatureIK.js';
 import { restInParentFrame } from './ArmatureRestEditing.js';
+import { reflectBoneFrame, mirroredBoneConstraint, mirroredBonePhysics } from './ArmatureMirror.js';
+import { armaturePoseCycles } from './ArmaturePose.js?v=armature-symmetrize';
+import { constraintSettings, resolveConstraint } from './ArmatureConstraints.js';
 
 function editable( object ) {
 
@@ -255,5 +258,271 @@ export function subdivideRigBones( editor, rig, bones, cuts = 1 ) {
 	adjustSplitReferences( editor, rig, frames, splits, edit );
 	edit.run( 'Subdivide Bones' );
 	return Array.from( splits.values() );
+
+}
+
+function namedBoneMap( bones ) {
+
+	const byName = new Map();
+	for ( const bone of bones ) byName.set( bone.name, byName.has( bone.name ) ? null : bone );
+	return byName;
+
+}
+
+function matchingName( byName, name ) {
+
+	if ( byName.get( name ) === null ) throw new Error( 'Use unique bone names before mirroring ' + name + '.' );
+	return byName.get( name );
+
+}
+
+function mirroredRelativeTransform( matrix, bone ) {
+
+	const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
+	matrix.decompose( position, quaternion, scale );
+	const local = new THREE.Matrix4().compose( position, quaternion, scale );
+	if ( matrix.elements.some( ( value, i ) => ! Number.isFinite( local.elements[ i ] ) ||
+		Math.abs( value - local.elements[ i ] ) > 1e-7 * Math.max( 1, Math.abs( value ) ) ) ) {
+
+		throw new Error( 'Mirroring ' + bone.name + ' would require a sheared local pose.' );
+
+	}
+	return { position: position.toArray(), quaternion: quaternion.toArray(), scale: scale.toArray() };
+
+}
+
+function checkMirroredRelationships( scene, staged, edit ) {
+
+	const relevant = Array.from( staged ).some( ( [ target, stage ] ) =>
+		stage.source.userData.armatureIK || stage.source.userData.armatureConstraints?.length ||
+		target.userData.armatureIK || target.userData.armatureConstraints?.length );
+	if ( ! relevant && ! Array.from( staged.keys() ).some( bone => bone.parent ) ) return;
+	const shadow = new THREE.Scene();
+	const objects = new Map( [ [ scene.uuid, shadow ] ] );
+	// Validate the proposed hierarchy with the same planner as Play, without
+	// registering editor objects or cloning geometry, materials or assets.
+	function copy( object ) {
+
+		const node = object.isBone ? new THREE.Bone() : new THREE.Object3D();
+		node.uuid = object.uuid;
+		node.name = object.name;
+		node.userData = staged.has( object ) ? edit.entry( object ).after.data : object.userData;
+		node.matrixAutoUpdate = object.matrixAutoUpdate;
+		objects.set( node.uuid, node );
+
+	}
+	scene.traverse( object => { if ( object !== scene ) copy( object ); } );
+	for ( const object of staged.keys() ) if ( ! objects.has( object.uuid ) ) copy( object );
+	scene.traverse( object => {
+
+		if ( object === scene || staged.has( object ) ) return;
+		objects.get( object.parent.uuid ).add( objects.get( object.uuid ) );
+
+	} );
+	for ( const [ target, stage ] of staged ) objects.get( stage.parent.uuid ).add( objects.get( target.uuid ) );
+	for ( const [ target, { source } ] of staged ) {
+
+		const clone = objects.get( target.uuid );
+		const oldIK = ikSettings( source.userData.armatureIK );
+		const newIK = ikSettings( clone.userData.armatureIK );
+		if ( newIK?.influence && ! resolveIK( scene, source, oldIK ).error ) {
+
+			const result = resolveIK( shadow, clone, newIK );
+			if ( result.error ) throw new Error( target.name + ': ' + result.error );
+
+		}
+		for ( const entry of clone.userData.armatureConstraints || [] ) {
+
+			if ( entry.muted || ! entry.influence ) continue;
+			const original = constraintSettings( source.userData.armatureConstraints.find( value => value?.name === entry.name ) );
+			if ( resolveConstraint( scene, source, original ).error ) continue;
+			const result = resolveConstraint( shadow, clone, entry );
+			if ( result.error ) throw new Error( target.name + ': ' + result.error );
+
+		}
+
+	}
+	const existing = armaturePoseCycles( scene );
+	for ( const uuid of armaturePoseCycles( shadow ) ) if ( ! existing.has( uuid ) ) {
+
+		throw new Error( 'Mirroring would create a pose dependency cycle at ' + objects.get( uuid ).name + '.' );
+
+	}
+
+}
+
+export function symmetrizeRigBones( editor, rig, bones ) {
+
+	const edit = topologyEdit( editor, rig, bones );
+	const all = armatureBones( rig );
+	const named = namedBoneMap( all );
+	const selected = new Set( edit.bones );
+	const frames = boneRestFrames( THREE, rig );
+	const mirror = new THREE.Matrix4().makeScale( - 1, 1, 1 );
+	editor.scene.updateMatrixWorld( true );
+	if ( ! rig.matrixWorld.determinant() ) throw new Error( 'Use a nonzero armature scale before mirroring bones.' );
+	const worldReflection = rig.matrixWorld.clone().multiply( mirror ).multiply( rig.matrixWorld.clone().invert() );
+	const pairs = new Map(), staged = new Map();
+	for ( const source of edit.bones ) {
+
+		const opposite = mirroredBoneName( source.name );
+		if ( ! opposite ) continue;
+		matchingName( named, source.name );
+		const existing = matchingName( named, opposite.name );
+		if ( opposite.side === 'l' && selected.has( existing ) ) continue;
+		if ( existing && ( ! frames.has( existing ) || ! editable( existing ) ) ) throw new Error( 'Unlock ' + opposite.name + ' before mirroring bones.' );
+		const target = existing || new THREE.Bone();
+		target.name = opposite.name;
+		pairs.set( source, target );
+		staged.set( target, {
+			source, frame: reflectBoneFrame( THREE, frames.get( source ) ),
+			world: worldReflection.clone().multiply( source.matrixWorld ).multiply( mirror )
+		} );
+
+	}
+	if ( ! pairs.size ) throw new Error( 'Select bones with side names such as Arm.L or Arm.R.' );
+
+	function oppositeObject( source ) {
+
+		if ( pairs.has( source ) ) return pairs.get( source );
+		const name = mirroredBoneName( source.name )?.name;
+		if ( ! name ) return null;
+		if ( frames.has( source ) ) return matchingName( named, name );
+		const matches = source.parent?.children.filter( child => child.name === name && ! child.userData.runtimeOnly );
+		return matches?.length === 1 ? matches[ 0 ] : null;
+
+	}
+
+	for ( const [ target, stage ] of staged ) {
+
+		let parent = stage.source.parent;
+		while ( parent !== rig ) {
+
+			const opposite = oppositeObject( parent );
+			if ( opposite && ( staged.has( opposite ) || frames.has( opposite ) ) ) {
+
+				parent = opposite;
+				break;
+
+			}
+			if ( ! mirroredBoneName( parent.name ) ) break;
+			parent = parent.parent;
+
+		}
+		if ( ! editable( parent ) ) throw new Error( 'Unlock ' + parent.name + ' before assigning mirrored bones.' );
+		stage.parent = parent;
+		if ( ! target.parent ) edit.add( target, parent );
+
+	}
+	const afterParent = object => staged.get( object )?.parent || object.parent;
+	for ( const target of staged.keys() ) {
+
+		const ancestors = new Set( [ target ] );
+		for ( let parent = afterParent( target ); parent !== rig; parent = afterParent( parent ) ) {
+
+			if ( ! parent || ancestors.has( parent ) ) throw new Error( 'Mirroring ' + target.name + ' would create a bone hierarchy cycle.' );
+			ancestors.add( parent );
+
+		}
+
+	}
+	function restFrame( bone ) {
+
+		if ( bone === rig ) return;
+		if ( staged.has( bone ) ) return staged.get( bone ).frame;
+		const rest = bone.userData.armatureBone;
+		if ( ! rest ) return;
+		const parent = restFrame( bone.parent );
+		const head = new THREE.Vector3().fromArray( rest.position );
+		const quaternion = new THREE.Quaternion().fromArray( rest.quaternion );
+		if ( parent ) {
+
+			head.applyQuaternion( parent.quaternion ).add( parent.head );
+			quaternion.premultiply( parent.quaternion );
+
+		}
+		return { head, quaternion, tail: new THREE.Vector3( 0, rest.length, 0 ).applyQuaternion( quaternion ).add( head ) };
+
+	}
+	function poseMatrix( object ) {
+
+		if ( staged.has( object ) ) return staged.get( object ).world;
+		if ( ! object.parent || object === rig ) return object.matrixWorld;
+		return poseMatrix( object.parent ).clone().multiply( object.matrix );
+
+	}
+	const retarget = uuid => {
+
+		const object = uuid && editor.objectByUuid( uuid );
+		return object && oppositeObject( object )?.uuid || uuid;
+
+	};
+	const mirroredById = new Map( Array.from( staged.keys(), bone => [ bone.uuid, bone ] ) );
+	const weightGroups = new Map();
+	for ( const [ target, stage ] of staged ) {
+
+		const { source, frame, world, parent } = stage;
+		const local = poseMatrix( parent ).clone();
+		if ( ! local.determinant() ) throw new Error( 'Cannot mirror a pose through a parent with a zero scale axis.' );
+		const change = edit.entry( target ).after;
+		if ( change.parent !== parent.uuid ) change.index = null;
+		Object.assign( change, mirroredRelativeTransform( local.invert().multiply( world ), source ), { parent: parent.uuid } );
+		const sourceRest = source.userData.armatureBone;
+		const parentFrame = restFrame( parent );
+		const connected = Boolean( sourceRest.connected && parentFrame && parentFrame.tail.distanceToSquared( frame.head ) < 1e-14 );
+		const rest = restInParentFrame( THREE, { ...sourceRest, connected }, frame, parentFrame );
+		if ( sourceRest.weightGroup ) {
+
+			if ( ! weightGroups.has( sourceRest.weightGroup ) ) {
+
+				const head = all.find( bone => bone.uuid === sourceRest.weightGroup );
+				const sameGroup = all.find( bone => bone.userData.armatureBone?.weightGroup === sourceRest.weightGroup && oppositeObject( bone )?.userData.armatureBone?.weightGroup );
+				weightGroups.set( sourceRest.weightGroup, ( sameGroup && oppositeObject( sameGroup ).userData.armatureBone.weightGroup ) ||
+					( head && oppositeObject( head )?.uuid ) || THREE.MathUtils.generateUUID() );
+
+			}
+			rest.weightGroup = weightGroups.get( sourceRest.weightGroup );
+
+		}
+		const ik = ikSettings( source.userData.armatureIK );
+		const constraints = ( source.userData.armatureConstraints || [] ).flatMap( constraint => {
+
+			const existing = target.userData.armatureConstraints?.find( item => item?.type === constraint?.type && item?.name === constraint?.name );
+			const next = mirroredBoneConstraint( constraint, worldReflection, retarget( constraint?.target ), existing?.id || THREE.MathUtils.generateUUID() );
+			if ( ! next ) return [];
+			if ( next.type === 'childOf' ) {
+
+				const oldTarget = editor.objectByUuid( constraint.target );
+				const newTarget = mirroredById.get( next.target ) || editor.objectByUuid( next.target );
+				if ( oldTarget && newTarget ) {
+
+					const oldDistance = ( oldTarget.userData.armatureBone?.length ?? 0 ) * next.headTail;
+					const newDistance = ( staged.get( newTarget )?.source.userData.armatureBone.length ?? newTarget.userData.armatureBone?.length ?? 0 ) * next.headTail;
+					const oldFrame = oldTarget.matrixWorld.clone().multiply( new THREE.Matrix4().makeTranslation( 0, oldDistance, 0 ) );
+					const newFrame = poseMatrix( newTarget ).clone().multiply( new THREE.Matrix4().makeTranslation( 0, newDistance, 0 ) );
+					if ( newFrame.determinant() ) {
+
+						next.inverse = newFrame.invert().multiply( worldReflection ).multiply( oldFrame )
+							.multiply( next.inverse ? new THREE.Matrix4().fromArray( next.inverse ) : new THREE.Matrix4() )
+							.multiply( worldReflection ).toArray();
+
+					}
+
+				}
+
+			}
+			return [ next ];
+
+		} );
+		edit.data( target, {
+			armatureBone: rest, armaturePhysics: mirroredBonePhysics( source.userData.armaturePhysics ) || undefined,
+			armatureIK: ik ? { ...ik, target: retarget( ik.target ), pole: retarget( ik.pole ) } : undefined,
+			armatureConstraints: constraints.length ? constraints : undefined
+		} );
+
+	}
+	checkMirroredRelationships( editor.scene, staged, edit );
+	edit.run( 'Symmetrize Bones' );
+	return Array.from( pairs, ( [ source, bone ] ) => ( { source, bone } ) );
 
 }

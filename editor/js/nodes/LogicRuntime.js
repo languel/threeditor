@@ -1,4 +1,4 @@
-import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, resetBoneTransform } from '../rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, mirroredBoneName, resetBoneTransform } from '../rigging/Armature.js?v=armature-symmetrize';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
 import { findConstraint, constraintSettings, constraintTypes, resolveConstraint } from '../rigging/ArmatureConstraints.js';
 import { switchedParentStack } from '../rigging/ConstraintParenting.js';
@@ -143,8 +143,10 @@ export class LogicRuntime {
 					bones.find( candidate => candidate.uuid === name ) ?? bones.find( candidate => candidate.name === name );
 				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return {
 					object: '#missing-bone', parent: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ],
-					restLength: 0, connected: false, count: bones.length
+					restLength: 0, connected: false, count: bones.length, mirrored: '#missing-bone'
 				};
+				const opposite = mirroredBoneName( bone.name )?.name;
+				const mirrored = opposite && bones.find( candidate => candidate.name === opposite && ! hasRestriction( candidate, 'disabled' ) );
 				return withArmaturePose( this.THREE, this.scene, () => {
 
 					const rest = bone.userData.armatureBone;
@@ -152,7 +154,7 @@ export class LogicRuntime {
 					const head = bone.getWorldPosition( this.motion ).toArray();
 					const tail = bone.localToWorld( this.motion.set( 0, restLength, 0 ) ).toArray();
 					return { object: bone.uuid, parent: bone.parent.uuid, found: true, head, tail,
-						restLength, connected: Boolean( rest?.connected ), count: bones.length };
+						restLength, connected: Boolean( rest?.connected ), count: bones.length, mirrored: mirrored?.uuid || '#missing-bone' };
 
 				} );
 

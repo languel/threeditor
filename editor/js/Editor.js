@@ -17,7 +17,7 @@ import { createEmptyHelper } from './modeling/ReferenceObjects.js';
 import { createBoneHelper } from './rigging/ArmatureHelper.js';
 import { releaseArmatureGeometry } from './rigging/ArmatureDeformation.js';
 import { NodeComponentRuntime } from './nodes/NodeComponents.js';
-import { History as _History } from './History.js?v=bone-topology';
+import { History as _History } from './History.js?v=armature-symmetrize';
 import { Strings } from './Strings.js';
 import { Storage as _Storage } from './Storage.js';
 import { Selector } from './Selector.js?v=pencil-selection';

@@ -18,7 +18,7 @@ import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBo
 import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
-import { deleteRigBones, subdivideRigBones } from './rigging/ArmatureTopology.js';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './rigging/ArmatureTopology.js?v=armature-symmetrize';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -103,6 +103,12 @@ function AgentAPI( editor ) {
 
   const splits = subdivideRigBones( editor, object( a.armature ), a.bones.map( object ), a.cuts );
   return { splits: splits.map( ( { bone, segments } ) => ( { uuid: bone.uuid, segments: segments.map( describeBone ) } ) ) };
+
+ } );
+ add( 'bone_symmetrize', 'Mirror named bones across the armature X axis. Creates or updates opposite bones and supports undo.', topologyBones, [ 'armature', 'bones' ], a => {
+
+  const mirrored = symmetrizeRigBones( editor, object( a.armature ), a.bones.map( object ) );
+  return { mirrored: mirrored.map( ( { source, bone } ) => ( { source: source.uuid, bone: describeBone( bone ) } ) ) };
 
  } );
  add( 'bone_edit_rest', 'Edit a bone’s rest endpoints and roll while preserving its pose offset. Supports undo.', {

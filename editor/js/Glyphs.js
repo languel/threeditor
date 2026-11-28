@@ -107,6 +107,7 @@ const ICONS = {
 	opacity: svg( '<path d="M12 3c2 4 6 8 6 12a6 6 0 0 1-12 0c0-4 4-8 6-12Z"/><path d="M6 15h12"/>' ),
 	exitTool: svg( '<path d="M12 5H5v14h7m1-11 4 4-4 4m4-4H8"/>' ),
 	extrude: svg( '<path d="m4 15 8-4 8 4-8 4-8-4Zm8-5V3m-3 3 3-3 3 3"/>' ),
+	symmetrize: svg( '<path d="M12 4v16m-3-3H3l6-10Zm6 0h6L15 7Z"/>' ),
 	deleteFace: svg( '<path d="M4 18h16L12 5Zm5-6 6 6m0-6-6 6"/>' ),
 	maskCutout: svg( '<path d="M4 4h16v16H4z"/><circle cx="12" cy="12" r="4" stroke-dasharray="2 2"/>' ),
 	// Tabs

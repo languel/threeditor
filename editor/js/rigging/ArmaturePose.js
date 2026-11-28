@@ -108,6 +108,12 @@ export function hasConstraintDependencyCycle( scene, owner, stack ) {
 
 }
 
+export function armaturePoseCycles( scene ) {
+
+	return new Set( posePlan( scene ).blocked.map( operation => operation.owner.uuid ) );
+
+}
+
 export function withArmaturePose( THREE, scene, evaluate, skipRig, override ) {
 
 	if ( evaluating.has( scene ) ) return evaluate();

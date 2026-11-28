@@ -92,7 +92,7 @@ async function exportEditorHtml( editor ) {
 
 	const loaders = [ ...modulePaths ].map( path => `[${ JSON.stringify( path ) }, () => import(${ JSON.stringify( editorSpecifier( path ) ) })]` );
 	const entry = `
-import { startEditor } from './js/EditorApp.js?v=bone-topology';
+import { startEditor } from './js/EditorApp.js?v=armature-symmetrize';
 import { openPortableSession } from './js/PortableSession.js';
 await startEditor(await openPortableSession(new Map([${ loaders.join( ', ' ) }])));
 `;
