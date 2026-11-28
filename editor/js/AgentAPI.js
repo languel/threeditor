@@ -14,7 +14,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
 import { exportEditorHtml } from './EditorHtml.js';
 import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js?v=armature-x-mirror';
 import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
@@ -208,11 +208,12 @@ function AgentAPI( editor ) {
   uuid: { ...str, description: 'Authored bone UUID.' },
   head: restVector( 'Rest head in armature-local space.' ),
   tail: restVector( 'Rest tail in armature-local space.' ),
-  roll: float( 'Roll in radians about the bone’s rest axis.' )
+  roll: float( 'Roll in radians about the bone’s rest axis.' ),
+  mirror: { type: 'boolean', description: 'Reflect the edit to the named counterpart across armature-local X.' }
  }, [ 'uuid' ], a => {
 
   const bone = object( a.uuid );
-  editRigSpaceBoneRest( editor, bone, a );
+  editRigSpaceBoneRest( editor, bone, { ...a, mirror: a.mirror === true } );
   return describeBone( bone );
 
  } );
@@ -294,11 +295,12 @@ function AgentAPI( editor ) {
  }, true );
  add( 'armature_set_weights', 'Assign a bone’s weight to the selected rest vertices and normalize remaining influences. Supports undo.', {
   uuid: { ...str, description: 'Bound object UUID.' }, bone: { ...str, description: 'Deforming bone UUID.' }, vertices: weightVertices,
-  weight: { ...float( 'Desired share for this bone.' ), minimum: 0, maximum: 1 }
- }, [ 'uuid', 'bone', 'vertices', 'weight' ], ( { uuid, bone, vertices, weight } ) => {
+  weight: { ...float( 'Desired share for this bone.' ), minimum: 0, maximum: 1 },
+  mirror: { type: 'boolean', description: 'Paint the opposite bone on matched vertices across armature-local X.' }
+ }, [ 'uuid', 'bone', 'vertices', 'weight' ], ( { uuid, bone, vertices, weight, mirror } ) => {
 
   const target = object( uuid );
-  const samples = weightsForVertexEdits( THREE, editor.scene, target, bone, vertices, weight );
+  const samples = weightsForVertexEdits( THREE, editor.scene, target, bone, vertices, weight, mirror === true );
   commitArmatureWeights( editor, target, samples );
   return { uuid, points: Object.keys( samples ).length };
 

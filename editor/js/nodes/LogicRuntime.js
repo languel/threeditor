@@ -366,7 +366,7 @@ export class LogicRuntime {
 
 				const binding = object.userData.armatureBinding;
 				if ( ! binding || ! inputs.bone ) return;
-				const samples = weightsForVertexEdits( this.THREE, this.scene, object, inputs.bone, [ Math.round( inputs.vertex ) ], inputs.weight );
+				const samples = weightsForVertexEdits( this.THREE, this.scene, object, inputs.bone, [ Math.round( inputs.vertex ) ], inputs.weight, inputs.mirror );
 				object.userData.armatureBinding = { ...binding, weightSamples: { ...binding.weightSamples, ...samples } };
 				break;
 

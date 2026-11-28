@@ -6,7 +6,7 @@ import { SidebarConstraints } from './Sidebar.Constraints.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
-import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js';
+import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js?v=armature-x-mirror';
 
 function sceneArmatures( scene ) {
 

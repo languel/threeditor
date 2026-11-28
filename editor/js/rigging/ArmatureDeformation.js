@@ -1,6 +1,6 @@
 import { armatureBones, isArmature } from './Armature.js';
 import { withArmaturePose } from './ArmaturePose.js';
-import { normalizeBoneWeights, paintBoneWeight, weightPointKey } from './ArmatureWeights.js';
+import { createWeightMirror, normalizeBoneWeights, paintBoneWeight, paintMirrorCenter, weightPointKey } from './ArmatureWeights.js?v=armature-x-mirror';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 const records = new WeakMap();
@@ -194,17 +194,33 @@ export function armatureVertexWeights( THREE, scene, object ) {
 
 }
 
-export function weightsForVertexEdits( THREE, scene, object, bone, vertices, value ) {
+export function weightsForVertexEdits( THREE, scene, object, bone, vertices, value, mirrorX = false ) {
 
 	const weights = armatureVertexWeights( THREE, scene, object );
 	if ( ! weights?.boneIds.includes( bone ) ) throw new Error( 'Choose a deforming bone from the object’s armature.' );
 	if ( ! Number.isFinite( value ) || value < 0 || value > 1 ) throw new Error( 'Weight must be between zero and one.' );
 	const samples = {};
+	const mirror = mirrorX ? createWeightMirror( THREE, weights, object.userData.armatureBinding.objectToRig, bone ) : null;
 	for ( const vertex of vertices ) {
 
 		const current = weights.at( vertex );
 		if ( ! current ) throw new Error( 'Vertex index is outside the rest geometry.' );
-		samples[ weightPointKey( weights.position, vertex ) ] = paintBoneWeight( current, bone, value, weights.boneIds, weights.count );
+		const key = weightPointKey( weights.position, vertex );
+		samples[ key ] = paintBoneWeight( current, bone, value, weights.boneIds, weights.count );
+
+	}
+	if ( ! mirror ) return samples;
+	for ( const vertex of vertices ) {
+
+		const key = weightPointKey( weights.position, vertex );
+		const other = mirror.pairedVertex( vertex );
+		const otherKey = other === undefined ? undefined : weightPointKey( weights.position, other );
+		if ( otherKey === key ) samples[ key ] = paintMirrorCenter( weights.at( vertex ), bone, mirror.bone, value, weights.boneIds, weights.count );
+		if ( otherKey !== undefined && ! Object.hasOwn( samples, otherKey ) ) {
+
+			samples[ otherKey ] = paintBoneWeight( weights.at( other ), mirror.bone, value, weights.boneIds, weights.count );
+
+		}
 
 	}
 	return samples;

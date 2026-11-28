@@ -11,7 +11,7 @@ import { editableMesh } from './modeling/ModelViewport.js?v=transform-gizmos';
 import { canMaskLight } from './modeling/LightMask.js?v=mask-editor';
 import { isProjector } from './assets/Projector.js';
 import { SidebarScript } from './Sidebar.Script.js?v=component-layout';
-import { hasArmatureTools, SidebarArmature } from './Sidebar.Armature.js';
+import { hasArmatureTools, SidebarArmature } from './Sidebar.Armature.js?v=armature-x-mirror';
 import { armatureOf } from './rigging/Armature.js';
 import { canOwnConstraints } from './rigging/ArmatureConstraints.js';
 import { SidebarConstraints } from './Sidebar.Constraints.js';

@@ -54,6 +54,24 @@ test( 'Mirroring reflects the bone frame, signed limits and cardinal world-space
 
 } );
 
+test( 'A mirrored edit keeps the shared head on the center plane and mirrors a paired roll', () => {
+
+	const rig = createArmature( THREE );
+	const root = rig.children[ 0 ];
+	const makeArm = ( name, x ) => createBone( THREE, name, boneRestFromPoints( THREE, [ 0, 1, 0 ], [ x, 1.4, 0 ], 0, true ) );
+	const left = makeArm( 'Arm.L', .8 ), right = makeArm( 'Arm.R', -.8 );
+	root.add( left, right );
+	const result = stageBoneRest( THREE, rig, new Map( [
+		[ left, { head: new THREE.Vector3( .4, 1.1, 0 ), tail: new THREE.Vector3( 1.2, 1.5, 0 ), roll: .3 } ]
+	] ), true );
+	for ( const [ bone, rest ] of result ) bone.userData.armatureBone = rest;
+	const frames = boneRestFrames( THREE, rig );
+	assert.ok( frames.get( root ).tail.distanceTo( new THREE.Vector3( 0, 1.1, 0 ) ) < 1e-9 );
+	assert.ok( frames.get( right ).tail.distanceTo( new THREE.Vector3( -1.2, 1.5, 0 ) ) < 1e-9 );
+	assert.equal( right.userData.armatureBone.roll, -.3 );
+
+} );
+
 function bind( rig, object, influences ) {
 
 	rig.updateWorldMatrix( true, false );

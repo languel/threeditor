@@ -9,7 +9,7 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { keepWorldTransform } from '../ObjectParenting.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, bonePoseTransform, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, isArmature } from './Armature.js';
-import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js';
+import { restInParentFrame, stageBoneRest } from './ArmatureRestEditing.js?v=armature-x-mirror';
 import { canDeformWithArmature, releaseArmatureGeometry } from './ArmatureDeformation.js';
 import { bonePhysicsSettings } from './ArmaturePhysicsConfig.js';
 import { ikSettings, resolveIK } from './ArmatureIK.js';
@@ -104,7 +104,7 @@ export function commitBoneRest( editor, changes ) {
 
 }
 
-export function editRigSpaceBoneRest( editor, bone, { head, tail, roll } ) {
+export function editRigSpaceBoneRest( editor, bone, { head, tail, roll, mirror = editor.config.getKey( 'settings/armatureMirrorX' ) } ) {
 
 	if ( ! editable( editor, bone ) || ! bone.userData.armatureBone || ! armatureOf( bone ) ) throw new Error( 'Select an editable authored bone.' );
 	if ( roll !== undefined && ! Number.isFinite( roll ) ) throw new Error( 'Bone roll must be finite.' );
@@ -116,7 +116,7 @@ export function editRigSpaceBoneRest( editor, bone, { head, tail, roll } ) {
 		edit[ key ] = new THREE.Vector3().fromArray( point );
 
 	}
-	commitBoneRest( editor, stageBoneRest( THREE, armatureOf( bone ), new Map( [ [ bone, edit ] ] ) ) );
+	commitBoneRest( editor, stageBoneRest( THREE, armatureOf( bone ), new Map( [ [ bone, edit ] ] ), mirror ) );
 
 }
 

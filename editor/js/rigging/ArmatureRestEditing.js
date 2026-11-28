@@ -1,4 +1,40 @@
-import { boneRestFrames, boneRestFromPoints } from './Armature.js';
+import { boneRestFrames, boneRestFromPoints, mirroredBoneName } from './Armature.js';
+
+function mirroredEdits( THREE, original, edits ) {
+
+	const byName = new Map();
+	for ( const bone of original.keys() ) byName.set( bone.name, byName.has( bone.name ) ? null : bone );
+	const result = new Map();
+	const reflected = point => point && new THREE.Vector3( - point.x, point.y, point.z );
+	// The active bone supplies the edit if both partners are selected.
+	for ( const [ bone, edit ] of Array.from( edits ).reverse() ) {
+
+		if ( result.has( bone ) ) continue;
+		const name = mirroredBoneName( bone.name )?.name;
+		const other = byName.get( bone.name ) === bone && name ? byName.get( name ) : null;
+		if ( ! other ) {
+
+			const base = original.get( bone );
+			const keepCenter = ( point, previous ) => point && previous && ! name && Math.abs( previous.x ) < 1e-7 ?
+				point.clone().setX( 0 ) : point;
+			result.set( bone, { ...edit, head: keepCenter( edit.head, base?.head ), tail: keepCenter( edit.tail, base?.tail ) } );
+			continue;
+
+		}
+		const sharedHead = bone.parent === other.parent && bone.userData.armatureBone.connected && other.userData.armatureBone.connected;
+		const head = sharedHead && edit.head ? edit.head.clone().setX( 0 ) : edit.head;
+		const q = edit.quaternion;
+		result.set( bone, { ...edit, head } );
+		result.set( other, {
+			head: reflected( head ), tail: reflected( edit.tail ),
+			quaternion: q && new THREE.Quaternion( q.x, - q.y, - q.z, q.w ),
+			roll: edit.roll === undefined ? undefined : - edit.roll
+		} );
+
+	}
+	return result;
+
+}
 
 export function restInParentFrame( THREE, previous, frame, parent ) {
 
@@ -23,9 +59,10 @@ export function restInParentFrame( THREE, previous, frame, parent ) {
 
 }
 
-export function stageBoneRest( THREE, rig, edits ) {
+export function stageBoneRest( THREE, rig, edits, mirror = false ) {
 
 	const original = boneRestFrames( THREE, rig );
+	if ( mirror ) edits = mirroredEdits( THREE, original, edits );
 	const joints = new Map();
 	for ( const [ bone, edit ] of edits ) {
 

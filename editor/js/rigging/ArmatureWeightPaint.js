@@ -4,7 +4,7 @@ import { hasRestriction } from '../ObjectRestrictions.js';
 import { armatureVertexWeights } from './ArmatureDeformation.js';
 import { withArmaturePose } from './ArmaturePose.js';
 import { commitArmatureWeights } from './ArmatureTools.js';
-import { paintBoneWeight, weightNeighbors, weightPointKey } from './ArmatureWeights.js';
+import { createWeightMirror, paintBoneWeight, paintMirrorCenter, weightNeighbors, weightPointKey } from './ArmatureWeights.js?v=armature-x-mirror';
 
 const cellSize = 48;
 
@@ -98,6 +98,8 @@ export class ArmatureWeightPaint {
 
 		}
 		modelField( parent, 'Paint Through', 'xray', 'checkbox', this.through ).onchange = event => { this.through = event.target.checked; };
+		const mirror = modelField( parent, 'X-Axis Mirror', 'symmetrize', 'checkbox', this.editor.config.getKey( 'settings/armatureWeightMirrorX' ) );
+		mirror.onchange = () => this.editor.config.setKey( 'settings/armatureWeightMirrorX', mirror.checked );
 		modelButton( parent, 'Done Weight Painting', 'exitTool', () => this.view.setMode( '' ) );
 
 	}
@@ -148,15 +150,45 @@ export class ArmatureWeightPaint {
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		document.activeElement.blur?.();
+		const binding = this.object.userData.armatureBinding;
+		const mirror = this.editor.config.getKey( 'settings/armatureWeightMirrorX' ) ?
+			createWeightMirror( THREE, data, binding.objectToRig, this.bone ) : null;
 		this.stroke = {
 			pointer: event.pointerId, canvas: event.target, frame: frame.key, data,
 			cells: withArmaturePose( THREE, this.editor.scene, () => this.projectedVertices( frame, data ) ),
-			object: this.object, geometry: this.object.geometry, binding: this.object.userData.armatureBinding,
+			object: this.object, geometry: this.object.geometry, binding, mirror,
 			draft: {}, coverage: new Map(), erase: event.shiftKey,
 			neighbors: this.blend === 'smooth' && ! event.shiftKey && ! this.object.isPoints ? weightNeighbors( this.object, data.position ) : null
 		};
 		event.target.setPointerCapture( event.pointerId );
 		this.pointerMove( event );
+
+	}
+
+	paintPoint( stroke, index, key, bone, coverage, direct, center = false ) {
+
+		if ( coverage <= 0 ) return false;
+		const prior = stroke.coverage.get( key );
+		if ( prior && ( coverage < prior.coverage || coverage === prior.coverage && ( prior.direct || ! direct ) ) ) return false;
+		const { data } = stroke;
+		const current = data.at( index );
+		const other = center ? stroke.mirror.bone : bone;
+		const read = weights => ( ( weights[ bone ] || 0 ) + ( weights[ other ] || 0 ) ) / 2;
+		let target = stroke.erase ? 0 : this.weight;
+		if ( stroke.neighbors ) {
+
+			const neighbors = stroke.neighbors.get( key );
+			if ( ! neighbors?.size ) return false;
+			let sum = 0;
+			for ( const vertex of neighbors.values() ) sum += read( data.at( vertex ) );
+			target = sum / neighbors.size;
+
+		}
+		const weight = THREE.MathUtils.lerp( read( current ), target, coverage );
+		stroke.coverage.set( key, { coverage, direct } );
+		stroke.draft[ key ] = center ? paintMirrorCenter( current, bone, other, weight, data.boneIds, data.count ) :
+			paintBoneWeight( current, bone, weight, data.boneIds, data.count );
+		return true;
 
 	}
 
@@ -186,22 +218,16 @@ export class ArmatureWeightPaint {
 				for ( const point of stroke.cells.get( column + ',' + row ) || [] ) {
 
 					const coverage = Math.max( 0, 1 - segmentDistance( point.x, point.y, start, end ) / radius ) * strength;
-					if ( coverage <= ( stroke.coverage.get( point.key ) || 0 ) ) continue;
-					stroke.coverage.set( point.key, coverage );
-					const current = stroke.data.at( point.index );
-					let target = stroke.erase ? 0 : this.weight;
-					if ( stroke.neighbors ) {
+					if ( coverage <= 0 ) continue;
+					const opposite = stroke.mirror?.pairedVertex( point.index );
+					const otherKey = opposite === undefined ? undefined : weightPointKey( stroke.data.position, opposite );
+					const center = stroke.data.count > 1 && otherKey === point.key && stroke.mirror.bone !== bone;
+					changed = this.paintPoint( stroke, point.index, point.key, bone, coverage, true, center ) || changed;
+					if ( otherKey !== undefined && otherKey !== point.key ) {
 
-						const neighbors = stroke.neighbors.get( point.key );
-						if ( ! neighbors?.size ) continue;
-						let sum = 0;
-						for ( const index of neighbors.values() ) sum += stroke.data.at( index )[ bone ] || 0;
-						target = sum / neighbors.size;
+						changed = this.paintPoint( stroke, opposite, otherKey, stroke.mirror.bone, coverage, false ) || changed;
 
 					}
-					const weight = THREE.MathUtils.lerp( current[ bone ] || 0, target, coverage );
-					stroke.draft[ point.key ] = paintBoneWeight( current, bone, weight, stroke.data.boneIds, stroke.data.count );
-					changed = true;
 
 				}
 

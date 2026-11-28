@@ -11,7 +11,7 @@ import { upgradeModelScript } from './assets/ModelBehavior.js';
 import * as THREE from 'three';
 import { cameraControllerSettings } from './CameraControllerScript.js';
 
-import { Config } from './Config.js?v=transform-gizmos';
+import { Config } from './Config.js?v=armature-x-mirror';
 import { Loader } from './Loader.js?v=splat-filters';
 import { createEmptyHelper } from './modeling/ReferenceObjects.js';
 import { createBoneHelper } from './rigging/ArmatureHelper.js';
