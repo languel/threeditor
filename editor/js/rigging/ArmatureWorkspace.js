@@ -5,7 +5,7 @@ import { withArmaturePose } from './ArmaturePose.js';
 import { stageBoneRest } from './ArmatureRestEditing.js';
 import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
 import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js';
-import { deleteRigBones, subdivideRigBones } from './ArmatureTopology.js';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=armature-symmetrize';
 
 export class ArmatureWorkspace {
 
@@ -206,7 +206,8 @@ export class ArmatureWorkspace {
 		if ( ! this.canEditTopology ) return;
 		const bones = this.selectedBones;
 		if ( action === 'delete' ) deleteRigBones( this.editor, this.rig, bones );
-		else subdivideRigBones( this.editor, this.rig, bones, this.subdivideCuts );
+		else if ( action === 'subdivide' ) subdivideRigBones( this.editor, this.rig, bones, this.subdivideCuts );
+		else if ( action === 'symmetrize' ) symmetrizeRigBones( this.editor, this.rig, bones );
 
 	}
 

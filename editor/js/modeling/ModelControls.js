@@ -1,4 +1,4 @@
-import { icon } from '../Glyphs.js?v=coverage-overlay';
+import { icon } from '../Glyphs.js?v=armature-symmetrize';
 
 function labelContent( node, label, glyph ) {
 

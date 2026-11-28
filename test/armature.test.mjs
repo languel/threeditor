@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from '../build/three.module.js';
-import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, findBone } from '../editor/js/rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestFromPoints, boneRestTail, createArmature, createBone, findBone, mirroredBoneName } from '../editor/js/rigging/Armature.js';
 import { withArmatureDeformation } from '../editor/js/rigging/ArmatureDeformation.js';
 import { stageBoneRest } from '../editor/js/rigging/ArmatureRestEditing.js';
 import { LogicRuntime } from '../editor/js/nodes/LogicRuntime.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { addNode, connectNodes } from '../editor/js/nodes/NodeGraph.js';
+import { mirroredBoneConstraint, mirroredBonePhysics, reflectBoneFrame } from '../editor/js/rigging/ArmatureMirror.js';
 
 function chain() {
 
@@ -17,6 +18,41 @@ function chain() {
 	return { rig, root, tip };
 
 }
+
+test( 'Side names retain the subdivision suffix and preserve the naming convention', () => {
+
+	for ( const [ left, right ] of [
+		[ 'Arm.L', 'Arm.R' ], [ 'Wrist.L.001', 'Wrist.R.001' ], [ 'LeftHand', 'RightHand' ],
+		[ 'FlapLeft', 'FlapRight' ], [ 'FlapLeft.003', 'FlapRight.003' ], [ 'l-foot', 'r-foot' ], [ 'foot LEFT', 'foot RIGHT' ]
+	] ) {
+
+		assert.deepEqual( mirroredBoneName( left ), { side: 'l', name: right } );
+		assert.deepEqual( mirroredBoneName( right ), { side: 'r', name: left } );
+
+	}
+	assert.equal( mirroredBoneName( 'Spine.003' ), null );
+
+} );
+
+test( 'Mirroring reflects the bone frame, signed limits and cardinal world-space offsets', () => {
+
+	const { rig, root } = chain();
+	root.userData.armatureBone = boneRestFromPoints( THREE, [ .6, 0, .3 ], [ 1, .7, .6 ], .4 );
+	const frame = boneRestFrames( THREE, rig ).get( root );
+	const mirrored = reflectBoneFrame( THREE, frame );
+	const axis = new THREE.Vector3( 0, 1, 0 ).applyQuaternion( mirrored.quaternion );
+	assert.ok( axis.distanceTo( mirrored.tail.clone().sub( mirrored.head ).normalize() ) < 1e-9 );
+	assert.deepEqual( mirrored.head.toArray(), [ -.6, 0, .3 ] );
+	assert.equal( mirroredBonePhysics( { mode: 'dynamic', joint: 'hinge', axis: 'Z', min: -20, max: 85 } ).min, -85 );
+	assert.equal( mirroredBonePhysics( { mode: 'dynamic', joint: 'hinge', axis: 'X', min: -20, max: 85 } ).min, -20 );
+	const worldReflection = new THREE.Matrix4().makeScale( -1, 1, 1 ).setPosition( 6, 0, 0 );
+	const next = mirroredBoneConstraint( {
+		id: 'limit', name: 'World box', type: 'limitLocation', ownerSpace: 'world', min: [ 4, null, 0 ], max: [ 5, null, 2 ]
+	}, worldReflection, '', 'opposite' );
+	assert.deepEqual( next.min, [ 1, null, 0 ] );
+	assert.deepEqual( next.max, [ 2, null, 2 ] );
+
+} );
 
 function bind( rig, object, influences ) {
 

@@ -34,7 +34,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=bone-topology';
+import { ViewportTools } from './modeling/ViewportTools.js?v=armature-symmetrize';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=pane-navigation';
 import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';

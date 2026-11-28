@@ -1,4 +1,4 @@
-import * as Commands from './commands/Commands.js?v=bone-topology';
+import * as Commands from './commands/Commands.js?v=armature-symmetrize';
 
 class History {
 

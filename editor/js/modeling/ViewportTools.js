@@ -9,7 +9,7 @@ import { TexturePaintStroke } from './TexturePaint.js?v=expressive-pencil';
 import { TexturePaintProjection } from './TexturePaintProjection.js';
 import { cleanShading } from '../ViewportShading.js?v=live-preview';
 import { formatCombo } from '../Keymap.js?v=pencil-ribbon';
-import { modelButton, modelField } from './ModelControls.js?v=color-sampler';
+import { modelButton, modelField } from './ModelControls.js?v=armature-symmetrize';
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { MultiCmdsCommand } from '../commands/MultiCmdsCommand.js';
@@ -26,7 +26,7 @@ import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?
 import { StrokeSampler } from './StrokeSampler.js';
 import { interactionModes } from './InteractionModes.js';
 import { armatureOf } from '../rigging/Armature.js';
-import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js';
+import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js?v=armature-symmetrize';
 import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js';
 
 const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
@@ -696,6 +696,7 @@ export class ViewportTools {
 			cuts.step = 1;
 			cuts.onchange = () => { this.armature.subdivideCuts = cuts.valueAsNumber; };
 			modelButton( parent, 'Subdivide Bones', 'extrude', () => this.run( () => this.armature.changeTopology( 'subdivide' ) ) );
+			modelButton( parent, 'Symmetrize Bones', 'symmetrize', () => this.run( () => this.armature.changeTopology( 'symmetrize' ) ) );
 			modelButton( parent, 'Delete Bones', 'delete', () => this.editor.keymap.run( 'deleteBones' ) );
 			return;
 

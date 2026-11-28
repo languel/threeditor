@@ -415,7 +415,7 @@ function ContextMenu( editor, viewport ) {
 		const armature = editor.viewTools.armature;
 		if ( armature.mode ) {
 
-			const rigActions = armature.editing ? [ 'extrudeBone', 'subdivideBones', 'deleteBones', 'parentBones', 'clearBoneParent' ] :
+			const rigActions = armature.editing ? [ 'extrudeBone', 'subdivideBones', 'symmetrizeBones', 'deleteBones', 'parentBones', 'clearBoneParent' ] :
 				[ 'clearPoseLocation', 'clearPoseRotation', 'clearPoseScale', 'addBoneIK' ];
 			const actions = [ ...rigActions, 'translate', 'rotate', 'scale', 'selectAll', 'selectNone' ].filter( id =>
 				editor.keymap.actionAvailable( id ) ).map( id => editor.keymap.actions.find( action => action.id === id ) );

@@ -42,6 +42,24 @@ export function findBone( rig, nameOrId ) {
 
 }
 
+export function mirroredBoneName( name ) {
+
+	const suffix = /^(.*[. _-])(left|right|l|r)(\.\d+)?$/i.exec( name );
+	const prefix = ! suffix && /^(left|right|l|r)([. _-].*)$/i.exec( name );
+	const camel = ! suffix && ! prefix && /^(Left|Right)([A-Z].*|)$/.exec( name );
+	const camelTail = ! suffix && ! prefix && ! camel && /^(.*[a-z0-9])(Left|Right)(\.\d+)?$/.exec( name );
+	const part = suffix?.[ 2 ] ?? prefix?.[ 1 ] ?? camel?.[ 1 ] ?? camelTail?.[ 2 ];
+	if ( ! part ) return null;
+	const side = part[ 0 ].toLowerCase();
+	let other = part.length === 1 ? ( side === 'l' ? 'r' : 'l' ) : ( side === 'l' ? 'right' : 'left' );
+	if ( part === part.toUpperCase() ) other = other.toUpperCase();
+	else if ( part[ 0 ] === part[ 0 ].toUpperCase() ) other = other[ 0 ].toUpperCase() + other.slice( 1 );
+	const opposite = suffix ? suffix[ 1 ] + other + ( suffix[ 3 ] || '' ) :
+		camelTail ? camelTail[ 1 ] + other + ( camelTail[ 3 ] || '' ) : other + ( prefix || camel )[ 2 ];
+	return { side, name: opposite };
+
+}
+
 export function boneRestFromPoints( THREE, head, tail, roll = 0, connected = false ) {
 
 	if ( [ head, tail ].some( point => ! Array.isArray( point ) || point.length !== 3 || ! point.every( Number.isFinite ) ) ) {
