@@ -31,6 +31,8 @@ function Config( persist = true ) {
 		'settings/keymapOverrides': {},
 		'settings/mouseNavigation': 'blender',
 		'settings/emptySpaceDrag': 'select',
+		'settings/armatureMirrorX': false,
+		'settings/armatureWeightMirrorX': false,
 		'settings/partialElementSelection': false,
 		'settings/showObjectNames': false,
 		'settings/selectionHighlight': 'outline',

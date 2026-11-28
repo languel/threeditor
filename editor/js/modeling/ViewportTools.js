@@ -26,8 +26,8 @@ import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?
 import { StrokeSampler } from './StrokeSampler.js';
 import { interactionModes } from './InteractionModes.js';
 import { armatureOf } from '../rigging/Armature.js';
-import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js?v=armature-symmetrize';
-import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js';
+import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js?v=armature-x-mirror';
+import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js?v=armature-x-mirror';
 
 const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );
 
@@ -697,6 +697,8 @@ export class ViewportTools {
 			cuts.onchange = () => { this.armature.subdivideCuts = cuts.valueAsNumber; };
 			modelButton( parent, 'Subdivide Bones', 'extrude', () => this.run( () => this.armature.changeTopology( 'subdivide' ) ) );
 			modelButton( parent, 'Symmetrize Bones', 'symmetrize', () => this.run( () => this.armature.changeTopology( 'symmetrize' ) ) );
+			const mirror = modelField( parent, 'X-Axis Mirror', 'symmetrize', 'checkbox', this.editor.config.getKey( 'settings/armatureMirrorX' ) );
+			mirror.onchange = () => this.editor.config.setKey( 'settings/armatureMirrorX', mirror.checked );
 			modelButton( parent, 'Delete Bones', 'delete', () => this.editor.keymap.run( 'deleteBones' ) );
 			return;
 

@@ -139,7 +139,8 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.boneWeight', { label: 'Bone Weight', category: 'Rigging',
 			inputs: { target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ) }, outputs: numeric } ],
 		[ 'logic.setBoneWeight', action( 'Set Bone Weight', 'Rigging', {
-			target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ), weight: unit( 'Weight', 1 )
+			target, bone: object( 'Bone' ), vertex: numberInput( 'Vertex Index', 0, 0, 1e7 ), weight: unit( 'Weight', 1 ),
+			mirror: flag( 'X-Axis Mirror' )
 		} ) ],
 		[ 'logic.boneContact', {
 			...trigger( 'On Bone Contact', 'bonecontact', { target, other: { ...object( 'Other Collider' ), emptyLabel: 'Any collider' } },

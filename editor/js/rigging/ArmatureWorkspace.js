@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
 import { armatureBones, armatureOf, boneRestFrames } from './Armature.js';
 import { withArmaturePose } from './ArmaturePose.js';
-import { stageBoneRest } from './ArmatureRestEditing.js';
+import { stageBoneRest } from './ArmatureRestEditing.js?v=armature-x-mirror';
 import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
-import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js';
+import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js?v=armature-x-mirror';
 import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=armature-symmetrize';
 
 export class ArmatureWorkspace {
@@ -274,6 +274,7 @@ export class ArmatureWorkspace {
 		this.syncProxy();
 		this.drag = {
 			selected: this.selectedBones, frames: boneRestFrames( THREE, this.rig ),
+			mirror: this.editor.config.getKey( 'settings/armatureMirrorX' ),
 			inversePivot: this.proxy.matrixWorld.clone().invert(), orientation: this.proxy.quaternion.clone(),
 			worldToRig: this.rig.matrixWorld.clone().invert(), rigRotation: this.rig.getWorldQuaternion( new THREE.Quaternion() )
 		};
@@ -298,7 +299,12 @@ export class ArmatureWorkspace {
 		}
 		try {
 
-			this.drag.changes = stageBoneRest( THREE, this.rig, edits );
+			this.drag.changes = stageBoneRest( THREE, this.rig, edits, this.drag.mirror );
+			for ( const bone of this.drag.changes.keys() ) if ( hasRestriction( bone, 'locked' ) || hasRestriction( bone, 'disabled' ) ) {
+
+				throw new Error( 'Unlock ' + bone.name + ' before editing this joint.' );
+
+			}
 			this.drag.error = null;
 
 		} catch ( error ) {

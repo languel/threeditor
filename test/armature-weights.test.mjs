@@ -125,3 +125,24 @@ test( 'Subdivided segments compete as one automatic influence and the nearest se
 	assert.ok( readPositions().every( ( value, i ) => Math.abs( value - posed[ i ] ) < 1e-6 ) );
 
 } );
+
+test( 'Mirror weights pair rest vertices in rig bind space, handle seams and share center influences', () => {
+
+	const { scene, object, root, tip } = setup( true );
+	root.name = 'Arm.L';
+	tip.name = 'Arm.R';
+	const transform = new THREE.Matrix4().makeRotationZ( .38 ).setPosition( .7, .31, 0 );
+	const local = transform.clone().invert();
+	const vertices = [ [ .8, 1, 0 ], [ -.8, 1, 0 ], [ .8, 1, 0 ], [ 0, .9, 0 ], [ 1.4, 1.4, 0 ] ]
+		.map( point => new THREE.Vector3( ...point ).applyMatrix4( local ) );
+	object.geometry = new THREE.BufferGeometry().setFromPoints( vertices );
+	object.userData.armatureBinding.objectToRig = transform.toArray();
+	const positions = object.geometry.attributes.position;
+	const key = index => weightPointKey( positions, index );
+	const result = weightsForVertexEdits( THREE, scene, object, root.uuid, [ 0, 2, 3, 4 ], .8, true );
+	assert.deepEqual( Object.keys( result ).sort(), [ key( 0 ), key( 1 ), key( 3 ), key( 4 ) ].sort() );
+	assert.equal( result[ key( 0 ) ][ root.uuid ], .8 );
+	assert.equal( result[ key( 1 ) ][ tip.uuid ], .8 );
+	assert.deepEqual( result[ key( 3 ) ], { [ root.uuid ]: .5, [ tip.uuid ]: .5 } );
+
+} );
