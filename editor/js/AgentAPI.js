@@ -18,6 +18,7 @@ import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBo
 import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
+import { deleteRigBones, subdivideRigBones } from './rigging/ArmatureTopology.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -86,6 +87,24 @@ function AgentAPI( editor ) {
  }, [ 'armature' ], a => describeBone( addRigBone( editor, object( a.armature ), {
   parent: a.parent === undefined ? undefined : object( a.parent ), name: a.name, head: a.head, tail: a.tail, roll: a.roll
  } ) ) );
+ const topologyBones = {
+  armature: { ...str, description: 'Armature object UUID.' },
+  bones: { type: 'array', minItems: 1, uniqueItems: true, items: str, description: 'Authored bone UUIDs from that armature.' }
+ };
+ add( 'bone_delete', 'Delete bones and keep surviving children and rigid attachments in place. Supports undo.', topologyBones, [ 'armature', 'bones' ], a => {
+
+  const promoted = deleteRigBones( editor, object( a.armature ), a.bones.map( object ) );
+  return { deleted: a.bones, promoted: promoted.map( item => ( { uuid: item.object.uuid, parent: item.parent.uuid } ) ) };
+
+ } );
+ add( 'bone_subdivide', 'Split bones into equal connected segments, preserving the original head bone UUID. Supports undo.', {
+  ...topologyBones, cuts: { type: 'integer', minimum: 1, maximum: 16, description: 'Number of cuts per bone. Defaults to one.' }
+ }, [ 'armature', 'bones' ], a => {
+
+  const splits = subdivideRigBones( editor, object( a.armature ), a.bones.map( object ), a.cuts );
+  return { splits: splits.map( ( { bone, segments } ) => ( { uuid: bone.uuid, segments: segments.map( describeBone ) } ) ) };
+
+ } );
  add( 'bone_edit_rest', 'Edit a bone’s rest endpoints and roll while preserving its pose offset. Supports undo.', {
   uuid: { ...str, description: 'Authored bone UUID.' },
   head: restVector( 'Rest head in parent-local space.' ),

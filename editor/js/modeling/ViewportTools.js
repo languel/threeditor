@@ -690,6 +690,13 @@ export class ViewportTools {
 
 			modelButton( parent, 'Add Bone at Cursor', 'add', () => this.run( () => this.armature.addRoot() ) );
 			modelButton( parent, 'Extrude Bone', 'extrude', () => this.run( () => this.armature.extrude() ) );
+			const cuts = modelField( parent, 'Subdivision cuts', 'extrude', 'number', this.armature.subdivideCuts );
+			cuts.min = 1;
+			cuts.max = 16;
+			cuts.step = 1;
+			cuts.onchange = () => { this.armature.subdivideCuts = cuts.valueAsNumber; };
+			modelButton( parent, 'Subdivide Bones', 'extrude', () => this.run( () => this.armature.changeTopology( 'subdivide' ) ) );
+			modelButton( parent, 'Delete Bones', 'delete', () => this.editor.keymap.run( 'deleteBones' ) );
 			return;
 
 		}

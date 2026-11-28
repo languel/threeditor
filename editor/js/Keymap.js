@@ -54,6 +54,9 @@ const definitions = [
  ['addBoneIK','Add IK to Bone','Rigging','','shift+i'],
  ['poseMode','Toggle Pose Mode','Rigging','',control+'+tab'],
  ['extrudeBone','Extrude Bone','Rigging','','e'],
+ ['deleteBones','Delete Bones','Rigging','delete','x'],
+ ['deleteBonesAlternate','Delete Bones (alternate)','Rigging','','delete'],
+ ['subdivideBones','Subdivide Bones','Rigging','',''],
  ['parentBones','Set Bone Parent','Rigging','',control+'+p'],
  ['clearBoneParent','Clear Bone Parent','Rigging','','alt+p'],
  ['clearPoseLocation','Clear Pose Location','Rigging','','alt+g'],
@@ -202,6 +205,7 @@ class Keymap {
   if ( this.actions.find( action => action.id === id )?.available?.() === false ) return false;
   if ( id === 'poseMode' ) return !!armatureOf(e.selected) && !e.streams.playing && !e.modalTransform?.active;
   if ( id === 'extrudeBone' ) return armature?.canTransform;
+  if ( ['deleteBones','deleteBonesAlternate','subdivideBones'].includes(id) ) return armature?.canEditTopology;
   if ( id === 'parentBones' ) return armature?.canTransform && armature.selectedBones.length > 1;
   if ( id === 'clearBoneParent' ) return armature?.canTransform && armature.selectedBones.some(bone=>bone.parent.isBone);
   if ( id.startsWith('clearPose') ) return armature?.mode === 'pose' && armature.selectedBones.length > 0;
@@ -310,6 +314,8 @@ class Keymap {
    case 'addComponent':if(this.actionAvailable(id))e.openComponentPicker?.();break;
    case 'poseMode':if(this.actionAvailable(id))e.viewTools.setWorkspaceMode(e.viewTools.armature.mode==='pose'?'object':'pose');break;
    case 'extrudeBone':if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.extrude());break;
+   case 'deleteBones':case 'deleteBonesAlternate':if(this.actionAvailable(id))e.contextMenu?.openDeleteBones(this.pointer);break;
+   case 'subdivideBones':if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.changeTopology('subdivide'));break;
    case 'parentBones':case 'clearBoneParent':if(this.actionAvailable(id))e.contextMenu?.openBoneParent(id==='clearBoneParent',this.pointer);break;
    case 'clearPoseLocation':case 'clearPoseRotation':case 'clearPoseScale':
     if(this.actionAvailable(id))e.viewTools.run(()=>e.viewTools.armature.clearPose(id.slice(9).toLowerCase()));break;

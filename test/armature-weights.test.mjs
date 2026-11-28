@@ -100,3 +100,28 @@ test( 'Logic can read a vertex weight and update it through normalized deformati
 	logic.stop();
 
 } );
+
+test( 'Subdivided segments compete as one automatic influence and the nearest segment inherits its weight', () => {
+
+	const { scene, object, root, tip } = setup( true );
+	object.geometry.attributes.position.setY( 0, .8 );
+	root.rotation.z = .45;
+	const original = armatureVertexWeights( THREE, scene, object ).at( 0 );
+	const readPositions = () => withArmatureDeformation( THREE, scene, () => Array.from( object.geometry.attributes.position.array ) );
+	const posed = readPositions();
+
+	root.userData.armatureBone = { ...root.userData.armatureBone, length: .5, weightGroup: root.uuid };
+	const section = createBone( THREE, 'Section', {
+		...boneRestFromPoints( THREE, [ 0, .5, 0 ], [ 0, 1, 0 ], 0, true ), weightGroup: root.uuid
+	} );
+	root.add( section );
+	section.add( tip );
+	tip.userData.armatureBone = { ...tip.userData.armatureBone, position: [ 0, .5, 0 ] };
+	tip.position.y = .5;
+
+	const split = armatureVertexWeights( THREE, scene, object );
+	assert.deepEqual( split.at( 0 ), { [ section.uuid ]: original[ root.uuid ], [ tip.uuid ]: original[ tip.uuid ] } );
+	assert.ok( split.at( 2 )[ root.uuid ] > .5 );
+	assert.ok( readPositions().every( ( value, i ) => Math.abs( value - posed[ i ] ) < 1e-6 ) );
+
+} );

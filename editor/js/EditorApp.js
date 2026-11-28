@@ -1,21 +1,21 @@
 import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
-import { Editor } from './Editor.js?v=pane-navigation';
-import { Keymap } from './Keymap.js?v=apply-transforms';
+import { Editor } from './Editor.js?v=bone-topology';
+import { Keymap } from './Keymap.js?v=bone-topology';
 import { ModalTransform } from './ModalTransform.js?v=transform-gizmos';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=transform-gizmos';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=pane-navigation';
+import { Viewport } from './Viewport.js?v=bone-topology';
 import { Toolbar } from './Toolbar.js?v=pane-navigation';
 import { Player } from './Player.js?v=pane-navigation';
 import { Sidebar } from './Sidebar.js?v=apply-transforms';
 import { Menubar } from './Menubar.js?v=nested-add';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=apply-transforms';
-import { AgentAPI } from './AgentAPI.js?v=viewport-tools';
+import { ContextMenu } from './ContextMenu.js?v=bone-topology';
+import { AgentAPI } from './AgentAPI.js?v=bone-topology';
 import { Resizer } from './Resizer.js?v=dock-split-menu';
 import { PanelDock } from './PanelDock.js';
 import { WorkspaceArea } from './WorkspaceArea.js?v=split-areas';

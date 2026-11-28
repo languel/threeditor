@@ -97,7 +97,7 @@ export function duplicateObjects( editor, move ) {
 	} ) );
 	const uuid = value => copies.get( value )?.uuid || value;
 	const commands = roots.map( ( copy, i ) => new AddObjectCommand( editor, copy, sources[ i ].parent, false ) );
-	const scriptIds = new Map(), animationIds = new Map();
+	const scriptIds = new Map(), animationIds = new Map(), weightGroups = new Map();
 	for ( const [ source, copy ] of pairs ) {
 
 		if ( source.geometry ) {
@@ -149,6 +149,13 @@ export function duplicateObjects( editor, move ) {
 				binding.weightSamples[ key ] = Object.fromEntries( Object.entries( weights ).map( ( [ bone, weight ] ) => [ uuid( bone ), weight ] ) );
 
 			}
+
+		}
+		const group = copy.userData.armatureBone?.weightGroup;
+		if ( group ) {
+
+			if ( ! weightGroups.has( group ) ) weightGroups.set( group, copies.get( group )?.uuid || MathUtils.generateUUID() );
+			copy.userData.armatureBone.weightGroup = weightGroups.get( group );
 
 		}
 		if ( copy.userData.armatureIK ) {
