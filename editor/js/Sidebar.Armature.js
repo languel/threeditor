@@ -4,9 +4,9 @@ import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js'
 import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
 import { SidebarConstraints } from './Sidebar.Constraints.js';
 import { hasRestriction } from './ObjectRestrictions.js';
-import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js?v=armature-apply';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
-import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js?v=armature-x-mirror';
+import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js?v=armature-apply';
 
 function sceneArmatures( scene ) {
 

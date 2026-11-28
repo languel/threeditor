@@ -5,6 +5,7 @@ export function reflectBoneFrame( THREE, frame ) {
 
 	const { head, tail, quaternion } = frame;
 	return {
+		scale: frame.scale,
 		head: new THREE.Vector3( - head.x, head.y, head.z ),
 		tail: new THREE.Vector3( - tail.x, tail.y, tail.z ),
 		quaternion: new THREE.Quaternion( quaternion.x, - quaternion.y, - quaternion.z, quaternion.w )
@@ -26,6 +27,17 @@ export function mirroredBoneConstraint( value, worldReflection, target, id ) {
 	if ( ! settings ) return null;
 	settings.id = id;
 	if ( settings.target ) settings.target = target;
+	for ( const key of [ 'ownerPoseBasis', 'targetPoseBasis' ] ) if ( settings[ key ] ) {
+
+		settings[ key ] = settings[ key ].map( ( value, index ) => {
+
+			const flipRow = index % 4 === 0;
+			const flipColumn = index < 4;
+			return flipRow === flipColumn ? value : - value;
+
+		} );
+
+	}
 	if ( settings.type === 'dampedTrack' && settings.trackAxis.endsWith( 'X' ) ) {
 
 		settings.trackAxis = settings.trackAxis === 'X' ? '-X' : 'X';

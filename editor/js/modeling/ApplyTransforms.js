@@ -6,7 +6,11 @@ import { SetGeometryCommand } from '../commands/SetGeometryCommand.js';
 import { SetPositionCommand } from '../commands/SetPositionCommand.js';
 import { SetRotationCommand } from '../commands/SetRotationCommand.js';
 import { SetScaleCommand } from '../commands/SetScaleCommand.js';
+import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { pencilSamples } from './ModelGeometry.js?v=texture-projection';
+import { isArmature } from '../rigging/Armature.js';
+import { constraintSettings } from '../rigging/ArmatureConstraints.js';
+import { armatureTransformBake, bakedArmatureLinks, bakedRestBone, rebasedArmatureTimeline } from '../rigging/ArmatureTransformBake.js';
 
 export const applyTransformOptions = [
 	[ 'location', 'Location' ],
@@ -37,7 +41,7 @@ function canBakeObject( object, scene ) {
 	const data = object.userData, geometry = object.geometry;
 	if ( ! object.parent || object === scene || ! editableTransform( object ) || object.isBone ||
 		object.isSkinnedMesh || object.isInstancedMesh || object.isBatchedMesh || object.splats ||
-		data.armature || data.armatureBinding || data.armatureConstraints?.length || data.modifierBase ||
+		data.armatureBinding || data.armatureConstraints?.length || data.modifierBase ||
 		data.measurement || data.assetObject || data.nodeComponents?.geometry ) return false;
 	if ( ! geometry ) return object.isGroup || object.type === 'Object3D';
 	return ( object.isMesh || object.isLine || object.isPoints ) && geometry.isBufferGeometry &&
@@ -46,11 +50,11 @@ function canBakeObject( object, scene ) {
 
 }
 
-export function canApplyObjectTransforms( editor ) {
+export function canApplyObjectTransforms( editor, selection = editor.selector.selection ) {
 
-	const selection = editor.selector.selection;
 	return ! editor.modeling.editMode && ! editor.viewTools.mode && ! editor.viewTools.armature?.mode && ! editor.editWorkspace.exclusive &&
 		! editor.streams.playing && ! editor.modalTransform.active && ! editor.flyControls?.active &&
+		( ! editor.timeline?.recording || ! selection.some( isArmature ) ) &&
 		selection.length > 0 && selection.every( object => canBakeObject( object, editor.scene ) );
 
 }
@@ -153,31 +157,37 @@ function bakeGeometry( object, matrix ) {
 
 }
 
-export function applyObjectTransforms( editor, mode ) {
+function planObjectTransforms( editor, mode, selection ) {
 
-	const option = applyTransformOptions.find( ( [ value ] ) => value === mode );
-	if ( ! option || ! canApplyObjectTransforms( editor ) ) return false;
-	const selection = editor.selector.selection;
 	const selected = new Set( selection );
 	const commands = [];
+	const bakes = new Map(), rebased = new Map(), metadata = new Map();
+	function change( object, values ) {
 
-	function visit( object, inherited ) {
+		metadata.set( object, { ...object.userData, ...metadata.get( object ), ...values } );
+
+	}
+
+	function visit( object, inherited, parentBake ) {
 
 		if ( object.userData.runtimeOnly ) return;
-		let carry = identity;
+		let carry = identity, armatureBake;
 		if ( selected.has( object ) || inherited !== identity ) {
 
 			const name = object.name || object.type;
-			if ( ! editableTransform( object ) || object.isBone || object.userData.armatureConstraints?.length ) {
+			const constraints = object.userData.armatureConstraints;
+			const changesConstraintFrame = constraints?.length && ( ! parentBake || ! object.userData.armatureBone &&
+				Array.isArray( constraints ) && constraints.some( entry => constraintSettings( entry )?.ownerSpace === 'local' ) );
+			if ( ! editableTransform( object ) || object.isBone && ! parentBake || changesConstraintFrame ) {
 
 				throw new Error( 'Cannot preserve the transform of ' + name + '.' );
 
 			}
 			const position = object.position.clone(), rotation = object.rotation.clone(), scale = object.scale.clone();
 			const quaternion = object.quaternion.clone();
-			const local = new THREE.Matrix4().compose( position, quaternion, scale ).premultiply( inherited );
 			if ( selected.has( object ) ) {
 
+				const local = new THREE.Matrix4().compose( position, quaternion, scale ).premultiply( inherited );
 				if ( mode === 'location' || mode === 'all' ) position.set( 0, 0, 0 );
 				if ( mode === 'rotation' || mode === 'rotationScale' || mode === 'all' ) {
 
@@ -190,10 +200,30 @@ export function applyObjectTransforms( editor, mode ) {
 				if ( reset.determinant() === 0 || local.determinant() === 0 ) throw new Error( 'Cannot apply transforms to ' + name + ' with a zero scale axis.' );
 				carry = reset.invert().multiply( local );
 				if ( matricesMatch( carry, identity ) ) carry = identity;
-				if ( carry !== identity && object.geometry ) commands.push( new SetGeometryCommand( editor, object, bakeGeometry( object, carry ) ) );
+				if ( carry !== identity ) {
+
+					if ( isArmature( object ) ) {
+
+						armatureBake = armatureTransformBake( THREE, carry );
+						bakes.set( object, armatureBake );
+
+					} else if ( object.geometry ) commands.push( new SetGeometryCommand( editor, object, bakeGeometry( object, carry ) ) );
+
+				}
+				if ( parentBake ) rebased.set( object, {} );
+
+			} else if ( parentBake ) {
+
+				position.applyMatrix4( parentBake.matrix );
+				if ( parentBake.rotates ) rotation.setFromQuaternion( quaternion.premultiply( parentBake.rotation ), rotation.order );
+				scale.multiplyScalar( parentBake.scale );
+				const rest = object.userData.armatureBone;
+				if ( object.isBone && rest ) change( object, { armatureBone: bakedRestBone( THREE, rest, parentBake ) } );
+				rebased.set( object, parentBake );
 
 			} else {
 
+				const local = new THREE.Matrix4().compose( position, quaternion, scale ).premultiply( inherited );
 				local.decompose( position, quaternion, scale );
 				if ( ! matricesMatch( local, new THREE.Matrix4().compose( position, quaternion, scale ) ) ) {
 
@@ -208,13 +238,39 @@ export function applyObjectTransforms( editor, mode ) {
 			if ( ! scale.equals( object.scale ) ) commands.push( new SetScaleCommand( editor, object, scale ) );
 
 		}
-		for ( const child of object.children ) visit( child, carry );
+		for ( const child of object.children ) visit( child, carry, armatureBake );
 
 	}
 
 	for ( const object of selectionRoots( selection ) ) visit( object, identity );
+	if ( bakes.size ) {
+
+		bakedArmatureLinks( THREE, editor.scene, bakes, rebased, change );
+		const timeline = rebasedArmatureTimeline( THREE, editor.scene, bakes, rebased );
+		if ( timeline ) change( editor.scene, { timeline } );
+		for ( const [ object, data ] of metadata ) commands.push( new SetValueCommand( editor, object, 'userData', data ) );
+
+	}
+	return { commands, bakes };
+
+}
+
+export function applyObjectTransforms( editor, mode, selection = editor.selector.selection ) {
+
+	const option = applyTransformOptions.find( ( [ value ] ) => value === mode );
+	if ( ! option || ! canApplyObjectTransforms( editor, selection ) ) return false;
+	const plan = () => planObjectTransforms( editor, mode, selection );
+	const containsRig = selection.some( isArmature );
+	const { commands, bakes } = containsRig && editor.timeline ? editor.timeline.withBase( plan ) : plan();
 	if ( ! commands.length ) return false;
-	editor.execute( new MultiCmdsCommand( editor, commands ), mode === 'all' ? 'Apply All Transforms' : 'Apply ' + option[ 1 ] );
+	const name = mode === 'all' ? 'Apply All Transforms' : 'Apply ' + option[ 1 ];
+	const command = new MultiCmdsCommand( editor, commands );
+	if ( bakes.size ) {
+
+		editor.animationCommands?.animationStop();
+		editor.history.execute( command, name );
+
+	} else editor.execute( command, name );
 	editor.selector.syncPivot();
 	return true;
 

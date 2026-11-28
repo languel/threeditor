@@ -1,4 +1,4 @@
-import { armatureOf } from './Armature.js';
+import { armatureOf, boneRestScale } from './Armature.js?v=armature-apply';
 import { hasRestriction } from '../ObjectRestrictions.js';
 
 export const constraintTypes = {
@@ -26,6 +26,14 @@ function axisValues( value ) {
 
 }
 
+function affineMatrix( value ) {
+
+	return Array.isArray( value ) && value.length === 16 && value.every( Number.isFinite ) &&
+		Math.abs( value[ 3 ] ) <= 1e-9 && Math.abs( value[ 7 ] ) <= 1e-9 &&
+		Math.abs( value[ 11 ] ) <= 1e-9 && Math.abs( value[ 15 ] - 1 ) <= 1e-9;
+
+}
+
 export function constraintSettings( value ) {
 
 	const { type, id, name, influence = 1, muted = false } = value ?? {};
@@ -47,6 +55,13 @@ export function constraintSettings( value ) {
 		if ( ! constraintSpaces.includes( ownerSpace ) || definition.target && ! constraintSpaces.includes( targetSpace ) ) return null;
 		settings.ownerSpace = ownerSpace;
 		if ( definition.target ) settings.targetSpace = targetSpace;
+		for ( const [ space, property ] of [ [ ownerSpace, 'ownerPoseBasis' ], [ settings.targetSpace, 'targetPoseBasis' ] ] ) {
+
+			if ( space !== 'pose' || value[ property ] === undefined ) continue;
+			if ( ! affineMatrix( value[ property ] ) ) return null;
+			settings[ property ] = value[ property ].slice();
+
+		}
 
 	}
 	if ( definition.mixes ) {
@@ -89,9 +104,7 @@ export function constraintSettings( value ) {
 	if ( type === 'childOf' ) {
 
 		const { inverse = null } = value;
-		if ( inverse !== null && ( ! Array.isArray( inverse ) || inverse.length !== 16 || ! inverse.every( Number.isFinite ) ||
-			Math.abs( inverse[ 3 ] ) > 1e-9 || Math.abs( inverse[ 7 ] ) > 1e-9 || Math.abs( inverse[ 11 ] ) > 1e-9 ||
-			Math.abs( inverse[ 15 ] - 1 ) > 1e-9 ) ) return null;
+		if ( inverse !== null && ! affineMatrix( inverse ) ) return null;
 		settings.inverse = inverse?.slice() ?? null;
 		if ( settings.inverse ) {
 
@@ -144,14 +157,14 @@ export function constraintTargetFrame( THREE, target, headTail ) {
 
 }
 
-function basisInSpace( THREE, object, space ) {
+function basisInSpace( THREE, object, space, poseBasis ) {
 
 	const matrix = new THREE.Matrix4();
 	if ( space === 'local' ) {
 
 		const rest = object.userData.armatureBone;
 		if ( rest ) matrix.compose( new THREE.Vector3().fromArray( rest.position ),
-			new THREE.Quaternion().fromArray( rest.quaternion ), new THREE.Vector3( 1, 1, 1 ) ).invert();
+			new THREE.Quaternion().fromArray( rest.quaternion ), new THREE.Vector3().setScalar( boneRestScale( rest ) ) ).invert();
 
 	} else {
 
@@ -163,6 +176,7 @@ function basisInSpace( THREE, object, space ) {
 			rig.updateWorldMatrix( true, false );
 			if ( ! rig.matrixWorld.determinant() ) return null;
 			matrix.premultiply( rig.matrixWorld.clone().invert() );
+			if ( poseBasis ) matrix.premultiply( new THREE.Matrix4().fromArray( poseBasis ) );
 
 		}
 
@@ -182,7 +196,7 @@ function sample( THREE, object, basis, space, headTail = 0 ) {
 		position.copy( object.position ).applyMatrix4( basis );
 		rotation.copy( object.quaternion );
 		if ( rest ) rotation.premultiply( new THREE.Quaternion().fromArray( rest.quaternion ).invert() );
-		scale.copy( object.scale );
+		scale.copy( object.scale ).divideScalar( boneRestScale( rest ) );
 
 	} else {
 
@@ -285,8 +299,8 @@ function limitAngles( value, { min, max } ) {
 
 function applyTransform( THREE, bone, settings, target ) {
 
-	const ownerBasis = basisInSpace( THREE, bone, settings.ownerSpace );
-	const targetBasis = target && basisInSpace( THREE, target, settings.targetSpace );
+	const ownerBasis = basisInSpace( THREE, bone, settings.ownerSpace, settings.ownerPoseBasis );
+	const targetBasis = target && basisInSpace( THREE, target, settings.targetSpace, settings.targetPoseBasis );
 	if ( ! ownerBasis || target && ! targetBasis ) return;
 	const owner = sample( THREE, bone, ownerBasis, settings.ownerSpace );
 	const input = target && sample( THREE, target, targetBasis, settings.targetSpace, settings.headTail );
@@ -322,7 +336,7 @@ function applyTransform( THREE, bone, settings, target ) {
 
 		if ( settings.ownerSpace === 'local' ) {
 
-			bone.scale.lerp( scale, influence );
+			bone.scale.lerp( scale.multiplyScalar( boneRestScale( bone.userData.armatureBone ) ), influence );
 			return;
 
 		}

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { hasRestriction, isVisible } from '../ObjectRestrictions.js';
-import { armatureBones, armatureOf, boneRestFrames } from './Armature.js';
+import { armatureBones, armatureOf, boneRestFrames, boneRestScale } from './Armature.js?v=armature-apply';
 import { withArmaturePose } from './ArmaturePose.js';
-import { stageBoneRest } from './ArmatureRestEditing.js?v=armature-x-mirror';
+import { stageBoneRest } from './ArmatureRestEditing.js?v=armature-apply';
 import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
-import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js?v=armature-x-mirror';
-import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=armature-symmetrize';
+import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js?v=armature-apply';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=armature-apply';
 
 export class ArmatureWorkspace {
 
@@ -351,7 +351,7 @@ export class ArmatureWorkspace {
 				snapshots.push( [ bone, bone.position.clone(), bone.quaternion.clone(), bone.scale.clone() ] );
 				bone.position.fromArray( rest.position );
 				bone.quaternion.fromArray( rest.quaternion );
-				bone.scale.set( 1, 1, 1 );
+				bone.scale.setScalar( boneRestScale( rest ) );
 				bone.updateMatrix();
 
 			}

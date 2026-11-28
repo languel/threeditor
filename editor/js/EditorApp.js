@@ -2,20 +2,20 @@ import { installNumericScrubbing } from './NumericScrubbing.js?v=pencil-ribbon';
 import * as THREE from 'three';
 
 import { Editor } from './Editor.js?v=armature-x-mirror';
-import { Keymap } from './Keymap.js?v=armature-symmetrize';
+import { Keymap } from './Keymap.js?v=armature-apply';
 import { ModalTransform } from './ModalTransform.js?v=transform-gizmos';
 import { P5Preview } from './P5Preview.js';
 import { applyTheme, applyUIStyle } from './Theme.js';
 import { applyGlyphMode } from './Glyphs.js?v=transform-gizmos';
 import { applyUIConsistency } from './UIConsistency.js';
-import { Viewport } from './Viewport.js?v=armature-x-mirror';
+import { Viewport } from './Viewport.js?v=armature-apply';
 import { Toolbar } from './Toolbar.js?v=pane-navigation';
 import { Player } from './Player.js?v=pane-navigation';
-import { Sidebar } from './Sidebar.js?v=armature-x-mirror';
+import { Sidebar } from './Sidebar.js?v=armature-apply';
 import { Menubar } from './Menubar.js?v=nested-add';
 import { MenuAutoHide } from './MenuAutoHide.js';
-import { ContextMenu } from './ContextMenu.js?v=armature-symmetrize';
-import { AgentAPI } from './AgentAPI.js?v=armature-x-mirror';
+import { ContextMenu } from './ContextMenu.js?v=armature-apply';
+import { AgentAPI } from './AgentAPI.js?v=armature-apply';
 import { Resizer } from './Resizer.js?v=dock-split-menu';
 import { PanelDock } from './PanelDock.js';
 import { WorkspaceArea } from './WorkspaceArea.js?v=split-areas';
@@ -23,7 +23,7 @@ import { WorkspaceEditors } from './WorkspaceEditors.js?v=pane-navigation';
 import { PrimitiveAdjustment } from './modeling/PrimitiveAdjustment.js?v=editor-panes';
 import { CodePanel } from './CodePanel.js?v=editor-panes';
 import { AnimationResizer } from './AnimationResizer.js?v=dock-split-menu';
-import { Animation } from './Animation.js?v=workspace-tabs';
+import { Animation } from './Animation.js?v=armature-apply';
 
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 

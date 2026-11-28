@@ -9,6 +9,58 @@ import { LogicRuntime } from '../editor/js/nodes/LogicRuntime.js';
 import { StreamRouter } from '../editor/js/streams/StreamRouter.js';
 import { createLogicGraph, LOGIC_DOMAIN } from '../editor/js/nodes/LogicNodes.js';
 import { addNode, connectNodes } from '../editor/js/nodes/NodeGraph.js';
+import { armatureTransformBake, bakedRestBone } from '../editor/js/rigging/ArmatureTransformBake.js';
+
+test( 'A positively scaled armature bake preserves an anchored Rapier hinge trajectory', async () => {
+
+	const scene = new THREE.Scene(), rig = createArmature( THREE );
+	const bone = rig.children[ 0 ];
+	rig.position.set( .5, 3, 1 );
+	rig.rotation.z = .23;
+	rig.scale.setScalar( 1.6 );
+	bone.rotation.z = .67;
+	bone.userData.armaturePhysics = { mode: 'dynamic', anchored: true, joint: 'hinge', axis: 'Z', radius: .08 };
+	scene.add( rig );
+	scene.updateMatrixWorld( true );
+	const loader = new THREE.ObjectLoader();
+	const animated = loader.parse( JSON.parse( JSON.stringify( scene.toJSON() ) ) );
+	rig.updateMatrix();
+	const bake = armatureTransformBake( THREE, rig.matrix.clone() );
+	bone.userData.armatureBone = bakedRestBone( THREE, bone.userData.armatureBone, bake );
+	bone.position.applyMatrix4( bake.matrix );
+	bone.quaternion.premultiply( bake.rotation );
+	bone.scale.multiplyScalar( bake.scale );
+	rig.position.set( 0, 0, 0 );
+	rig.quaternion.identity();
+	rig.scale.setScalar( 1 );
+
+	async function paths( root ) {
+
+		const physics = await prepareArmaturePhysics( THREE, root );
+		try {
+
+			const target = root.getObjectByProperty( 'uuid', bone.uuid );
+			const tail = () => target.localToWorld( new THREE.Vector3( 0, 1, 0 ) ).toArray();
+			return [ .1, .2, .35, .6 ].map( time => {
+
+				physics.advanceTo( time );
+				return tail();
+
+			} ).flat();
+
+		} finally {
+
+			physics.dispose();
+
+		}
+
+	}
+
+	const before = await paths( animated );
+	const after = await paths( scene );
+	assert.ok( after.every( ( value, index ) => Math.abs( value - before[ index ] ) < 1e-4 ) );
+
+} );
 
 test( 'A serialized kinematic and dynamic chain drives weighted geometry and attached objects from real Rapier joint poses', async () => {
 
