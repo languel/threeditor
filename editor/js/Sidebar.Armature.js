@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { UIButton, UINumber, UIPanel, UIRow, UIText } from './libs/ui.js';
 import { SidebarBonePhysics, SidebarRigCollider } from './Sidebar.RigPhysics.js';
 import { SidebarArmatureIK } from './Sidebar.ArmatureIK.js';
+import { SidebarBoneCollections } from './Sidebar.BoneCollections.js';
 import { SidebarConstraints } from './Sidebar.Constraints.js';
 import { hasRestriction } from './ObjectRestrictions.js';
 import { armatureBones, armatureOf, bonePoseOffsets, boneRestFrames, boneRestTail, isArmature } from './rigging/Armature.js?v=armature-apply';
 import { canDeformWithArmature } from './rigging/ArmatureDeformation.js';
-import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js?v=armature-apply';
+import { boneVisibleInCollections } from './rigging/BoneCollections.js';
+import { addRigBone, bindArmature, commitArmatureWeights, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBonePose } from './rigging/ArmatureTools.js?v=bone-collections';
 
 function sceneArmatures( scene ) {
 
@@ -41,6 +43,8 @@ export function SidebarArmature( editor ) {
 	const editMode = new UIButton( 'Edit Rest Skeleton' ).onClick( () => editor.viewTools.setWorkspaceMode( 'armature-edit' ) );
 	const poseMode = new UIButton( 'Pose Mode' ).onClick( () => editor.viewTools.setWorkspaceMode( 'pose' ) );
 	pose.add( new UIRow().add( editMode, poseMode ), new UIRow().add( root, extrude ), new UIRow().add( reset ) );
+	const collections = SidebarBoneCollections( editor, run );
+	pose.add( collections.panel );
 
 	const restPanel = new UIPanel();
 	pose.add( restPanel );
@@ -143,6 +147,7 @@ export function SidebarArmature( editor ) {
 		rig = armatureOf( object );
 		bone = rig && object.isBone ? object : null;
 		pose.setDisplay( rig ? '' : 'none' );
+		collections.update( rig );
 		const rigs = ! rig && canDeformWithArmature( object ) ? sceneArmatures( editor.scene ) : [];
 		updateBinding( object, rigs );
 		physics.setObject( bone );
@@ -153,6 +158,7 @@ export function SidebarArmature( editor ) {
 		const options = [ new Option( rig.name, rig.uuid ) ];
 		for ( const child of armatureBones( rig ) ) {
 
+			if ( editor.viewTools.armature.mode && ! boneVisibleInCollections( child ) ) continue;
 			let depth = 0;
 			for ( let parent = child.parent; parent !== rig; parent = parent.parent ) depth ++;
 			options.push( new Option( ' '.repeat( depth ) + child.name, child.uuid ) );

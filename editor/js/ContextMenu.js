@@ -4,6 +4,8 @@ import { formatCombo } from './Keymap.js';
 import { changeParent } from './ObjectParenting.js?v=editor-panes';
 import { SetValueCommand } from './commands/SetValueCommand.js';
 import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
+import { boneCollectionTree } from './rigging/BoneCollections.js';
+import { assignBonesToCollection } from './rigging/BoneCollectionTools.js';
 
 function ContextMenu( editor, viewport ) {
 
@@ -368,6 +370,27 @@ function ContextMenu( editor, viewport ) {
 
 	}
 
+	function openBoneCollections( moving, position ) {
+
+		const { armature } = editor.viewTools;
+		const { rig, selectedBones } = armature;
+		const update = ( collection, operation ) => editor.viewTools.run( () =>
+			assignBonesToCollection( editor, rig, collection.id, selectedBones, operation ) );
+		const actions = boneCollectionTree( rig ).map( ( { collection, depth } ) => {
+
+			const label = ' '.repeat( depth ) + collection.name;
+			if ( moving ) return { label, run: () => update( collection, 'move' ) };
+			return { label, children: [
+				{ label: 'Assign', run: () => update( collection, 'assign' ) },
+				{ label: 'Unassign', run: () => update( collection, 'remove' ) }
+			] };
+
+		} );
+		if ( ! actions.length ) actions.push( { label: 'Add a collection in the Armature tab', disabled: true } );
+		show( moving ? 'Move to Bone Collection' : 'Bone Collection Membership', actions, position );
+
+	}
+
 	function openRename( position ) {
 
 		const object = editor.selector.selection.at( -1 );
@@ -417,7 +440,7 @@ function ContextMenu( editor, viewport ) {
 
 			const rigActions = armature.editing ? [ 'extrudeBone', 'subdivideBones', 'symmetrizeBones', 'deleteBones', 'parentBones', 'clearBoneParent' ] :
 				[ 'clearPoseLocation', 'clearPoseRotation', 'clearPoseScale', 'addBoneIK' ];
-			const actions = [ ...rigActions, 'translate', 'rotate', 'scale', 'selectAll', 'selectNone' ].filter( id =>
+			const actions = [ ...rigActions, 'moveBonesToCollection', 'editBoneCollectionMembership', 'translate', 'rotate', 'scale', 'selectAll', 'selectNone' ].filter( id =>
 				editor.keymap.actionAvailable( id ) ).map( id => editor.keymap.actions.find( action => action.id === id ) );
 			if ( armature.editing ) actions.unshift( { label: 'Add Bone at Cursor', run: () => editor.viewTools.run( () => armature.addRoot() ) } );
 			show( armature.editing ? 'Armature' : 'Pose', actions, position );
@@ -504,7 +527,7 @@ function ContextMenu( editor, viewport ) {
 
 	}, true );
 	window.addEventListener( 'resize', () => { if ( menu.classList.contains( 'context-menu-add' ) ) close(); } );
-	return { openAdd, openObject, openPalette, openSeparate, openParent, openApply, openBoneParent, openDeleteBones, openRename, show, close };
+	return { openAdd, openObject, openPalette, openSeparate, openParent, openApply, openBoneParent, openDeleteBones, openBoneCollections, openRename, show, close };
 
 }
 

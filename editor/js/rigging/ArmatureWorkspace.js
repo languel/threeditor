@@ -4,8 +4,9 @@ import { armatureBones, armatureOf, boneRestFrames, boneRestScale } from './Arma
 import { withArmaturePose } from './ArmaturePose.js';
 import { stageBoneRest } from './ArmatureRestEditing.js?v=armature-apply';
 import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
-import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js?v=armature-apply';
-import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=armature-apply';
+import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js?v=bone-collections';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './ArmatureTopology.js?v=bone-collections';
+import { boneVisibleInCollections } from './BoneCollections.js';
 
 export class ArmatureWorkspace {
 
@@ -23,11 +24,12 @@ export class ArmatureWorkspace {
 
 			if ( ! this.mode ) return;
 			if ( armatureOf( object ) !== this.rig ) this.setMode( '' );
-			else this.syncProxy();
+			else if ( ! this.pruneCollectionSelection() ) this.syncProxy();
 
 		} );
 		editor.signals.objectChanged.add( object => {
 
+			if ( this.mode && object === this.rig && this.pruneCollectionSelection() ) return;
 			if ( this.drag && object === this.proxy ) this.update();
 			else if ( this.editing && ! this.drag ) this.syncProxy();
 
@@ -45,13 +47,24 @@ export class ArmatureWorkspace {
 
 	get selectedBones() {
 
-		return this.editor.selector.selection.filter( bone => bone.userData.armatureBone && armatureOf( bone ) === this.rig );
+		return this.editor.selector.selection.filter( bone => bone.userData.armatureBone && armatureOf( bone ) === this.rig && boneVisibleInCollections( bone ) );
 
 	}
 
 	selectable( bone ) {
 
-		return isVisible( bone ) && ! hasRestriction( bone, 'unselectable' );
+		return isVisible( bone ) && ! hasRestriction( bone, 'unselectable' ) && boneVisibleInCollections( bone );
+
+	}
+
+	pruneCollectionSelection() {
+
+		const { selector } = this.editor;
+		const selection = selector.selection.filter( boneVisibleInCollections );
+		if ( selection.length === selector.selection.length ) return false;
+		this.part = 'body';
+		selector.setSelection( selection.length ? selection : [ this.rig ] );
+		return true;
 
 	}
 
@@ -72,6 +85,7 @@ export class ArmatureWorkspace {
 			const first = armatureBones( rig ).find( bone => bone.userData.armatureBone && this.selectable( bone ) );
 			if ( selected.length ) editor.selector.setSelection( selected );
 			else if ( first ) editor.select( first );
+			else editor.select( rig );
 
 		}
 		this.syncProxy();

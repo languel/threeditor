@@ -26,7 +26,7 @@ import { localSurfacePoint, surfacePaint, surfacePath } from './SurfaceMarks.js?
 import { StrokeSampler } from './StrokeSampler.js';
 import { interactionModes } from './InteractionModes.js';
 import { armatureOf } from '../rigging/Armature.js';
-import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js?v=armature-apply';
+import { ArmatureWorkspace } from '../rigging/ArmatureWorkspace.js?v=bone-collections';
 import { ArmatureWeightPaint } from '../rigging/ArmatureWeightPaint.js?v=armature-x-mirror';
 
 const pencilGroundPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 0 );

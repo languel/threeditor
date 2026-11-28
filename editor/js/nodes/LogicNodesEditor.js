@@ -2,7 +2,7 @@ import { SetValueCommand } from '../commands/SetValueCommand.js';
 import { hasRestriction } from '../ObjectRestrictions.js';
 import { bindGraphHistory } from './GraphWorkspace.js';
 import { NodeGraphEditor } from './NodeGraphEditor.js';
-import { createLogicGraph, LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js';
+import { createLogicGraph, LOGIC_DOMAIN, planLogicGraph } from './LogicNodes.js?v=bone-collections';
 import { nodeComponentData, supportsNodeComponents } from './NodeComponents.js';
 
 export function openLogicNodes( editor ) {

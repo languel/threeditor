@@ -11,15 +11,17 @@ import { MultiCmdsCommand } from './commands/MultiCmdsCommand.js';
 import { AddScriptCommand } from './commands/AddScriptCommand.js';
 import { SetScriptValueCommand } from './commands/SetScriptValueCommand.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js';
-import { exportEditorHtml } from './EditorHtml.js';
+import { exportThreeArchive, exportPlayableScene, exportPlayableHtml } from './Publish.js?v=bone-collections';
+import { exportEditorHtml } from './EditorHtml.js?v=bone-collections';
 import { armatureBones, bonePoseOffsets, boneRestFrames, boneRestScale, boneRestTail, isArmature } from './rigging/Armature.js?v=armature-apply';
-import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js?v=armature-apply';
+import { addRigBone, attachToBone, bindArmature, commitArmatureWeights, createBoneIKTarget, createRig, editBoneRest, editRigSpaceBoneRest, reparentBone, resetArmaturePose, setBoneConstraints, setChildInverse, setConstraintStack, switchConstraintParent, setBoneIK, setBonePhysics, setBonePose, setRigCollider } from './rigging/ArmatureTools.js?v=bone-collections';
 import { canOwnConstraints, constraintSettings, constraintSpaces, constraintTypes, distanceModes, eulerOrders, resolveConstraint, trackAxes } from './rigging/ArmatureConstraints.js';
 import { withArmaturePose } from './rigging/ArmaturePose.js';
 import { armatureVertexWeights, weightsForVertexEdits } from './rigging/ArmatureDeformation.js';
-import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './rigging/ArmatureTopology.js?v=armature-apply';
+import { deleteRigBones, subdivideRigBones, symmetrizeRigBones } from './rigging/ArmatureTopology.js?v=bone-collections';
 import { applyObjectTransforms, applyTransformOptions, canApplyObjectTransforms } from './modeling/ApplyTransforms.js?v=armature-apply';
+import { boneCollectionTree, boneCollectionVisible } from './rigging/BoneCollections.js';
+import { assignBonesToCollection, removeBoneCollection, setBoneCollection } from './rigging/BoneCollectionTools.js';
 
 // The page API and WebMCP call the same descriptors and handlers.
 function AgentAPI( editor ) {
@@ -34,6 +36,8 @@ function AgentAPI( editor ) {
  function vector(v){if(!Array.isArray(v)||v.length!==3||v.some(n=>typeof n!=='number'||!Number.isFinite(n)))throw new Error('Expected three finite numbers');return v;}
  const restVector = description => ( { ...vec, description } );
  const float = description => ( { type: 'number', description } );
+ const describeCollections = rig => boneCollectionTree( rig ).map( ( { collection, depth } ) =>
+  ( { ...collection, depth, effectiveVisibility: boneCollectionVisible( rig, collection ) } ) );
  function describeBone( bone ) {
 
   const rest = bone.userData.armatureBone;
@@ -75,9 +79,44 @@ function AgentAPI( editor ) {
    if ( frame ) result[ index ].rigRest = { head: frame.head.toArray(), tail: frame.tail.toArray() };
 
   } ) );
-  return { uuid: rig.uuid, name: rig.name, bones: result };
+  return { uuid: rig.uuid, name: rig.name, bones: result, collections: describeCollections( rig ) };
 
  }, true );
+ const collectionArmature = { ...str, description: 'Authored armature object UUID.' };
+ const collectionId = { ...str, description: 'Bone collection ID or name.' };
+ add( 'bone_collection_list', 'List the armature’s bone collections in hierarchy order, including member UUIDs and effective guide visibility.', {
+  armature: collectionArmature
+ }, [ 'armature' ], a => {
+
+  const rig = object( a.armature );
+  if ( ! isArmature( rig ) ) throw new Error( 'Expected an authored armature object.' );
+  return { collections: describeCollections( rig ) };
+
+ }, true );
+ add( 'bone_collection_set', 'Create or edit an undoable bone collection, including its parent, eye and solo flags, and sibling order.', {
+  armature: collectionArmature,
+  collection: { ...collectionId, description: 'Existing ID or name. Omit to create a collection.' },
+  name: str,
+  parent: { anyOf: [ str, { type: 'null' } ], description: 'Parent collection ID or name. Pass null for the top level.' },
+  visible: { type: 'boolean', description: 'Show its bone guides when its ancestors are visible and solo is inactive.' },
+  solo: { type: 'boolean', description: 'Show this collection when soloing. Any soloed collections take precedence over all eye flags.' },
+  direction: { type: 'string', enum: [ 'up', 'down' ], description: 'Move this collection up or down among its siblings.' }
+ }, [ 'armature' ], a => setBoneCollection( editor, object( a.armature ), a.collection, a ) );
+ add( 'bone_collection_remove', 'Remove a collection with undo. Its children are promoted to its parent. Bones remain in the rig.', {
+  armature: collectionArmature, collection: collectionId
+ }, [ 'armature', 'collection' ], a => {
+
+  const rig = object( a.armature );
+  removeBoneCollection( editor, rig, a.collection );
+  return { collections: describeCollections( rig ) };
+
+ } );
+ add( 'bone_collection_assign', 'Assign, unassign, or exclusively move bones to a collection with undo.', {
+  armature: collectionArmature, collection: collectionId,
+  bones: { type: 'array', minItems: 1, items: str, description: 'Bone UUIDs in the same armature.' },
+  operation: { type: 'string', enum: [ 'assign', 'remove', 'move' ], description: 'Assign adds a membership. Remove deletes it. Move removes the other memberships.' }
+ }, [ 'armature', 'collection', 'bones' ], a =>
+  assignBonesToCollection( editor, object( a.armature ), a.collection, a.bones.map( object ), a.operation ) );
  add( 'bone_add', 'Insert a root bone or extrude a child from an existing bone’s tail. Selects the new bone and supports undo.', {
   armature: { ...str, description: 'Armature object UUID.' },
   parent: { ...str, description: 'Parent bone UUID. Omit for a root bone.' },

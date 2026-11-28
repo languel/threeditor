@@ -1,5 +1,5 @@
 import { ACTIVE_OUTLINE, SELECTED_OUTLINE, SelectionOutline, hasSelectionSurface, supportsSelectionOutline } from './Viewport.SelectionOutline.js?v=unified-sync';
-import { createEditWorkspace } from './modeling/EditWorkspace.js?v=transform-gizmos';
+import { createEditWorkspace } from './modeling/EditWorkspace.js?v=bone-collections';
 import { transformSnapStep } from './TransformSettings.js?v=pane-navigation';
 import { cleanShading, usesSceneEffects, withViewportShading } from './ViewportShading.js?v=pencil-ribbon';
 import { isProjector } from './assets/Projector.js?v=projector-shadows';
@@ -34,7 +34,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ViewportPathtracer } from './Viewport.Pathtracer.js?v=unified-sync';
 import { ViewportAccumulation } from './Viewport.Accumulation.js';
 import { SplatHost } from './assets/SplatHost.js';
-import { ViewportTools } from './modeling/ViewportTools.js?v=armature-apply';
+import { ViewportTools } from './modeling/ViewportTools.js?v=bone-collections';
+import { boneVisibleInCollections } from './rigging/BoneCollections.js';
 import { ProjectorCoverageOverlay } from './modeling/ProjectorCoverageOverlay.js';
 import { ViewLayout } from './modeling/ViewLayout.js?v=pane-navigation';
 import { ModelViewport } from './modeling/ModelViewport.js?v=transform-gizmos';
@@ -149,7 +150,7 @@ function Viewport( editor ) {
 			const object = editor.scene.getObjectById( Number( id ) );
 			if ( ! object ) continue;
 			const enabled = helper.type === 'CameraHelper' ? helperAppearance.cameraHelpers : helper.isSkeletonHelper ? helperAppearance.skeletonHelpers : helperAppearance.lightHelpers;
-			helper.visible = enabled && isVisible( object );
+			helper.visible = enabled && isVisible( object ) && boneVisibleInCollections( object );
 
 		}
 
@@ -571,7 +572,7 @@ function Viewport( editor ) {
 		if ( armature.mode === 'pose' ) {
 
 			const bone = intersects.map( hit => hit.object.userData.object || hit.object ).find( object =>
-				object.userData.armatureBone && armature.rig.getObjectById( object.id ) );
+				object.userData.armatureBone && armature.rig.getObjectById( object.id ) && armature.selectable( object ) );
 			armature.selectHit( bone ? { bone, part: 'body' } : null, shift );
 			render();
 			return;
@@ -861,6 +862,7 @@ function Viewport( editor ) {
 
 	signals.sceneGraphChanged.add( function () {
 
+		updateHelperVisibility();
 		initPT();
 		render();
 

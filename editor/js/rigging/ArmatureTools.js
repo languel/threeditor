@@ -17,6 +17,8 @@ import { hasConstraintDependencyCycle, hasIKDependencyCycle, withArmaturePose } 
 import { canOwnConstraints, constraintSettings, constraintTypes, resolveConstraint } from './ArmatureConstraints.js';
 import { switchedParentStack, withChildInverse } from './ConstraintParenting.js';
 import { createEmpty } from '../modeling/ReferenceObjects.js';
+import { boneCollections } from './BoneCollections.js';
+import { boneCollectionsCommand } from './BoneCollectionTools.js';
 
 function editable( editor, object ) {
 
@@ -51,7 +53,13 @@ export function addRigBone( editor, rig, { parent = rig, name = 'Bone', head, ta
 	head ??= [ 0, parentLength ?? 0, 0 ];
 	tail ??= [ head[ 0 ], head[ 1 ] + 1, head[ 2 ] ];
 	const bone = createBone( THREE, unique, boneRestFromPoints( THREE, head, tail, roll, connected ) );
-	editor.execute( new AddObjectCommand( editor, bone, parent ), connected ? 'Extrude Bone' : 'Add Bone' );
+	const add = new AddObjectCommand( editor, bone, parent );
+	const collections = boneCollections( rig );
+	const inherited = collections.map( collection => collection.bones.includes( parent.uuid ) ?
+		{ ...collection, bones: [ ...collection.bones, bone.uuid ] } : collection );
+	const command = inherited.some( ( collection, index ) => collection !== collections[ index ] ) ?
+		new MultiCmdsCommand( editor, [ boneCollectionsCommand( editor, rig, inherited ), add ] ) : add;
+	editor.execute( command, connected ? 'Extrude Bone' : 'Add Bone' );
 	return bone;
 
 }

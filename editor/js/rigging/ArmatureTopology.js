@@ -8,6 +8,7 @@ import { restInParentFrame } from './ArmatureRestEditing.js?v=armature-apply';
 import { reflectBoneFrame, mirroredBoneConstraint, mirroredBonePhysics } from './ArmatureMirror.js?v=armature-apply';
 import { armaturePoseCycles } from './ArmaturePose.js?v=armature-symmetrize';
 import { constraintSettings, resolveConstraint } from './ArmatureConstraints.js';
+import { boneCollections } from './BoneCollections.js';
 
 function editable( object ) {
 
@@ -74,7 +75,23 @@ function topologyEdit( editor, rig, bones ) {
 		editor.history.execute( new ArmatureTopologyCommand( editor, rig, Array.from( entries.values() ), selection ), name );
 
 	}
-	return { bones: topologySelection( editor, rig, bones ), entry, data, add, remove, run };
+	function updateCollections( update ) {
+
+		const collections = boneCollections( rig );
+		const next = collections.map( collection => {
+
+			const members = update( collection );
+			return members.length === collection.bones.length ? collection : { ...collection, bones: members };
+
+		} );
+		if ( next.some( ( collection, index ) => collection !== collections[ index ] ) ) {
+
+			data( rig, { armature: { ...rig.userData.armature, collections: next } } );
+
+		}
+
+	}
+	return { bones: topologySelection( editor, rig, bones ), entry, data, add, remove, run, updateCollections };
 
 }
 
@@ -107,6 +124,8 @@ export function deleteRigBones( editor, rig, bones ) {
 		edit.remove( bone );
 
 	}
+	const removedIds = new Set( edit.bones.map( bone => bone.uuid ) );
+	edit.updateCollections( collection => collection.bones.filter( id => ! removedIds.has( id ) ) );
 	edit.run( 'Delete Bones' );
 	return promoted;
 
@@ -256,6 +275,8 @@ export function subdivideRigBones( editor, rig, bones, cuts = 1 ) {
 	}
 	adjustSplitIK( rig, splits, edit );
 	adjustSplitReferences( editor, rig, frames, splits, edit );
+	edit.updateCollections( collection => collection.bones.flatMap( id =>
+		splits.get( id )?.segments.map( bone => bone.uuid ) ?? [ id ] ) );
 	edit.run( 'Subdivide Bones' );
 	return Array.from( splits.values() );
 
@@ -513,6 +534,21 @@ export function symmetrizeRigBones( editor, rig, bones ) {
 
 	}
 	checkMirroredRelationships( editor.scene, staged, edit );
+	const collections = boneCollections( rig );
+	const byName = new Map( collections.map( collection => [ collection.name, collection ] ) );
+	const additions = new Map();
+	for ( const collection of collections ) {
+
+		const opposite = byName.get( mirroredBoneName( collection.name )?.name ) ?? collection;
+		for ( const [ source, target ] of pairs ) if ( collection.bones.includes( source.uuid ) && ! target.parent ) {
+
+			if ( ! additions.has( opposite ) ) additions.set( opposite, [] );
+			additions.get( opposite ).push( target.uuid );
+
+		}
+
+	}
+	edit.updateCollections( collection => [ ...new Set( [ ...collection.bones, ...( additions.get( collection ) ?? [] ) ] ) ] );
 	edit.run( 'Symmetrize Bones' );
 	return Array.from( pairs, ( [ source, bone ] ) => ( { source, bone } ) );
 

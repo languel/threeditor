@@ -1,4 +1,4 @@
-import { collectPlayableProject, inlineScriptDependencies } from './Publish.js';
+import { collectPlayableProject, inlineScriptDependencies } from './Publish.js?v=bone-collections';
 import { embedResources, loadEsbuild } from './SingleHtml.js';
 import { stateId, serializeState, snapshotEditor } from './PortableSession.js';
 import { exampleResources } from './ExampleCatalog.js?v=dda-cinema';
@@ -92,7 +92,7 @@ async function exportEditorHtml( editor ) {
 
 	const loaders = [ ...modulePaths ].map( path => `[${ JSON.stringify( path ) }, () => import(${ JSON.stringify( editorSpecifier( path ) ) })]` );
 	const entry = `
-import { startEditor } from './js/EditorApp.js?v=armature-apply';
+import { startEditor } from './js/EditorApp.js?v=bone-collections';
 import { openPortableSession } from './js/PortableSession.js';
 await startEditor(await openPortableSession(new Map([${ loaders.join( ', ' ) }])));
 `;

@@ -14,7 +14,7 @@ import { SetValueCommand } from './commands/SetValueCommand.js';
 import { addGeometryGraph } from './nodes/GeometryNodesEditor.js';
 import { GEOMETRY_MODIFIER } from './nodes/GeometryNodes.js';
 import { createShaderGraph } from './nodes/ShaderNodes.js';
-import { createLogicGraph } from './nodes/LogicNodes.js';
+import { createLogicGraph } from './nodes/LogicNodes.js?v=bone-collections';
 import { nodeComponentData, supportsNodeComponents } from './nodes/NodeComponents.js';
 
 const spinSource = `// @param speed = 45 (-360..360)
