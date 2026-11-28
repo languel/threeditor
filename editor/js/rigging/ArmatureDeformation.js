@@ -50,16 +50,36 @@ function automaticWeights( THREE, position, bones, objectToRig, count ) {
 	const weights = new Float32Array( indices.length );
 	const point = new THREE.Vector3(), nearest = new THREE.Vector3();
 	const scores = new Float64Array( count );
+	const groups = new Map();
+	for ( const [ id, { bone, rest } ] of bones.entries() ) {
+
+		const key = rest.weightGroup || bone.uuid;
+		if ( ! groups.has( key ) ) groups.set( key, [] );
+		groups.get( key ).push( id );
+
+	}
 	for ( let vertex = 0; vertex < position.count; vertex ++ ) {
 
 		point.fromBufferAttribute( position, vertex ).applyMatrix4( objectToRig );
 		scores.fill( 0 );
 		const start = vertex * count;
-		for ( let id = 0; id < bones.length; id ++ ) {
+		for ( const group of groups.values() ) {
 
-			const { segment } = bones[ id ];
-			segment.closestPointToPoint( point, true, nearest );
-			const distance2 = point.distanceToSquared( nearest );
+			// A subdivided bone still ranks as one influence against the rest
+			// of the rig. Its nearest segment receives that influence.
+			let id = group[ 0 ], distance2 = Infinity;
+			for ( const candidate of group ) {
+
+				bones[ candidate ].segment.closestPointToPoint( point, true, nearest );
+				const distance = point.distanceToSquared( nearest );
+				if ( distance < distance2 ) {
+
+					id = candidate;
+					distance2 = distance;
+
+				}
+
+			}
 			const score = 1 / ( ( distance2 + .0025 ) ** 2 );
 			for ( let rank = 0; rank < count; rank ++ ) {
 

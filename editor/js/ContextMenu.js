@@ -360,6 +360,14 @@ function ContextMenu( editor, viewport ) {
 
 	}
 
+	function openDeleteBones( position ) {
+
+		show( 'Delete', [ {
+			label: 'Bones', run: () => editor.viewTools.run( () => editor.viewTools.armature.changeTopology( 'delete' ) )
+		} ], position );
+
+	}
+
 	function openRename( position ) {
 
 		const object = editor.selector.selection.at( -1 );
@@ -407,7 +415,7 @@ function ContextMenu( editor, viewport ) {
 		const armature = editor.viewTools.armature;
 		if ( armature.mode ) {
 
-			const rigActions = armature.editing ? [ 'extrudeBone', 'parentBones', 'clearBoneParent' ] :
+			const rigActions = armature.editing ? [ 'extrudeBone', 'subdivideBones', 'deleteBones', 'parentBones', 'clearBoneParent' ] :
 				[ 'clearPoseLocation', 'clearPoseRotation', 'clearPoseScale', 'addBoneIK' ];
 			const actions = [ ...rigActions, 'translate', 'rotate', 'scale', 'selectAll', 'selectNone' ].filter( id =>
 				editor.keymap.actionAvailable( id ) ).map( id => editor.keymap.actions.find( action => action.id === id ) );
@@ -469,7 +477,7 @@ function ContextMenu( editor, viewport ) {
 	function openPalette() {
 
 		const rect = viewport.getBoundingClientRect();
-		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) && editor.keymap.inArea( action ) ).map( action => ( { ...action, section: action.section || action.category } ) );
+		const actions = editor.keymap.actions.filter( action => ! [ 'palette', 'paletteAlternate', 'deleteBonesAlternate' ].includes( action.id ) && editor.keymap.actionAvailable( action.id ) && editor.keymap.inArea( action ) ).map( action => ( { ...action, section: action.section || action.category } ) );
 		if ( ! document.body.dataset.maximizedArea ) {
 
 			const areaPointer = pointer;
@@ -496,7 +504,7 @@ function ContextMenu( editor, viewport ) {
 
 	}, true );
 	window.addEventListener( 'resize', () => { if ( menu.classList.contains( 'context-menu-add' ) ) close(); } );
-	return { openAdd, openObject, openPalette, openSeparate, openParent, openApply, openBoneParent, openRename, show, close };
+	return { openAdd, openObject, openPalette, openSeparate, openParent, openApply, openBoneParent, openDeleteBones, openRename, show, close };
 
 }
 

@@ -5,6 +5,7 @@ import { withArmaturePose } from './ArmaturePose.js';
 import { stageBoneRest } from './ArmatureRestEditing.js';
 import { combineSelection, selectionRegionIntersectsSegment } from '../modeling/MeshSelection.js';
 import { addRigBone, commitBoneRest, reparentBones, resetBonesPose } from './ArmatureTools.js';
+import { deleteRigBones, subdivideRigBones } from './ArmatureTopology.js';
 
 export class ArmatureWorkspace {
 
@@ -14,6 +15,7 @@ export class ArmatureWorkspace {
 		this.mode = '';
 		this.rig = null;
 		this.part = 'body';
+		this.subdivideCuts = 1;
 		this.proxy = new THREE.Object3D();
 		this.proxy.name = 'Armature transform pivot';
 		editor.sceneHelpers.add( this.proxy );
@@ -39,6 +41,7 @@ export class ArmatureWorkspace {
 	}
 
 	get editing() { return this.mode === 'armature-edit'; }
+	get canEditTopology() { return this.editing && this.part === 'body' && this.selectedBones.length > 0; }
 
 	get selectedBones() {
 
@@ -195,6 +198,15 @@ export class ArmatureWorkspace {
 		if ( ! parent ) return;
 		this.part = 'tail';
 		addRigBone( this.editor, this.rig, { parent } );
+
+	}
+
+	changeTopology( action ) {
+
+		if ( ! this.canEditTopology ) return;
+		const bones = this.selectedBones;
+		if ( action === 'delete' ) deleteRigBones( this.editor, this.rig, bones );
+		else subdivideRigBones( this.editor, this.rig, bones, this.subdivideCuts );
 
 	}
 

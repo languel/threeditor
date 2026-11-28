@@ -100,8 +100,11 @@ export const LOGIC_DOMAIN = {
 		[ 'logic.host', { label: 'Host Object', category: 'Values', outputs: { object: { label: 'Object', type: 'object' } } } ],
 		[ 'logic.bone', {
 			label: 'Armature Bone', category: 'Rigging',
-			inputs: { armature: object( 'Armature' ), name: text( 'Bone Name or UUID', 'Bone' ) },
-			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ) }
+			inputs: { armature: object( 'Armature' ), name: text( 'Bone Name or UUID', 'Bone' ),
+				index: numberInput( 'Index (−1 uses name)', -1, -1, 1e6 ) },
+			outputs: { object: { label: 'Bone', type: 'object' }, found: booleanOutput( 'Found' ), head: vector( 'World Head' ), tail: vector( 'World Tail' ),
+				parent: { label: 'Parent', type: 'object' }, restLength: numberOutput( 'Rest Length' ),
+				connected: booleanOutput( 'Connected' ), count: numberOutput( 'Bone Count' ) }
 		} ],
 		[ 'logic.resetBone', action( 'Reset Bone Pose', 'Rigging', { target } ) ],
 		[ 'logic.bonePose', {

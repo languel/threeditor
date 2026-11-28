@@ -1,4 +1,4 @@
-import * as Commands from './commands/Commands.js?v=look-controls';
+import * as Commands from './commands/Commands.js?v=bone-topology';
 
 class History {
 

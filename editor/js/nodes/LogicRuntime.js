@@ -1,4 +1,4 @@
-import { armatureOf, bonePoseOffsets, bonePoseTransform, findBone, resetBoneTransform } from '../rigging/Armature.js';
+import { armatureBones, armatureOf, bonePoseOffsets, bonePoseTransform, resetBoneTransform } from '../rigging/Armature.js';
 import { hasConstraintDependencyCycle, withArmaturePose } from '../rigging/ArmaturePose.js';
 import { findConstraint, constraintSettings, constraintTypes, resolveConstraint } from '../rigging/ArmatureConstraints.js';
 import { switchedParentStack } from '../rigging/ConstraintParenting.js';
@@ -137,13 +137,22 @@ export class LogicRuntime {
 
 				let rig;
 				for ( let object = this.target( instance, inputs.armature ); object && ! rig; object = object.parent ) rig = armatureOf( object );
-				const bone = findBone( rig, inputs.name.trim() );
-				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return { object: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ] };
+				const bones = armatureBones( rig );
+				const name = inputs.name.trim();
+				const bone = inputs.index >= 0 ? bones[ Math.floor( inputs.index ) ] :
+					bones.find( candidate => candidate.uuid === name ) ?? bones.find( candidate => candidate.name === name );
+				if ( ! bone || hasRestriction( bone, 'disabled' ) ) return {
+					object: '#missing-bone', parent: '#missing-bone', found: false, head: [ 0, 0, 0 ], tail: [ 0, 0, 0 ],
+					restLength: 0, connected: false, count: bones.length
+				};
 				return withArmaturePose( this.THREE, this.scene, () => {
 
+					const rest = bone.userData.armatureBone;
+					const restLength = rest?.length ?? 1;
 					const head = bone.getWorldPosition( this.motion ).toArray();
-					const tail = bone.localToWorld( this.motion.set( 0, bone.userData.armatureBone?.length ?? 1, 0 ) ).toArray();
-					return { object: bone.uuid, found: true, head, tail };
+					const tail = bone.localToWorld( this.motion.set( 0, restLength, 0 ) ).toArray();
+					return { object: bone.uuid, parent: bone.parent.uuid, found: true, head, tail,
+						restLength, connected: Boolean( rest?.connected ), count: bones.length };
 
 				} );
 
