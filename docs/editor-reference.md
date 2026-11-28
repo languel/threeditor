@@ -333,6 +333,8 @@ Hover a viewport and press **Shift+Backtick** to fly its camera or optical sourc
 
 In Object Mode with the Blender keymap, press **G**, then **G** again to move the selection vertically until its lowest geometry point touches the ground plane at world Y=0. The drop confirms the grab in one undo step and keeps the spacing between selected objects.
 
+In Object Mode, press **Ctrl+A** with the Blender keymap, or right-click and open **Apply**. Choose **Location**, **Rotation**, **Scale**, **All Transforms**, or **Rotation & Scale**. Applying a transform resets the chosen local fields and keeps the geometry and child objects in place. It works on static meshes, lines, points, groups, and compatible editable curves and Pencil strokes. A Pencil stroke needs uniform positive bake scale, and planar shapes keep their editing plane. An operation that would require shearing a child's local transform leaves the selection untouched. Each successful operation is one undo step.
+
 The viewport camera dropdown remembers the active scene camera. **Numpad 0** toggles between it and the editor view. **Ctrl+Numpad 0** makes the selected scene camera active. **Ctrl+Alt+Numpad 0** aligns the active scene camera to the current view and looks through it. Orbit, pan, and zoom move the camera you are looking through. In a scene camera's **Object** properties, choose **Orbit**, **Fly**, **First Person**, or **Third Person** under **Controller** for Play and published scenes. For Third Person, choose the object to follow.
 
 ## Advanced modeling and selection

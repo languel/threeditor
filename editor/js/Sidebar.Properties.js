@@ -4,7 +4,7 @@ import { SidebarAnimationClips } from './Sidebar.AnimationClips.js';
 import { UIPanel } from './libs/ui.js';
 
 import { SidebarObject } from './Sidebar.Object.js?v=image-textures';
-import { SidebarGeometry } from './Sidebar.Geometry.js?v=outline-brushes';
+import { SidebarGeometry } from './Sidebar.Geometry.js?v=apply-transforms';
 import { SidebarMaterial } from './Sidebar.Material.js?v=material-look-layout';
 import { SidebarModeling } from './Sidebar.Modeling.js?v=transform-gizmos';
 import { editableMesh } from './modeling/ModelViewport.js?v=transform-gizmos';

@@ -12,6 +12,7 @@ import { canParentSelection } from './ObjectParenting.js?v=editor-panes';
 import { canDuplicateObjects, duplicateObjects } from './DuplicateObjects.js?v=editor-panes';
 import { armatureOf } from './rigging/Armature.js';
 import { createBoneIKTarget, setBoneIK } from './rigging/ArmatureTools.js';
+import { canApplyObjectTransforms } from './modeling/ApplyTransforms.js';
 
 const control = /Mac|iPhone|iPad/.test( navigator.platform ) ? 'ctrl' : 'mod';
 const alignCameraShortcut = control + '+alt+numpad0';
@@ -24,6 +25,7 @@ const topologySelectionActions = {
 const definitions = [
  ['save','Save project','File','mod+s','mod+s'],
  ['translate','Move / grab','Transform','w','g'], ['rotate','Rotate','Transform','e','r'], ['scale','Scale','Transform','r','s'],
+ ['applyTransforms','Apply Transforms…','Transform','',control+'+a'],
  ['addMenu','Open Add menu','Workspace','','shift+a'], ['contextMenu','Open object context menu','Workspace','',''],
  ['addComponent','Add Component','Workspace','',''],
  ['palette','Open command palette','Workspace','f3','f3'], ['paletteAlternate','Open command palette (alternate)','Workspace','mod+k','mod+k'],
@@ -196,6 +198,7 @@ class Keymap {
   const e=this.editor,m=e.modeling;
   const armature = e.viewTools?.armature;
   if ( id === 'adjustLastOperation' ) return !! e.primitiveAdjustment?.available();
+  if ( id === 'applyTransforms' ) return canApplyObjectTransforms( e );
   if ( this.actions.find( action => action.id === id )?.available?.() === false ) return false;
   if ( id === 'poseMode' ) return !!armatureOf(e.selected) && !e.streams.playing && !e.modalTransform?.active;
   if ( id === 'extrudeBone' ) return armature?.canTransform;
@@ -335,6 +338,7 @@ class Keymap {
    case 'brushSmaller':case 'brushLarger':e.viewTools.resizeBrush(id==='brushSmaller'?1/1.2:1.2);break;
    case 'save':e.saveProject?.();break;
    case 'addMenu':e.contextMenu?.openAdd();break;case 'contextMenu':e.contextMenu?.openObject();break;case 'palette':case 'paletteAlternate':e.contextMenu?.openPalette();break;
+   case 'applyTransforms':e.contextMenu?.openApply(this.pointer);break;
    case 'translate':case 'rotate':case 'scale': if(this.preset!=='blender'||e.transformGizmoMode!=='combined')s.transformModeChanged.dispatch(id);if(this.preset==='blender')e.modalTransform?.start(id);break;
    case 'undo':e.undo();break;case 'redo':e.redo();break;
    case 'delete':case 'deleteBack':{if(e.viewTools.armature.mode)break;if(e.modeling?.editMode){const m=e.modeling;if(m.canEdit()&&m.data.kind!=='vertices'&&m.indices.length)m.removeSelection();break;}const cmds=[];for(const obj of e.selector.selection){if(!obj.parent)continue;cmds.push(new RemoveObjectCommand(e,obj));if(obj.isSpotLight||obj.isDirectionalLight)cmds.push(new RemoveObjectCommand(e,obj.target));}if(cmds.length)e.execute(cmds.length===1?cmds[0]:new MultiCmdsCommand(e,cmds));break;}
